@@ -56,20 +56,24 @@
   <div id="buttons"></div>
 
   <script>
-    // shows when page loaded
+    // show last load time
     document.getElementById("lastUpdated").innerText =
       "Last loaded: " + new Date().toLocaleString();
 
-    // loads links from Links.txt
+    // load links
     fetch("Links.txt")
       .then(r => r.text())
       .then(text => {
         const container = document.getElementById("buttons");
 
-        const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+        const lines = text
+          .split("\n")
+          .map(l => l.trim())
+          .filter(Boolean);
 
         lines.forEach(line => {
           const parts = line.split("|");
+
           if (parts.length < 2) return;
 
           const name = parts[0];
