@@ -1,5 +1,2 @@
-google.com
-test
-test.com
-
-test1.com
+Google|https://google.com
+Google Test|https://google.com
