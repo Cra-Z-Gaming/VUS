@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>VUS</title>
+
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -44,6 +45,7 @@
 </head>
 
 <body>
+
   <h1>VUS</h1>
 
   <div id="meta">
@@ -54,17 +56,24 @@
   <div id="buttons"></div>
 
   <script>
+    // shows when page loaded
     document.getElementById("lastUpdated").innerText =
       "Last loaded: " + new Date().toLocaleString();
 
+    // loads links from Links.txt
     fetch("Links.txt")
       .then(r => r.text())
       .then(text => {
         const container = document.getElementById("buttons");
 
-        text.trim().split("\n").forEach(line => {
-          const [name, url] = line.split("|");
-          if (!name || !url) return;
+        const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+
+        lines.forEach(line => {
+          const parts = line.split("|");
+          if (parts.length < 2) return;
+
+          const name = parts[0];
+          const url = parts[1];
 
           const btn = document.createElement("button");
           btn.textContent = name;
@@ -76,9 +85,11 @@
           container.appendChild(btn);
         });
       })
-      .catch(err => {
-        document.getElementById("buttons").innerText = "Failed to load Links.txt";
+      .catch(() => {
+        document.getElementById("buttons").innerText =
+          "Failed to load Links.txt";
       });
   </script>
+
 </body>
 </html>
