@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>VUS Hub</title>
+</head>
+<body>
+
+<h1>VUS Hub</h1>
+
+<button onclick="loadApp('https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/VUSL')">
+    VUSL
+</button>
+
+<button onclick="loadApp('https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Game1')">
+    Game1
+</button>
+
+<script>
+async function loadApp(url) {
+    const html = await (await fetch(url)).text();
+
+    const win = window.open("about:blank", "_blank");
+
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+}
+</script>
+
+</body>
+</html>
