@@ -191,15 +191,19 @@ function render() {
 /* Tabs */
 document.getElementById("tab-home").onclick = () => {
     currentTab = "home";
+
     document.getElementById("tab-home").classList.add("active");
     document.getElementById("tab-tools").classList.remove("active");
+
     render();
 };
 
 document.getElementById("tab-tools").onclick = () => {
     currentTab = "tools";
+
     document.getElementById("tab-tools").classList.add("active");
-    document.getElementById("tab-hubs").classList.remove("active");
+    document.getElementById("tab-home").classList.remove("active");
+
     render();
 };
 
