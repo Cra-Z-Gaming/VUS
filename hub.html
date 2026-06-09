@@ -5,25 +5,31 @@
 </head>
 <body>
 
-<h1>VUS Hub</h1>
+<h2>VUS Hub</h2>
 
-<button onclick="loadApp('https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/VUSL')">
+<button onclick="openApp('https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL')">
     VUSL
 </button>
 
-<button onclick="loadApp('https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Game1')">
-    Game1
-</button>
+<!-- Add more apps like this:
+<button onclick="openApp('RAW_URL_HERE')">Game 2</button>
+-->
 
 <script>
-async function loadApp(url) {
-    const html = await (await fetch(url)).text();
+async function openApp(url) {
+    try {
+        const html = await fetch(url).then(r => r.text());
 
-    const win = window.open("about:blank", "_blank");
+        const win = window.open("about:blank", "_blank");
 
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
+        win.document.open();
+        win.document.write(html);
+        win.document.close();
+
+    } catch (e) {
+        console.error(e);
+        alert("Failed to load app");
+    }
 }
 </script>
 
