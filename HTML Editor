@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>HTML Editor</title>
+
+<style>
+    body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: #0f172a;
+        color: white;
+        display: flex;
+        height: 100vh;
+    }
+
+    .left {
+        width: 50%;
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid #334155;
+    }
+
+    textarea {
+        flex: 1;
+        background: #0f172a;
+        color: white;
+        border: none;
+        outline: none;
+        padding: 12px;
+        font-family: monospace;
+        font-size: 13px;
+        resize: none;
+    }
+
+    .right {
+        width: 50%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    iframe {
+        flex: 1;
+        border: none;
+        background: white;
+    }
+
+    .bar {
+        display: flex;
+        gap: 8px;
+        padding: 8px;
+        background: #111827;
+        border-bottom: 1px solid #334155;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    button {
+        padding: 6px 10px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 12px;
+        background: #22c55e;
+        color: black;
+        font-weight: bold;
+    }
+
+    button.secondary {
+        background: #1e293b;
+        color: white;
+        border: 1px solid #334155;
+    }
+
+    .toggle {
+        padding: 6px 10px;
+        border-radius: 6px;
+        font-size: 12px;
+        cursor: pointer;
+        background: #1e293b;
+        border: 1px solid #334155;
+        user-select: none;
+    }
+
+    .on {
+        background: #22c55e !important;
+        color: black;
+    }
+
+    .label {
+        font-size: 12px;
+        color: #94a3b8;
+        margin-left: auto;
+    }
+</style>
+</head>
+
+<body>
+
+<div class="left">
+    <div class="bar">
+        <button onclick="run()">Run</button>
+        <button class="secondary" onclick="openTab()">Open Tab</button>
+        <button class="secondary" onclick="resetCode()">Reset</button>
+
+        <div class="toggle on" id="autoToggle" onclick="toggleAuto()">Auto Refresh</div>
+
+        <div class="label">HTML Editor</div>
+    </div>
+
+    <textarea id="code"></textarea>
+</div>
+
+<div class="right">
+    <iframe id="preview"></iframe>
+</div>
+
+<script>
+let auto = true;
+
+const iframe = document.getElementById("preview");
+const codeBox = document.getElementById("code");
+
+/* Load saved */
+codeBox.value = localStorage.getItem("html_code") || "<h1>Hello World</h1>";
+
+function save() {
+    localStorage.setItem("html_code", codeBox.value);
+}
+
+/* RENDER */
+function run() {
+    save();
+
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
+    doc.open();
+    doc.write(codeBox.value);
+    doc.close();
+}
+
+/* AUTO REFRESH */
+codeBox.addEventListener("input", () => {
+    if (auto) run();
+});
+
+/* OPEN IN NEW TAB */
+function openTab() {
+    const win = window.open("about:blank", "_blank");
+    win.document.open();
+    win.document.write(codeBox.value);
+    win.document.close();
+}
+
+/* RESET */
+function resetCode() {
+    codeBox.value = "";
+    run();
+}
+
+/* TOGGLE */
+function toggleAuto() {
+    auto = !auto;
+    document.getElementById("autoToggle").classList.toggle("on", auto);
+}
+
+/* INIT */
+run();
+</script>
+
+</body>
+</html>
