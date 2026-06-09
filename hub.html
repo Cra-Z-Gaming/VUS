@@ -95,10 +95,10 @@ function setStatus(msg, isErr) {
 
 function openApp(app) {
   if (!app.url) return;
+
   let url = app.url.trim();
-  if (!url.startsWith("http://") && !url.startsWith("https://")) {
-    url = "https://" + url;
-  }
+
+  // If it's a GitHub raw file or normal link, just open it directly
   window.open(url, "_blank");
 }
 
