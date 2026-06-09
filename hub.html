@@ -102,7 +102,7 @@ function writeToBlank(html) {
 }
 
 function openApp(app) {
-  if (app.direct) { window.open(app.url, "_blank"); return; }
+  if (current === "links") { window.open(app.url, "_blank"); return; }
   if (cache[app.url]) { writeToBlank(cache[app.url]); return; }
   setStatus("Loading " + app.name + "…");
   fetch(app.url)
