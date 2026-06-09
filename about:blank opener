@@ -199,18 +199,19 @@
     }
 
     const btn = document.getElementById("urlBtn");
-    btn.textContent = "Loading...";
+    btn.textContent = "Opening...";
     btn.disabled = true;
 
-    try {
-        const win = window.open(url, "_blank");
+    const win = window.open("about:blank", "_blank");
 
-        if (!win) {
-            showToast("Popup blocked — allow popups for this page");
-        }
-    } catch (e) {
-        showToast("Failed to open URL");
+    if (!win) {
+        showToast("Popup blocked — allow popups for this page");
+        btn.textContent = "Open URL";
+        btn.disabled = false;
+        return;
     }
+
+    win.location.href = url;
 
     btn.textContent = "Open URL";
     btn.disabled = false;
