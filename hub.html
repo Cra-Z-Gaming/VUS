@@ -1,254 +1,105 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>VUS Hub</title>
 
-    <style>
-        body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background: #0f172a;
-            color: white;
-        }
+<style>
+  .hub-header { padding: 14px 0; text-align: center; font-size: 22px; font-weight: 500; border-bottom: 0.5px solid var(--color-border-tertiary); margin-bottom: 0; }
+  .hub-tabs { display: flex; gap: 8px; padding: 12px 0; border-bottom: 0.5px solid var(--color-border-tertiary); flex-wrap: wrap; }
+  .hub-tab { padding: 6px 14px; border-radius: var(--border-radius-md); cursor: pointer; background: var(--color-background-secondary); border: 0.5px solid var(--color-border-tertiary); font-size: 14px; color: var(--color-text-secondary); transition: background 0.15s; }
+  .hub-tab:hover { background: var(--color-background-tertiary); color: var(--color-text-primary); }
+  .hub-tab.active { background: #1a7a4a; color: #fff; border-color: #1a7a4a; font-weight: 500; }
+  .hub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; padding: 16px 0; }
+  .hub-card { background: var(--color-background-primary); border-radius: var(--border-radius-lg); border: 0.5px solid var(--color-border-tertiary); padding: 16px 14px; cursor: pointer; text-align: center; transition: border-color 0.15s, background 0.15s; }
+  .hub-card:hover { border-color: var(--color-border-primary); background: var(--color-background-secondary); }
+  .hub-card.empty { opacity: 0.35; cursor: default; pointer-events: none; }
+  .hub-card-title { font-size: 15px; font-weight: 500; margin-bottom: 5px; color: var(--color-text-primary); }
+  .hub-card-sub { font-size: 12px; color: var(--color-text-secondary); }
+  .hub-status { font-size: 13px; color: var(--color-text-secondary); padding: 12px 0; text-align: center; min-height: 20px; }
+  .hub-status.err { color: var(--color-text-danger); }
+</style>
 
-        header {
-            padding: 16px;
-            text-align: center;
-            font-size: 26px;
-            font-weight: bold;
-            background: #111827;
-            border-bottom: 1px solid #1f2937;
-        }
-
-        #tabs {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            padding: 10px;
-            background: #0b1220;
-            border-bottom: 1px solid #1f2937;
-        }
-
-        .tab {
-            padding: 8px 14px;
-            border-radius: 8px;
-            cursor: pointer;
-            background: #1e293b;
-            border: 1px solid #334155;
-            transition: 0.2s;
-            font-size: 14px;
-        }
-
-        .tab:hover {
-            background: #334155;
-        }
-
-        .tab.active {
-            background: #22c55e;
-            color: black;
-            font-weight: bold;
-        }
-
-        #container {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 15px;
-            padding: 20px;
-        }
-
-        .card {
-            background: #1e293b;
-            border-radius: 12px;
-            padding: 15px;
-            cursor: pointer;
-            text-align: center;
-            transition: 0.2s;
-            border: 1px solid #334155;
-        }
-
-        .card:hover {
-            transform: translateY(-3px);
-            background: #334155;
-        }
-
-        .card.empty {
-            opacity: 0.35;
-            cursor: default;
-            pointer-events: none;
-        }
-
-        .card.empty:hover {
-            transform: none;
-            background: #1e293b;
-        }
-
-        .title {
-            font-size: 16px;
-            margin-bottom: 8px;
-        }
-
-        .sub {
-            font-size: 12px;
-            color: #94a3b8;
-        }
-
-        /* Toast */
-        #toast {
-            position: fixed;
-            bottom: 24px;
-            left: 50%;
-            transform: translateX(-50%) translateY(60px);
-            background: #ef4444;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-size: 14px;
-            opacity: 0;
-            transition: opacity 0.3s, transform 0.3s;
-            pointer-events: none;
-            z-index: 999;
-        }
-
-        #toast.show {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-        }
-    </style>
-</head>
-
-<body>
-
-<header>VUS Hub</header>
-
-<div id="tabs">
-    <div class="tab active" data-tab="home">Home</div>
-    <div class="tab" data-tab="tools">Tools</div>
-    <div class="tab" data-tab="links">Links</div>
-</div>
-
-<div id="container"></div>
-<div id="toast"></div>
+<h2 class="sr-only">VUS Hub — launcher for games, tools, and links</h2>
+<div class="hub-header">VUS Hub</div>
+<div class="hub-tabs" id="tabs"></div>
+<div class="hub-status" id="status"></div>
+<div class="hub-grid" id="grid"></div>
 
 <script>
 const apps = {
-    home: [
-        {
-            name: "VUSL",
-            url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL",
-            desc: "Main game hub"
-        },
-        {
-            name: "YouTube",
-            url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/YouTube%20Premium%20V11%20K1",
-            desc: "YouTube Version 11 K1"
-        },
-        { name: "Empty Slot", url: "", desc: "" },
-        { name: "Empty Slot", url: "", desc: "" },
-        { name: "Empty Slot", url: "", desc: "" }
-    ],
-
-    tools: [
-        {
-            name: "about:blank opener",
-            url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/about%3Ablank%20opener",
-            desc: "opens Files as about:blank"
-        },
-        {
-            name: "Timer",
-            url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Timer",
-            desc: "Stopwatch + countdown timer"
-        },
-        {
-            name: "Code Editor",
-            url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/HTML%20Editor",
-            desc: "Live Code Editor"
-        },
-        { name: "Nothing", url: "", desc: "Nothing" },
-        { name: "Nothing", url: "", desc: "Nothing" }
-    ],
-
-    links: [
-        { name: "Google", url: "https://www.google.com", desc: "Search Engine" },
-        { name: "Wikipedia", url: "https://www.wikipedia.org", desc: "Online Encyclopedia" },
-        { name: "Nothing", url: "", desc: "Nothing" },
-        { name: "Nothing", url: "", desc: "Nothing" },
-        { name: "Nothing", url: "", desc: "Nothing" }
-    ]
+  home: [
+    { name: "VUSL", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL", desc: "Main game hub" },
+    { name: "YouTube", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/YouTube%20Premium%20V11%20K1", desc: "YouTube Version 11 K1" },
+    { name: "Empty Slot", url: "", desc: "Coming soon" },
+    { name: "Empty Slot", url: "", desc: "Coming soon" },
+    { name: "Empty Slot", url: "", desc: "Coming soon" }
+  ],
+  tools: [
+    { name: "about:blank opener", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/about%3Ablank%20opener", desc: "Opens files as about:blank" },
+    { name: "Timer", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Timer", desc: "Stopwatch + countdown timer" },
+    { name: "Code Editor", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/HTML%20Editor", desc: "Live code editor" },
+    { name: "Empty Slot", url: "", desc: "Coming soon" },
+    { name: "Empty Slot", url: "", desc: "Coming soon" }
+  ],
+  links: [
+    { name: "Google", url: "https://www.google.com", desc: "Search engine", direct: true },
+    { name: "Wikipedia", url: "https://www.wikipedia.org", desc: "Online encyclopedia", direct: true },
+    { name: "Empty Slot", url: "", desc: "Coming soon" },
+    { name: "Empty Slot", url: "", desc: "Coming soon" },
+    { name: "Empty Slot", url: "", desc: "Coming soon" }
+  ]
 };
 
 const cache = {};
-let currentTab = "home";
+let current = "home";
 
-/* ── Toast ── */
-let toastTimer = null;
-
-function showToast(msg) {
-    const toast = document.getElementById("toast");
-    toast.textContent = msg;
-    toast.classList.add("show");
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toast.classList.remove("show"), 3000);
-}
-
-/* ── Open app via fetch → about:blank ── */
-function openApp(app) {
-    if (cache[app.url]) {
-        writeToBlank(cache[app.url]);
-        return;
-    }
-
-    fetch(app.url)
-        .then(r => {
-            if (!r.ok) throw new Error(`HTTP ${r.status}`);
-            return r.text();
-        })
-        .then(html => {
-            cache[app.url] = html;
-            writeToBlank(html);
-        })
-        .catch(() => showToast(`Failed to load "${app.name}"`));
+function setStatus(msg, isErr) {
+  const el = document.getElementById("status");
+  el.textContent = msg;
+  el.className = "hub-status" + (isErr ? " err" : "");
 }
 
 function writeToBlank(html) {
-    const win = window.open("about:blank", "_blank");
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
+  const win = window.open("about:blank", "_blank");
+  if (!win) { setStatus("Popup blocked — allow popups for this site and try again.", true); return; }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
 }
 
-/* ── Render ── */
+function openApp(app) {
+  if (app.direct) { window.open(app.url, "_blank"); return; }
+  if (cache[app.url]) { writeToBlank(cache[app.url]); return; }
+  setStatus("Loading " + app.name + "…");
+  fetch(app.url)
+    .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+    .then(html => { cache[app.url] = html; setStatus(""); writeToBlank(html); })
+    .catch(e => setStatus('Failed to load "' + app.name + '" — check your internet connection or the file URL.', true));
+}
+
 function render() {
-    const container = document.getElementById("container");
-    container.innerHTML = "";
-
-    apps[currentTab].forEach(app => {
-        const card = document.createElement("div");
-        card.className = "card" + (app.url ? "" : " empty");
-
-        card.innerHTML = `
-            <div class="title">${app.name || "Empty Slot"}</div>
-            <div class="sub">${app.desc || "Coming soon"}</div>
-        `;
-
-        if (app.url) card.onclick = () => openApp(app);
-
-        container.appendChild(card);
-    });
+  const grid = document.getElementById("grid");
+  grid.innerHTML = "";
+  setStatus("");
+  apps[current].forEach(app => {
+    const card = document.createElement("div");
+    card.className = "hub-card" + (app.url ? "" : " empty");
+    card.innerHTML = '<div class="hub-card-title">' + app.name + '</div><div class="hub-card-sub">' + app.desc + '</div>';
+    if (app.url) card.onclick = () => openApp(app);
+    grid.appendChild(card);
+  });
 }
 
-/* ── Tabs ── */
-document.querySelectorAll(".tab").forEach(tab => {
-    tab.onclick = () => {
-        currentTab = tab.dataset.tab;
-        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-        tab.classList.add("active");
-        render();
-    };
+const tabLabels = { home: "Home", tools: "Tools", links: "Links" };
+const tabsEl = document.getElementById("tabs");
+Object.keys(apps).forEach(key => {
+  const tab = document.createElement("div");
+  tab.className = "hub-tab" + (key === current ? " active" : "");
+  tab.textContent = tabLabels[key];
+  tab.onclick = () => {
+    current = key;
+    document.querySelectorAll(".hub-tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    render();
+  };
+  tabsEl.appendChild(tab);
 });
 
 render();
 </script>
-
-</body>
-</html>
