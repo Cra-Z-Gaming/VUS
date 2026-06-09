@@ -21,7 +21,6 @@
             border-bottom: 1px solid #1f2937;
         }
 
-        /* Tabs */
         #tabs {
             display: flex;
             justify-content: center;
@@ -126,7 +125,31 @@ const hubs = [
 ];
 
 const tools = [
-    // future tools go here
+    {
+        name: "Base64 Tool",
+        url: "",
+        desc: "Encode / Decode text"
+    },
+    {
+        name: "HTML Viewer",
+        url: "",
+        desc: "Render raw HTML"
+    },
+    {
+        name: "URL Opener",
+        url: "",
+        desc: "Open links in about:blank"
+    },
+    {
+        name: "Notes",
+        url: "",
+        desc: "Simple local notes"
+    },
+    {
+        name: "JSON Formatter",
+        url: "",
+        desc: "Format JSON data"
+    }
 ];
 
 let currentTab = "hubs";
@@ -165,7 +188,7 @@ function render() {
     });
 }
 
-/* Tab switching */
+/* Tabs */
 document.getElementById("tab-hubs").onclick = () => {
     currentTab = "hubs";
     document.getElementById("tab-hubs").classList.add("active");
