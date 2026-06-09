@@ -1,3 +1,0 @@
-Google|https://google.com
-Google Test|https://google.com
-8 Ball Classic|HTML_Games/8ballclassic.html
