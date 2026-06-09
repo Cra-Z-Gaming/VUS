@@ -1,1 +1,28 @@
-https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/VUSL
+<button id="open">Open VUSL</button>
+
+<script>
+document.getElementById("open").onclick = async () => {
+    try {
+        const response = await fetch(
+            "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/VUSL"
+        );
+
+        const html = await response.text();
+
+        const win = window.open("about:blank", "_blank");
+
+        if (!win) {
+            alert("Popup blocked");
+            return;
+        }
+
+        win.document.open();
+        win.document.write(html);
+        win.document.close();
+
+    } catch (err) {
+        console.error(err);
+        alert("Failed to load VUSL");
+    }
+};
+</script>
