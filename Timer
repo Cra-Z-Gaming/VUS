@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Timer / Stopwatch</title>
+
+<style>
+    body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: #0f172a;
+        color: white;
+        display: flex;
+        justify-content: center;
+        padding: 30px;
+    }
+
+    .container {
+        width: 100%;
+        max-width: 600px;
+    }
+
+    h1 {
+        text-align: center;
+        margin-bottom: 20px;
+    }
+
+    .box {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 16px;
+    }
+
+    .time {
+        font-size: 40px;
+        text-align: center;
+        margin: 10px 0;
+        font-family: monospace;
+    }
+
+    button {
+        width: 100%;
+        padding: 10px;
+        margin-top: 8px;
+        border-radius: 8px;
+        border: 1px solid #334155;
+        background: #22c55e;
+        color: black;
+        font-size: 14px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+    button:hover {
+        background: #16a34a;
+    }
+
+    button.secondary {
+        background: #0f172a;
+        color: white;
+    }
+
+    input {
+        width: 100%;
+        padding: 10px;
+        margin-top: 8px;
+        border-radius: 8px;
+        border: 1px solid #334155;
+        background: #0f172a;
+        color: white;
+        font-size: 14px;
+        text-align: center;
+    }
+
+    .laps {
+        max-height: 120px;
+        overflow-y: auto;
+        margin-top: 10px;
+        font-family: monospace;
+        font-size: 14px;
+        color: #94a3b8;
+    }
+</style>
+</head>
+
+<body>
+
+<div class="container">
+    <h1>Timer / Stopwatch</h1>
+
+    <!-- STOPWATCH -->
+    <div class="box">
+        <h3>Stopwatch</h3>
+        <div class="time" id="sw">0:00.0</div>
+
+        <button onclick="startStopwatch()">Start / Pause</button>
+        <button class="secondary" onclick="resetStopwatch()">Reset</button>
+        <button class="secondary" onclick="lap()">Lap</button>
+
+        <div class="laps" id="laps"></div>
+    </div>
+
+    <!-- TIMER -->
+    <div class="box">
+        <h3>Countdown Timer</h3>
+
+        <input id="timerInput" placeholder="Seconds (e.g. 60)">
+
+        <div class="time" id="timer">0:00</div>
+
+        <button onclick="startTimer()">Start Timer</button>
+        <button class="secondary" onclick="resetTimer()">Reset</button>
+    </div>
+</div>
+
+<script>
+/* ───────── Stopwatch ───────── */
+let swRunning = false;
+let swTime = 0;
+let swInterval;
+
+function formatSw(t) {
+    const min = Math.floor(t / 60000);
+    const sec = Math.floor((t % 60000) / 1000);
+    const ms = Math.floor((t % 1000) / 100);
+    return `${min}:${sec.toString().padStart(2,'0')}.${ms}`;
+}
+
+function updateSw() {
+    document.getElementById("sw").innerText = formatSw(swTime);
+}
+
+function startStopwatch() {
+    if (swRunning) {
+        clearInterval(swInterval);
+        swRunning = false;
+        return;
+    }
+
+    swRunning = true;
+    let start = Date.now() - swTime;
+
+    swInterval = setInterval(() => {
+        swTime = Date.now() - start;
+        updateSw();
+    }, 100);
+}
+
+function resetStopwatch() {
+    clearInterval(swInterval);
+    swRunning = false;
+    swTime = 0;
+    updateSw();
+    document.getElementById("laps").innerHTML = "";
+}
+
+function lap() {
+    const lapTime = formatSw(swTime);
+    const div = document.createElement("div");
+    div.textContent = "Lap: " + lapTime;
+    document.getElementById("laps").appendChild(div);
+}
+
+/* ───────── Timer ───────── */
+let timerInterval;
+let timerRunning = false;
+let timerLeft = 0;
+
+function formatTimer(t) {
+    const sec = Math.floor(t % 60);
+    const min = Math.floor(t / 60);
+    return `${min}:${sec.toString().padStart(2,'0')}`;
+}
+
+function updateTimer() {
+    document.getElementById("timer").innerText = formatTimer(timerLeft);
+}
+
+function startTimer() {
+    if (timerRunning) return;
+
+    let input = parseInt(document.getElementById("timerInput").value);
+    if (isNaN(input) || input <= 0) return;
+
+    timerLeft = input;
+    updateTimer();
+
+    timerRunning = true;
+
+    timerInterval = setInterval(() => {
+        timerLeft--;
+        updateTimer();
+
+        if (timerLeft <= 0) {
+            clearInterval(timerInterval);
+            timerRunning = false;
+            alert("Time's up!");
+        }
+    }, 1000);
+}
+
+function resetTimer() {
+    clearInterval(timerInterval);
+    timerRunning = false;
+    timerLeft = 0;
+    updateTimer();
+}
+</script>
+
+</body>
+</html>
