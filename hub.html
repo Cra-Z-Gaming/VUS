@@ -7,7 +7,7 @@
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #0f172a; color: #f1f5f9; font-family: Arial, sans-serif; padding: 16px; }
-  .hub-header { padding: 14px 0; text-align: center; font-size: 22px; font-weight: 500; border-bottom: 1px solid #1f2937; color: #f1f5f9; }
+  .hub-header { padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; font-size: 22px; font-weight: 500; border-bottom: 1px solid #1f2937; color: #f1f5f9; }
   .hub-tabs { display: flex; gap: 8px; padding: 12px 0; border-bottom: 1px solid #1f2937; flex-wrap: wrap; }
   .hub-tab { padding: 6px 14px; border-radius: 8px; cursor: pointer; background: #1e293b; border: 1px solid #334155; font-size: 14px; color: #94a3b8; transition: background 0.15s; }
   .hub-tab:hover { background: #334155; color: #f1f5f9; }
@@ -24,7 +24,12 @@
 </head>
 <body>
 
-<div class="hub-header">VUS Hub</div>
+
+<div class="hub-header">
+  <div>VUS Hub</div>
+  <div id="clock"></div>
+</div>
+ 
 <div class="hub-tabs" id="tabs"></div>
 <div class="hub-status" id="status"></div>
 <div class="hub-grid" id="grid"></div>
@@ -130,6 +135,21 @@ Object.keys(apps).forEach(key => {
   tabsEl.appendChild(tab);
 });
 
+function updateClock() {
+  const el = document.getElementById("clock");
+  if (!el) return;
+
+  const now = new Date();
+  el.textContent = now.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+}
+
+setInterval(updateClock, 1000);
+updateClock();
+ 
 render();
 </script>
 
