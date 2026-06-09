@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>VUS Opener</title>
+    <title>File Opener</title>
 
     <style>
         * {
@@ -127,7 +127,7 @@
 
 <body>
 
-    <h1>VUS Opener</h1>
+    <h1>File Opener</h1>
     <p class="subtitle">Open local files in about:blank</p>
 
     <!-- File Section -->
