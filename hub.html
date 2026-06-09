@@ -117,9 +117,21 @@ function openApp(app) {
         setStatus("Popup blocked — allow popups for this site.", true);
         return;
       }
-      win.document.open();
-      win.document.write(text);
-      win.document.close();
+      const doc = win.document;
+doc.open();
+doc.write(`
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>${app.name}</title>
+</head>
+<body>
+${text}
+</body>
+</html>
+`);
+doc.close();
       setStatus("");
     })
     .catch(() => setStatus("Failed to load " + app.name + ".", true));
