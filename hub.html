@@ -1,36 +1,104 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <title>VUS Hub</title>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #0f172a;
+            color: white;
+        }
+
+        header {
+            padding: 20px;
+            text-align: center;
+            font-size: 28px;
+            font-weight: bold;
+            background: #111827;
+            border-bottom: 1px solid #1f2937;
+        }
+
+        #container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            padding: 20px;
+        }
+
+        .card {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 15px;
+            cursor: pointer;
+            text-align: center;
+            transition: 0.2s;
+            border: 1px solid #334155;
+        }
+
+        .card:hover {
+            transform: translateY(-3px);
+            background: #334155;
+        }
+
+        .title {
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+
+        .sub {
+            font-size: 12px;
+            color: #94a3b8;
+        }
+    </style>
 </head>
+
 <body>
 
-<h2>VUS Hub</h2>
+<header>VUS Hub</header>
 
-<button onclick="openApp('https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL')">
-    VUSL
-</button>
-
-<!-- Add more apps like this:
-<button onclick="openApp('RAW_URL_HERE')">Game 2</button>
--->
+<div id="container"></div>
 
 <script>
-async function openApp(url) {
-    try {
-        const html = await fetch(url).then(r => r.text());
-
-        const win = window.open("about:blank", "_blank");
-
-        win.document.open();
-        win.document.write(html);
-        win.document.close();
-
-    } catch (e) {
-        console.error(e);
-        alert("Failed to load app");
+const apps = [
+    {
+        name: "VUSL",
+        url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL",
+        desc: "Main game hub"
     }
+
+    // Add more apps here:
+    // { name: "Game 2", url: "...", desc: "Description" }
+];
+
+function openApp(url) {
+    fetch(url)
+        .then(r => r.text())
+        .then(html => {
+            const win = window.open("about:blank", "_blank");
+            win.document.open();
+            win.document.write(html);
+            win.document.close();
+        });
 }
+
+const container = document.getElementById("container");
+
+apps.forEach(app => {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    card.innerHTML = `
+        <div class="title">${app.name}</div>
+        <div class="sub">${app.desc}</div>
+    `;
+
+    card.onclick = () => openApp(app.url);
+
+    container.appendChild(card);
+});
 </script>
 
 </body>
