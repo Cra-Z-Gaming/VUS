@@ -13,12 +13,42 @@
         }
 
         header {
-            padding: 20px;
+            padding: 16px;
             text-align: center;
-            font-size: 28px;
+            font-size: 26px;
             font-weight: bold;
             background: #111827;
             border-bottom: 1px solid #1f2937;
+        }
+
+        /* Tabs */
+        #tabs {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            padding: 10px;
+            background: #0b1220;
+            border-bottom: 1px solid #1f2937;
+        }
+
+        .tab {
+            padding: 8px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            background: #1e293b;
+            border: 1px solid #334155;
+            transition: 0.2s;
+            font-size: 14px;
+        }
+
+        .tab:hover {
+            background: #334155;
+        }
+
+        .tab.active {
+            background: #22c55e;
+            color: black;
+            font-weight: bold;
         }
 
         #container {
@@ -59,10 +89,15 @@
 
 <header>VUS Hub</header>
 
+<div id="tabs">
+    <div class="tab active" id="tab-hubs">Hubs</div>
+    <div class="tab" id="tab-tools">Tools</div>
+</div>
+
 <div id="container"></div>
 
 <script>
-const apps = [
+const hubs = [
     {
         name: "VUSL",
         url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL",
@@ -74,7 +109,7 @@ const apps = [
         desc: "YouTube Version 11 K1"
     },
     {
-        name: "",
+        name: "Empty Slot",
         url: "",
         desc: ""
     },
@@ -90,6 +125,12 @@ const apps = [
     }
 ];
 
+const tools = [
+    // future tools go here
+];
+
+let currentTab = "hubs";
+
 function openApp(url) {
     fetch(url)
         .then(r => r.text())
@@ -101,24 +142,45 @@ function openApp(url) {
         });
 }
 
-const container = document.getElementById("container");
+function render() {
+    const container = document.getElementById("container");
+    container.innerHTML = "";
 
-apps.forEach(app => {
-    // skip empty slots
-    if (!app.url) return;
+    const list = currentTab === "hubs" ? hubs : tools;
 
-    const card = document.createElement("div");
-    card.className = "card";
+    list.forEach(app => {
+        if (!app.url) return;
 
-    card.innerHTML = `
-        <div class="title">${app.name}</div>
-        <div class="sub">${app.desc}</div>
-    `;
+        const card = document.createElement("div");
+        card.className = "card";
 
-    card.onclick = () => openApp(app.url);
+        card.innerHTML = `
+            <div class="title">${app.name}</div>
+            <div class="sub">${app.desc}</div>
+        `;
 
-    container.appendChild(card);
-});
+        card.onclick = () => openApp(app.url);
+
+        container.appendChild(card);
+    });
+}
+
+/* Tab switching */
+document.getElementById("tab-hubs").onclick = () => {
+    currentTab = "hubs";
+    document.getElementById("tab-hubs").classList.add("active");
+    document.getElementById("tab-tools").classList.remove("active");
+    render();
+};
+
+document.getElementById("tab-tools").onclick = () => {
+    currentTab = "tools";
+    document.getElementById("tab-tools").classList.add("active");
+    document.getElementById("tab-hubs").classList.remove("active");
+    render();
+};
+
+render();
 </script>
 
 </body>
