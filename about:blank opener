@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>VUS Opener</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #0f172a;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 13px;
+            color: #64748b;
+            margin-bottom: 40px;
+        }
+
+        .section {
+            width: 100%;
+            max-width: 500px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+
+        .section-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #64748b;
+            margin-bottom: 12px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: white;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+            margin-bottom: 12px;
+        }
+
+        input[type="text"]:focus {
+            border-color: #22c55e;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-label {
+            display: block;
+            width: 100%;
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px dashed #334155;
+            background: #0f172a;
+            color: #94a3b8;
+            font-size: 14px;
+            cursor: pointer;
+            text-align: center;
+            transition: border-color 0.2s, color 0.2s;
+            margin-bottom: 12px;
+        }
+
+        .file-label:hover {
+            border-color: #22c55e;
+            color: white;
+        }
+
+        .file-label.selected {
+            border-color: #22c55e;
+            color: #22c55e;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: none;
+            background: #22c55e;
+            color: black;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #16a34a;
+        }
+
+        button:disabled {
+            background: #1e3a2a;
+            color: #4b7a5a;
+            cursor: default;
+        }
+
+        /* Toast */
+        #toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(60px);
+            background: #ef4444;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.3s, transform 0.3s;
+            pointer-events: none;
+            z-index: 999;
+        }
+
+        #toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+    </style>
+</head>
+<body>
+
+    <h1>VUS Opener</h1>
+    <p class="subtitle">Open URLs or local files in about:blank</p>
+
+    <!-- URL Section -->
+    <div class="section">
+        <div class="section-label">Open URL</div>
+        <input type="text" id="urlInput" placeholder="https://example.com or raw GitHub URL" />
+        <button id="urlBtn" onclick="openURL()">Open URL</button>
+    </div>
+
+    <!-- File Section -->
+    <div class="section">
+        <div class="section-label">Open Local File</div>
+        <label class="file-label" id="fileLabel" for="fileInput">Click to choose any file</label>
+        <input type="file" id="fileInput" onchange="fileSelected()" />
+        <button id="fileBtn" onclick="openFile()" disabled>Open File</button>
+    </div>
+
+    <div id="toast"></div>
+
+    <script>
+        let selectedFile = null;
+        let toastTimer = null;
+
+        function showToast(msg) {
+            const toast = document.getElementById("toast");
+            toast.textContent = msg;
+            toast.classList.add("show");
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => toast.classList.remove("show"), 3000);
+        }
+
+        function writeToBlank(html) {
+            const win = window.open("about:blank", "_blank");
+            if (!win) {
+                showToast("Popup blocked — allow popups for this page");
+                return;
+            }
+            win.document.open();
+            win.document.write(html);
+            win.document.close();
+        }
+
+        /* ── URL Opener ── */
+        function openURL() {
+            let url = document.getElementById("urlInput").value.trim();
+            if (!url) {
+                showToast("Enter a URL first");
+                return;
+            }
+            if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                url = "https://" + url;
+            }
+
+            const btn = document.getElementById("urlBtn");
+            btn.textContent = "Loading...";
+            btn.disabled = true;
+
+            fetch(url)
+                .then(r => {
+                    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                    return r.text();
+                })
+                .then(html => writeToBlank(html))
+                .catch(() => showToast("Failed to fetch URL — check the address and try again"))
+                .finally(() => {
+                    btn.textContent = "Open URL";
+                    btn.disabled = false;
+                });
+        }
+
+        /* ── File Opener ── */
+        function fileSelected() {
+            const input = document.getElementById("fileInput");
+            selectedFile = input.files[0] || null;
+
+            const label = document.getElementById("fileLabel");
+            const btn = document.getElementById("fileBtn");
+
+            if (selectedFile) {
+                label.textContent = selectedFile.name;
+                label.classList.add("selected");
+                btn.disabled = false;
+            } else {
+                label.textContent = "Click to choose any file";
+                label.classList.remove("selected");
+                btn.disabled = true;
+            }
+        }
+
+        function isHTML(filename) {
+            return /\.(html|htm)$/i.test(filename);
+        }
+
+        function openFile() {
+            if (!selectedFile) return;
+
+            const reader = new FileReader();
+            reader.onerror = () => showToast("Failed to read file");
+
+            if (isHTML(selectedFile.name)) {
+                // Render HTML directly
+                reader.onload = e => writeToBlank(e.target.result);
+            } else {
+                // Wrap plain text in a simple styled page
+                reader.onload = e => {
+                    const escaped = e.target.result
+                        .replace(/&/g, "&amp;")
+                        .replace(/</g, "&lt;")
+                        .replace(/>/g, "&gt;");
+                    const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>${selectedFile.name}</title>
+<style>
+  body { margin: 0; background: #0f172a; color: #e2e8f0; font-family: monospace; font-size: 14px; }
+  pre { padding: 20px; white-space: pre-wrap; word-break: break-word; margin: 0; }
+  header { padding: 10px 20px; background: #111827; border-bottom: 1px solid #1f2937; font-size: 13px; color: #64748b; }
+</style>
+</head>
+<body>
+<header>${selectedFile.name}</header>
+<pre>${escaped}</pre>
+</body>
+</html>`;
+                    writeToBlank(html);
+                };
+            }
+
+            reader.readAsText(selectedFile);
+        }
+
+        /* Open URL on Enter key */
+        document.getElementById("urlInput").addEventListener("keydown", e => {
+            if (e.key === "Enter") openURL();
+        });
+    </script>
+
+</body>
+</html>
