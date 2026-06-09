@@ -67,10 +67,27 @@ const apps = [
         name: "VUSL",
         url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL",
         desc: "Main game hub"
+    },
+    {
+        name: "App 2",
+        url: "",
+        desc: "Empty slot"
+    },
+    {
+        name: "App 3",
+        url: "",
+        desc: "Empty slot"
+    },
+    {
+        name: "App 4",
+        url: "",
+        desc: "Empty slot"
+    },
+    {
+        name: "App 5",
+        url: "",
+        desc: "Empty slot"
     }
-
-    // Add more apps here:
-    // { name: "Game 2", url: "...", desc: "Description" }
 ];
 
 function openApp(url) {
@@ -87,6 +104,9 @@ function openApp(url) {
 const container = document.getElementById("container");
 
 apps.forEach(app => {
+    // skip empty slots
+    if (!app.url) return;
+
     const card = document.createElement("div");
     card.className = "card";
 
