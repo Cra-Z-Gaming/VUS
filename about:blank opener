@@ -188,31 +188,33 @@
 
         /* ── URL Opener ── */
         function openURL() {
-            let url = document.getElementById("urlInput").value.trim();
-            if (!url) {
-                showToast("Enter a URL first");
-                return;
-            }
-            if (!url.startsWith("http://") && !url.startsWith("https://")) {
-                url = "https://" + url;
-            }
+    let url = document.getElementById("urlInput").value.trim();
+    if (!url) {
+        showToast("Enter a URL first");
+        return;
+    }
 
-            const btn = document.getElementById("urlBtn");
-            btn.textContent = "Loading...";
-            btn.disabled = true;
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        url = "https://" + url;
+    }
 
-            fetch(url)
-                .then(r => {
-                    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                    return r.text();
-                })
-                .then(html => writeToBlank(html))
-                .catch(() => showToast("Failed to fetch URL — check the address and try again"))
-                .finally(() => {
-                    btn.textContent = "Open URL";
-                    btn.disabled = false;
-                });
+    const btn = document.getElementById("urlBtn");
+    btn.textContent = "Loading...";
+    btn.disabled = true;
+
+    try {
+        const win = window.open(url, "_blank");
+
+        if (!win) {
+            showToast("Popup blocked — allow popups for this page");
         }
+    } catch (e) {
+        showToast("Failed to open URL");
+    }
+
+    btn.textContent = "Open URL";
+    btn.disabled = false;
+}
 
         /* ── File Opener ── */
         function fileSelected() {
