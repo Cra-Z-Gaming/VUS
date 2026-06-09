@@ -15,11 +15,11 @@
   .hub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; padding: 16px 0; }
   .hub-card { background: #1e293b; border-radius: 12px; border: 1px solid #334155; padding: 16px 14px; cursor: pointer; text-align: center; transition: border-color 0.15s, background 0.15s; }
   .hub-card:hover { border-color: #475569; background: #334155; }
-  .hub-card.empty { opacity: 0.35; cursor: default; pointer-events: none; }
   .hub-card-title { font-size: 15px; font-weight: 500; margin-bottom: 5px; color: #f1f5f9; }
   .hub-card-sub { font-size: 12px; color: #94a3b8; }
   .hub-status { font-size: 13px; color: #94a3b8; padding: 12px 0; text-align: center; min-height: 20px; }
   .hub-status.err { color: #ef4444; }
+  .hub-empty { font-size: 14px; color: #475569; padding: 32px 0; text-align: center; }
 </style>
 </head>
 <body>
@@ -34,23 +34,23 @@ const apps = {
   home: [
     { name: "VUSL", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL", desc: "Main game hub" },
     { name: "YouTube", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/YouTube%20Premium%20V11%20K1", desc: "YouTube Version 11 K1" },
-    { name: "Empty Slot", url: "", desc: "Coming soon" },
-    { name: "Empty Slot", url: "", desc: "Coming soon" },
-    { name: "Empty Slot", url: "", desc: "Coming soon" }
+    { name: "Empty Slot", url: "", desc: "" },
+    { name: "Empty Slot", url: "", desc: "" },
+    { name: "Empty Slot", url: "", desc: "" }
   ],
   tools: [
     { name: "about:blank opener", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/about%3Ablank%20opener", desc: "Opens files as about:blank" },
     { name: "Timer", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Timer", desc: "Stopwatch + countdown timer" },
     { name: "Code Editor", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/HTML%20Editor", desc: "Live code editor" },
-    { name: "Empty Slot", url: "", desc: "Coming soon" },
-    { name: "Empty Slot", url: "", desc: "Coming soon" }
+    { name: "Empty Slot", url: "", desc: "" },
+    { name: "Empty Slot", url: "", desc: "" }
   ],
   links: [
-    { name: "Empty Slot", url: "", desc: "Coming soon", direct: true },
-    { name: "Empty Slot", url: "", desc: "Coming soon", direct: true },
-    { name: "Empty Slot", url: "", desc: "Coming soon" },
-    { name: "Empty Slot", url: "", desc: "Coming soon" },
-    { name: "Empty Slot", url: "", desc: "Coming soon" }
+    { name: "Empty Slot", url: "", desc: "", direct: true },
+    { name: "Empty Slot", url: "", desc: "", direct: false },
+    { name: "Empty Slot", url: "", desc: "" },
+    { name: "Empty Slot", url: "", desc: "" },
+    { name: "Empty Slot", url: "", desc: "" }
   ]
 };
 
@@ -85,11 +85,16 @@ function render() {
   const grid = document.getElementById("grid");
   grid.innerHTML = "";
   setStatus("");
-  apps[current].forEach(app => {
+  const filled = apps[current].filter(app => app.url.trim() !== "");
+  if (filled.length === 0) {
+    grid.innerHTML = '<div class="hub-empty">Nothing here yet.</div>';
+    return;
+  }
+  filled.forEach(app => {
     const card = document.createElement("div");
-    card.className = "hub-card" + (app.url ? "" : " empty");
+    card.className = "hub-card";
     card.innerHTML = '<div class="hub-card-title">' + app.name + '</div><div class="hub-card-sub">' + app.desc + '</div>';
-    if (app.url) card.onclick = () => openApp(app);
+    card.onclick = () => openApp(app);
     grid.appendChild(card);
   });
 }
