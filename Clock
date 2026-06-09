@@ -1,0 +1,17 @@
+function startClock() {
+  const el = document.getElementById("clock");
+
+  function update() {
+    const now = new Date();
+    el.textContent = now.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    });
+  }
+
+  update();
+  setInterval(update, 1000);
+}
+
+startClock();
