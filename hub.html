@@ -89,7 +89,7 @@
 <header>VUS Hub</header>
 
 <div id="tabs">
-    <div class="tab active" id="tab-hubs">Hubs</div>
+    <div class="tab active" id="tab-home">Home</div>
     <div class="tab" id="tab-tools">Tools</div>
 </div>
 
@@ -152,7 +152,7 @@ const tools = [
     }
 ];
 
-let currentTab = "hubs";
+let currentTab = "home";
 
 function openApp(url) {
     fetch(url)
@@ -169,7 +169,7 @@ function render() {
     const container = document.getElementById("container");
     container.innerHTML = "";
 
-    const list = currentTab === "hubs" ? hubs : tools;
+    const list = currentTab === "home" ? hubs : tools;
 
     list.forEach(app => {
         if (!app.url) return;
@@ -189,9 +189,9 @@ function render() {
 }
 
 /* Tabs */
-document.getElementById("tab-hubs").onclick = () => {
-    currentTab = "hubs";
-    document.getElementById("tab-hubs").classList.add("active");
+document.getElementById("tab-home").onclick = () => {
+    currentTab = "home";
+    document.getElementById("tab-home").classList.add("active");
     document.getElementById("tab-tools").classList.remove("active");
     render();
 };
