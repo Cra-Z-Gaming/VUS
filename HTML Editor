@@ -92,6 +92,11 @@
         color: #94a3b8;
         margin-left: auto;
     }
+
+    /* hidden file input */
+    #fileInput {
+        display: none;
+    }
 </style>
 </head>
 
@@ -102,6 +107,13 @@
         <button onclick="run()">Run</button>
         <button class="secondary" onclick="openTab()">Open Tab</button>
         <button class="secondary" onclick="resetCode()">Reset</button>
+
+        <button class="secondary" onclick="exportCode()">Export</button>
+
+        <input type="file" id="fileInput" onchange="importCode(event)">
+        <label for="fileInput" class="secondary" style="padding:6px 10px;border-radius:6px;cursor:pointer;display:inline-block;border:1px solid #334155;">
+            Import
+        </label>
 
         <div class="toggle on" id="autoToggle" onclick="toggleAuto()">Auto Refresh</div>
 
@@ -161,6 +173,28 @@ function resetCode() {
 function toggleAuto() {
     auto = !auto;
     document.getElementById("autoToggle").classList.toggle("on", auto);
+}
+
+/* EXPORT */
+function exportCode() {
+    const blob = new Blob([codeBox.value], { type: "text/html" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "index.html";
+    a.click();
+}
+
+/* IMPORT */
+function importCode(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = e => {
+        codeBox.value = e.target.result;
+        run();
+    };
+    reader.readAsText(file);
 }
 
 /* INIT */
