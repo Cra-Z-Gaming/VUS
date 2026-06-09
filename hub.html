@@ -72,6 +72,17 @@
             background: #334155;
         }
 
+        .card.empty {
+            opacity: 0.35;
+            cursor: default;
+            pointer-events: none;
+        }
+
+        .card.empty:hover {
+            transform: none;
+            background: #1e293b;
+        }
+
         .title {
             font-size: 16px;
             margin-bottom: 8px;
@@ -81,6 +92,28 @@
             font-size: 12px;
             color: #94a3b8;
         }
+
+        /* Toast */
+        #toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(60px);
+            background: #ef4444;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.3s, transform 0.3s;
+            pointer-events: none;
+            z-index: 999;
+        }
+
+        #toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
     </style>
 </head>
 
@@ -89,123 +122,108 @@
 <header>VUS Hub</header>
 
 <div id="tabs">
-    <div class="tab active" id="tab-home">Home</div>
-    <div class="tab" id="tab-tools">Tools</div>
+    <div class="tab active" data-tab="home">Home</div>
+    <div class="tab" data-tab="tools">Tools</div>
 </div>
 
 <div id="container"></div>
+<div id="toast"></div>
 
 <script>
-const hubs = [
-    {
-        name: "VUSL",
-        url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL",
-        desc: "Main game hub"
-    },
-    {
-        name: "YouTube",
-        url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/YouTube%20Premium%20V11%20K1",
-        desc: "YouTube Version 11 K1"
-    },
-    {
-        name: "Empty Slot",
-        url: "",
-        desc: ""
-    },
-    {
-        name: "App 4",
-        url: "",
-        desc: "Empty slot"
-    },
-    {
-        name: "App 5",
-        url: "",
-        desc: "Empty slot"
-    }
-];
+const apps = {
+    home: [
+        {
+            name: "VUSL",
+            url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL",
+            desc: "Main game hub"
+        },
+        {
+            name: "YouTube",
+            url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/YouTube%20Premium%20V11%20K1",
+            desc: "YouTube Version 11 K1"
+        },
+        { name: "Empty Slot", url: "", desc: "" },
+        { name: "Empty Slot",      url: "", desc: "" },
+        { name: "Empty Slot",      url: "", desc: "" }
+    ],
+    tools: [
+        { name: "Nothing",    url: "", desc: "Nothing" },
+        { name: "Nothing",    url: "", desc: "Nothing" },
+        { name: "Nothing",     url: "", desc: "Nothing" },
+        { name: "Nothing",          url: "", desc: "Nothing" },
+        { name: "Nothing", url: "", desc: "Nothing" }
+    ]
+};
 
-const tools = [
-    {
-        name: "Base64 Tool",
-        url: "",
-        desc: "Encode / Decode text"
-    },
-    {
-        name: "HTML Viewer",
-        url: "",
-        desc: "Render raw HTML"
-    },
-    {
-        name: "URL Opener",
-        url: "",
-        desc: "Open links in about:blank"
-    },
-    {
-        name: "Notes",
-        url: "",
-        desc: "Simple local notes"
-    },
-    {
-        name: "JSON Formatter",
-        url: "",
-        desc: "Format JSON data"
-    }
-];
-
+const cache = {};
 let currentTab = "home";
 
-function openApp(url) {
-    fetch(url)
-        .then(r => r.text())
-        .then(html => {
-            const win = window.open("about:blank", "_blank");
-            win.document.open();
-            win.document.write(html);
-            win.document.close();
-        });
+/* ── Toast ── */
+let toastTimer = null;
+
+function showToast(msg) {
+    const toast = document.getElementById("toast");
+    toast.textContent = msg;
+    toast.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove("show"), 3000);
 }
 
+/* ── Open app via fetch → about:blank ── */
+function openApp(app) {
+    if (cache[app.url]) {
+        writeToBlank(cache[app.url]);
+        return;
+    }
+
+    fetch(app.url)
+        .then(r => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.text();
+        })
+        .then(html => {
+            cache[app.url] = html;
+            writeToBlank(html);
+        })
+        .catch(() => showToast(`Failed to load "${app.name}"`));
+}
+
+function writeToBlank(html) {
+    const win = window.open("about:blank", "_blank");
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+}
+
+/* ── Render ── */
 function render() {
     const container = document.getElementById("container");
     container.innerHTML = "";
 
-    const list = currentTab === "home" ? hubs : tools;
-
-    list.forEach(app => {
-        if (!app.url) return;
-
+    apps[currentTab].forEach(app => {
         const card = document.createElement("div");
-        card.className = "card";
+        card.className = "card" + (app.url ? "" : " empty");
 
         card.innerHTML = `
-            <div class="title">${app.name}</div>
-            <div class="sub">${app.desc}</div>
+            <div class="title">${app.name || "Empty Slot"}</div>
+            <div class="sub">${app.desc || "Coming soon"}</div>
         `;
 
-        card.onclick = () => openApp(app.url);
+        if (app.url) card.onclick = () => openApp(app);
 
         container.appendChild(card);
     });
 }
 
-/* Tabs */
-document.getElementById("tab-home").onclick = () => {
-    currentTab = "home";
-
-    document.getElementById("tab-home").classList.add("active");
-    document.getElementById("tab-tools").classList.remove("active");
-
-    render();
-};
-
-document.getElementById("tab-tools").onclick = () => {
-    currentTab = "tools";
-
-    document.getElementById("tab-tools").classList.add("active");
-    document.getElementById("tab-home").classList.remove("active");
-
-    render();
-};
+/* ── Tabs ── */
+document.querySelectorAll(".tab").forEach(tab => {
+    tab.onclick = () => {
+        currentTab = tab.dataset.tab;
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+        render();
+    };
+});
 
 render();
 </script>
