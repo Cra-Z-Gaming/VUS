@@ -1,53 +1,37 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VUS Hub</title>
+
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #0f172a; color: #f1f5f9; font-family: Arial, sans-serif; padding: 16px; }
-  .hub-header { padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; font-size: 22px; font-weight: 500; border-bottom: 1px solid #1f2937; color: #f1f5f9; }
-  .hub-tabs { display: flex; gap: 8px; padding: 12px 0; border-bottom: 1px solid #1f2937; flex-wrap: wrap; }
-  .hub-tab { padding: 6px 14px; border-radius: 8px; cursor: pointer; background: #1e293b; border: 1px solid #334155; font-size: 14px; color: #94a3b8; transition: background 0.15s; }
-  .hub-tab:hover { background: #334155; color: #f1f5f9; }
-  .hub-tab.active { background: #22c55e; color: #000; border-color: #22c55e; font-weight: 500; }
-  .hub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; padding: 16px 0; }
-  .hub-card { background: #1e293b; border-radius: 12px; border: 1px solid #334155; padding: 16px 14px; cursor: pointer; text-align: center; transition: border-color 0.15s, background 0.15s; }
-  .hub-card:hover { border-color: #475569; background: #334155; }
-  .hub-card-title { font-size: 15px; font-weight: 500; margin-bottom: 5px; color: #f1f5f9; }
-  .hub-card-sub { font-size: 12px; color: #94a3b8; }
-  .hub-status { font-size: 13px; color: #94a3b8; padding: 12px 0; text-align: center; min-height: 20px; }
-  .hub-status.err { color: #ef4444; }
-  .hub-empty { font-size: 14px; color: #475569; padding: 32px 0; text-align: center; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+#hub-root { background: #0f172a; color: #f1f5f9; font-family: Arial, sans-serif; padding: 16px; border-radius: 12px; min-height: 400px; }
+.hub-header { padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; font-size: 22px; font-weight: 500; border-bottom: 1px solid #1f2937; color: #f1f5f9; }
+.hub-tabs { display: flex; gap: 8px; padding: 12px 0; border-bottom: 1px solid #1f2937; flex-wrap: wrap; }
+.hub-tab { padding: 6px 14px; border-radius: 8px; cursor: pointer; background: #1e293b; border: 1px solid #334155; font-size: 14px; color: #94a3b8; transition: background 0.15s; }
+.hub-tab:hover { background: #334155; color: #f1f5f9; }
+.hub-tab.active { background: #22c55e; color: #000; border-color: #22c55e; font-weight: 500; }
+.hub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; padding: 16px 0; }
+.hub-card { background: #1e293b; border-radius: 12px; border: 1px solid #334155; padding: 16px 14px; cursor: pointer; text-align: center; transition: border-color 0.15s, background 0.15s; }
+.hub-card:hover { border-color: #475569; background: #334155; }
+.hub-card-title { font-size: 15px; font-weight: 500; margin-bottom: 5px; color: #f1f5f9; }
+.hub-card-sub { font-size: 12px; color: #94a3b8; }
+.hub-status { font-size: 13px; color: #94a3b8; padding: 12px 0; text-align: center; min-height: 20px; }
+.hub-status.err { color: #ef4444; }
+.hub-empty { font-size: 14px; color: #475569; padding: 32px 0; text-align: center; }
 </style>
-</head>
-<body>
 
-
-<div class="hub-header">
-  <div>VUS Hub</div>
-  <div id="clock"></div>
+<div id="hub-root">
+  <div class="hub-header">
+    <div>VUS Hub</div>
+    <div id="clock"></div>
+  </div>
+  <div class="hub-tabs" id="tabs"></div>
+  <div class="hub-status" id="status"></div>
+  <div class="hub-grid" id="grid"></div>
 </div>
- 
-<div class="hub-tabs" id="tabs"></div>
-<div class="hub-status" id="status"></div>
-<div class="hub-grid" id="grid"></div>
 
 <script>
 const apps = {
   home: [
     { name: "VUSL", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL", desc: "Main game hub" },
     { name: "YouTube", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/YouTube%20Premium%20V11%20K1", desc: "YouTube Version 11 K1" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
     { name: "Empty Slot", url: "", desc: "" },
     { name: "Empty Slot", url: "", desc: "" },
     { name: "Empty Slot", url: "", desc: "" },
@@ -59,25 +43,9 @@ const apps = {
     { name: "Code Editor", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/HTML%20Editor", desc: "Live code editor" },
     { name: "Empty Slot", url: "", desc: "" },
     { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
     { name: "Empty Slot", url: "", desc: "" }
   ],
   links: [
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
     { name: "Empty Slot", url: "", desc: "" },
     { name: "Empty Slot", url: "", desc: "" },
     { name: "Empty Slot", url: "", desc: "" },
@@ -96,10 +64,34 @@ function setStatus(msg, isErr) {
 function openApp(app) {
   if (!app.url) return;
 
-  let url = app.url.trim();
+  setStatus("Loading " + app.name + "...");
 
-  // If it's a GitHub raw file or normal link, just open it directly
-  window.open(url, "_blank");
+  fetch(app.url)
+    .then(r => {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    })
+    .then(text => {
+      const trimmed = text.trim();
+      const isHTML = trimmed.toLowerCase().startsWith("<!doctype html") ||
+                     trimmed.toLowerCase().startsWith("<html");
+
+      if (!isHTML) {
+        setStatus(app.name + " is not a full HTML page — cannot open.", true);
+        return;
+      }
+
+      const win = window.open("about:blank", "_blank");
+      if (!win) {
+        setStatus("Popup blocked — allow popups for this site.", true);
+        return;
+      }
+      win.document.open();
+      win.document.write(text);
+      win.document.close();
+      setStatus("");
+    })
+    .catch(() => setStatus("Failed to load " + app.name + ".", true));
 }
 
 function render() {
@@ -138,20 +130,10 @@ Object.keys(apps).forEach(key => {
 function updateClock() {
   const el = document.getElementById("clock");
   if (!el) return;
-
   const now = new Date();
-  el.textContent = now.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  });
+  el.textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
-
 setInterval(updateClock, 1000);
 updateClock();
- 
 render();
 </script>
-
-</body>
-</html>
