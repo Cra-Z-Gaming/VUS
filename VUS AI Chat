@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VUS AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:      #0a0a0d;
+  --surface: #101014;
+  --panel:   #141418;
+  --border:  #202026;
+  --accent:  #00ff88;
+  --acc-dim: rgba(0,255,136,.10);
+  --text:    #dcdcee;
+  --muted:   #42425a;
+  --red:     #ff3355;
+  --blue:    #4488ff;
+  --gold:    #ffcc00;
+  --mono:    'Space Mono', monospace;
+  --display: 'Syne', sans-serif;
+  --r:       8px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  font-family: var(--mono);
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 3px,
+    rgba(0,0,0,.04) 3px, rgba(0,0,0,.04) 4px
+  );
+  pointer-events: none;
+  z-index: 9000;
+}
+
+/* ── Top Bar ── */
+#topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.wordmark {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -2px;
+  color: var(--accent);
+  text-shadow: 0 0 20px rgba(0,255,136,.45);
+  white-space: nowrap;
+}
+.wordmark sup {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 1px;
+  vertical-align: super;
+}
+
+.model-pill {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+/* ── Topbar buttons ── */
+.tb-btn {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 5px 11px;
+  cursor: pointer;
+  transition: color .15s, border-color .15s, background .15s;
+  white-space: nowrap;
+  letter-spacing: .3px;
+}
+.tb-btn:hover { color: var(--text); border-color: #42425a; }
+.tb-btn.danger:hover { color: var(--red); border-color: var(--red); background: rgba(255,51,85,.06); }
+.tb-btn.hub-btn:hover { color: var(--accent); border-color: var(--accent); background: var(--acc-dim); }
+.tb-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+.tb-spacer { margin-left: auto; }
+
+/* ── Key Selector Dropdown ── */
+#keyWrap { position: relative; }
+
+#keyDropBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 5px 11px;
+  cursor: pointer;
+  transition: border-color .15s;
+  white-space: nowrap;
+}
+#keyDropBtn:hover { border-color: var(--accent); }
+#keyDropBtn .k-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+  transition: background .2s;
+}
+#keyDropBtn .k-dot.active { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+#keyDropBtn .k-dot.inactive { background: var(--red); }
+#keyDropBtn .k-caret { font-size: 8px; color: var(--muted); }
+
+#keyMenu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  min-width: 160px;
+  z-index: 500;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  animation: fadeUp .12s ease;
+}
+#keyMenu.open { display: block; }
+
+.km-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 11px;
+  cursor: pointer;
+  color: var(--muted);
+  transition: background .1s, color .1s;
+  user-select: none;
+}
+.km-item:hover { background: var(--border); color: var(--text); }
+.km-item.selected { color: var(--accent); }
+.km-item .km-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+}
+.km-item .km-dot.active   { background: var(--accent); box-shadow: 0 0 5px var(--accent); }
+.km-item .km-dot.inactive { background: var(--red); }
+.km-item .km-dot.unchecked { background: var(--muted); }
+.km-item .km-status {
+  margin-left: auto;
+  font-size: 9px;
+  letter-spacing: .3px;
+}
+.km-item .km-status.active   { color: var(--accent); }
+.km-item .km-status.inactive { color: var(--red); }
+.km-item .km-status.unchecked { color: var(--muted); }
+
+/* ── Search Bar ── */
+#searchBar {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#searchBar.open { display: flex; }
+
+#searchInput {
+  flex: 1;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 6px 11px;
+  outline: none;
+  transition: border-color .2s;
+}
+#searchInput:focus { border-color: var(--accent); }
+#searchInput::placeholder { color: var(--muted); }
+
+#searchCount {
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+  min-width: 52px;
+  text-align: center;
+}
+
+.srch-btn {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--muted);
+  font-size: 12px;
+  width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+  flex-shrink: 0;
+}
+.srch-btn:hover { color: var(--accent); border-color: var(--accent); }
+.srch-btn:disabled { opacity: .3; cursor: not-allowed; }
+
+#searchClose {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 3px;
+  transition: color .15s;
+}
+#searchClose:hover { color: var(--red); }
+
+/* search highlight */
+.hl { background: rgba(255,204,0,.3); border-radius: 2px; }
+.hl.current { background: rgba(255,204,0,.7); color: #000; border-radius: 2px; }
+
+/* ── Chat Area ── */
+#chat {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+#chat::-webkit-scrollbar { width: 4px; }
+#chat::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── Messages ── */
+.msg {
+  display: flex;
+  gap: 10px;
+  max-width: 760px;
+  animation: fadeUp .18s ease;
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.msg.user { align-self: flex-end; flex-direction: row-reverse; }
+.msg.assistant { align-self: flex-start; }
+
+.avatar {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+  flex-shrink: 0; margin-top: 2px;
+}
+.msg.user .avatar { background: var(--blue); color: #fff; }
+.msg.assistant .avatar {
+  background: var(--acc-dim);
+  border: 1px solid rgba(0,255,136,.25);
+  color: var(--accent);
+  font-family: var(--display);
+  font-size: 9px; letter-spacing: .5px;
+}
+
+.bubble {
+  padding: 10px 14px;
+  border-radius: var(--r);
+  font-size: 13px;
+  line-height: 1.75;
+  max-width: calc(100% - 40px);
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.msg.user .bubble { background: var(--blue); color: #fff; border-bottom-right-radius: 2px; }
+.msg.assistant .bubble { background: var(--panel); border: 1px solid var(--border); color: var(--text); border-bottom-left-radius: 2px; }
+
+.bubble code {
+  font-family: var(--mono); font-size: 11px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 4px; padding: 1px 5px; color: var(--accent);
+}
+.bubble pre {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 10px 12px;
+  overflow-x: auto; margin: 6px 0;
+  font-size: 11px; line-height: 1.6; white-space: pre;
+}
+.bubble pre code { background: none; border: none; padding: 0; color: var(--text); }
+
+.typing-dots { display: flex; gap: 4px; padding: 4px 2px; align-items: center; }
+.typing-dots span {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--accent); animation: dot .9s infinite;
+}
+.typing-dots span:nth-child(2) { animation-delay: .15s; }
+.typing-dots span:nth-child(3) { animation-delay: .3s; }
+@keyframes dot {
+  0%,60%,100% { opacity:.2; transform:scale(.8); }
+  30% { opacity:1; transform:scale(1); }
+}
+
+/* ── Welcome ── */
+#welcome {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 14px; flex: 1; text-align: center; padding: 40px 20px;
+}
+.w-logo {
+  font-family: var(--display); font-size: 48px;
+  font-weight: 900; letter-spacing: -4px;
+  color: var(--accent); text-shadow: 0 0 40px rgba(0,255,136,.4); line-height: 1;
+}
+.w-sub { font-size: 12px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; }
+
+/* ── Confirm Modal ── */
+#modalBg {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.7);
+  z-index: 8000;
+  align-items: center; justify-content: center;
+  backdrop-filter: blur(4px);
+}
+#modalBg.open { display: flex; }
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px 22px;
+  max-width: 340px; width: calc(100% - 32px);
+  text-align: center;
+  box-shadow: 0 20px 50px rgba(0,0,0,.6);
+  animation: fadeUp .16s ease;
+}
+.modal h3 { font-family: var(--display); font-size: 16px; font-weight: 800; margin-bottom: 8px; color: var(--text); }
+.modal p { font-size: 11px; color: var(--muted); line-height: 1.8; margin-bottom: 20px; }
+.modal-btns { display: flex; gap: 8px; justify-content: center; }
+.m-btn {
+  padding: 8px 20px; border-radius: var(--r);
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  cursor: pointer; border: 1px solid transparent; transition: all .15s;
+}
+.m-cancel { background: var(--surface); border-color: var(--border); color: var(--muted); }
+.m-cancel:hover { color: var(--text); border-color: #42425a; }
+.m-confirm { background: rgba(255,51,85,.15); border-color: var(--red); color: var(--red); }
+.m-confirm:hover { background: rgba(255,51,85,.25); }
+
+/* ── Input Area ── */
+#inputArea {
+  padding: 12px 16px 14px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#inputRow {
+  display: flex; gap: 8px; align-items: flex-end;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 8px 10px 8px 14px;
+  transition: border-color .2s;
+}
+#inputRow:focus-within { border-color: var(--accent); }
+
+#msgInput {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: var(--text); font-family: var(--mono); font-size: 12px;
+  resize: none; min-height: 20px; max-height: 140px;
+  line-height: 1.6; scrollbar-width: none;
+}
+#msgInput::placeholder { color: var(--muted); }
+#msgInput::-webkit-scrollbar { display: none; }
+
+#sendBtn {
+  width: 32px; height: 32px; border-radius: 6px; border: none;
+  background: var(--accent); color: #000; font-size: 14px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: filter .15s, transform .1s;
+}
+#sendBtn:hover:not(:disabled) { filter: brightness(1.15); }
+#sendBtn:active:not(:disabled) { transform: scale(.93); }
+#sendBtn:disabled { opacity: .35; cursor: not-allowed; }
+
+#hint { font-size: 9px; color: var(--muted); text-align: center; margin-top: 7px; letter-spacing: .5px; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════
+     KEYS  ←  PASTE YOUR KEYS HERE
+     Only add a key between the quotes on each line.
+     Leave a line empty ('') to disable that slot.
+     The selector in the topbar will only show filled slots.
+════════════════════════════════════════════════════ -->
+<script>
+const KEYS = [
+  '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', // ← Key 1 
+  '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', // ← Key 2
+  '', // ← Key 3
+  '', // ← Key 4
+  '', // ← Key 5
+];
+</script>
+<!-- ════════════════════════════════════════════════ -->
+
+<div id="topbar">
+  <div class="wordmark">VUS<sup>AI</sup></div>
+  <div class="model-pill">llama-3.3-70b · groq</div>
+
+  <!-- Key selector -->
+  <div id="keyWrap">
+    <button id="keyDropBtn" onclick="toggleKeyMenu()">
+      <span class="k-dot unchecked" id="activeDot"></span>
+      <span id="activeKeyLabel">Key 1</span>
+      <span class="k-caret">▼</span>
+    </button>
+    <div id="keyMenu"></div>
+  </div>
+
+  <span class="tb-spacer"></span>
+
+  <!-- Search -->
+  <button class="tb-btn" onclick="toggleSearch()" title="Search chat">⌕ Search</button>
+
+  <!-- Hub -->
+  <button class="tb-btn hub-btn" onclick="openHub()" title="Back to VUS Hub">⬡ Hub</button>
+
+  <!-- Clear -->
+  <button class="tb-btn danger" onclick="promptClear()">✕ Clear</button>
+</div>
+
+<!-- Search bar (hidden until toggled) -->
+<div id="searchBar">
+  <input id="searchInput" type="text" placeholder="Search chat…" autocomplete="off">
+  <span id="searchCount">—</span>
+  <button class="srch-btn" id="srchUp"   onclick="stepSearch(-1)" title="Previous" disabled>▲</button>
+  <button class="srch-btn" id="srchDown" onclick="stepSearch(1)"  title="Next"     disabled>▼</button>
+  <button id="searchClose" onclick="toggleSearch()">✕</button>
+</div>
+
+<div id="chat">
+  <div id="welcome">
+    <div class="w-logo">AI</div>
+    <div class="w-sub">Powered by Groq · VUS Hub</div>
+  </div>
+</div>
+
+<!-- Confirm clear modal -->
+<div id="modalBg">
+  <div class="modal">
+    <h3>Clear Chat?</h3>
+    <p>If you confirm, your entire conversation will be deleted.<br>You cannot restore your chats.</p>
+    <div class="modal-btns">
+      <button class="m-btn m-cancel"  onclick="closeModal()">Cancel</button>
+      <button class="m-btn m-confirm" onclick="confirmClear()">Clear</button>
+    </div>
+  </div>
+</div>
+
+<div id="inputArea">
+  <div id="inputRow">
+    <textarea id="msgInput" placeholder="Ask anything…" rows="1"></textarea>
+    <button id="sendBtn" onclick="send()" title="Send (Enter)">▶</button>
+  </div>
+  <div id="hint">Enter to send · Shift+Enter for new line</div>
+</div>
+
+<script>
+const MODEL = 'llama-3.3-70b-versatile';
+
+/* ════════════════════════════════════════
+   STATE
+════════════════════════════════════════ */
+let history    = [];
+let thinking   = false;
+
+// Build active key list from KEYS (only non-empty)
+const filledKeys = KEYS
+  .map((k, i) => ({ key: k.trim(), label: 'Key ' + (i + 1), index: i }))
+  .filter(k => k.key !== '');
+
+// keyStatuses: 'unchecked' | 'active' | 'inactive'
+const keyStatuses = filledKeys.map(() => 'unchecked');
+
+// Which key slot is currently selected (index into filledKeys)
+let selectedKeySlot = 0;
+
+/* ════════════════════════════════════════
+   DOM REFS
+════════════════════════════════════════ */
+const chatEl      = document.getElementById('chat');
+const welcomeEl   = document.getElementById('welcome');
+const inputEl     = document.getElementById('msgInput');
+const sendBtn     = document.getElementById('sendBtn');
+const keyMenu     = document.getElementById('keyMenu');
+const keyDropBtn  = document.getElementById('keyDropBtn');
+const activeDot   = document.getElementById('activeDot');
+const activeLabel = document.getElementById('activeKeyLabel');
+const modalBg     = document.getElementById('modalBg');
+const searchBar   = document.getElementById('searchBar');
+const searchInput = document.getElementById('searchInput');
+const searchCount = document.getElementById('searchCount');
+const srchUp      = document.getElementById('srchUp');
+const srchDown    = document.getElementById('srchDown');
+
+/* ════════════════════════════════════════
+   KEY SELECTOR
+════════════════════════════════════════ */
+function buildKeyMenu() {
+  keyMenu.innerHTML = '';
+  if (filledKeys.length === 0) {
+    const el = document.createElement('div');
+    el.className = 'km-item';
+    el.textContent = 'No keys configured';
+    keyMenu.appendChild(el);
+    activeLabel.textContent = 'No Key';
+    return;
+  }
+  filledKeys.forEach((k, i) => {
+    const el  = document.createElement('div');
+    const st  = keyStatuses[i];
+    el.className = 'km-item' + (i === selectedKeySlot ? ' selected' : '');
+    el.innerHTML = `
+      <span class="km-dot ${st}"></span>
+      <span>${k.label}</span>
+      <span class="km-status ${st}">${st === 'unchecked' ? '—' : st === 'active' ? 'Active' : 'Inactive'}</span>
+    `;
+    el.onclick = () => selectKey(i);
+    keyMenu.appendChild(el);
+  });
+  updateDropBtn();
+}
+
+function selectKey(i) {
+  selectedKeySlot = i;
+  buildKeyMenu();
+  keyMenu.classList.remove('open');
+}
+
+function updateDropBtn() {
+  const st = filledKeys.length > 0 ? keyStatuses[selectedKeySlot] : 'unchecked';
+  activeDot.className = 'k-dot ' + st;
+  activeLabel.textContent = filledKeys.length > 0
+    ? filledKeys[selectedKeySlot].label
+    : 'No Key';
+}
+
+function toggleKeyMenu() {
+  keyMenu.classList.toggle('open');
+}
+
+// Close key menu when clicking outside
+document.addEventListener('click', e => {
+  if (!document.getElementById('keyWrap').contains(e.target)) {
+    keyMenu.classList.remove('open');
+  }
+});
+
+/* ════════════════════════════════════════
+   HUB OPENER
+════════════════════════════════════════ */
+async function openHub() {
+  const hubCode = await fetch(
+    'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/hub.html?v=' + Date.now()
+  ).then(r => r.text());
+  const win = window.open('about:blank', '_blank');
+  win.document.open();
+  win.document.write(hubCode);
+  win.document.close();
+}
+
+/* ════════════════════════════════════════
+   CONFIRM CLEAR MODAL
+════════════════════════════════════════ */
+function promptClear() { modalBg.classList.add('open'); }
+function closeModal()  { modalBg.classList.remove('open'); }
+function confirmClear() {
+  history = [];
+  chatEl.innerHTML = '';
+  chatEl.appendChild(welcomeEl);
+  closeModal();
+  clearSearch();
+}
+
+// Close modal on background click
+modalBg.addEventListener('click', e => { if (e.target === modalBg) closeModal(); });
+
+/* ════════════════════════════════════════
+   SEARCH
+════════════════════════════════════════ */
+let searchMatches = [];
+let searchCurrent = -1;
+
+function toggleSearch() {
+  const isOpen = searchBar.classList.toggle('open');
+  if (isOpen) {
+    searchInput.focus();
+  } else {
+    clearSearch();
+  }
+}
+
+function clearSearch() {
+  searchInput.value = '';
+  removeHighlights();
+  searchMatches = [];
+  searchCurrent = -1;
+  searchCount.textContent = '—';
+  srchUp.disabled   = true;
+  srchDown.disabled = true;
+}
+
+searchInput.addEventListener('input', () => runSearch());
+searchInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); stepSearch(e.shiftKey ? -1 : 1); }
+  if (e.key === 'Escape') toggleSearch();
+});
+
+function removeHighlights() {
+  chatEl.querySelectorAll('.hl').forEach(el => {
+    el.replaceWith(document.createTextNode(el.textContent));
+  });
+  // Merge adjacent text nodes
+  chatEl.querySelectorAll('.bubble').forEach(b => b.normalize());
+}
+
+function runSearch() {
+  removeHighlights();
+  searchMatches = [];
+  searchCurrent = -1;
+
+  const q = searchInput.value.trim();
+  if (!q) {
+    searchCount.textContent = '—';
+    srchUp.disabled   = true;
+    srchDown.disabled = true;
+    return;
+  }
+
+  const regex = new RegExp(escapeRegex(q), 'gi');
+
+  // Walk all text nodes inside bubbles
+  chatEl.querySelectorAll('.bubble').forEach(bubble => {
+    highlightInNode(bubble, regex);
+  });
+
+  searchMatches = Array.from(chatEl.querySelectorAll('.hl'));
+
+  if (searchMatches.length === 0) {
+    searchCount.textContent = '0 / 0';
+    srchUp.disabled   = true;
+    srchDown.disabled = true;
+    return;
+  }
+
+  srchUp.disabled   = false;
+  srchDown.disabled = false;
+  stepSearch(1);
+}
+
+function highlightInNode(node, regex) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    const text = node.textContent;
+    let match, lastIdx = 0;
+    const frag = document.createDocumentFragment();
+    regex.lastIndex = 0;
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIdx) {
+        frag.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
+      }
+      const span = document.createElement('span');
+      span.className = 'hl';
+      span.textContent = match[0];
+      frag.appendChild(span);
+      lastIdx = regex.lastIndex;
+    }
+    if (lastIdx < text.length) frag.appendChild(document.createTextNode(text.slice(lastIdx)));
+    if (frag.childNodes.length > 1 || (frag.firstChild && frag.firstChild.nodeName === 'SPAN')) {
+      node.parentNode.replaceChild(frag, node);
+    }
+  } else if (node.nodeType === Node.ELEMENT_NODE && node.nodeName !== 'SCRIPT' && node.nodeName !== 'STYLE') {
+    Array.from(node.childNodes).forEach(child => highlightInNode(child, regex));
+  }
+}
+
+function stepSearch(dir) {
+  if (searchMatches.length === 0) return;
+  if (searchCurrent >= 0) searchMatches[searchCurrent].classList.remove('current');
+  searchCurrent = (searchCurrent + dir + searchMatches.length) % searchMatches.length;
+  const target = searchMatches[searchCurrent];
+  target.classList.add('current');
+  searchCount.textContent = (searchCurrent + 1) + ' / ' + searchMatches.length;
+
+  // Scroll into view with padding so it's never clipped
+  const chatRect   = chatEl.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  const pad = 60;
+  if (targetRect.top < chatRect.top + pad) {
+    chatEl.scrollTop -= (chatRect.top + pad - targetRect.top);
+  } else if (targetRect.bottom > chatRect.bottom - pad) {
+    chatEl.scrollTop += (targetRect.bottom - chatRect.bottom + pad);
+  }
+}
+
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/* ════════════════════════════════════════
+   INPUT
+════════════════════════════════════════ */
+inputEl.addEventListener('input', () => {
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + 'px';
+});
+
+inputEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
+
+/* ════════════════════════════════════════
+   MARKDOWN-LITE RENDERER
+════════════════════════════════════════ */
+function renderText(raw) {
+  let out = raw.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, _lang, code) =>
+    `<pre><code>${escHtml(code.trim())}</code></pre>`
+  );
+  out = out.replace(/`([^`]+)`/g, (_, c) => `<code>${escHtml(c)}</code>`);
+  out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  out = out.replace(/\n/g, '<br>');
+  return out;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ════════════════════════════════════════
+   MESSAGES
+════════════════════════════════════════ */
+function appendMsg(role, content, isTyping = false) {
+  if (welcomeEl && welcomeEl.parentNode === chatEl) chatEl.removeChild(welcomeEl);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'msg ' + role;
+
+  const av = document.createElement('div');
+  av.className = 'avatar';
+  av.textContent = role === 'user' ? 'YOU' : 'AI';
+
+  const bub = document.createElement('div');
+  bub.className = 'bubble';
+
+  if (isTyping) {
+    bub.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+  } else {
+    bub.innerHTML = role === 'assistant' ? renderText(content) : escHtml(content);
+  }
+
+  wrap.appendChild(av);
+  wrap.appendChild(bub);
+  chatEl.appendChild(wrap);
+  chatEl.scrollTop = chatEl.scrollHeight;
+
+  return { wrap, bub };
+}
+
+/* ════════════════════════════════════════
+   SEND — tries selected key first,
+   then falls back through all others
+   before showing "System Inactive"
+════════════════════════════════════════ */
+async function tryKey(keyObj) {
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + keyObj.key
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: 1024,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a helpful AI assistant embedded in VUS Hub, a personal web hub used by a student. Be concise, clear, and helpful. You can help with schoolwork, coding, writing, and general questions.'
+        },
+        ...history
+      ]
+    })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || 'HTTP ' + res.status);
+  }
+  return res.json();
+}
+
+async function send() {
+  const text = inputEl.value.trim();
+  if (!text || thinking) return;
+
+  if (filledKeys.length === 0) {
+    alert('No API keys configured. Add at least one key to the KEYS array at the top of the script.');
+    return;
+  }
+
+  thinking = true;
+  sendBtn.disabled = true;
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
+  clearSearch();
+
+  appendMsg('user', text);
+  history.push({ role: 'user', content: text });
+
+  const { bub: typingBub } = appendMsg('assistant', '', true);
+
+  // Build try order: selected key first, then the rest
+  const tryOrder = [
+    selectedKeySlot,
+    ...filledKeys.map((_, i) => i).filter(i => i !== selectedKeySlot)
+  ];
+
+  let data = null;
+  let usedSlot = -1;
+
+  for (const slot of tryOrder) {
+    try {
+      data = await tryKey(filledKeys[slot]);
+      usedSlot = slot;
+      // Mark key as active
+      keyStatuses[slot] = 'active';
+      buildKeyMenu();
+      break;
+    } catch {
+      // Mark key as inactive and try next
+      keyStatuses[slot] = 'inactive';
+      buildKeyMenu();
+    }
+  }
+
+  if (data) {
+    const reply = data.choices?.[0]?.message?.content || '(no response)';
+    typingBub.innerHTML = renderText(reply);
+    history.push({ role: 'assistant', content: reply });
+    // If fallback key was used, switch selection to it silently
+    if (usedSlot !== selectedKeySlot) selectedKeySlot = usedSlot;
+    buildKeyMenu();
+  } else {
+    typingBub.innerHTML = `<span style="color:var(--red)">⚠ System Inactive — all keys failed. Please check your keys.</span>`;
+  }
+
+  chatEl.scrollTop = chatEl.scrollHeight;
+  thinking = false;
+  sendBtn.disabled = false;
+  inputEl.focus();
+}
+
+/* ════════════════════════════════════════
+   INIT
+════════════════════════════════════════ */
+buildKeyMenu();
+</script>
+</body>
+</html>
