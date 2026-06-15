@@ -4,7 +4,7 @@ i like to do this for the little jits in school
 
 anyways, here is how to actually use this correctly/how to build it
 
-first go to hub.html, copy code then go to any html viewer and paste the hub.html code.
+first go to index.html, copy code then go to any html viewer and paste the hub.html code.
 then just click the button and it should show my Hub and YT. theres also other tabs for tools and links.
 
 
