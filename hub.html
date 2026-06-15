@@ -95,6 +95,12 @@ function setStatus(msg, isErr) {
 function openApp(app) {
   if (!app.url) return;
 
+  // Open normal websites directly
+  if (!app.url.includes("raw.githubusercontent.com")) {
+    window.open(app.url, "_blank");
+    return;
+  }
+
   setStatus("Loading " + app.name + "...");
 
   fetch(app.url)
@@ -103,38 +109,21 @@ function openApp(app) {
       return r.text();
     })
     .then(text => {
-      const trimmed = text.trim();
-      const isHTML = trimmed.toLowerCase().startsWith("<!doctype html") ||
-                     trimmed.toLowerCase().startsWith("<html");
-
-      if (!isHTML) {
-        setStatus(app.name + " is not a full HTML page — cannot open.", true);
-        return;
-      }
-
       const win = window.open("about:blank", "_blank");
       if (!win) {
         setStatus("Popup blocked — allow popups for this site.", true);
         return;
       }
-      const doc = win.document;
-doc.open();
-doc.write(`
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>${app.name}</title>
-</head>
-<body>
-${text}
-</body>
-</html>
-`);
-doc.close();
+
+      win.document.open();
+      win.document.write(text);
+      win.document.close();
+
       setStatus("");
     })
-    .catch(() => setStatus("Failed to load " + app.name + ".", true));
+    .catch(() => {
+      setStatus("Failed to load " + app.name + ".", true);
+    });
 }
 
 function render() {
