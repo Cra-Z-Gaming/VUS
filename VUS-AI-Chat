@@ -848,7 +848,6 @@ A: The only information that may be stored is token usage per input and output b
 
 If the user asks what they can ask you, or similar questions about your capabilities, respond with:
 - questions about VUS
-- coding help
 - writing help
 - schoolwork help
 - general knowledge questions
@@ -874,7 +873,7 @@ Q: How is the YouTube feature integrated with VUS?
 A: The YouTube feature retrieves video data and information using API keys.
 
 Q: What is inside VUSL?
-A: VUSL is a game launcher that loads games from GitHub and opens them in about:blank. When a game is selected, it is loaded into the tab so it can run without needing to stay on the original page. After downloading, most games can be played offline. A button also allows downloading all games (3–6 minutes), enabling offline access for many of them. It is called a launcher because it launches games from GitHub into a new browser tab.
+A: VUSL is a game launcher that loads 150+ games from GitHub and opens them in about:blank When a game is selected. The game is loaded into the tab so it can run without needing to stay on the original page. After downloading, most games can be played offline. A button also allows downloading all games (3–6 minutes), enabling offline access for many of them. It is called a launcher because it launches games from GitHub into a new browser tab.
 `
 
         },
