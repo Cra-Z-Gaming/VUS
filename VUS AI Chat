@@ -594,7 +594,7 @@ document.addEventListener('click', e => {
 ════════════════════════════════════════ */
 async function openHub() {
   const hubCode = await fetch(
-    'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/hub.html?v=' + Date.now()
+    'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/index.html?v=' + Date.now()
   ).then(r => r.text());
   const win = window.open('about:blank', '_blank');
   win.document.open();
