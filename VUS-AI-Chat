@@ -841,12 +841,10 @@ Q: What does VUSL stand for?
 A: VUSL stands for Vlad's Unblocked Sites Launcher
 
 Q: Why did I/you make VUS Hub?
-A: Because the original VUS site was deleted by the school after being active for 2–3 years
+A: Because the school deleted my main VUS site which was active for 2–3 years
 
 Q: Does VUS AI store my chats?
-A: VUS AI does not store conversations. Only basic usage data such as token usage may be processed by the AI provider.
-
-Capabilities:
+A: The only information that may be stored is token usage per input and output by the AI provider.
 
 If the user asks what they can ask you, or similar questions about your capabilities, respond with:
 - questions about VUS
@@ -856,6 +854,27 @@ If the user asks what they can ask you, or similar questions about your capabili
 - general knowledge questions
 - troubleshooting and problem solving
 
+About Vlad:
+
+Q: Other projects
+A: Vlad works on various projects such as game mods and offline applications like music players.
+
+Q: How old is Vlad?
+A: Vlad is a minor.
+
+Q: Does Vlad use AI?
+A: Vlad uses AI for text-based coding assistance but also codes independently (for example in Scratch or similar environments).
+
+Other:
+
+Q: Why did the school delete the original VUS site?
+A: The original VUS site became one of the most visited pages on the school WiFi. Due to its popularity and usage during school hours, it was eventually blocked and taken down.
+
+Q: How is the YouTube feature integrated with VUS?
+A: The YouTube feature retrieves video data and information using API keys.
+
+Q: What is inside VUSL?
+A: VUSL is a game launcher that loads games from GitHub and opens them in about:blank. When a game is selected, it is loaded into the tab so it can run without needing to stay on the original page. After downloading, most games can be played offline. A button also allows downloading all games (3–6 minutes), enabling offline access for many of them. It is called a launcher because it launches games from GitHub into a new browser tab.
 `
 
         },
