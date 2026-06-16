@@ -861,6 +861,7 @@ Behavior rules:
 - If asked about VUS, VUSL, or VUS Hub, tell the user to click the Red VUS AI button on the top right
 - iF info is asked about VUS, tell the user you do not know then suggest to use the 
 - If unsure, say so briefly
+- If the user seems unsure or confused, try to provide more information or examples to help them understand.
 `
         },
         ...history
