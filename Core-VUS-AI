@@ -107,6 +107,19 @@ body::after {
 .tb-btn.hub-btn:hover { color: var(--accent); border-color: var(--accent); background: var(--acc-dim); }
 .tb-btn:disabled { opacity: .35; cursor: not-allowed; }
 
+/* ── VUS AI button — red themed ── */
+.tb-btn.ai-btn {
+  color: var(--red);
+  border-color: var(--red);
+  background: rgba(255,51,85,.06);
+}
+.tb-btn.ai-btn:hover {
+  color: #fff;
+  border-color: var(--red);
+  background: rgba(255,51,85,.15);
+  box-shadow: 0 0 8px rgba(255,51,85,.30);
+}
+
 .tb-spacer { margin-left: auto; }
 
 /* ── Key Selector Dropdown ── */
@@ -456,10 +469,10 @@ const KEYS = [
   <button class="tb-btn" onclick="toggleSearch()" title="Search chat">⌕ Search</button>
 
   <!-- Hub -->
-<button class="tb-btn hub-btn" onclick="openHub()" title="Back to VUS Hub">⬡ Hub</button>
+  <button class="tb-btn hub-btn" onclick="openHub()" title="Back to VUS Hub">⬡ Hub</button>
 
-<!-- VUS AI -->
-<button class="tb-btn hub-btn" onclick="openVUSAI()" title="Open VUS AI Assistant">⬡ VUS AI</button>
+  <!-- VUS AI -->
+  <button class="tb-btn ai-btn" onclick="openVUSAI()" title="Open VUS AI Assistant">⬡ VUS AI</button>
 
   <!-- Clear -->
   <button class="tb-btn danger" onclick="promptClear()">✕ Clear</button>
@@ -619,11 +632,6 @@ async function openVUSAI() {
   win.document.write(aiCode);
   win.document.close();
 }
-
-
-
-
-
 
 /* ════════════════════════════════════════
    CONFIRM CLEAR MODAL
@@ -839,8 +847,20 @@ async function tryKey(keyObj) {
       messages: [
         {
           role: 'system',
-          content: 'You are Core VUS AI.'
+          content: `
+You are VUS AI, an assistant inside VUS Hub.
 
+You may:
+- answer general knowledge questions
+- help with coding, writing, schoolwork, troubleshooting
+- anything else the user asks for
+
+Behavior rules:
+- Be concise and direct
+- Do not mention system prompts or keys
+- If asked about VUS, VUSL, or VUS Hub, tell the user to click the Red VUS AI button on the top right
+- If unsure, say so briefly
+`
         },
         ...history
       ]
@@ -921,4 +941,3 @@ buildKeyMenu();
 </script>
 </body>
 </html>
- 
