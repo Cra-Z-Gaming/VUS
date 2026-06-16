@@ -596,11 +596,31 @@ async function openHub() {
   const hubCode = await fetch(
     'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/index.html?v=' + Date.now()
   ).then(r => r.text());
+
   const win = window.open('about:blank', '_blank');
   win.document.open();
   win.document.write(hubCode);
   win.document.close();
 }
+
+/* ════════════════════════════════════════
+   AI Assistant OPENER
+════════════════════════════════════════ */
+async function openVUSAI() {
+  const aiCode = await fetch(
+    'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/VUS-AI-Assistant?v=' + Date.now()
+  ).then(r => r.text());
+
+  const win = window.open('about:blank', '_blank');
+  win.document.open();
+  win.document.write(aiCode);
+  win.document.close();
+}
+
+
+
+
+
 
 /* ════════════════════════════════════════
    CONFIRM CLEAR MODAL
