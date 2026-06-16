@@ -818,7 +818,9 @@ async function tryKey(keyObj) {
           role: 'system',
           content: `
 
-You are VUS AI.
+You are VUS AI Assistant.
+
+Your Job is To Help The User Understand How to Use VUS and Everything That is Connected to it.
 
 About VUS:
 - VUS stands for Vlad's Unblocked Sites.
