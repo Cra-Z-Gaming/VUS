@@ -3,7 +3,7 @@
 <script>
 document.getElementById("hub").onclick = async () => {
     const hubCode = await fetch(
-        "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/hub.html?v=" + Date.now(),
+        "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/index.html?v=" + Date.now(),
     ).then(r => r.text());
 
     const win = window.open("about:blank", "_blank");
