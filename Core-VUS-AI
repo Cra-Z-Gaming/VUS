@@ -456,7 +456,10 @@ const KEYS = [
   <button class="tb-btn" onclick="toggleSearch()" title="Search chat">⌕ Search</button>
 
   <!-- Hub -->
-  <button class="tb-btn hub-btn" onclick="openHub()" title="Back to VUS Hub">⬡ Hub</button>
+<button class="tb-btn hub-btn" onclick="openHub()" title="Back to VUS Hub">⬡ Hub</button>
+
+<!-- VUS AI -->
+<button class="tb-btn hub-btn" onclick="openVUSAI()" title="Open VUS AI Assistant">⬡ VUS AI</button>
 
   <!-- Clear -->
   <button class="tb-btn danger" onclick="promptClear()">✕ Clear</button>
