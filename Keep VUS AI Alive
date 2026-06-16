@@ -97,8 +97,8 @@ Example: gsk_vCcCLvQy1qyP1j16kZn0WGdyb3FYvxpvKZDV1UNONOhsb6NEq42Bi
 
   <!-- Replace # with your desired URL -->
 
-  <a href="https://google.com" class="example-btn">
-    Paste Here
+  <a href="https://google.com" target="_blank" class="example-btn">
+     Paste Here
   </a>
 
 </body>
