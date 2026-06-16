@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How to Get a Groq API Key</title>
+<style>
+  body {
+    margin: 0;
+    padding: 30px;
+    font-family: Arial, sans-serif;
+    background: #111827;
+    color: #f3f4f6;
+  }
+
+  .container {
+    max-width: 700px;
+    margin: auto;
+    background: #1f2937;
+    border: 1px solid #374151;
+    border-radius: 12px;
+    padding: 24px;
+  }
+
+  h1 {
+    margin-top: 0;
+    text-align: center;
+  }
+
+  ol {
+    line-height: 1.8;
+    padding-left: 24px;
+  }
+
+  code {
+    display: block;
+    margin-top: 10px;
+    padding: 10px;
+    background: #0f172a;
+    border-radius: 6px;
+    color: #22c55e;
+    word-break: break-all;
+  }
+
+  .note {
+    margin-top: 20px;
+    padding: 12px;
+    border-left: 4px solid #f59e0b;
+    background: rgba(245, 158, 11, 0.1);
+  }
+
+  .example-btn {
+    display: block;
+    width: 100%;
+    margin-top: 24px;
+    padding: 14px;
+    text-align: center;
+    text-decoration: none;
+    font-weight: bold;
+    font-size: 16px;
+    color: white;
+    background: #2563eb;
+    border-radius: 8px;
+    transition: background 0.2s;
+  }
+
+  .example-btn:hover {
+    background: #1d4ed8;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>How to Create a Groq API Key</h1>
+
+  <ol>
+    <li>
+  Go to
+  <a href="https://console.groq.com/" target="_blank" style="color:#60a5fa;">
+    https://console.groq.com/
+  </a>.
+</li>
+    <li>Sign in or create a Groq account.</li>
+    <li>Open the <strong>API Keys</strong> page. (Top Right)</li>
+    <li>Click <strong>Create API Key</strong>.</li>
+    <li>Give your key a name. (can be anything)</li>
+    <li>Copy the key</li>
+    <li>Click the "Paste Here" button then Paste your Key</li>
+  </ol>
+
+  <code>
+Example: gsk_vCcCLvQy1qyP1j16kZn0WGdyb3FYvxpvKZDV1UNONOhsb6NEq42Bi
+  </code>
+
+ 
+
+  <!-- Replace # with your desired URL -->
+
+  <a href="https://google.com" class="example-btn">
+    Paste Here
+  </a>
+
+</body>
+</html>
