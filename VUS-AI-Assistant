@@ -427,8 +427,8 @@ body::after {
 ════════════════════════════════════════════════════ -->
 <script>
 const KEYS = [
-  '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', // ← Key 1 
-  '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', // ← Key 2
+  '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', // ← Key 1 
+  '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', // ← Key 2
   '', // ← Key 3
   '', // ← Key 4
   '', // ← Key 5
