@@ -1,205 +1,842 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>HTML Editor</title>
+  <meta charset="UTF-8">
+  <title>HTML Editor</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
 
-<style>
     body {
-        margin: 0;
-        font-family: Arial, sans-serif;
-        background: #0f172a;
-        color: white;
-        display: flex;
-        height: 100vh;
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: white;
+      display: flex;
+      height: 100vh;
+      flex-direction: column;
+      overflow: hidden;
     }
 
+    /* ══════════════════════════════════
+       TAB BAR
+    ══════════════════════════════════ */
+    .tab-bar {
+      display: flex;
+      align-items: center;
+      background: #0a1120;
+      border-bottom: 1px solid #334155;
+      overflow-x: auto;
+      flex-shrink: 0;
+      scrollbar-width: thin;
+      scrollbar-color: #334155 transparent;
+      position: relative;
+    }
+    .tab-bar::-webkit-scrollbar { height: 4px; }
+    .tab-bar::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+
+    .tab {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 14px;
+      height: 36px;
+      font-size: 12px;
+      color: #94a3b8;
+      cursor: pointer;
+      border-right: 1px solid #1e293b;
+      white-space: nowrap;
+      flex-shrink: 0;
+      user-select: none;
+      transition: background 0.15s;
+      position: relative;
+    }
+    .tab:hover { background: #1e293b; }
+    .tab.active {
+      background: #0f172a;
+      color: white;
+      border-top: 2px solid #22c55e;
+    }
+    /* drag-over highlight */
+    .tab.drag-over { background: #1e3a5f; }
+
+    .tab .tab-name {
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .tab .tab-name-input {
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid #22c55e;
+      color: white;
+      font-size: 12px;
+      outline: none;
+      width: 90px;
+      padding: 0;
+    }
+    .tab .close-btn {
+      font-size: 14px;
+      line-height: 1;
+      color: #64748b;
+      border-radius: 3px;
+      padding: 1px 3px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .tab .close-btn:hover { color: white; background: #ef4444; }
+
+    .tab-add-btn {
+      padding: 0 14px;
+      height: 36px;
+      font-size: 18px;
+      color: #64748b;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      transition: color 0.15s;
+      flex-shrink: 0;
+    }
+    .tab-add-btn:hover { color: #22c55e; }
+
+    /* Tab search button */
+    .tab-search-btn {
+      padding: 0 10px;
+      height: 36px;
+      font-size: 13px;
+      color: #64748b;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      transition: color 0.15s;
+      flex-shrink: 0;
+      margin-left: auto;
+      border-left: 1px solid #1e293b;
+    }
+    .tab-search-btn:hover { color: #22c55e; }
+
+    /* Tab search dropdown */
+    .tab-search-dropdown {
+      position: absolute;
+      top: 36px;
+      right: 0;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      z-index: 100;
+      min-width: 200px;
+      display: none;
+      flex-direction: column;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      overflow: hidden;
+    }
+    .tab-search-dropdown.open { display: flex; }
+    .tab-search-dropdown input {
+      background: #0f172a;
+      border: none;
+      border-bottom: 1px solid #334155;
+      color: white;
+      padding: 8px 10px;
+      font-size: 12px;
+      outline: none;
+      width: 100%;
+    }
+    .tab-search-list { max-height: 200px; overflow-y: auto; }
+    .tab-search-item {
+      padding: 7px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      color: #cbd5e1;
+      transition: background 0.12s;
+    }
+    .tab-search-item:hover { background: #334155; color: white; }
+    .tab-search-item.active-item { color: #22c55e; }
+
+    /* Session export/import buttons inside tab bar */
+    .tab-session-btn {
+      padding: 0 10px;
+      height: 36px;
+      font-size: 11px;
+      color: #64748b;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      transition: color 0.15s;
+      flex-shrink: 0;
+      border-left: 1px solid #1e293b;
+      gap: 4px;
+    }
+    .tab-session-btn:hover { color: #22c55e; }
+
+    /* ══════════════════════════════════
+       CONTEXT MENU
+    ══════════════════════════════════ */
+    #ctxMenu {
+      position: fixed;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      z-index: 9999;
+      display: none;
+      flex-direction: column;
+      min-width: 140px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+      overflow: hidden;
+    }
+    #ctxMenu.open { display: flex; }
+    .ctx-item {
+      padding: 8px 14px;
+      font-size: 12px;
+      cursor: pointer;
+      color: #cbd5e1;
+      transition: background 0.12s;
+      user-select: none;
+    }
+    .ctx-item:hover { background: #334155; color: white; }
+    .ctx-item.danger:hover { background: #7f1d1d; color: #fca5a5; }
+
+    /* ══════════════════════════════════
+       MAIN LAYOUT
+    ══════════════════════════════════ */
+    .main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
     .left {
-        width: 50%;
-        display: flex;
-        flex-direction: column;
-        border-right: 1px solid #334155;
+      display: flex;
+      flex-direction: column;
+      border-right: none; /* divider handles border */
+      min-width: 80px;
+      overflow: hidden;
     }
-
-    textarea {
-        flex: 1;
-        background: #0f172a;
-        color: white;
-        border: none;
-        outline: none;
-        padding: 12px;
-        font-family: monospace;
-        font-size: 13px;
-        resize: none;
-    }
-
     .right {
-        width: 50%;
-        display: flex;
-        flex-direction: column;
+      display: flex;
+      flex-direction: column;
+      min-width: 80px;
+      overflow: hidden;
+    }
+
+    /* ── DRAGGABLE DIVIDER ── */
+    .divider {
+      width: 5px;
+      background: #334155;
+      cursor: col-resize;
+      flex-shrink: 0;
+      transition: background 0.15s;
+      position: relative;
+      z-index: 10;
+    }
+    .divider:hover, .divider.dragging { background: #22c55e; }
+
+    /* ── EDITOR PANE (line numbers + textarea) ── */
+    .editor-wrap {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+    .line-numbers {
+      background: #0a1120;
+      color: #475569;
+      font-family: monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 12px 6px 12px 8px;
+      text-align: right;
+      user-select: none;
+      overflow: hidden;
+      min-width: 36px;
+      border-right: 1px solid #1e293b;
+      white-space: pre;
+    }
+    textarea {
+      flex: 1;
+      background: #0f172a;
+      color: white;
+      border: none;
+      outline: none;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      resize: none;
+      overflow-y: auto;
+      tab-size: 2;
     }
 
     iframe {
-        flex: 1;
-        border: none;
-        background: white;
+      flex: 1;
+      border: none;
+      background: white;
     }
-
     .bar {
-        display: flex;
-        gap: 8px;
-        padding: 8px;
-        background: #111827;
-        border-bottom: 1px solid #334155;
-        align-items: center;
-        flex-wrap: wrap;
+      display: flex;
+      gap: 8px;
+      padding: 8px;
+      background: #111827;
+      border-bottom: 1px solid #334155;
+      align-items: center;
+      flex-wrap: wrap;
     }
-
     button {
-        padding: 6px 10px;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 12px;
-        background: #22c55e;
-        color: black;
-        font-weight: bold;
+      padding: 6px 10px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      background: #22c55e;
+      color: black;
+      font-weight: bold;
     }
-
     button.secondary {
-        background: #1e293b;
-        color: white;
-        border: 1px solid #334155;
+      background: #1e293b;
+      color: white;
+      border: 1px solid #334155;
     }
-
     .toggle {
-        padding: 6px 10px;
-        border-radius: 6px;
-        font-size: 12px;
-        cursor: pointer;
-        background: #1e293b;
-        border: 1px solid #334155;
-        user-select: none;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      background: #1e293b;
+      border: 1px solid #334155;
+      user-select: none;
     }
+    .on { background: #22c55e !important; color: black; }
+    .label { font-size: 12px; color: #94a3b8; margin-left: auto; }
+    #fileInput, #sessionImportInput { display: none; }
 
-    .on {
-        background: #22c55e !important;
-        color: black;
-    }
-
-    .label {
-        font-size: 12px;
-        color: #94a3b8;
-        margin-left: auto;
-    }
-
-    /* hidden file input */
-    #fileInput {
-        display: none;
-    }
-</style>
+    /* Prevent iframe from eating mousemove during divider drag */
+    .main.is-resizing iframe { pointer-events: none; }
+  </style>
 </head>
-
 <body>
 
-<div class="left">
-    <div class="bar">
+  <!-- TAB BAR -->
+  <div class="tab-bar" id="tabBar">
+    <div class="tab-add-btn" onclick="addTab()" title="New tab">+</div>
+    <!-- session buttons -->
+    <div class="tab-session-btn" onclick="exportSession()" title="Export all tabs as JSON">⬇ Export All</div>
+    <input type="file" id="sessionImportInput" accept=".json" onchange="importSession(event)">
+    <label for="sessionImportInput" class="tab-session-btn" title="Import tabs from JSON">⬆ Import All</label>
+    <!-- tab search -->
+    <div class="tab-search-btn" id="tabSearchBtn" onclick="toggleTabSearch()" title="Find tab">🔍</div>
+    <div class="tab-search-dropdown" id="tabSearchDropdown">
+      <input type="text" id="tabSearchInput" placeholder="Search tabs…" oninput="filterTabSearch()">
+      <div class="tab-search-list" id="tabSearchList"></div>
+    </div>
+  </div>
+
+  <!-- CONTEXT MENU -->
+  <div id="ctxMenu">
+    <div class="ctx-item" onclick="ctxRename()">✏️ Rename</div>
+    <div class="ctx-item" onclick="ctxDupe()">⧉ Duplicate</div>
+    <div class="ctx-item danger" onclick="ctxClose()">✕ Close</div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main" id="mainArea">
+    <div class="left" id="leftPane">
+      <div class="bar">
         <button onclick="run()">Run</button>
         <button class="secondary" onclick="openTab()">Open Tab</button>
         <button class="secondary" onclick="resetCode()">Reset</button>
-
         <button class="secondary" onclick="exportCode()">Export</button>
-
         <input type="file" id="fileInput" onchange="importCode(event)">
-        <label for="fileInput" class="secondary" style="padding:6px 10px;border-radius:6px;cursor:pointer;display:inline-block;border:1px solid #334155;">
-            Import
+        <label for="fileInput" class="secondary"
+               style="padding:6px 10px;border-radius:6px;cursor:pointer;display:inline-block;border:1px solid #334155;">
+          Import
         </label>
-
         <div class="toggle on" id="autoToggle" onclick="toggleAuto()">Auto Refresh</div>
-
         <div class="label">HTML Editor</div>
+      </div>
+      <div class="editor-wrap">
+        <div class="line-numbers" id="lineNumbers">1</div>
+        <textarea id="code"></textarea>
+      </div>
     </div>
 
-    <textarea id="code"></textarea>
-</div>
+    <div class="divider" id="divider"></div>
 
-<div class="right">
-    <iframe id="preview"></iframe>
-</div>
+    <div class="right" id="rightPane">
+      <iframe id="preview"></iframe>
+    </div>
+  </div>
 
-<script>
-let auto = true;
+  <script>
+  /* ═══════════════════════════════════════════════════════
+     TAB STATE
+  ═══════════════════════════════════════════════════════ */
+  let tabs     = [];
+  let activeId = null;
 
-const iframe = document.getElementById("preview");
-const codeBox = document.getElementById("code");
+  const STORAGE_TABS   = 'html_editor_tabs';
+  const STORAGE_ACTIVE = 'html_editor_active';
 
-/* Load saved */
-codeBox.value = localStorage.getItem("html_code") || "<h1>Hello World</h1>";
+  function genId() { return 't' + Date.now() + Math.random().toString(36).slice(2, 6); }
 
-function save() {
-    localStorage.setItem("html_code", codeBox.value);
-}
+  function saveTabs() {
+    localStorage.setItem(STORAGE_TABS,   JSON.stringify(tabs));
+    localStorage.setItem(STORAGE_ACTIVE, activeId);
+  }
 
-/* RENDER */
-function run() {
+  function loadTabs() {
+    try {
+      const raw = localStorage.getItem(STORAGE_TABS);
+      if (raw) {
+        tabs = JSON.parse(raw);
+        activeId = localStorage.getItem(STORAGE_ACTIVE) || tabs[0]?.id || null;
+        return;
+      }
+    } catch(e) {}
+    const legacy = localStorage.getItem('html_code') || '<h1>Hello World</h1>';
+    const id = genId();
+    tabs = [{ id, name: 'Tab 1', code: legacy }];
+    activeId = id;
+    saveTabs();
+  }
+
+  function activeTab() { return tabs.find(t => t.id === activeId) || null; }
+
+  /* ═══════════════════════════════════════════════════════
+     TAB UI + DRAG-TO-REORDER
+  ═══════════════════════════════════════════════════════ */
+  let dragSrcId = null;
+
+  function renderTabs() {
+    const bar    = document.getElementById('tabBar');
+    const addBtn = bar.querySelector('.tab-add-btn');
+    Array.from(bar.querySelectorAll('.tab')).forEach(el => el.remove());
+
+    tabs.forEach(tab => {
+      const el = document.createElement('div');
+      el.className = 'tab' + (tab.id === activeId ? ' active' : '');
+      el.dataset.id = tab.id;
+      el.draggable = true;
+
+      /* drag-to-reorder */
+      el.addEventListener('dragstart', e => {
+        dragSrcId = tab.id;
+        e.dataTransfer.effectAllowed = 'move';
+        setTimeout(() => el.style.opacity = '0.5', 0);
+      });
+      el.addEventListener('dragend', () => { el.style.opacity = ''; });
+      el.addEventListener('dragover', e => {
+        e.preventDefault();
+        el.classList.add('drag-over');
+      });
+      el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+      el.addEventListener('drop', e => {
+        e.preventDefault();
+        el.classList.remove('drag-over');
+        if (!dragSrcId || dragSrcId === tab.id) return;
+        flushActiveCode();
+        const fromIdx = tabs.findIndex(t => t.id === dragSrcId);
+        const toIdx   = tabs.findIndex(t => t.id === tab.id);
+        const [moved] = tabs.splice(fromIdx, 1);
+        tabs.splice(toIdx, 0, moved);
+        saveTabs();
+        renderTabs();
+      });
+
+      /* name span */
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'tab-name';
+      nameSpan.textContent = tab.name;
+      nameSpan.title = 'Double-click to rename';
+      nameSpan.addEventListener('dblclick', e => {
+        e.stopPropagation();
+        startRename(tab.id, nameSpan);
+      });
+
+      /* close btn */
+      const closeBtn = document.createElement('span');
+      closeBtn.className = 'close-btn';
+      closeBtn.textContent = '×';
+      closeBtn.title = 'Close tab';
+      closeBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        closeTabById(tab.id);
+      });
+
+      el.appendChild(nameSpan);
+      if (tabs.length > 1) el.appendChild(closeBtn);
+
+      el.addEventListener('click', () => switchTab(tab.id));
+      el.addEventListener('contextmenu', e => openCtxMenu(e, tab.id));
+
+      bar.insertBefore(el, addBtn);
+    });
+  }
+
+  function startRename(id, nameSpanOrNull) {
+    const tab = tabs.find(t => t.id === id);
+    if (!tab) return;
+
+    /* If called from context menu we need to find the span */
+    if (!nameSpanOrNull) {
+      const el = document.querySelector(`.tab[data-id="${id}"] .tab-name`);
+      if (el) nameSpanOrNull = el; else return;
+    }
+
+    const input = document.createElement('input');
+    input.className = 'tab-name-input';
+    input.value = tab.name;
+    nameSpanOrNull.replaceWith(input);
+    input.focus();
+    input.select();
+
+    function commit() {
+      const val = input.value.trim() || tab.name;
+      tab.name = val;
+      saveTabs();
+      renderTabs();
+    }
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter')  input.blur();
+      if (e.key === 'Escape') { input.value = tab.name; input.blur(); }
+    });
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     CONTEXT MENU
+  ═══════════════════════════════════════════════════════ */
+  let ctxTargetId = null;
+  const ctxMenu = document.getElementById('ctxMenu');
+
+  function openCtxMenu(e, id) {
+    e.preventDefault();
+    e.stopPropagation();
+    ctxTargetId = id;
+    ctxMenu.style.left = e.clientX + 'px';
+    ctxMenu.style.top  = e.clientY + 'px';
+    ctxMenu.classList.add('open');
+
+    /* disable Close option if only 1 tab */
+    ctxMenu.querySelectorAll('.ctx-item')[2].style.opacity = tabs.length <= 1 ? '0.4' : '1';
+    ctxMenu.querySelectorAll('.ctx-item')[2].style.pointerEvents = tabs.length <= 1 ? 'none' : '';
+  }
+
+  function closeCtxMenu() { ctxMenu.classList.remove('open'); ctxTargetId = null; }
+  document.addEventListener('click', closeCtxMenu);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCtxMenu(); });
+
+  function ctxRename() {
+    const id = ctxTargetId; closeCtxMenu();
+    startRename(id, null);
+  }
+  function ctxDupe() {
+    const id = ctxTargetId; closeCtxMenu();
+    duplicateTab(id);
+  }
+  function ctxClose() {
+    const id = ctxTargetId; closeCtxMenu();
+    closeTabById(id);
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     TAB OPERATIONS
+  ═══════════════════════════════════════════════════════ */
+  function switchTab(id) {
+    flushActiveCode();
+    activeId = id;
+    saveTabs();
+    loadActiveCode();
+    renderTabs();
+    updateLineNumbers();
+    run();
+  }
+
+  function addTab() {
+    flushActiveCode();
+    const id  = genId();
+    const num = tabs.length + 1;
+    tabs.push({ id, name: 'Tab ' + num, code: '<h1>Hello World</h1>' });
+    activeId = id;
+    saveTabs();
+    loadActiveCode();
+    renderTabs();
+    updateLineNumbers();
+    run();
+  }
+
+  function duplicateTab(id) {
+    flushActiveCode();
+    const src = tabs.find(t => t.id === id);
+    if (!src) return;
+    const newId = genId();
+    const idx   = tabs.findIndex(t => t.id === id);
+    tabs.splice(idx + 1, 0, { id: newId, name: src.name + ' (copy)', code: src.code });
+    activeId = newId;
+    saveTabs();
+    loadActiveCode();
+    renderTabs();
+    updateLineNumbers();
+    run();
+  }
+
+  function closeTabById(id) {
+    if (tabs.length <= 1) return;
+    const idx = tabs.findIndex(t => t.id === id);
+    tabs.splice(idx, 1);
+    if (activeId === id) {
+      activeId = tabs[Math.min(idx, tabs.length - 1)].id;
+      loadActiveCode();
+      run();
+    }
+    saveTabs();
+    renderTabs();
+    updateLineNumbers();
+  }
+
+  function flushActiveCode() {
+    const tab = activeTab();
+    if (tab) tab.code = codeBox.value;
+  }
+
+  function loadActiveCode() {
+    const tab = activeTab();
+    if (tab) codeBox.value = tab.code;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     TAB SEARCH
+  ═══════════════════════════════════════════════════════ */
+  function toggleTabSearch() {
+    const dd = document.getElementById('tabSearchDropdown');
+    const isOpen = dd.classList.toggle('open');
+    if (isOpen) {
+      filterTabSearch();
+      document.getElementById('tabSearchInput').focus();
+    }
+  }
+
+  function filterTabSearch() {
+    const q    = document.getElementById('tabSearchInput').value.toLowerCase();
+    const list = document.getElementById('tabSearchList');
+    list.innerHTML = '';
+    tabs.filter(t => t.name.toLowerCase().includes(q)).forEach(t => {
+      const item = document.createElement('div');
+      item.className = 'tab-search-item' + (t.id === activeId ? ' active-item' : '');
+      item.textContent = t.name;
+      item.addEventListener('click', () => {
+        document.getElementById('tabSearchDropdown').classList.remove('open');
+        switchTab(t.id);
+        /* scroll tab into view */
+        const el = document.querySelector(`.tab[data-id="${t.id}"]`);
+        if (el) el.scrollIntoView({ inline: 'nearest' });
+      });
+      list.appendChild(item);
+    });
+    if (!list.children.length) {
+      const empty = document.createElement('div');
+      empty.className = 'tab-search-item';
+      empty.style.color = '#475569';
+      empty.textContent = 'No tabs found';
+      list.appendChild(empty);
+    }
+  }
+
+  /* Close tab-search when clicking outside */
+  document.addEventListener('click', e => {
+    const btn = document.getElementById('tabSearchBtn');
+    const dd  = document.getElementById('tabSearchDropdown');
+    if (!btn.contains(e.target) && !dd.contains(e.target)) {
+      dd.classList.remove('open');
+    }
+  });
+
+  /* ═══════════════════════════════════════════════════════
+     SESSION EXPORT / IMPORT
+  ═══════════════════════════════════════════════════════ */
+  function exportSession() {
+    flushActiveCode();
+    const bundle = JSON.stringify({ tabs, activeId }, null, 2);
+    const blob = new Blob([bundle], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'html-editor-session.json';
+    a.click();
+  }
+
+  function importSession(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const bundle = JSON.parse(e.target.result);
+        if (!Array.isArray(bundle.tabs) || !bundle.tabs.length) throw new Error('bad');
+        tabs     = bundle.tabs;
+        activeId = bundle.activeId || tabs[0].id;
+        saveTabs();
+        loadActiveCode();
+        renderTabs();
+        updateLineNumbers();
+        run();
+      } catch {
+        alert('Invalid session file.');
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     LINE NUMBERS
+  ═══════════════════════════════════════════════════════ */
+  function updateLineNumbers() {
+    const lines = codeBox.value.split('\n').length;
+    const ln    = document.getElementById('lineNumbers');
+    let out = '';
+    for (let i = 1; i <= lines; i++) out += i + '\n';
+    ln.textContent = out;
+    /* sync scroll */
+    ln.scrollTop = codeBox.scrollTop;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     DRAGGABLE DIVIDER
+  ═══════════════════════════════════════════════════════ */
+  (function() {
+    const divider  = document.getElementById('divider');
+    const mainArea = document.getElementById('mainArea');
+    const leftPane = document.getElementById('leftPane');
+    const rightPane= document.getElementById('rightPane');
+    let dragging = false, startX = 0, startLeftW = 0;
+
+    /* Restore saved split */
+    const savedPct = parseFloat(localStorage.getItem('html_editor_split'));
+    if (!isNaN(savedPct)) {
+      leftPane.style.width  = savedPct + '%';
+      rightPane.style.flex  = 'none';
+      rightPane.style.width = (100 - savedPct) + '%';
+    } else {
+      leftPane.style.width  = '50%';
+      rightPane.style.width = '50%';
+    }
+
+    divider.addEventListener('mousedown', e => {
+      dragging   = true;
+      startX     = e.clientX;
+      startLeftW = leftPane.getBoundingClientRect().width;
+      divider.classList.add('dragging');
+      mainArea.classList.add('is-resizing');
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (!dragging) return;
+      const totalW  = mainArea.getBoundingClientRect().width;
+      const delta   = e.clientX - startX;
+      let newLeftW  = startLeftW + delta;
+      const minW    = 80;
+      newLeftW      = Math.max(minW, Math.min(totalW - minW - 5, newLeftW));
+      const pct     = (newLeftW / totalW) * 100;
+      leftPane.style.width  = pct + '%';
+      rightPane.style.width = (100 - pct - (5 / totalW * 100)) + '%';
+      localStorage.setItem('html_editor_split', pct.toFixed(2));
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      divider.classList.remove('dragging');
+      mainArea.classList.remove('is-resizing');
+    });
+  })();
+
+  /* ═══════════════════════════════════════════════════════
+     ORIGINAL FEATURES (unchanged behaviour)
+  ═══════════════════════════════════════════════════════ */
+  let auto = true;
+  const iframe  = document.getElementById('preview');
+  const codeBox = document.getElementById('code');
+
+  function save() {
+    flushActiveCode();
+    saveTabs();
+    localStorage.setItem('html_code', codeBox.value);
+  }
+
+  function run() {
     save();
-
     const doc = iframe.contentDocument || iframe.contentWindow.document;
     doc.open();
     doc.write(codeBox.value);
     doc.close();
-}
+  }
 
-/* AUTO REFRESH */
-codeBox.addEventListener("input", () => {
+  /* Tab key → insert spaces instead of shifting focus */
+  codeBox.addEventListener('keydown', e => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const s = codeBox.selectionStart;
+      const v = codeBox.value;
+      codeBox.value = v.slice(0, s) + '  ' + v.slice(codeBox.selectionEnd);
+      codeBox.selectionStart = codeBox.selectionEnd = s + 2;
+      if (auto) run();
+    }
+  });
+
+  codeBox.addEventListener('input', () => {
+    updateLineNumbers();
     if (auto) run();
-});
+  });
 
-/* OPEN IN NEW TAB */
-function openTab() {
-    const win = window.open("about:blank", "_blank");
+  codeBox.addEventListener('scroll', () => {
+    document.getElementById('lineNumbers').scrollTop = codeBox.scrollTop;
+  });
+
+  function openTab() {
+    const win = window.open('about:blank', '_blank');
     win.document.open();
     win.document.write(codeBox.value);
     win.document.close();
-}
+  }
 
-/* RESET */
-function resetCode() {
-    codeBox.value = "";
+  function resetCode() {
+    codeBox.value = '';
+    updateLineNumbers();
     run();
-}
+  }
 
-/* TOGGLE */
-function toggleAuto() {
+  function toggleAuto() {
     auto = !auto;
-    document.getElementById("autoToggle").classList.toggle("on", auto);
-}
+    document.getElementById('autoToggle').classList.toggle('on', auto);
+  }
 
-/* EXPORT */
-function exportCode() {
-    const blob = new Blob([codeBox.value], { type: "text/html" });
-    const a = document.createElement("a");
+  /* Export uses tab name as filename */
+  function exportCode() {
+    const name = (activeTab()?.name || 'index').replace(/[^a-z0-9_\-]/gi, '_');
+    const blob = new Blob([codeBox.value], { type: 'text/html' });
+    const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = "index.html";
+    a.download = name + '.html';
     a.click();
-}
+  }
 
-/* IMPORT */
-function importCode(event) {
+  function importCode(event) {
     const file = event.target.files[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = e => {
-        codeBox.value = e.target.result;
-        run();
+      codeBox.value = e.target.result;
+      updateLineNumbers();
+      run();
     };
     reader.readAsText(file);
-}
+    event.target.value = '';
+  }
 
-/* INIT */
-run();
-</script>
-
+  /* ═══════════════════════════════════════════════════════
+     INIT
+  ═══════════════════════════════════════════════════════ */
+  loadTabs();
+  loadActiveCode();
+  renderTabs();
+  updateLineNumbers();
+  run();
+  </script>
 </body>
 </html>
