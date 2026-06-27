@@ -5,65 +5,156 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Groq API Keys</title>
 <style>
-/* ----- Theme variables ----- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 :root {
-  --bg-gradient: linear-gradient(135deg, #e0f7fa, #e8f5e9);
-  --card-bg: #ffffff;
-  --primary: #00695c; /* teal‑blue */
-  --primary-light: #26a69a;
-  --primary-dark: #004d40;
-  --copy-success: #e0e0e0; /* permanent grey */
-  --error: #c62828;
-  --text: #212121;
-  --muted: #666666;
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface-hover: #21253a;
+  --border: rgba(255,255,255,0.07);
+  --primary: #6c63ff;
+  --primary-hover: #7c74ff;
+  --primary-glow: rgba(108,99,255,0.25);
+  --contribute: #1a8a5a;
+  --contribute-hover: #22a06b;
+  --contribute-glow: rgba(26,138,90,0.25);
+  --copied-bg: #2a2d3a;
+  --copied-text: #6c757d;
+  --error: #ff5c5c;
+  --text: #e8eaf6;
+  --muted: #8b8fa8;
+  --tag-bg: rgba(108,99,255,0.15);
+  --tag-text: #a5a0ff;
 }
 
-/* ----- Global layout ----- */
+*, *::before, *::after { box-sizing: border-box; }
+
 body {
-  font-family: system-ui, sans-serif;
-  background: var(--bg-gradient);
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
   margin: 0;
-  padding: 2rem;
+  padding: 2rem 1rem;
   display: flex;
   justify-content: center;
   align-items: flex-start;
   min-height: 100vh;
+  color: var(--text);
+}
+
+/* Subtle animated background orbs */
+body::before, body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.12;
+  pointer-events: none;
+  z-index: 0;
+}
+body::before {
+  width: 500px; height: 500px;
+  background: var(--primary);
+  top: -100px; left: -100px;
+}
+body::after {
+  width: 400px; height: 400px;
+  background: var(--contribute);
+  bottom: -80px; right: -80px;
 }
 
 .container {
-  background: var(--card-bg);
-  max-width: 600px;
+  position: relative;
+  z-index: 1;
+  background: var(--surface);
+  max-width: 620px;
   width: 100%;
   padding: 2rem;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0,0,0,.1);
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+}
+
+/* ----- Header ----- */
+.header {
+  text-align: center;
+  margin-bottom: 1.75rem;
+}
+
+.header .badge {
+  display: inline-block;
+  background: var(--tag-bg);
+  color: var(--tag-text);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.75rem;
+  border-radius: 99px;
+  margin-bottom: 0.75rem;
 }
 
 h1 {
-  color: var(--primary-dark);
-  margin-top: 0;
-  font-size: 2rem;
-  text-align: center;
+  color: var(--text);
+  margin: 0 0 0.25rem;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
-/* ----- Launch button ----- */
+.header p {
+  color: var(--muted);
+  margin: 0;
+  font-size: 0.875rem;
+}
 
-.launch-btn {
-  margin-bottom: 1rem;
-  padding: 0.5rem 1rem;
+/* ----- Divider ----- */
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.5rem 0;
+}
+
+/* ----- Buttons ----- */
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.7rem 1.25rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.925rem;
+  font-weight: 600;
+  font-family: inherit;
+  transition: background 0.2s, box-shadow 0.2s, transform 0.1s;
+  margin-bottom: 0.75rem;
+}
+.btn:active { transform: scale(0.98); }
+
+.btn-primary {
   background: var(--primary);
   color: #fff;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer; 
-  font-size: 1rem;
-  width: 100%; /* added width to change button length */
+  box-shadow: 0 0 0 0 var(--primary-glow);
 }
-.launch-btn:hover {
-  background: var(--primary-light);
+.btn-primary:hover {
+  background: var(--primary-hover);
+  box-shadow: 0 0 20px var(--primary-glow);
 }
 
-/* ----- List of keys ----- */
+.btn-contribute {
+  background: transparent;
+  color: var(--contribute-hover);
+  border: 1px solid var(--contribute);
+  box-shadow: 0 0 0 0 var(--contribute-glow);
+}
+.btn-contribute:hover {
+  background: rgba(26,138,90,0.1);
+  box-shadow: 0 0 20px var(--contribute-glow);
+}
+
+/* ----- Key list ----- */
 ul {
   list-style: none;
   padding: 0;
@@ -71,89 +162,144 @@ ul {
 }
 
 li {
-  background: var(--card-bg);
-  margin: 0.5rem 0;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  margin: 0.4rem 0;
   padding: 0.75rem 1rem;
-  border-radius: 6px;
-  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  border-radius: 8px;
   word-break: break-all;
   cursor: pointer;
-  transition: background .2s, transform .1s;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
   display: flex;
   align-items: center;
+  font-size: 0.85rem;
+  font-family: 'Courier New', monospace;
+  color: var(--text);
 }
 
 li:hover {
-  background: #f1fdfd;
+  background: var(--surface-hover);
+  border-color: rgba(108,99,255,0.35);
   transform: translateY(-1px);
 }
+li:active { transform: translateY(0); }
 
-li:active {
-  background: #e0f2f1;
-}
-
-/* When a key is copied, turn the whole block grey permanently */
 li.copied {
-  background: var(--copy-success);
-  opacity: 1;
+  background: var(--copied-bg);
+  border-color: transparent;
+  color: var(--copied-text);
 }
+li.copied .key-icon { opacity: 0.4; }
+li.copied .copy-label { display: inline; }
+li .copy-label { display: none; font-size: 0.75rem; margin-left: auto; color: var(--muted); }
 
-.emoji {
-  margin-right: 0.5rem;
-  font-size: 1.2rem;
-}
-
-/* ----- Status & error messages ----- */
-.status {
-  margin-top: 1rem;
+.key-icon {
+  margin-right: 0.6rem;
   font-size: 1rem;
+  flex-shrink: 0;
+}
+
+/* ----- Status ----- */
+.status {
+  margin: 0.75rem 0 0;
+  font-size: 0.875rem;
   color: var(--muted);
   text-align: center;
+  min-height: 1.25rem;
 }
+.status.error { color: var(--error); }
 
-.error {
-  color: var(--error);
+/* Loading spinner */
+.spinner {
+  display: inline-block;
+  width: 14px; height: 14px;
+  border: 2px solid rgba(255,255,255,0.15);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+  margin-right: 0.4rem;
 }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-/* ----- Small decorative element ----- */
+/* ----- Footer ----- */
 .footer {
-  margin-top: 2rem;
+  margin-top: 1.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
   text-align: center;
-  font-size: .85rem;
+  font-size: 0.8rem;
   color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
 }
 
-a {
-  color: var(--primary);
+.footer a {
+  color: var(--muted);
   text-decoration: none;
+  transition: color 0.15s;
 }
+.footer a:hover { color: var(--text); }
 
-a:hover {
-  text-decoration: underline;
+.footer svg {
+  width: 14px; height: 14px;
+  fill: currentColor;
+  flex-shrink: 0;
 }
 </style>
 </head>
 <body>
 <div class="container">
-  <button id="launchBtn" class="launch-btn">Launch VUS Hub</button>
-  <h1>Groq API Keys</h1>
-  <ul id="keys"></ul>
-  <p id="status" class="status"></p>
-  <div class="footer">
-    <a href="https://github.com/Cra-Z-Gaming/VUS" target="_blank">View source on GitHub</a>
-    <button id="openRawBtn" class="launch-btn">No Keys Avalible? Contribute Here</button>
+
+  <div class="header">
+    <div class="badge">🔑 Community Pool</div>
+    <h1>Groq API Keys</h1>
+    <p>Click any key to copy it to your clipboard</p>
   </div>
+
+  <button id="launchBtn" class="btn btn-primary">
+    <span>🚀</span> Launch VUS Hub
+  </button>
+
+  <hr class="divider">
+
+  <ul id="keys"></ul>
+  <p id="status" class="status"><span class="spinner"></span> Loading keys…</p>
+
+  <hr class="divider">
+
+  <button id="contributeBtn" class="btn btn-contribute">
+    <span>✨</span> No Keys Available? Contribute Here
+  </button>
+
+  <div class="footer">
+    <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+               0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13
+               -.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66
+               .07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15
+               -.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27
+               .68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12
+               .51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48
+               0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+    </svg>
+    <a href="https://github.com/Cra-Z-Gaming/VUS" target="_blank">View source on GitHub</a>
+  </div>
+
 </div>
 
 <script>
 (async () => {
   const rawUrl = 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/GroqAPIKeys';
-  const listEl = document.getElementById('keys');
+  const listEl  = document.getElementById('keys');
   const statusEl = document.getElementById('status');
 
-  // Show loading message
-  statusEl.textContent = 'Loading keys...';
-  statusEl.className = 'status';
+  const setStatus = (msg, isError = false) => {
+    statusEl.innerHTML = msg;
+    statusEl.className = 'status' + (isError ? ' error' : '');
+  };
 
   try {
     const resp = await fetch(rawUrl);
@@ -161,7 +307,6 @@ a:hover {
 
     const text = await resp.text();
 
-    // Try to parse as JSON first; if that fails, treat as newline‑separated list
     let keys = [];
     try {
       const json = JSON.parse(text);
@@ -173,44 +318,34 @@ a:hover {
     const alive = keys.map(k => k.trim()).filter(k => k !== '');
 
     if (alive.length === 0) {
-      statusEl.textContent = 'No active keys found.';
-      statusEl.className = 'error';
+      setStatus('No active keys found.', true);
       return;
     }
 
-    // Clear any status text once we have data
-    statusEl.textContent = '';
+    setStatus('');
 
-    // Render each key with click‑to‑copy and an emoji indicator
     alive.forEach(key => {
       const li = document.createElement('li');
-
-      // Build inner HTML for emoji and key text
-      const content = document.createElement('span');
-      content.innerHTML = `<span class="emoji">📋</span>${key}`;
-
-      // Append content to list item (no circle)
-      li.appendChild(content);
-
-      // Accessibility: make li behave like a button
+      li.innerHTML = `<span class="key-icon">🔑</span><span class="key-text">${key}</span><span class="copy-label">Copied!</span>`;
       li.setAttribute('role', 'button');
       li.setAttribute('tabindex', '0');
+      li.title = 'Click to copy';
 
       const copyKey = async () => {
         try {
-          if (navigator.clipboard && navigator.clipboard.writeText) {
+          if (navigator.clipboard?.writeText) {
             await navigator.clipboard.writeText(key);
           } else {
-            // Fallback for older browsers
-            const textarea = document.createElement('textarea');
-            textarea.value = key;
-            textarea.style.position = 'fixed';
-            document.body.appendChild(textarea);
-            textarea.select();
+            const ta = document.createElement('textarea');
+            ta.value = key;
+            ta.style.position = 'fixed';
+            document.body.appendChild(ta);
+            ta.select();
             document.execCommand('copy');
-            document.body.removeChild(textarea);
+            document.body.removeChild(ta);
           }
-          li.classList.add('copied'); // turn grey permanently
+          li.classList.add('copied');
+          li.title = 'Copied!';
         } catch (e) {
           console.error('Copy failed', e);
         }
@@ -218,38 +353,50 @@ a:hover {
 
       li.addEventListener('click', copyKey);
       li.addEventListener('keydown', e => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          copyKey();
-        }
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); copyKey(); }
       });
 
       listEl.appendChild(li);
     });
   } catch (err) {
-    statusEl.textContent = `Failed to load keys: ${err.message}`;
-    statusEl.className = 'error';
+    setStatus(`Failed to load keys: ${err.message}`, true);
     console.error(err);
   }
 
-  // ----- Launch Demo button functionality -----
-  const launchBtn = document.getElementById('launchBtn');
-  launchBtn.addEventListener('click', async () => {
-    const demoUrl = 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/index.html';
+  // ----- Launch VUS Hub -----
+  document.getElementById('launchBtn').addEventListener('click', async () => {
+    const url = 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/index.html';
     try {
-      const resp = await fetch(demoUrl);
+      const resp = await fetch(url);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const html = await resp.text();
       const blob = new Blob([html], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-      // Revoke the object URL after a short delay to free memory
-      setTimeout(() => URL.revokeObjectURL(url), 5_000);
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank');
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 5_000);
     } catch (e) {
-      console.error('Failed to launch demo:', e);
-      alert('Unable to load the demo page.');
+      console.error('Failed to launch:', e);
+      alert('Unable to load the VUS Hub page.');
     }
   });
+
+  // ----- Contribute button -----
+  document.getElementById('contributeBtn').addEventListener('click', async () => {
+    const url = 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Keep%20VUS%20AI%20Alive';
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const html = await resp.text();
+      const blob = new Blob([html], { type: 'text/html' });
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank');
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 5_000);
+    } catch (e) {
+      console.error('Failed to load contribute page:', e);
+      alert('Unable to load the contribute page.');
+    }
+  });
+
 })();
 </script>
 </body>
