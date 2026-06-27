@@ -12,7 +12,17 @@
   .hub-tab { padding: 6px 14px; border-radius: 8px; cursor: pointer; background: #1e293b; border: 1px solid #334155; font-size: 14px; color: #94a3b8; transition: background 0.15s; }
   .hub-tab:hover { background: #334155; color: #f1f5f9; }
   .hub-tab.active { background: #22c55e; color: #000; border-color: #22c55e; font-weight: 500; }
-  .hub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; padding: 16px 0; }
+
+  .hub-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    padding: 16px 0;
+  }
+  @media (max-width: 500px) {
+    .hub-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
   .hub-card { background: #1e293b; border-radius: 12px; border: 1px solid #334155; padding: 16px 14px; cursor: pointer; text-align: center; transition: border-color 0.15s, background 0.15s; }
   .hub-card:hover { border-color: #475569; background: #334155; }
   .hub-card-title { font-size: 15px; font-weight: 500; margin-bottom: 5px; color: #f1f5f9; }
@@ -39,48 +49,49 @@ const apps = {
     { name: "VUSL", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL", desc: "Main game hub" },
     { name: "YouTube", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/YouTube%20Premium%20V11%20K1", desc: "YouTube Version 11 K1" },
     { name: "VUS AI Chat", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Core-VUS-AI", desc: "groq AI - VUS, Blocked In Wboro" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" }
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" }
   ],
   tools: [
     { name: "about:blank opener", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/about%3Ablank%20opener", desc: "Opens files as about:blank" },
     { name: "Timer", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Timer", desc: "Stopwatch + countdown timer" },
     { name: "Code Editor", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/HTML%20Editor", desc: "Live code editor" },
-    { name: "Local Music Player", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/vus-music-player.html", desc: "you need your own music files to start listening." },
-    { name: "File + Folder Viewer", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/File%20Viewer", desc: "im honestly running out of ideas" },
-    { name: "AI Code Editor", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/AI-HTML-Studio", desc: "Code Editor but with AI, it can replace, add, and delete specific code lines instead of replacing all the code" },
-    { name: "Groq API Keys", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/GroqKeys-NeatUI", desc: "Groq API Keys that anyone can use for free" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" }
+    { name: "Local Music Player", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/vus-music-player.html", desc: "You need your own music files to start listening." },
+    { name: "File + Folder Viewer", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/File%20Viewer", desc: "Browse your files and folders" },
+    { name: "AI Code Editor", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/AI-HTML-Studio", desc: "Code editor with AI — replace, add, and delete specific lines" },
+    { name: "Groq API Keys", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/GroqKeys-NeatUI", desc: "Free Groq API keys for anyone" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" }
   ],
   links: [
-    { name: "Scratch", url: "https://scratch.mit.edu/", desc: "You can find many things like games, music, and animations" },
-    { name: "Keep VUS AI Alive", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Keep%20VUS%20AI%20Alive", desc: "Create & Send your Key to Keep VUS AI Alive for Everyone" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" },
-    { name: "Empty Slot", url: "", desc: "" }
+    { name: "Scratch", url: "https://scratch.mit.edu/", desc: "Games, music, and animations" },
+    { name: "Keep VUS AI Alive", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Keep%20VUS%20AI%20Alive", desc: "Create and send your key to keep VUS AI alive for everyone" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" },
+    { name: "", url: "", desc: "" }
   ]
 };
 
@@ -95,7 +106,6 @@ function setStatus(msg, isErr) {
 function openApp(app) {
   if (!app.url) return;
 
-  // Open normal websites directly
   if (!app.url.includes("raw.githubusercontent.com")) {
     window.open(app.url, "_blank");
     return;
@@ -114,11 +124,9 @@ function openApp(app) {
         setStatus("Popup blocked — allow popups for this site.", true);
         return;
       }
-
       win.document.open();
       win.document.write(text);
       win.document.close();
-
       setStatus("");
     })
     .catch(() => {
@@ -130,15 +138,30 @@ function render() {
   const grid = document.getElementById("grid");
   grid.innerHTML = "";
   setStatus("");
-  const filled = apps[current].filter(app => app.url.trim() !== "");
+
+  const filled = apps[current].filter(app => app.url && app.url.trim() !== "");
   if (filled.length === 0) {
-    grid.innerHTML = '<div class="hub-empty">Nothing here yet.</div>';
+    const empty = document.createElement("div");
+    empty.className = "hub-empty";
+    empty.textContent = "Nothing here yet.";
+    grid.appendChild(empty);
     return;
   }
+
   filled.forEach(app => {
     const card = document.createElement("div");
     card.className = "hub-card";
-    card.innerHTML = '<div class="hub-card-title">' + app.name + '</div><div class="hub-card-sub">' + app.desc + '</div>';
+
+    const title = document.createElement("div");
+    title.className = "hub-card-title";
+    title.textContent = app.name;
+
+    const sub = document.createElement("div");
+    sub.className = "hub-card-sub";
+    sub.textContent = app.desc;
+
+    card.appendChild(title);
+    card.appendChild(sub);
     card.onclick = () => openApp(app);
     grid.appendChild(card);
   });
@@ -169,6 +192,5 @@ setInterval(updateClock, 1000);
 updateClock();
 render();
 </script>
-
 </body>
 </html>
