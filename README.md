@@ -1,6 +1,6 @@
 i made this for myself and probobly my whole school, but since my school likes to be a BEAAACH about games or sites, 
-im not supposed to share anymore. but this is litterly the only thing im good at. i dont even do these sites for myself, 
-i do this for the little jits in school
+im not supposed to share anymore. but this is litterly the only thing im good at. i dont make these sites mainly for myself, 
+but for the little jits in school
 
 anyways, here is how to actually use this correctly/how to build it
 
