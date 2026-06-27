@@ -141,6 +141,7 @@ a:hover {
   <p id="status" class="status"></p>
   <div class="footer">
     <a href="https://github.com/Cra-Z-Gaming/VUS" target="_blank">View source on GitHub</a>
+    <button id="openRawBtn" class="launch-btn">No Keys Avalible? Contribute Here</button>
   </div>
 </div>
 
