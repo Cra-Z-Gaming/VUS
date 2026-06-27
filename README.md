@@ -18,6 +18,11 @@ SUPER SIMPLE "HOW TO BUILD"
 copy code from [STARTER BUTTON](https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/STARTER%20BUTTON) then paste into a code viewer.
 
 
+CODE VIEWER LINKS
+
+[CodeBeautify](https://codebeautify.org/htmlviewer)
+[HTMLOnlineViewer](https://html.onlineviewer.net/)
+
 -----------------------------------------------------------------------------------------------------------------------------------
 
 Starter Button code:
