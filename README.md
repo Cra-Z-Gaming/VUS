@@ -17,7 +17,7 @@ copy code from hub.html then paste into a code viewer.
 
 -----------------------------------------------------------------------------------------------------------------------------------
 
-Starter Button code:
+hub.html / Starter Button code:
 
 ```text
 
