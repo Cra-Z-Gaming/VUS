@@ -13,3 +13,28 @@ then just click the button and it should show my Hub and YT. theres also other t
 SUPER SIMPLE "HOW TO BUILD"
 
 copy code from hub.html then paste into a code viewer.
+
+
+-----------------------------------------------------------------------------------------------------------------------------------
+
+Starter Button code:
+
+```text
+
+<button id="hub">Open</button>
+
+<script>
+document.getElementById("hub").onclick = async () => {
+    const hubCode = await fetch(
+        "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/index.html?v=" + Date.now(),
+    ).then(r => r.text());
+
+    const win = window.open("about:blank", "_blank");
+
+    win.document.open();
+    win.document.write(hubCode);
+    win.document.close();
+};
+</script>
+
+```
