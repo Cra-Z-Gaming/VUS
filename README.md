@@ -7,7 +7,7 @@ I don't mainly make these sites for myself, I make them for the little jits at s
 
 anyways, here is how to actually use this correctly/how to build it
 
-first go to index.html, copy code then go to any html viewer and paste the hub.html code.
+first go to STARTER BUTTON, copy code, go to any html viewer and paste the code.
 then just click the button and it should show my Hub and YT. theres also other tabs for tools and links.
 
 
@@ -15,12 +15,12 @@ then just click the button and it should show my Hub and YT. theres also other t
 
 SUPER SIMPLE "HOW TO BUILD"
 
-copy code from hub.html then paste into a code viewer.
+copy code from STARTER BUTTON then paste into a code viewer.
 
 
 -----------------------------------------------------------------------------------------------------------------------------------
 
-hub.html / Starter Button code:
+Starter Button code:
 
 ```text
 
