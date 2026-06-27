@@ -442,7 +442,7 @@ body::after {
 const KEYS = [
   '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', // ← Key 1 
   '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', // ← Key 2
-  '', // ← Key 3
+  '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', // ← Key 3
   '', // ← Key 4
   '', // ← Key 5
   '', // ← Key ?
