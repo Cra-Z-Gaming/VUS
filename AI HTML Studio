@@ -1,0 +1,1485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI HTML Learning Studio</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:      #0d1117;
+  --bg2:     #161b22;
+  --bg3:     #21262d;
+  --border:  #30363d;
+  --text:    #e6edf3;
+  --muted:   #8b949e;
+  --dim:     #484f58;
+  --green:   #3fb950;
+  --blue:    #58a6ff;
+  --red:     #f85149;
+  --yellow:  #d29922;
+  --mono:    'Consolas', 'Fira Code', monospace;
+  --ui:      system-ui, sans-serif;
+}
+
+html, body { height: 100vh; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--ui); font-size: 13px; }
+
+/* ── LAYOUT ── */
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#toolbar {
+  flex-shrink: 0;
+  height: 40px;
+  display: flex; align-items: center; gap: 6px; padding: 0 10px;
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+}
+
+#main { position: relative; flex: 1; overflow: hidden; }
+
+#left-col {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: row;
+  overflow: hidden;
+}
+
+#editor-pane { flex: 1; min-width: 200px; display: flex; flex-direction: column; overflow: hidden; }
+
+#h-resizer {
+  flex-shrink: 0; width: 6px; cursor: col-resize;
+  background: var(--bg2); border-left: 1px solid var(--border); border-right: 1px solid var(--border);
+  position: relative;
+}
+#h-resizer::after {
+  content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 3px; height: 36px; border-radius: 2px; background: var(--dim);
+}
+#h-resizer:hover::after, #h-resizer.dragging::after { background: var(--blue); }
+
+#preview-pane { flex-shrink: 0; width: 42%; min-width: 200px; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── FLOATING / DRAGGABLE AI PANEL ── */
+#ai-pane {
+  position: fixed;
+  display: flex; flex-direction: column;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.55);
+  overflow: hidden;
+  z-index: 50;
+  min-width: 280px; min-height: 220px;
+}
+#ai-pane-header { cursor: move; user-select: none; gap: 6px; }
+#ai-pane-header .right { font-size: 10px; color: var(--dim); margin-left: auto; }
+#aiMinimizeBtn { padding: 1px 7px; font-size: 12px; line-height: 1.3; cursor: pointer; }
+#ai-pane-body { display: flex; flex-direction: column; flex: 1; overflow: hidden; min-height: 0; }
+#ai-resize-handle {
+  position: absolute; right: 1px; bottom: 1px; width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; color: var(--dim); cursor: nwse-resize; line-height: 1;
+}
+#ai-resize-handle:hover { color: var(--blue); }
+
+/* ── KEY STATUS INDICATOR ── */
+#keyStatusBar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 8px;
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  font-size: 10.5px; color: var(--dim); flex-shrink: 0;
+}
+#keyStatusDot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--dim); flex-shrink: 0;
+}
+#keyStatusDot.ok     { background: var(--green); }
+#keyStatusDot.warn   { background: var(--yellow); }
+#keyStatusDot.error  { background: var(--red); }
+#keyStatusDot.loading { background: var(--blue); animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+#keyStatusText { flex: 1; }
+#keyStatusRefreshBtn {
+  padding: 2px 6px; font-size: 10px; cursor: pointer;
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 4px; color: var(--muted);
+}
+#keyStatusRefreshBtn:hover { border-color: var(--blue); color: var(--blue); }
+
+/* ── TOOLBAR BUTTONS ── */
+button {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg3);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  font-family: var(--ui);
+  white-space: nowrap;
+}
+button:hover { border-color: var(--muted); }
+button.green { background: var(--green); border-color: var(--green); color: #000; font-weight: 600; }
+button.green:hover { opacity: 0.9; }
+button.on { border-color: var(--blue); color: var(--blue); }
+.sep { width: 1px; height: 20px; background: var(--border); margin: 0 2px; }
+label.btn { padding: 4px 10px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg3); color: var(--text); font-size: 12px; cursor: pointer; }
+label.btn:hover { border-color: var(--muted); }
+#fileInput { display: none; }
+
+/* ── PANE HEADERS ── */
+.pane-bar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 10px; height: 30px;
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  flex-shrink: 0; font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px;
+}
+.pane-bar span.right { margin-left: auto; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--dim); font-size: 11px; }
+
+/* ── CODE EDITOR ── */
+#editor-body {
+  flex: 1; display: flex; overflow: hidden; min-height: 0;
+}
+
+#line-nums {
+  padding: 8px 6px 8px 10px;
+  background: var(--bg);
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: right;
+  user-select: none;
+  white-space: pre;
+  overflow: hidden;
+  border-right: 1px solid var(--border);
+  min-width: 38px;
+}
+
+#code {
+  flex: 1;
+  background: var(--bg);
+  color: var(--text);
+  border: none; outline: none;
+  padding: 8px 12px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+  resize: none;
+  overflow: auto;
+  white-space: pre;
+  tab-size: 2;
+}
+
+/* ── PREVIEW ── */
+#preview { flex: 1; border: none; background: white; }
+
+/* ── AI PANE ── */
+#ai-buttons {
+  padding: 8px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+#topic-row { display: flex; gap: 6px; align-items: center; margin-bottom: 7px; }
+#topic-row label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+#topic {
+  flex: 1; background: var(--bg3); color: var(--text);
+  border: 1px solid var(--border); border-radius: 5px;
+  padding: 4px 8px; font-size: 12px; font-family: var(--ui); outline: none;
+}
+#topic:focus { border-color: var(--blue); }
+
+#toggle-row { display: flex; gap: 6px; margin-bottom: 7px; }
+#toggle-row button { flex: 1; }
+
+#codeContextBtn { }
+#effort-row { display: flex; gap: 6px; align-items: center; margin-bottom: 7px; }
+#effort-row label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.effort-btn {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 5px 4px;
+}
+.effort-btn .effort-sub { font-size: 9px; color: var(--dim); }
+.effort-btn.active { border-color: var(--blue); color: var(--blue); background: var(--bg2); }
+.effort-btn.active .effort-sub { color: var(--blue); }
+
+#fastModelRow { margin-bottom: 7px; }
+#fastModelRow select {
+  width: 100%; background: var(--bg3); color: var(--text);
+  border: 1px solid var(--border); border-radius: 5px;
+  padding: 5px 8px; font-size: 11.5px; font-family: var(--ui); outline: none; cursor: pointer;
+}
+#fastModelRow select:focus { border-color: var(--blue); }
+
+#modelStatusRow {
+  font-size: 10.5px; color: var(--dim); margin-bottom: 7px; min-height: 13px;
+}
+#modelStatusRow.warn { color: #d29922; }
+
+#qa-header {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 11px; color: var(--muted); cursor: pointer; padding: 4px 2px; user-select: none;
+}
+#qa-header:hover { color: var(--blue); }
+
+.btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.qbtn {
+  padding: 5px 6px; font-size: 11px; text-align: left;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 5px; color: var(--text); cursor: pointer;
+  font-family: var(--ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.qbtn:hover { border-color: var(--blue); color: var(--blue); }
+.qbtn.full { grid-column: 1 / -1; }
+
+/* ── CHAT ── */
+#chat {
+  flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; min-height: 0;
+}
+
+.msg { display: flex; flex-direction: column; gap: 3px; }
+.msg-label { font-size: 10px; color: var(--dim); padding: 0 2px; }
+.msg.user .msg-label { color: var(--blue); }
+.msg.ai   .msg-label { color: var(--green); }
+.msg-body {
+  padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border);
+  font-size: 12.5px; line-height: 1.6; background: var(--bg2);
+}
+.msg.user .msg-body { background: var(--bg3); }
+
+.msg-body p { margin: 4px 0; }
+.msg-body h1,.msg-body h2,.msg-body h3 { color: var(--blue); margin: 8px 0 4px; }
+.msg-body h1 { font-size: 15px; }
+.msg-body h2 { font-size: 14px; }
+.msg-body h3 { font-size: 13px; }
+.msg-body ul,.msg-body ol { margin: 4px 0 4px 16px; }
+.msg-body li { margin: 2px 0; }
+.msg-body strong { color: var(--text); }
+.msg-body em { color: #d29922; }
+.msg-body code { background: #0d1117; color: #79c0ff; padding: 1px 5px; border-radius: 4px; font-family: var(--mono); font-size: 11.5px; }
+.msg-body blockquote { border-left: 3px solid var(--blue); padding: 3px 8px; margin: 4px 0; color: var(--muted); background: var(--bg3); border-radius: 0 4px 4px 0; }
+.code-wrap { margin: 6px 0; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.code-top { display: flex; justify-content: space-between; align-items: center; padding: 3px 8px; background: var(--bg3); font-size: 10px; color: var(--dim); }
+.code-top button { padding: 2px 7px; font-size: 10px; }
+.code-wrap pre { margin: 0; padding: 10px; background: #0d1117; font-family: var(--mono); font-size: 12px; line-height: 1.6; overflow-x: auto; color: var(--text); }
+
+.model-tag {
+  font-size: 9.5px; color: var(--dim); padding: 0 2px 2px;
+  font-family: var(--mono);
+}
+.model-tag.fallback { color: #d29922; }
+
+.retry-trail { font-size: 10.5px; color: var(--dim); padding: 2px; line-height: 1.5; }
+.retry-trail .fail { color: var(--red); }
+.retry-trail .ok { color: var(--green); }
+
+/* ── DIFF / EDIT VIEW ── */
+.diff-wrap { margin: 6px 0; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.diff-header { display: flex; justify-content: space-between; align-items: center; padding: 5px 9px; background: var(--bg3); font-size: 10.5px; color: var(--muted); font-weight: 600; }
+.diff-stats { font-family: var(--mono); font-weight: 400; }
+.diff-stats .add-count { color: var(--green); }
+.diff-stats .del-count { color: var(--red); }
+.diff-body { max-height: 320px; overflow: auto; background: #0d1117; font-family: var(--mono); font-size: 11.5px; line-height: 1.55; }
+.diff-line { display: flex; white-space: pre; }
+.diff-ln { flex-shrink: 0; width: 34px; text-align: right; padding: 0 6px; color: var(--dim); user-select: none; border-right: 1px solid var(--border); }
+.diff-code { padding: 0 8px; white-space: pre-wrap; word-break: break-word; flex: 1; }
+.diff-line.add { background: rgba(63, 185, 80, 0.15); }
+.diff-line.add .diff-code { color: #7ee08a; }
+.diff-line.del { background: rgba(248, 81, 73, 0.15); }
+.diff-line.del .diff-code { color: #ff9d97; }
+.diff-line.ctx .diff-code { color: var(--muted); }
+.diff-collapsed { text-align: center; padding: 4px 0; color: var(--dim); font-size: 10.5px; font-family: var(--ui); background: var(--bg2); }
+.diff-actions { display: flex; gap: 6px; padding: 7px 9px; background: var(--bg3); border-top: 1px solid var(--border); }
+.diff-actions button { flex: 1; }
+.diff-apply { background: var(--green); border-color: var(--green); color: #000; font-weight: 600; }
+.diff-apply:hover { opacity: 0.9; }
+.diff-discard { color: var(--red); border-color: var(--red); }
+.diff-discard:hover { background: rgba(248, 81, 73, 0.1); }
+.diff-status { font-size: 11.5px; font-weight: 600; padding: 2px 0; }
+.diff-status.applied { color: var(--green); }
+.diff-status.discarded { color: var(--red); }
+.diff-wrap.diff-applied .diff-body, .diff-wrap.diff-discarded .diff-body { opacity: 0.55; }
+
+/* spinner */
+.spin { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--border); border-top-color: var(--green); border-radius: 50%; animation: spin .7s linear infinite; margin-right: 6px; vertical-align: middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── CHAT INPUT ── */
+#chat-input-area {
+  padding: 8px; background: var(--bg2); border-top: 1px solid var(--border); flex-shrink: 0;
+}
+#input-row { display: flex; gap: 6px; }
+#user-input {
+  flex: 1; background: var(--bg3); color: var(--text);
+  border: 1px solid var(--border); border-radius: 5px;
+  padding: 6px 9px; font-size: 12.5px; font-family: var(--ui);
+  outline: none; resize: none; min-height: 32px; max-height: 80px;
+  line-height: 1.5;
+}
+#user-input:focus { border-color: var(--blue); }
+#send-btn { width: 34px; height: 34px; padding: 0; display: flex; align-items: center; justify-content: center; background: var(--green); border-color: var(--green); border-radius: 5px; color: #000; flex-shrink: 0; }
+#send-btn:hover { opacity: 0.85; }
+
+/* ── API KEY MODAL ── */
+#keyModalOverlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+}
+#keyModal {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+  width: 420px; max-width: 90vw; padding: 20px;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.6);
+}
+#keyModal h2 { font-size: 15px; margin-bottom: 8px; color: var(--text); }
+#keyModal p { font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 12px; }
+#keyModal a { color: var(--blue); }
+#keyModalInput {
+  width: 100%; background: var(--bg3); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 8px 10px; font-size: 13px; font-family: var(--mono);
+  outline: none; margin-bottom: 12px;
+}
+#keyModalInput:focus { border-color: var(--blue); }
+#keyModalActions { display: flex; gap: 8px; }
+#keyModalActions button { flex: 1; padding: 7px 10px; }
+#keyModalError { font-size: 11.5px; color: var(--red); margin-top: -4px; margin-bottom: 10px; min-height: 14px; }
+
+/* scrollbars */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- TOOLBAR -->
+  <div id="toolbar">
+    <button class="green" onclick="runCode()">▶ Run</button>
+    <button id="autoBtn" class="on" onclick="toggleAuto()">⟳ Auto</button>
+    <div class="sep"></div>
+    <button onclick="openTab()">↗ New Tab</button>
+    <input type="file" id="fileInput" accept=".html,.htm" onchange="importFile(event)">
+    <label for="fileInput" class="btn">⬆ Import</label>
+    <button onclick="exportFile()">⬇ Export</button>
+    <button onclick="resetEditor()" style="color:var(--red)">↺ Reset</button>
+    <div class="sep"></div>
+    <button onclick="clearChat()">🗑 Clear Chat</button>
+    <button onclick="openKeyModal(true)">🔑 API Key</button>
+  </div>
+
+  <!-- MAIN AREA -->
+  <div id="main">
+
+    <div id="left-col">
+      <!-- EDITOR PANE -->
+      <div id="editor-pane">
+        <div class="pane-bar">
+          Editor
+          <span class="right" id="status">0 lines · 0 chars</span>
+        </div>
+        <div id="editor-body">
+          <div id="line-nums">1</div>
+          <textarea id="code" spellcheck="false" autocorrect="off" autocomplete="off"></textarea>
+        </div>
+      </div>
+
+      <div id="h-resizer" title="Drag to resize editor / preview width"></div>
+
+      <!-- PREVIEW PANE -->
+      <div id="preview-pane">
+        <div class="pane-bar">Preview</div>
+        <iframe id="preview" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+      </div>
+    </div>
+
+    <!-- FLOATING / DRAGGABLE / MINIMIZABLE AI PANE -->
+    <div id="ai-pane">
+      <div class="pane-bar" id="ai-pane-header">
+        <span>AI Tutor</span>
+        <button id="aiMinimizeBtn" onclick="toggleAIMinimize(event)" title="Minimize / Restore">─</button>
+        <span class="right">⠿ drag</span>
+      </div>
+
+      <div id="ai-pane-body">
+
+        <!-- KEY STATUS BAR -->
+        <div id="keyStatusBar">
+          <div id="keyStatusDot" class="loading"></div>
+          <span id="keyStatusText">Fetching API keys…</span>
+          <button id="keyStatusRefreshBtn" onclick="refreshKeyPool()" title="Reload keys from GitHub">↺ Refresh</button>
+        </div>
+
+        <div id="ai-buttons">
+          <div id="topic-row">
+            <label>Topic:</label>
+            <input id="topic" type="text" placeholder="e.g. Forms, Grid, Flexbox…">
+          </div>
+
+          <div id="toggle-row">
+            <button id="codeContextBtn" class="on" onclick="toggleCodeContext()">📄 Reads Code: ON</button>
+            <button id="editModeBtn" onclick="toggleEditMode()">✏️ Edit Mode: OFF</button>
+          </div>
+
+          <div id="effort-row">
+            <label>Effort:</label>
+            <button class="effort-btn" id="effortLowBtn" onclick="setEffort('low')">⚡ Low<span class="effort-sub">instant</span></button>
+            <button class="effort-btn" id="effortHighBtn" onclick="setEffort('high')">🧠 High<span class="effort-sub">versatile</span></button>
+          </div>
+
+          <div id="fastModelRow">
+            <select id="fastModelSelect" onchange="setFastModel(this.value)"></select>
+          </div>
+
+          <div id="modelStatusRow"></div>
+
+          <div id="qa-header" onclick="toggleQuickActions()">
+            <span>Quick Actions</span><span id="qa-chevron">▾</span>
+          </div>
+          <div class="btn-grid" id="btn-grid">
+            <button class="qbtn" onclick="quick('explain')">📖 Explain Topic</button>
+            <button class="qbtn" onclick="quick('problem')">✏️ Practice Problem</button>
+            <button class="qbtn" onclick="quick('howto')">🛠 How To</button>
+            <button class="qbtn" onclick="quick('hint')">💡 Give Hint</button>
+            <button class="qbtn" onclick="quick('explainCode')">🔍 Explain My Code</button>
+            <button class="qbtn" onclick="quick('findMistake')">🐛 Find Mistake</button>
+            <button class="qbtn" onclick="quick('improve')">⚡ Improve Code</button>
+            <button class="qbtn" onclick="quick('accessibility')">♿ Accessibility</button>
+            <button class="qbtn" onclick="quick('semantic')">🏷 Semantic HTML</button>
+            <button class="qbtn" onclick="quick('bestPractices')">⭐ Best Practices</button>
+            <button class="qbtn" onclick="quick('optimize')">🚀 Optimize</button>
+            <button class="qbtn" onclick="quick('solution')">✅ Show Solution</button>
+            <button class="qbtn full" onclick="quickEdit()">🪄 Ask AI to Edit My Code</button>
+            <button class="qbtn full" onclick="focusInput()">💬 Ask Anything…</button>
+          </div>
+        </div>
+
+        <div id="chat"></div>
+
+        <div id="chat-input-area">
+          <div id="input-row">
+            <textarea id="user-input" rows="1" placeholder="Ask anything about HTML…"></textarea>
+            <button id="send-btn" onclick="sendMessage()">➤</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="ai-resize-handle" title="Drag to resize">⤡</div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- API KEY MODAL (last-resort / manual override) -->
+<div id="keyModalOverlay" style="display:none;">
+  <div id="keyModal">
+    <h2>🔑 Manual API Key</h2>
+    <p>
+      All keys from the pool have been exhausted or are invalid. Paste a Groq API key
+      manually to continue — it will be stored in this tab's local storage and used
+      alongside the pool on your next visit. Get a free key at
+      <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a>.
+    </p>
+    <input id="keyModalInput" type="password" placeholder="gsk_..." autocomplete="off" spellcheck="false">
+    <div id="keyModalError"></div>
+    <div id="keyModalActions">
+      <button onclick="closeKeyModal()" id="keyModalCancelBtn">Cancel</button>
+      <button class="green" onclick="saveKeyFromModal()">Save Key</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────────────
+const KEY_POOL_URL = 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/GroqAPIKeys';
+const API_URL      = 'https://api.groq.com/openai/v1/chat/completions';
+
+// "High" effort tries these in order until one works — biggest/smartest first.
+const HIGH_MODELS = [
+  { id: 'llama-3.3-70b-versatile',                    label: 'Llama 3.3 70B' },
+  { id: 'openai/gpt-oss-120b',                         label: 'GPT-OSS 120B' },
+  { id: 'meta-llama/llama-4-maverick-17b-128e-instruct', label: 'Llama 4 Maverick' },
+  { id: 'meta-llama/llama-4-scout-17b-16e-instruct',   label: 'Llama 4 Scout 17B' },
+  { id: 'qwen/qwen-3-32b',                             label: 'Qwen 3 32B' },
+  { id: 'moonshotai/kimi-k2-instruct-0905',            label: 'Kimi K2' },
+  { id: 'openai/gpt-oss-20b',                          label: 'GPT-OSS 20B' },
+  { id: 'llama-3.1-8b-instant',                        label: 'Llama 3.1 8B' },
+];
+
+const FAST_MODELS = [
+  { id: 'openai/gpt-oss-20b',                          label: 'GPT-OSS 20B',       sub: '~1000 t/s' },
+  { id: 'llama-3.1-8b-instant',                        label: 'Llama 3.1 8B',      sub: '~560 t/s' },
+  { id: 'meta-llama/llama-4-scout-17b-16e-instruct',   label: 'Llama 4 Scout 17B', sub: '~750 t/s · preview' },
+  { id: 'qwen/qwen-3-32b',                              label: 'Qwen 3 32B',        sub: 'preview' },
+  { id: 'meta-llama/llama-4-maverick-17b-128e-instruct', label: 'Llama 4 Maverick', sub: 'preview' },
+  { id: 'moonshotai/kimi-k2-instruct-0905',             label: 'Kimi K2',           sub: 'preview' },
+  { id: 'openai/gpt-oss-120b',                          label: 'GPT-OSS 120B',      sub: '~500 t/s' },
+  { id: 'llama-3.3-70b-versatile',                      label: 'Llama 3.3 70B',     sub: 'fallback' },
+];
+
+const SYSTEM = `You are a friendly HTML/CSS/JS tutor. 
+Explain things clearly with examples. Use markdown formatting.
+For code, always use triple-backtick blocks with the language label (e.g. \`\`\`html).`;
+
+const EDIT_SYSTEM_SUFFIX = `
+
+EDIT MODE IS ON. The user wants you to directly modify their code, not just explain it.
+Follow these rules exactly:
+1. Make the change(s) the user asked for to the code shown above.
+2. First, write a short 1-3 sentence summary of what you changed (outside any code block).
+3. Then output the COMPLETE updated file in a single fenced code block labeled html, like:
+\`\`\`html
+...full file...
+\`\`\`
+4. That code block MUST contain the ENTIRE file from <!DOCTYPE html> to </html> with your changes applied. Never output a partial snippet, never use "...rest unchanged..." style comments, and never omit any part of the original file that you didn't change.
+5. Include exactly ONE code block in your response.`;
+
+// ── KEY POOL STATE ───────────────────────────────────────────────
+// keyPool: all valid (non-empty, non-duplicate) keys fetched from GitHub
+// activeKeyIndex: which key we're currently using
+// exhaustedKeys: Set of keys that returned 401 this session
+let keyPool         = [];
+let activeKeyIndex  = -1;
+let exhaustedKeys   = new Set();
+let poolFetchedAt   = 0;   // timestamp of last successful fetch
+let poolFetchInFlight = false;
+
+// Manual override key (stored in localStorage, used as last resort)
+let manualApiKey = localStorage.getItem('groqApiKey') || '';
+
+// Returns the currently active key, or '' if none available.
+function activeKey() {
+  if (activeKeyIndex >= 0 && activeKeyIndex < keyPool.length) {
+    return keyPool[activeKeyIndex];
+  }
+  return manualApiKey || '';
+}
+
+// Advance to the next key in the pool that isn't exhausted.
+// Returns true if a new key was found, false if all are exhausted.
+function rotateToNextKey() {
+  for (let i = 0; i < keyPool.length; i++) {
+    const idx = (activeKeyIndex + 1 + i) % keyPool.length;
+    if (!exhaustedKeys.has(keyPool[idx])) {
+      activeKeyIndex = idx;
+      setKeyStatus('ok', `Key rotated — using pool key ${activeKeyIndex + 1}/${keyPool.length}`);
+      return true;
+    }
+  }
+  // Try manual key as last resort
+  if (manualApiKey && !exhaustedKeys.has(manualApiKey)) {
+    activeKeyIndex = -1; // signals "use manualApiKey"
+    setKeyStatus('warn', 'Pool exhausted — using manual key');
+    return true;
+  }
+  activeKeyIndex = -1;
+  return false;
+}
+
+// Mark the current key as bad and rotate.
+function markCurrentKeyExhausted() {
+  const bad = activeKey();
+  if (bad) exhaustedKeys.add(bad);
+  return rotateToNextKey();
+}
+
+// Fetch (or re-fetch) the key pool from GitHub.
+async function fetchKeyPool() {
+  if (poolFetchInFlight) return;
+  poolFetchInFlight = true;
+  setKeyStatus('loading', 'Fetching API keys…');
+  try {
+    const res = await fetch(KEY_POOL_URL + '?nocache=' + Date.now());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const raw = await res.text();
+    const parsed = JSON.parse(raw);
+    // Filter to non-empty strings; remove duplicates
+    const fresh = [...new Set(parsed.filter(k => typeof k === 'string' && k.trim().length > 0))];
+    if (fresh.length === 0) throw new Error('No keys found in pool file');
+    keyPool = fresh;
+    poolFetchedAt = Date.now();
+    // Re-clear exhausted set on refresh so newly-added keys get a shot
+    exhaustedKeys = new Set();
+    // Pick a random starting key
+    activeKeyIndex = Math.floor(Math.random() * keyPool.length);
+    setKeyStatus('ok', `Pool ready — ${keyPool.length} key${keyPool.length !== 1 ? 's' : ''} available`);
+  } catch (err) {
+    // Couldn't fetch — fall back to manual key if present
+    if (manualApiKey) {
+      setKeyStatus('warn', `Pool fetch failed — using manual key (${err.message})`);
+    } else {
+      setKeyStatus('error', `Pool fetch failed: ${err.message} — click 🔑 to add a key manually`);
+    }
+  } finally {
+    poolFetchInFlight = false;
+  }
+}
+
+async function refreshKeyPool() {
+  exhaustedKeys = new Set(); // clear exhausted list so we retry everything
+  await fetchKeyPool();
+}
+
+// ── KEY STATUS BAR ────────────────────────────────────────────────
+function setKeyStatus(state, text) {
+  const dot  = document.getElementById('keyStatusDot');
+  const span = document.getElementById('keyStatusText');
+  dot.className = state; // ok / warn / error / loading
+  span.textContent = text;
+}
+
+// ── STATE ────────────────────────────────────────────────────────
+let autoOn        = localStorage.getItem('auto') !== 'false';
+let history       = JSON.parse(localStorage.getItem('chat') || '[]');
+let lastAI        = '';
+let autoTimer;
+let effort        = localStorage.getItem('effort') || 'high';
+let fastModel     = localStorage.getItem('fastModel') || FAST_MODELS[0].id;
+let qaCollapsed   = localStorage.getItem('qaCollapsed') !== null
+                      ? localStorage.getItem('qaCollapsed') === 'true'
+                      : true;
+let codeContextOn = localStorage.getItem('codeContext') !== 'false';
+let editModeOn    = localStorage.getItem('editMode') === 'true';
+let aiMinimized   = localStorage.getItem('aiPaneMinimized') === 'true';
+let keyModalIsForced = false;
+
+let editIdCounter = 0;
+let pendingEdits  = {};
+
+const DEFAULT = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>My Page</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 24px; }
+    h1   { color: #3fb950; }
+  </style>
+</head>
+<body>
+  <h1>Hello, HTML Studio!</h1>
+  <p>Edit this and watch the preview update live.</p>
+</body>
+</html>`;
+
+// ── ELEMENTS ─────────────────────────────────────────────────────
+const $code           = document.getElementById('code');
+const $lines          = document.getElementById('line-nums');
+const $preview        = document.getElementById('preview');
+const $previewPane    = document.getElementById('preview-pane');
+const $leftCol        = document.getElementById('left-col');
+const $chat           = document.getElementById('chat');
+const $input          = document.getElementById('user-input');
+const $topic          = document.getElementById('topic');
+const $autoBtn        = document.getElementById('autoBtn');
+const $status         = document.getElementById('status');
+const $aiPane         = document.getElementById('ai-pane');
+const $aiHeader       = document.getElementById('ai-pane-header');
+const $aiBody         = document.getElementById('ai-pane-body');
+const $aiResize       = document.getElementById('ai-resize-handle');
+const $hResizer       = document.getElementById('h-resizer');
+const $btnGrid        = document.getElementById('btn-grid');
+const $qaChevron      = document.getElementById('qa-chevron');
+const $codeContextBtn = document.getElementById('codeContextBtn');
+const $editModeBtn    = document.getElementById('editModeBtn');
+const $fastModelRow   = document.getElementById('fastModelRow');
+const $fastModelSelect = document.getElementById('fastModelSelect');
+const $modelStatusRow = document.getElementById('modelStatusRow');
+const $keyModalOverlay = document.getElementById('keyModalOverlay');
+const $keyModalInput  = document.getElementById('keyModalInput');
+const $keyModalError  = document.getElementById('keyModalError');
+const $keyModalCancelBtn = document.getElementById('keyModalCancelBtn');
+
+// ── EDITOR ───────────────────────────────────────────────────────
+async function init() {
+  $code.value  = localStorage.getItem('code') || DEFAULT;
+  $topic.value = localStorage.getItem('topic') || '';
+  setAutoState(autoOn);
+  updateLines();
+  runCode();
+  restoreChat();
+
+  populateFastModelSelect();
+
+  $previewPane.style.width = localStorage.getItem('previewWidth') || Math.round(window.innerWidth * 0.4) + 'px';
+  restoreAIPane();
+  applyQA();
+  updateEffortUI();
+  updateCodeContextUI();
+  updateEditModeUI();
+  applyAIMinimize();
+
+  setupHResizer();
+  makeDraggable($aiHeader, $aiPane);
+  makeResizable($aiResize, $aiPane);
+
+  // Fetch key pool in background — no blocking, no modal on start
+  await fetchKeyPool();
+}
+
+function updateLines() {
+  const n = $code.value.split('\n').length;
+  $lines.textContent = Array.from({length: n}, (_, i) => i + 1).join('\n');
+  $lines.scrollTop = $code.scrollTop;
+  $status.textContent = `${n} lines · ${$code.value.length} chars`;
+}
+
+$code.addEventListener('input', () => {
+  localStorage.setItem('code', $code.value);
+  updateLines();
+  if (autoOn) {
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(runCode, 400);
+  }
+});
+
+$code.addEventListener('scroll', () => {
+  $lines.scrollTop = $code.scrollTop;
+});
+
+$code.addEventListener('keydown', e => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const s = $code.selectionStart;
+    $code.value = $code.value.slice(0, s) + '  ' + $code.value.slice($code.selectionEnd);
+    $code.selectionStart = $code.selectionEnd = s + 2;
+    updateLines();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runCode(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 's')     { e.preventDefault(); exportFile(); }
+});
+
+function runCode() {
+  localStorage.setItem('code', $code.value);
+  const doc = $preview.contentDocument || $preview.contentWindow.document;
+  doc.open(); doc.write($code.value); doc.close();
+}
+
+function setAutoState(on) {
+  autoOn = on;
+  $autoBtn.classList.toggle('on', on);
+  $autoBtn.textContent = on ? '⟳ Auto ON' : '⟳ Auto OFF';
+  localStorage.setItem('auto', on);
+}
+
+function toggleAuto() { setAutoState(!autoOn); }
+
+function openTab() {
+  const w = window.open('about:blank', '_blank');
+  if (!w) return;
+  w.document.open(); w.document.write($code.value); w.document.close();
+}
+
+function exportFile() {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([$code.value], {type: 'text/html'}));
+  a.download = 'index.html';
+  a.click();
+}
+
+function importFile(e) {
+  const f = e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = ev => { $code.value = ev.target.result; updateLines(); runCode(); };
+  r.readAsText(f);
+  e.target.value = '';
+}
+
+function resetEditor() {
+  if (!confirm('Reset to default template?')) return;
+  $code.value = DEFAULT;
+  updateLines();
+  runCode();
+}
+
+// ── API KEY MODAL (manual override / last resort) ─────────────────
+function openKeyModal(allowCancel) {
+  keyModalIsForced = !allowCancel;
+  $keyModalInput.value = manualApiKey || '';
+  $keyModalError.textContent = '';
+  $keyModalOverlay.style.display = 'flex';
+  $keyModalCancelBtn.style.display = allowCancel ? '' : 'none';
+  setTimeout(() => $keyModalInput.focus(), 0);
+}
+
+function closeKeyModal() {
+  if (keyModalIsForced) return;
+  $keyModalOverlay.style.display = 'none';
+}
+
+function saveKeyFromModal() {
+  const val = $keyModalInput.value.trim();
+  if (!val) {
+    $keyModalError.textContent = 'Please paste a key, or Cancel if one is already set.';
+    return;
+  }
+  manualApiKey = val;
+  localStorage.setItem('groqApiKey', val);
+  // Remove from exhausted set so it gets tried fresh
+  exhaustedKeys.delete(val);
+  $keyModalOverlay.style.display = 'none';
+  setKeyStatus('warn', 'Using manually entered key');
+}
+
+$keyModalInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); saveKeyFromModal(); }
+});
+
+// ── PANE / WINDOW DRAGGING & RESIZING ───────────────────────────
+function disablePreviewPointerEvents() { $preview.style.pointerEvents = 'none'; }
+function enablePreviewPointerEvents()  { $preview.style.pointerEvents = ''; }
+
+function setupHResizer() {
+  $hResizer.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = $previewPane.getBoundingClientRect().width;
+    document.body.style.userSelect = 'none';
+    $hResizer.classList.add('dragging');
+    disablePreviewPointerEvents();
+
+    function onMove(ev) {
+      const dx = startX - ev.clientX;
+      let newW = startW + dx;
+      const maxW = $leftCol.getBoundingClientRect().width - 200;
+      newW = Math.max(200, Math.min(maxW, newW));
+      $previewPane.style.width = newW + 'px';
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.userSelect = '';
+      $hResizer.classList.remove('dragging');
+      enablePreviewPointerEvents();
+      localStorage.setItem('previewWidth', $previewPane.style.width);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+function makeDraggable(handle, panel) {
+  handle.addEventListener('mousedown', e => {
+    if (e.target.closest('button')) return;
+    e.preventDefault();
+    const startX = e.clientX, startY = e.clientY;
+    const rect = panel.getBoundingClientRect();
+    const startLeft = rect.left, startTop = rect.top;
+    document.body.style.userSelect = 'none';
+    disablePreviewPointerEvents();
+
+    function onMove(ev) {
+      let left = startLeft + (ev.clientX - startX);
+      let top  = startTop  + (ev.clientY - startY);
+      left = Math.max(0, Math.min(window.innerWidth  - panel.offsetWidth, left));
+      top  = Math.max(40, Math.min(window.innerHeight - 40, top));
+      panel.style.left = left + 'px';
+      panel.style.top  = top  + 'px';
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.userSelect = '';
+      enablePreviewPointerEvents();
+      saveAIPaneState();
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+function makeResizable(handle, panel) {
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault(); e.stopPropagation();
+    const startX = e.clientX, startY = e.clientY;
+    const rect = panel.getBoundingClientRect();
+    const startW = rect.width, startH = rect.height;
+    document.body.style.userSelect = 'none';
+    disablePreviewPointerEvents();
+
+    function onMove(ev) {
+      const w = Math.max(280, Math.min(window.innerWidth  - rect.left, startW + (ev.clientX - startX)));
+      const h = Math.max(220, Math.min(window.innerHeight - rect.top,  startH + (ev.clientY - startY)));
+      panel.style.width  = w + 'px';
+      panel.style.height = h + 'px';
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.userSelect = '';
+      enablePreviewPointerEvents();
+      if (!aiMinimized) saveAIPaneState();
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+function saveAIPaneState() {
+  const r = $aiPane.getBoundingClientRect();
+  localStorage.setItem('aiPane', JSON.stringify({ left: r.left, top: r.top, width: r.width, height: r.height }));
+}
+
+function restoreAIPane() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem('aiPane') || 'null'); } catch (e) { saved = null; }
+
+  if (saved) {
+    $aiPane.style.width  = saved.width  + 'px';
+    $aiPane.style.height = saved.height + 'px';
+    $aiPane.style.left   = Math.max(0, Math.min(saved.left, window.innerWidth  - 280)) + 'px';
+    $aiPane.style.top    = Math.max(40, Math.min(saved.top,  window.innerHeight - 200)) + 'px';
+  } else {
+    const w = 360, h = window.innerHeight - 50;
+    $aiPane.style.width  = w + 'px';
+    $aiPane.style.height = h + 'px';
+    $aiPane.style.left   = (window.innerWidth - w - 10) + 'px';
+    $aiPane.style.top    = '44px';
+  }
+}
+
+window.addEventListener('resize', () => {
+  const r = $aiPane.getBoundingClientRect();
+  $aiPane.style.left = Math.max(0, Math.min(r.left, window.innerWidth  - 100)) + 'px';
+  $aiPane.style.top  = Math.max(40, Math.min(r.top,  window.innerHeight - 100)) + 'px';
+});
+
+// ── AI PANE MINIMIZE ────────────────────────────────────────────
+function toggleAIMinimize(e) {
+  if (e) e.stopPropagation();
+  aiMinimized = !aiMinimized;
+  localStorage.setItem('aiPaneMinimized', aiMinimized);
+  applyAIMinimize();
+}
+
+function applyAIMinimize() {
+  const minimizeBtn = document.getElementById('aiMinimizeBtn');
+  if (aiMinimized) {
+    if (!$aiPane.dataset.prevHeight) $aiPane.dataset.prevHeight = $aiPane.style.height;
+    $aiBody.style.display    = 'none';
+    $aiResize.style.display  = 'none';
+    $aiPane.style.height      = '32px';
+    $aiPane.style.minHeight   = '32px';
+    minimizeBtn.textContent   = '▢';
+    minimizeBtn.title         = 'Restore';
+  } else {
+    $aiBody.style.display    = 'flex';
+    $aiResize.style.display  = 'flex';
+    $aiPane.style.minHeight   = '220px';
+    $aiPane.style.height      = $aiPane.dataset.prevHeight || '500px';
+    delete $aiPane.dataset.prevHeight;
+    minimizeBtn.textContent  = '─';
+    minimizeBtn.title        = 'Minimize';
+  }
+}
+
+// ── QUICK ACTIONS COLLAPSE ───────────────────────────────────────
+function applyQA() {
+  $btnGrid.style.display = qaCollapsed ? 'none' : 'grid';
+  $qaChevron.textContent = qaCollapsed ? '▸' : '▾';
+}
+function toggleQuickActions() {
+  qaCollapsed = !qaCollapsed;
+  localStorage.setItem('qaCollapsed', qaCollapsed);
+  applyQA();
+}
+
+// ── EFFORT SELECTOR ──────────────────────────────────────────────
+function setEffort(e) {
+  effort = e;
+  localStorage.setItem('effort', e);
+  updateEffortUI();
+}
+function updateEffortUI() {
+  document.getElementById('effortLowBtn').classList.toggle('active', effort === 'low');
+  document.getElementById('effortHighBtn').classList.toggle('active', effort === 'high');
+  $fastModelRow.style.display = effort === 'low' ? 'block' : 'none';
+}
+
+function populateFastModelSelect() {
+  $fastModelSelect.innerHTML = FAST_MODELS.map(m =>
+    `<option value="${m.id}">${m.label} — ${m.sub}</option>`
+  ).join('');
+  $fastModelSelect.value = fastModel;
+  updateEffortUI();
+}
+
+function setFastModel(id) {
+  fastModel = id;
+  localStorage.setItem('fastModel', id);
+}
+
+function getModelChain() {
+  const pool = effort === 'low' ? FAST_MODELS : HIGH_MODELS;
+  const preferredId = effort === 'low' ? fastModel : HIGH_MODELS[0].id;
+  const ids = [preferredId, ...pool.map(m => m.id)];
+  return [...new Set(ids)];
+}
+
+function modelLabel(id) {
+  const found = [...HIGH_MODELS, ...FAST_MODELS].find(m => m.id === id);
+  return found ? found.label : id;
+}
+
+// ── CODE CONTEXT TOGGLE ─────────────────────────────────────────
+function toggleCodeContext() {
+  codeContextOn = !codeContextOn;
+  localStorage.setItem('codeContext', codeContextOn);
+  updateCodeContextUI();
+}
+function updateCodeContextUI() {
+  $codeContextBtn.classList.toggle('on', codeContextOn);
+  $codeContextBtn.textContent = codeContextOn ? '📄 Reads Code: ON' : '📄 Reads Code: OFF';
+}
+
+// ── EDIT MODE TOGGLE ─────────────────────────────────────────────
+function toggleEditMode() {
+  editModeOn = !editModeOn;
+  localStorage.setItem('editMode', editModeOn);
+  updateEditModeUI();
+}
+function updateEditModeUI() {
+  $editModeBtn.classList.toggle('on', editModeOn);
+  $editModeBtn.textContent = editModeOn ? '✏️ Edit Mode: ON' : '✏️ Edit Mode: OFF';
+}
+function quickEdit() {
+  if (!editModeOn) { editModeOn = true; localStorage.setItem('editMode', true); updateEditModeUI(); }
+  $input.placeholder = 'Describe the change you want the AI to make to your code…';
+  focusInput();
+}
+
+// ── AI ───────────────────────────────────────────────────────────
+function getPrompt(type) {
+  const topic = $topic.value.trim() || 'HTML';
+
+  const prompts = {
+    explain:       `Explain **${topic}** clearly with beginner-friendly examples.`,
+    problem:       `Give me a beginner HTML practice problem about **${topic}**. Do not give the answer yet.`,
+    howto:         `Teach me step-by-step how to use **${topic}** in HTML.`,
+    hint:          `Give me just one helpful hint about **${topic}**. Do not give the full solution.`,
+    solution:      `Show the full solution for **${topic}** with explanations.`,
+    bestPractices: `What are the HTML best practices for **${topic}**?`,
+    explainCode:   `Explain the code currently in my editor, section by section.`,
+    findMistake:   `Find and explain all mistakes in the code currently in my editor. Don't rewrite it — just explain each issue.`,
+    improve:       `Improve the code currently in my editor while keeping the same functionality. Explain each change.`,
+    accessibility: `Review the code currently in my editor for accessibility issues and how to fix them.`,
+    semantic:      `Convert the code currently in my editor to proper semantic HTML5 and explain each change.`,
+    optimize:      `Optimize the code currently in my editor for performance and clean structure. Explain each change.`,
+  };
+
+  return prompts[type] || `Tell me about **${topic}**.`;
+}
+
+function quick(type) {
+  localStorage.setItem('topic', $topic.value);
+  callAI(getPrompt(type));
+}
+
+function focusInput() { $input.focus(); }
+
+function sendMessage() {
+  const text = $input.value.trim();
+  if (!text) return;
+  $input.value = '';
+  $input.style.height = 'auto';
+  callAI(text);
+}
+
+function setModelStatus(text, warn) {
+  $modelStatusRow.textContent = text || '';
+  $modelStatusRow.classList.toggle('warn', !!warn);
+}
+
+// Single attempt against one model + one API key.
+// Rejects with an Error that has .status set on auth failure.
+async function tryModel(modelId, apiKey, dynamicSystem, apiMessages) {
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: modelId,
+      max_tokens: 2048,
+      temperature: 0.7,
+      messages: [{ role: 'system', content: dynamicSystem }, ...apiMessages]
+    })
+  });
+
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try {
+      const e = await res.json();
+      if (e?.error?.message) msg = e.error.message;
+    } catch (_) {}
+    const err = new Error(msg);
+    err.status = res.status;
+    throw err;
+  }
+
+  return res.json();
+}
+
+async function callAI(userMsg) {
+  const currentKey = activeKey();
+  if (!currentKey) {
+    // Pool is empty and no manual key — try fetching the pool first
+    await fetchKeyPool();
+    if (!activeKey()) {
+      addMsg('ai', '⚠️ No API key available. Click **🔑 API Key** to enter one manually, or check your key pool file on GitHub.');
+      openKeyModal(false);
+      return;
+    }
+  }
+
+  const isEdit = editModeOn;
+  const codeSnapshot = $code.value;
+
+  addMsg('user', userMsg);
+  history.push({ role: 'user', content: userMsg });
+
+  const loadEl = document.createElement('div');
+  loadEl.className = 'msg ai';
+  loadEl.innerHTML = `<div class="msg-label">AI Tutor</div><div class="msg-body"><span class="spin"></span>Thinking…<div class="retry-trail" id="retryTrail"></div></div>`;
+  $chat.appendChild(loadEl);
+  $chat.scrollTop = $chat.scrollHeight;
+  const $retryTrail = loadEl.querySelector('#retryTrail');
+
+  try {
+    let dynamicSystem = SYSTEM;
+
+    if (isEdit) {
+      dynamicSystem += `\n\nThe user's HTML editor currently contains the following COMPLETE file:\n\`\`\`html\n${codeSnapshot}\n\`\`\`` + EDIT_SYSTEM_SUFFIX;
+    } else if (codeContextOn) {
+      const codeSnippet = codeSnapshot.length > 8000 ? codeSnapshot.slice(0, 8000) + '\n<!-- …truncated… -->' : codeSnapshot;
+      dynamicSystem += `\n\nThe user's HTML editor currently contains the following code. It updates live as they type, so always treat this as their CURRENT code — even if they don't paste or mention it themselves:\n\`\`\`html\n${codeSnippet}\n\`\`\``;
+    }
+
+    const apiMessages = history.slice(-16).map(m => ({ role: m.role, content: m.content }));
+
+    const modelChain = getModelChain();
+    let data = null, usedModel = null;
+    const attemptLog = [];
+
+    // Outer loop: try each API key. Inner loop: try each model.
+    // On 401 we burn the key and rotate; on other errors we try the next model.
+    outerLoop: while (true) {
+      const key = activeKey();
+      if (!key) break; // all keys exhausted
+
+      for (let i = 0; i < modelChain.length; i++) {
+        const modelId = modelChain[i];
+        setModelStatus(`Trying ${modelLabel(modelId)}…`, false);
+
+        try {
+          data = await tryModel(modelId, key, dynamicSystem, apiMessages);
+          usedModel = modelId;
+          attemptLog.push({ id: modelId, ok: true });
+          break outerLoop; // success!
+        } catch (err) {
+          attemptLog.push({ id: modelId, ok: false, msg: err.message });
+
+          if (err.status === 401) {
+            // Bad key — mark it exhausted, rotate, and restart the model loop with fresh key
+            const hadNext = markCurrentKeyExhausted();
+            if (!hadNext) break outerLoop; // truly out of keys
+            // Update the retry trail to show key rotation
+            if ($retryTrail) {
+              $retryTrail.innerHTML = `<span class="fail">✗ Key rotated (auth failed)</span>`;
+            }
+            break; // break inner for-loop, outer while picks up with new key
+          }
+
+          // Non-auth error — update trail and try next model
+          if ($retryTrail) {
+            $retryTrail.innerHTML = attemptLog.map(a =>
+              a.ok ? `<span class="ok">✓ ${modelLabel(a.id)}</span>`
+                   : `<span class="fail">✗ ${modelLabel(a.id)}</span>`
+            ).join(' → ');
+          }
+        }
+      }
+    }
+
+    loadEl.remove();
+    setModelStatus('');
+
+    if (!data) {
+      // Check if it was a total key exhaustion
+      if (!activeKey() && keyPool.length > 0) {
+        setKeyStatus('error', `All ${keyPool.length} pool key${keyPool.length !== 1 ? 's' : ''} exhausted — enter a key manually or refresh pool`);
+        addMsg('ai', `❌ All API keys in the pool have been exhausted (returned 401). You can:\n\n- Click **↺ Refresh** in the key status bar to reload the pool from GitHub\n- Click **🔑 API Key** to enter a key manually`);
+      } else {
+        const lines = attemptLog.map(a => `✗ ${modelLabel(a.id)}: ${a.msg}`).join('\n');
+        addMsg('ai', `❌ All models failed:\n\n${lines}`);
+      }
+      return;
+    }
+
+    const reply = data?.choices?.[0]?.message?.content || '(empty response)';
+    const isFallback = usedModel !== modelChain[0];
+
+    lastAI = reply;
+    const histEntry = { role: 'assistant', content: reply, model: usedModel, fallback: isFallback };
+    if (isEdit) { histEntry.isEdit = true; histEntry.codeSnapshot = codeSnapshot; }
+    history.push(histEntry);
+    if (history.length > 20) history = history.slice(-20);
+    localStorage.setItem('chat', JSON.stringify(history));
+
+    // Update key status to confirm which key index is working
+    if (activeKeyIndex >= 0 && keyPool.length > 1) {
+      setKeyStatus('ok', `Active: pool key ${activeKeyIndex + 1}/${keyPool.length}`);
+    }
+
+    addMsg('ai', reply, isEdit ? codeSnapshot : null, usedModel, isFallback);
+
+  } catch (err) {
+    loadEl.remove();
+    setModelStatus('');
+    addMsg('ai', `❌ Network error: ${err.message}`);
+  }
+}
+
+// ── LINE DIFF (LCS-based) ─────────────────────────────────────────
+function diffLines(oldStr, newStr) {
+  const oldLines = oldStr.split('\n');
+  const newLines = newStr.split('\n');
+  const m = oldLines.length, n = newLines.length;
+
+  if (m * n > 4_000_000) {
+    const ops = [];
+    oldLines.forEach(l => ops.push({ type: 'del', line: l }));
+    newLines.forEach(l => ops.push({ type: 'add', line: l }));
+    return ops;
+  }
+
+  const dp = Array.from({ length: m + 1 }, () => new Int32Array(n + 1));
+  for (let i = m - 1; i >= 0; i--) {
+    for (let j = n - 1; j >= 0; j--) {
+      dp[i][j] = oldLines[i] === newLines[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+
+  const ops = [];
+  let i = 0, j = 0;
+  while (i < m && j < n) {
+    if (oldLines[i] === newLines[j]) { ops.push({ type: 'same', line: oldLines[i] }); i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { ops.push({ type: 'del', line: oldLines[i] }); i++; }
+    else { ops.push({ type: 'add', line: newLines[j] }); j++; }
+  }
+  while (i < m) { ops.push({ type: 'del', line: oldLines[i] }); i++; }
+  while (j < n) { ops.push({ type: 'add', line: newLines[j] }); j++; }
+  return ops;
+}
+
+function renderDiffBlock(oldCode, newCode) {
+  const ops = diffLines(oldCode, newCode);
+  const CONTEXT = 3;
+  const n = ops.length;
+  const show = new Array(n).fill(false);
+  let addCount = 0, delCount = 0;
+  ops.forEach((op, idx) => {
+    if (op.type === 'add') addCount++;
+    if (op.type === 'del') delCount++;
+    if (op.type !== 'same') {
+      for (let k = Math.max(0, idx - CONTEXT); k <= Math.min(n - 1, idx + CONTEXT); k++) show[k] = true;
+    }
+  });
+
+  let body = '';
+  let oldLn = 1, newLn = 1, i = 0;
+  while (i < n) {
+    if (!show[i]) {
+      let j = i;
+      while (j < n && !show[j]) j++;
+      const count = j - i;
+      body += `<div class="diff-collapsed">⋯ ${count} unchanged line${count > 1 ? 's' : ''} ⋯</div>`;
+      for (let k = i; k < j; k++) { oldLn++; newLn++; }
+      i = j;
+      continue;
+    }
+    const op = ops[i];
+    if (op.type === 'same') {
+      body += `<div class="diff-line ctx"><span class="diff-ln">${oldLn}</span><span class="diff-code">${esc(op.line)}</span></div>`;
+      oldLn++; newLn++;
+    } else if (op.type === 'del') {
+      body += `<div class="diff-line del"><span class="diff-ln">${oldLn}</span><span class="diff-code">− ${esc(op.line)}</span></div>`;
+      oldLn++;
+    } else {
+      body += `<div class="diff-line add"><span class="diff-ln">${newLn}</span><span class="diff-code">+ ${esc(op.line)}</span></div>`;
+      newLn++;
+    }
+    i++;
+  }
+
+  const id = editIdCounter++;
+  pendingEdits[id] = { newCode };
+
+  if (addCount === 0 && delCount === 0) {
+    return `<div class="diff-wrap" data-edit-id="${id}"><div class="diff-header"><span>📝 Proposed changes</span><span class="diff-stats">no changes detected</span></div></div>`;
+  }
+
+  return `<div class="diff-wrap" data-edit-id="${id}">
+    <div class="diff-header"><span>📝 Proposed changes</span><span class="diff-stats"><span class="add-count">+${addCount}</span> <span class="del-count">−${delCount}</span></span></div>
+    <div class="diff-body">${body}</div>
+    <div class="diff-actions">
+      <button class="diff-apply" onclick="applyEdit(${id})">✅ Apply Changes</button>
+      <button class="diff-discard" onclick="discardEdit(${id})">✖ Discard</button>
+    </div>
+  </div>`;
+}
+
+function applyEdit(id) {
+  const data = pendingEdits[id];
+  if (!data || data.done) return;
+  $code.value = data.newCode;
+  localStorage.setItem('code', $code.value);
+  updateLines();
+  runCode();
+  data.done = true;
+  markDiffDone(id, 'applied');
+}
+
+function discardEdit(id) {
+  const data = pendingEdits[id];
+  if (!data || data.done) return;
+  data.done = true;
+  markDiffDone(id, 'discarded');
+}
+
+function markDiffDone(id, state) {
+  const wrap = document.querySelector(`.diff-wrap[data-edit-id="${id}"]`);
+  if (!wrap) return;
+  wrap.classList.add('diff-' + state);
+  const actions = wrap.querySelector('.diff-actions');
+  if (actions) {
+    actions.innerHTML = state === 'applied'
+      ? '<span class="diff-status applied">✅ Applied to editor</span>'
+      : '<span class="diff-status discarded">✖ Discarded</span>';
+  }
+}
+
+// ── CHAT RENDERING ───────────────────────────────────────────────
+function addMsg(role, text, editSnapshot, modelId, isFallback) {
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  const label = role === 'user' ? 'You' : 'AI Tutor';
+  let body;
+  if (role === 'user') {
+    body = `<div class="msg-body">${esc(text)}</div>`;
+  } else if (editSnapshot != null) {
+    body = `<div class="msg-body">${mdWithDiff(text, editSnapshot)}</div>`;
+  } else {
+    body = `<div class="msg-body">${md(text)}</div>`;
+  }
+  let tag = '';
+  if (role === 'ai' && modelId) {
+    tag = `<div class="model-tag${isFallback ? ' fallback' : ''}">${isFallback ? '⤷ fell back to ' : 'via '}${modelLabel(modelId)}</div>`;
+  }
+  div.innerHTML = `<div class="msg-label">${label}</div>${tag}${body}`;
+  $chat.appendChild(div);
+  $chat.scrollTop = $chat.scrollHeight;
+
+  div.querySelectorAll('.code-wrap button').forEach(btn => {
+    btn.onclick = () => {
+      const pre = btn.closest('.code-wrap').querySelector('pre');
+      navigator.clipboard.writeText(pre.textContent).then(() => {
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = 'Copy', 1500);
+      });
+    };
+  });
+}
+
+function clearChat() {
+  history = [];
+  lastAI  = '';
+  localStorage.removeItem('chat');
+  $chat.innerHTML = '';
+  pendingEdits = {};
+}
+
+function restoreChat() {
+  history.forEach(m => addMsg(m.role === 'assistant' ? 'ai' : 'user', m.content, m.isEdit ? m.codeSnapshot : null, m.model, m.fallback));
+  const last = [...history].reverse().find(m => m.role === 'assistant');
+  if (last) lastAI = last.content;
+  if (!history.length) {
+    addMsg('ai', `Welcome! Type a topic and click a button to get started.\n\nAPI keys are loaded automatically — no setup needed.`);
+  }
+}
+
+// ── MARKDOWN ─────────────────────────────────────────────────────
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function splitCodeParts(text) {
+  const parts = [];
+  const re = /```(\w*)\n?([\s\S]*?)```/g;
+  let last = 0, m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push({ t: 'text', v: text.slice(last, m.index) });
+    parts.push({ t: 'code', lang: m[1] || 'html', v: m[2].trimEnd() });
+    last = re.lastIndex;
+  }
+  parts.push({ t: 'text', v: text.slice(last) });
+  return parts;
+}
+
+function mdText(v) {
+  let t = esc(v);
+  t = t.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  t = t.replace(/^## (.+)$/gm,  '<h2>$1</h2>');
+  t = t.replace(/^# (.+)$/gm,   '<h1>$1</h1>');
+  t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  t = t.replace(/\*(.+?)\*/g,     '<em>$1</em>');
+  t = t.replace(/`([^`]+)`/g,     '<code>$1</code>');
+  t = t.replace(/^&gt; (.+)$/gm,  '<blockquote>$1</blockquote>');
+  t = t.replace(/^[\*\-] (.+)$/gm,'<li>$1</li>');
+  t = t.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+  t = t.replace(/\n{2,}/g, '</p><p>');
+  t = t.replace(/\n/g, '<br>');
+  return `<p>${t}</p>`;
+}
+
+function md(text) {
+  return splitCodeParts(text).map(p => {
+    if (p.t === 'code') {
+      return `<div class="code-wrap"><div class="code-top"><span>${esc(p.lang)}</span><button>Copy</button></div><pre>${esc(p.v)}</pre></div>`;
+    }
+    return mdText(p.v);
+  }).join('');
+}
+
+function mdWithDiff(text, oldCode) {
+  let usedDiff = false;
+  return splitCodeParts(text).map(p => {
+    if (p.t === 'code') {
+      if (!usedDiff) {
+        usedDiff = true;
+        return renderDiffBlock(oldCode, p.v);
+      }
+      return `<div class="code-wrap"><div class="code-top"><span>${esc(p.lang)}</span><button>Copy</button></div><pre>${esc(p.v)}</pre></div>`;
+    }
+    return mdText(p.v);
+  }).join('');
+}
+
+// ── INPUT AUTO-RESIZE & ENTER TO SEND ───────────────────────────
+$input.addEventListener('input', () => {
+  $input.style.height = 'auto';
+  $input.style.height = Math.min($input.scrollHeight, 80) + 'px';
+});
+$input.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey||e.metaKey) && e.key==='l') { e.preventDefault(); clearChat(); }
+});
+
+// ── START ────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
