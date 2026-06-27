@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Groq API Keys</title>
+<style>
+/* ----- Theme variables ----- */
+:root {
+  --bg-gradient: linear-gradient(135deg, #e0f7fa, #e8f5e9);
+  --card-bg: #ffffff;
+  --primary: #00695c; /* teal‑blue */
+  --primary-light: #26a69a;
+  --primary-dark: #004d40;
+  --copy-success: #e0e0e0; /* permanent grey */
+  --error: #c62828;
+  --text: #212121;
+  --muted: #666666;
+}
+
+/* ----- Global layout ----- */
+body {
+  font-family: system-ui, sans-serif;
+  background: var(--bg-gradient);
+  margin: 0;
+  padding: 2rem;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+}
+
+.container {
+  background: var(--card-bg);
+  max-width: 600px;
+  width: 100%;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.1);
+}
+
+h1 {
+  color: var(--primary-dark);
+  margin-top: 0;
+  font-size: 2rem;
+  text-align: center;
+}
+
+/* ----- Launch button ----- */
+
+.launch-btn {
+  margin-bottom: 1rem;
+  padding: 0.5rem 1rem;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer; 
+  font-size: 1rem;
+  width: 100%; /* added width to change button length */
+}
+.launch-btn:hover {
+  background: var(--primary-light);
+}
+
+/* ----- List of keys ----- */
+ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+li {
+  background: var(--card-bg);
+  margin: 0.5rem 0;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  word-break: break-all;
+  cursor: pointer;
+  transition: background .2s, transform .1s;
+  display: flex;
+  align-items: center;
+}
+
+li:hover {
+  background: #f1fdfd;
+  transform: translateY(-1px);
+}
+
+li:active {
+  background: #e0f2f1;
+}
+
+/* When a key is copied, turn the whole block grey permanently */
+li.copied {
+  background: var(--copy-success);
+  opacity: 1;
+}
+
+.emoji {
+  margin-right: 0.5rem;
+  font-size: 1.2rem;
+}
+
+/* ----- Status & error messages ----- */
+.status {
+  margin-top: 1rem;
+  font-size: 1rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.error {
+  color: var(--error);
+}
+
+/* ----- Small decorative element ----- */
+.footer {
+  margin-top: 2rem;
+  text-align: center;
+  font-size: .85rem;
+  color: var(--muted);
+}
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <button id="launchBtn" class="launch-btn">Launch VUS Hub</button>
+  <h1>Groq API Keys</h1>
+  <ul id="keys"></ul>
+  <p id="status" class="status"></p>
+  <div class="footer">
+    <a href="https://github.com/Cra-Z-Gaming/VUS" target="_blank">View source on GitHub</a>
+  </div>
+</div>
+
+<script>
+(async () => {
+  const rawUrl = 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/GroqAPIKeys';
+  const listEl = document.getElementById('keys');
+  const statusEl = document.getElementById('status');
+
+  // Show loading message
+  statusEl.textContent = 'Loading keys...';
+  statusEl.className = 'status';
+
+  try {
+    const resp = await fetch(rawUrl);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+    const text = await resp.text();
+
+    // Try to parse as JSON first; if that fails, treat as newline‑separated list
+    let keys = [];
+    try {
+      const json = JSON.parse(text);
+      if (Array.isArray(json)) keys = json;
+    } catch {
+      keys = text.split('\n');
+    }
+
+    const alive = keys.map(k => k.trim()).filter(k => k !== '');
+
+    if (alive.length === 0) {
+      statusEl.textContent = 'No active keys found.';
+      statusEl.className = 'error';
+      return;
+    }
+
+    // Clear any status text once we have data
+    statusEl.textContent = '';
+
+    // Render each key with click‑to‑copy and an emoji indicator
+    alive.forEach(key => {
+      const li = document.createElement('li');
+
+      // Build inner HTML for emoji and key text
+      const content = document.createElement('span');
+      content.innerHTML = `<span class="emoji">📋</span>${key}`;
+
+      // Append content to list item (no circle)
+      li.appendChild(content);
+
+      // Accessibility: make li behave like a button
+      li.setAttribute('role', 'button');
+      li.setAttribute('tabindex', '0');
+
+      const copyKey = async () => {
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(key);
+          } else {
+            // Fallback for older browsers
+            const textarea = document.createElement('textarea');
+            textarea.value = key;
+            textarea.style.position = 'fixed';
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+          }
+          li.classList.add('copied'); // turn grey permanently
+        } catch (e) {
+          console.error('Copy failed', e);
+        }
+      };
+
+      li.addEventListener('click', copyKey);
+      li.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          copyKey();
+        }
+      });
+
+      listEl.appendChild(li);
+    });
+  } catch (err) {
+    statusEl.textContent = `Failed to load keys: ${err.message}`;
+    statusEl.className = 'error';
+    console.error(err);
+  }
+
+  // ----- Launch Demo button functionality -----
+  const launchBtn = document.getElementById('launchBtn');
+  launchBtn.addEventListener('click', async () => {
+    const demoUrl = 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/index.html';
+    try {
+      const resp = await fetch(demoUrl);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const html = await resp.text();
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      // Revoke the object URL after a short delay to free memory
+      setTimeout(() => URL.revokeObjectURL(url), 5_000);
+    } catch (e) {
+      console.error('Failed to launch demo:', e);
+      alert('Unable to load the demo page.');
+    }
+  });
+})();
+</script>
+</body>
+</html>
