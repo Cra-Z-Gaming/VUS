@@ -1,212 +1,251 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Timer / Stopwatch</title>
-
 <style>
-    body {
-        margin: 0;
-        font-family: Arial, sans-serif;
-        background: #0f172a;
-        color: white;
-        display: flex;
-        justify-content: center;
-        padding: 30px;
-    }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f172a; color: #f1f5f9; font-family: Arial, sans-serif; padding: 24px; display: flex; justify-content: center; }
 
-    .container {
-        width: 100%;
-        max-width: 600px;
-    }
+  .container { width: 100%; max-width: 520px; }
 
-    h1 {
-        text-align: center;
-        margin-bottom: 20px;
-    }
+  h1 { text-align: center; font-size: 22px; font-weight: 500; color: #f1f5f9; margin-bottom: 20px; }
 
-    .box {
-        background: #1e293b;
-        border: 1px solid #334155;
-        border-radius: 12px;
-        padding: 16px;
-        margin-bottom: 16px;
-    }
+  .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+  .tab { padding: 7px 20px; border-radius: 8px; cursor: pointer; background: #1e293b; border: 1px solid #334155; font-size: 14px; color: #94a3b8; transition: background 0.15s, color 0.15s; }
+  .tab:hover { background: #334155; color: #f1f5f9; }
+  .tab.active { background: #22c55e; color: #000; border-color: #22c55e; font-weight: 500; }
 
-    .time {
-        font-size: 40px;
-        text-align: center;
-        margin: 10px 0;
-        font-family: monospace;
-    }
+  .panel { display: none; }
+  .panel.active { display: block; }
 
-    button {
-        width: 100%;
-        padding: 10px;
-        margin-top: 8px;
-        border-radius: 8px;
-        border: 1px solid #334155;
-        background: #22c55e;
-        color: black;
-        font-size: 14px;
-        font-weight: bold;
-        cursor: pointer;
-    }
+  .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 28px 24px; }
 
-    button:hover {
-        background: #16a34a;
-    }
+  .display {
+    font-family: monospace;
+    font-size: 64px;
+    font-weight: 500;
+    text-align: center;
+    letter-spacing: 2px;
+    color: #f1f5f9;
+    margin: 0 0 28px;
+    line-height: 1;
+  }
+  .display .ms { font-size: 36px; color: #64748b; }
 
-    button.secondary {
-        background: #0f172a;
-        color: white;
-    }
+  .btn-row { display: flex; gap: 10px; margin-bottom: 10px; }
 
-    input {
-        width: 100%;
-        padding: 10px;
-        margin-top: 8px;
-        border-radius: 8px;
-        border: 1px solid #334155;
-        background: #0f172a;
-        color: white;
-        font-size: 14px;
-        text-align: center;
-    }
+  .btn {
+    flex: 1;
+    padding: 11px 0;
+    border-radius: 8px;
+    border: 1px solid #334155;
+    background: #22c55e;
+    color: #000;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn:hover { background: #16a34a; }
+  .btn.sec { background: #0f172a; color: #f1f5f9; }
+  .btn.sec:hover { background: #1e293b; }
 
-    .laps {
-        max-height: 120px;
-        overflow-y: auto;
-        margin-top: 10px;
-        font-family: monospace;
-        font-size: 14px;
-        color: #94a3b8;
-    }
+  .laps {
+    margin-top: 16px;
+    border-top: 1px solid #334155;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  .lap-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 7px 0;
+    border-bottom: 1px solid #1e293b;
+    font-family: monospace;
+    font-size: 13px;
+  }
+  .lap-row .lap-num { color: #475569; }
+  .lap-row .lap-time { color: #cbd5e1; }
+
+  .timer-input {
+    width: 100%;
+    padding: 11px 14px;
+    border-radius: 8px;
+    border: 1px solid #334155;
+    background: #0f172a;
+    color: #f1f5f9;
+    font-size: 15px;
+    text-align: center;
+    margin-bottom: 8px;
+    font-family: monospace;
+    outline: none;
+  }
+  .timer-input:focus { border-color: #22c55e; }
+
+  .timer-hint { font-size: 12px; color: #475569; text-align: center; margin-bottom: 20px; }
+
+  .done-flash { color: #22c55e !important; }
+  .done-flash .ms { color: #16a34a !important; }
 </style>
 </head>
-
 <body>
 
 <div class="container">
-    <h1>Timer / Stopwatch</h1>
+  <h1>Timer / Stopwatch</h1>
 
-    <!-- STOPWATCH -->
-    <div class="box">
-        <h3>Stopwatch</h3>
-        <div class="time" id="sw">0:00.0</div>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('sw')">Stopwatch</div>
+    <div class="tab" onclick="switchTab('timer')">Countdown</div>
+  </div>
 
-        <button onclick="startStopwatch()">Start / Pause</button>
-        <button class="secondary" onclick="resetStopwatch()">Reset</button>
-        <button class="secondary" onclick="lap()">Lap</button>
-
-        <div class="laps" id="laps"></div>
+  <div id="panel-sw" class="panel active">
+    <div class="card">
+      <div class="display" id="sw-display">0:00<span class="ms">.000</span></div>
+      <div class="btn-row">
+        <button class="btn" id="sw-startstop" onclick="swToggle()">Start</button>
+        <button class="btn sec" onclick="swLap()">Lap</button>
+        <button class="btn sec" onclick="swReset()">Reset</button>
+      </div>
+      <div class="laps" id="laps"></div>
     </div>
+  </div>
 
-    <!-- TIMER -->
-    <div class="box">
-        <h3>Countdown Timer</h3>
-
-        <input id="timerInput" placeholder="Seconds (e.g. 60)">
-
-        <div class="time" id="timer">0:00</div>
-
-        <button onclick="startTimer()">Start Timer</button>
-        <button class="secondary" onclick="resetTimer()">Reset</button>
+  <div id="panel-timer" class="panel">
+    <div class="card">
+      <input class="timer-input" id="timer-input" placeholder="e.g. 1:30 or 90" />
+      <div class="timer-hint">Enter mm:ss or total seconds</div>
+      <div class="display" id="timer-display">0:00<span class="ms">.000</span></div>
+      <div class="btn-row">
+        <button class="btn" id="timer-startstop" onclick="timerToggle()">Start</button>
+        <button class="btn sec" onclick="timerReset()">Reset</button>
+      </div>
     </div>
+  </div>
 </div>
 
 <script>
-/* ───────── Stopwatch ───────── */
-let swRunning = false;
-let swTime = 0;
-let swInterval;
-
-function formatSw(t) {
-    const min = Math.floor(t / 60000);
-    const sec = Math.floor((t % 60000) / 1000);
-    const ms = Math.floor((t % 1000) / 100);
-    return `${min}:${sec.toString().padStart(2,'0')}.${ms}`;
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', ['sw', 'timer'][i] === id);
+  });
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
 }
 
-function updateSw() {
-    document.getElementById("sw").innerText = formatSw(swTime);
+function fmt(ms) {
+  const m = Math.floor(ms / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  const millis = ms % 1000;
+  return { main: m + ':' + String(s).padStart(2, '0'), ms: '.' + String(millis).padStart(3, '0') };
 }
 
-function startStopwatch() {
-    if (swRunning) {
-        clearInterval(swInterval);
-        swRunning = false;
-        return;
-    }
-
-    swRunning = true;
-    let start = Date.now() - swTime;
-
-    swInterval = setInterval(() => {
-        swTime = Date.now() - start;
-        updateSw();
-    }, 100);
+function setDisplay(elId, ms) {
+  const el = document.getElementById(elId);
+  const f = fmt(ms);
+  el.innerHTML = f.main + '<span class="ms">' + f.ms + '</span>';
 }
 
-function resetStopwatch() {
-    clearInterval(swInterval);
+let swRunning = false, swTime = 0, swStart = 0, swRaf = null, lapCount = 0;
+
+function swTick() {
+  swTime = Date.now() - swStart;
+  setDisplay('sw-display', swTime);
+  swRaf = requestAnimationFrame(swTick);
+}
+
+function swToggle() {
+  if (swRunning) {
+    cancelAnimationFrame(swRaf);
     swRunning = false;
-    swTime = 0;
-    updateSw();
-    document.getElementById("laps").innerHTML = "";
+    document.getElementById('sw-startstop').textContent = 'Resume';
+  } else {
+    swStart = Date.now() - swTime;
+    swRunning = true;
+    swRaf = requestAnimationFrame(swTick);
+    document.getElementById('sw-startstop').textContent = 'Pause';
+  }
 }
 
-function lap() {
-    const lapTime = formatSw(swTime);
-    const div = document.createElement("div");
-    div.textContent = "Lap: " + lapTime;
-    document.getElementById("laps").appendChild(div);
+function swLap() {
+  if (!swRunning && swTime === 0) return;
+  lapCount++;
+  const f = fmt(swTime);
+  const row = document.createElement('div');
+  row.className = 'lap-row';
+  row.innerHTML = '<span class="lap-num">Lap ' + lapCount + '</span><span class="lap-time">' + f.main + f.ms + '</span>';
+  document.getElementById('laps').prepend(row);
 }
 
-/* ───────── Timer ───────── */
-let timerInterval;
-let timerRunning = false;
-let timerLeft = 0;
-
-function formatTimer(t) {
-    const sec = Math.floor(t % 60);
-    const min = Math.floor(t / 60);
-    return `${min}:${sec.toString().padStart(2,'0')}`;
+function swReset() {
+  cancelAnimationFrame(swRaf);
+  swRunning = false;
+  swTime = 0;
+  lapCount = 0;
+  setDisplay('sw-display', 0);
+  document.getElementById('laps').innerHTML = '';
+  document.getElementById('sw-startstop').textContent = 'Start';
 }
 
-function updateTimer() {
-    document.getElementById("timer").innerText = formatTimer(timerLeft);
+let timerRunning = false, timerEnd = 0, timerLeft = 0, timerRaf = null;
+
+function parseTimerInput(val) {
+  val = val.trim();
+  if (val.includes(':')) {
+    const parts = val.split(':');
+    const m = parseInt(parts[0]) || 0;
+    const s = parseFloat(parts[1]) || 0;
+    return (m * 60 + s) * 1000;
+  }
+  const n = parseFloat(val);
+  return isNaN(n) ? 0 : n * 1000;
 }
 
-function startTimer() {
-    if (timerRunning) return;
-
-    let input = parseInt(document.getElementById("timerInput").value);
-    if (isNaN(input) || input <= 0) return;
-
-    timerLeft = input;
-    updateTimer();
-
-    timerRunning = true;
-
-    timerInterval = setInterval(() => {
-        timerLeft--;
-        updateTimer();
-
-        if (timerLeft <= 0) {
-            clearInterval(timerInterval);
-            timerRunning = false;
-            alert("Time's up!");
-        }
-    }, 1000);
-}
-
-function resetTimer() {
-    clearInterval(timerInterval);
+function timerTick() {
+  const remaining = timerEnd - Date.now();
+  if (remaining <= 0) {
+    setDisplay('timer-display', 0);
     timerRunning = false;
-    timerLeft = 0;
-    updateTimer();
+    document.getElementById('timer-startstop').textContent = 'Start';
+    document.getElementById('timer-display').classList.add('done-flash');
+    setTimeout(() => document.getElementById('timer-display').classList.remove('done-flash'), 2000);
+    return;
+  }
+  timerLeft = remaining;
+  setDisplay('timer-display', remaining);
+  timerRaf = requestAnimationFrame(timerTick);
 }
+
+function timerToggle() {
+  if (timerRunning) {
+    cancelAnimationFrame(timerRaf);
+    timerRunning = false;
+    document.getElementById('timer-startstop').textContent = 'Resume';
+    return;
+  }
+  if (timerLeft === 0) {
+    const ms = parseTimerInput(document.getElementById('timer-input').value);
+    if (!ms) return;
+    timerLeft = ms;
+  }
+  timerEnd = Date.now() + timerLeft;
+  timerRunning = true;
+  document.getElementById('timer-startstop').textContent = 'Pause';
+  timerRaf = requestAnimationFrame(timerTick);
+}
+
+function timerReset() {
+  cancelAnimationFrame(timerRaf);
+  timerRunning = false;
+  timerLeft = 0;
+  setDisplay('timer-display', 0);
+  document.getElementById('timer-startstop').textContent = 'Start';
+  document.getElementById('timer-display').classList.remove('done-flash');
+}
+
+setDisplay('sw-display', 0);
+setDisplay('timer-display', 0);
 </script>
 
 </body>
