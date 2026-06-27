@@ -45,6 +45,9 @@ document.getElementById("hub").onclick = async () => {
 ----------------------------------------------------------------------------------------------------------------------------------------
 
 this project is free to make and is fully open source. i do not mind you using any code from VUS, but i do ask 2 things: 
+
 1 - Credits: this can be my youtube @NotVladYT or my github profile github.com/Cra-Z-Gaming
+
 2 - Donations: this is 100% optional but GREATLY appreciated: Cashapp $vlad118
-donations would definitely make me happy and motivated to make more projects or more buttons with code that live in VUS Hub
+
+Donations would definitely make me happy and motivated to make more projects or more buttons with code that live in VUS Hub
