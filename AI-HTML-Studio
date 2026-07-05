@@ -212,6 +212,22 @@ label.btn:hover { border-color: var(--muted); }
 }
 #fastModelRow select:focus { border-color: var(--blue); }
 
+#otherModelRow { margin-bottom: 7px; }
+#otherModelRow select {
+  width: 100%; background: var(--bg3); color: var(--text);
+  border: 1px solid var(--border); border-radius: 5px;
+  padding: 5px 8px; font-size: 11.5px; font-family: var(--ui); outline: none; cursor: pointer;
+  margin-bottom: 5px;
+}
+#otherModelRow select:focus { border-color: var(--blue); }
+#otherModelRow .other-meta {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 10.5px; color: var(--dim);
+}
+#otherModelRow .other-meta button {
+  padding: 2px 7px; font-size: 10px;
+}
+
 #modelStatusRow {
   font-size: 10.5px; color: var(--dim); margin-bottom: 7px; min-height: 13px;
 }
@@ -426,10 +442,19 @@ label.btn:hover { border-color: var(--muted); }
             <label>Effort:</label>
             <button class="effort-btn" id="effortLowBtn" onclick="setEffort('low')">⚡ Low<span class="effort-sub">instant</span></button>
             <button class="effort-btn" id="effortHighBtn" onclick="setEffort('high')">🧠 High<span class="effort-sub">versatile</span></button>
+            <button class="effort-btn" id="effortOtherBtn" onclick="setEffort('other')">🔀 Other<span class="effort-sub">custom list</span></button>
           </div>
 
           <div id="fastModelRow">
             <select id="fastModelSelect" onchange="setFastModel(this.value)"></select>
+          </div>
+
+          <div id="otherModelRow">
+            <select id="otherModelSelect" onchange="setOtherPreferredModel(this.value)"></select>
+            <div class="other-meta">
+              <span id="otherModelCount">0 models loaded</span>
+              <button id="otherModelRefreshBtn" onclick="refreshOtherModels()">↺ Refresh list</button>
+            </div>
           </div>
 
           <div id="modelStatusRow"></div>
@@ -493,8 +518,9 @@ label.btn:hover { border-color: var(--muted); }
 
 <script>
 // ── CONFIG ──────────────────────────────────────────────────────
-const KEY_POOL_URL = 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/GroqAPIKeys';
-const API_URL      = 'https://api.groq.com/openai/v1/chat/completions';
+const KEY_POOL_URL    = 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/GroqAPIKeys';
+const MODELS_LIST_URL = 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/GroqModels';
+const API_URL         = 'https://api.groq.com/openai/v1/chat/completions';
 
 // "High" effort tries these in order until one works — biggest/smartest first.
 const HIGH_MODELS = [
@@ -546,6 +572,66 @@ let exhaustedKeys   = new Set();
 let poolFetchedAt   = 0;   // timestamp of last successful fetch
 let poolFetchInFlight = false;
 
+// ── "OTHER" MODEL LIST STATE ──────────────────────────────────────
+// otherModels: array of model id strings fetched from GroqModels file (one per line)
+let otherModels          = [];
+let otherModelsFetchedAt = 0;
+let otherModelsFetchInFlight = false;
+let otherPreferredModel  = localStorage.getItem('otherPreferredModel') || '';
+
+async function fetchOtherModels() {
+  if (otherModelsFetchInFlight) return;
+  otherModelsFetchInFlight = true;
+  const $count = document.getElementById('otherModelCount');
+  if ($count) $count.textContent = 'Fetching model list…';
+  try {
+    const res = await fetch(MODELS_LIST_URL + '?nocache=' + Date.now());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const raw = await res.text();
+    // One model id per line — same format as the keys file
+    const fresh = [...new Set(
+      raw.split('\n')
+         .map(m => m.trim())
+         .filter(m => m.length > 0 && !m.startsWith('#'))
+    )];
+    otherModels = fresh;
+    otherModelsFetchedAt = Date.now();
+    if ($count) $count.textContent = `${otherModels.length} model${otherModels.length !== 1 ? 's' : ''} loaded`;
+    populateOtherModelSelect();
+  } catch (err) {
+    if ($count) $count.textContent = `Fetch failed: ${err.message}`;
+  } finally {
+    otherModelsFetchInFlight = false;
+  }
+}
+
+async function refreshOtherModels() {
+  await fetchOtherModels();
+}
+
+function populateOtherModelSelect() {
+  const $sel = document.getElementById('otherModelSelect');
+  if (!$sel) return;
+  if (otherModels.length === 0) {
+    $sel.innerHTML = `<option value="">(no models loaded)</option>`;
+    return;
+  }
+  $sel.innerHTML = otherModels.map(id => `<option value="${id}">${id}</option>`).join('');
+  // Keep previously chosen preferred model if it's still in the list, else default to first
+  if (otherPreferredModel && otherModels.includes(otherPreferredModel)) {
+    $sel.value = otherPreferredModel;
+  } else {
+    otherPreferredModel = otherModels[0];
+    localStorage.setItem('otherPreferredModel', otherPreferredModel);
+    $sel.value = otherPreferredModel;
+  }
+}
+
+function setOtherPreferredModel(id) {
+  otherPreferredModel = id;
+  localStorage.setItem('otherPreferredModel', id);
+}
+
 // Manual override key (stored in localStorage, used as last resort)
 let manualApiKey = localStorage.getItem('groqApiKey') || '';
 
@@ -594,9 +680,12 @@ async function fetchKeyPool() {
     const res = await fetch(KEY_POOL_URL + '?nocache=' + Date.now());
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const raw = await res.text();
-    const parsed = JSON.parse(raw);
-    // Filter to non-empty strings; remove duplicates
-    const fresh = [...new Set(parsed.filter(k => typeof k === 'string' && k.trim().length > 0))];
+    // File is plain text, one key per line — split on newlines (NOT JSON).
+    const fresh = [...new Set(
+      raw.split('\n')
+         .map(k => k.trim())
+         .filter(k => k.length > 0)
+    )];
     if (fresh.length === 0) throw new Error('No keys found in pool file');
     keyPool = fresh;
     poolFetchedAt = Date.now();
@@ -686,6 +775,7 @@ const $codeContextBtn = document.getElementById('codeContextBtn');
 const $editModeBtn    = document.getElementById('editModeBtn');
 const $fastModelRow   = document.getElementById('fastModelRow');
 const $fastModelSelect = document.getElementById('fastModelSelect');
+const $otherModelRow   = document.getElementById('otherModelRow');
 const $modelStatusRow = document.getElementById('modelStatusRow');
 const $keyModalOverlay = document.getElementById('keyModalOverlay');
 const $keyModalInput  = document.getElementById('keyModalInput');
@@ -715,8 +805,10 @@ async function init() {
   makeDraggable($aiHeader, $aiPane);
   makeResizable($aiResize, $aiPane);
 
-  // Fetch key pool in background — no blocking, no modal on start
-  await fetchKeyPool();
+  populateOtherModelSelect();
+
+  // Fetch key pool + custom model list in background — no blocking, no modal on start
+  await Promise.all([fetchKeyPool(), fetchOtherModels()]);
 }
 
 function updateLines() {
@@ -996,7 +1088,9 @@ function setEffort(e) {
 function updateEffortUI() {
   document.getElementById('effortLowBtn').classList.toggle('active', effort === 'low');
   document.getElementById('effortHighBtn').classList.toggle('active', effort === 'high');
-  $fastModelRow.style.display = effort === 'low' ? 'block' : 'none';
+  document.getElementById('effortOtherBtn').classList.toggle('active', effort === 'other');
+  $fastModelRow.style.display  = effort === 'low'   ? 'block' : 'none';
+  $otherModelRow.style.display = effort === 'other' ? 'block' : 'none';
 }
 
 function populateFastModelSelect() {
@@ -1013,6 +1107,12 @@ function setFastModel(id) {
 }
 
 function getModelChain() {
+  if (effort === 'other') {
+    const ids = otherPreferredModel
+      ? [otherPreferredModel, ...otherModels]
+      : [...otherModels];
+    return [...new Set(ids)];
+  }
   const pool = effort === 'low' ? FAST_MODELS : HIGH_MODELS;
   const preferredId = effort === 'low' ? fastModel : HIGH_MODELS[0].id;
   const ids = [preferredId, ...pool.map(m => m.id)];
@@ -1159,6 +1259,14 @@ async function callAI(userMsg) {
     const apiMessages = history.slice(-16).map(m => ({ role: m.role, content: m.content }));
 
     const modelChain = getModelChain();
+
+    if (effort === 'other' && modelChain.length === 0) {
+      loadEl.remove();
+      setModelStatus('');
+      addMsg('ai', `⚠️ No models loaded from the "Other" list yet. Click **↺ Refresh list** next to the Other model dropdown, or check that your GroqModels file has at least one model id.`);
+      return;
+    }
+
     let data = null, usedModel = null;
     const attemptLog = [];
 
