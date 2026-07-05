@@ -204,50 +204,55 @@ label.btn:hover { border-color: var(--muted); }
 .effort-btn.active { border-color: var(--blue); color: var(--blue); background: var(--bg2); }
 .effort-btn.active .effort-sub { color: var(--blue); }
 
-#fastModelRow { margin-bottom: 7px; }
-#fastModelRow select {
-  width: 100%; background: var(--bg3); color: var(--text);
-  border: 1px solid var(--border); border-radius: 5px;
-  padding: 5px 8px; font-size: 11.5px; font-family: var(--ui); outline: none; cursor: pointer;
-}
-#fastModelRow select:focus { border-color: var(--blue); }
-
 #otherModelRow { margin-bottom: 7px; }
-#otherModelRow select {
-  width: 100%; background: var(--bg3); color: var(--text);
-  border: 1px solid var(--border); border-radius: 5px;
-  padding: 5px 8px; font-size: 11.5px; font-family: var(--ui); outline: none; cursor: pointer;
-  margin-bottom: 5px;
-}
-#otherModelRow select:focus { border-color: var(--blue); }
 #otherModelRow .other-meta {
   display: flex; align-items: center; justify-content: space-between;
-  font-size: 10.5px; color: var(--dim);
+  font-size: 10.5px; color: var(--dim); margin-bottom: 5px;
 }
-#otherModelRow .other-meta button {
+#otherModelRow .other-meta-btns { display: flex; gap: 4px; }
+#otherModelRow .other-meta-btns button {
   padding: 2px 7px; font-size: 10px;
+}
+#otherModelToggle {
+  font-size: 11px; color: var(--muted); cursor: pointer; padding: 4px 2px;
+  user-select: none; margin-bottom: 4px;
+}
+#otherModelToggle:hover { color: var(--blue); }
+#otherModelList {
+  max-height: 160px; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: 5px;
+  background: var(--bg3);
+}
+.other-model-row {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 8px; font-size: 11.5px; cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+.other-model-row:last-child { border-bottom: none; }
+.other-model-row:hover { background: var(--bg2); }
+.other-model-row.selected { background: rgba(88, 166, 255, 0.12); }
+.other-model-row.selected .other-model-name { color: var(--blue); }
+.other-model-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--dim);
+}
+.other-model-dot.ok      { background: var(--green); }
+.other-model-dot.bad     { background: var(--red); }
+.other-model-dot.checking { background: var(--blue); animation: pulse 1s ease-in-out infinite; }
+.other-model-name {
+  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--mono); font-size: 11px;
+}
+.other-model-radio {
+  width: 13px; height: 13px; flex-shrink: 0; accent-color: var(--blue);
+}
+#otherModelEmpty {
+  padding: 10px 8px; font-size: 11px; color: var(--dim); text-align: center;
 }
 
 #modelStatusRow {
   font-size: 10.5px; color: var(--dim); margin-bottom: 7px; min-height: 13px;
 }
 #modelStatusRow.warn { color: #d29922; }
-
-#qa-header {
-  display: flex; justify-content: space-between; align-items: center;
-  font-size: 11px; color: var(--muted); cursor: pointer; padding: 4px 2px; user-select: none;
-}
-#qa-header:hover { color: var(--blue); }
-
-.btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
-.qbtn {
-  padding: 5px 6px; font-size: 11px; text-align: left;
-  background: var(--bg3); border: 1px solid var(--border);
-  border-radius: 5px; color: var(--text); cursor: pointer;
-  font-family: var(--ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.qbtn:hover { border-color: var(--blue); color: var(--blue); }
-.qbtn.full { grid-column: 1 / -1; }
 
 /* ── CHAT ── */
 #chat {
@@ -445,39 +450,21 @@ label.btn:hover { border-color: var(--muted); }
             <button class="effort-btn" id="effortOtherBtn" onclick="setEffort('other')">🔀 Other<span class="effort-sub">custom list</span></button>
           </div>
 
-          <div id="fastModelRow">
-            <select id="fastModelSelect" onchange="setFastModel(this.value)"></select>
-          </div>
-
           <div id="otherModelRow">
-            <select id="otherModelSelect" onchange="setOtherPreferredModel(this.value)"></select>
             <div class="other-meta">
               <span id="otherModelCount">0 models loaded</span>
-              <button id="otherModelRefreshBtn" onclick="refreshOtherModels()">↺ Refresh list</button>
+              <div class="other-meta-btns">
+                <button id="otherModelCheckBtn" onclick="checkAllModels()">✓ Check all</button>
+                <button id="otherModelRefreshBtn" onclick="refreshOtherModels()">↺ Refresh list</button>
+              </div>
             </div>
+            <div id="otherModelToggle" onclick="toggleOtherModelList()">
+              <span id="otherModelToggleLabel">▸ Show model list</span>
+            </div>
+            <div id="otherModelList" style="display:none;"></div>
           </div>
 
           <div id="modelStatusRow"></div>
-
-          <div id="qa-header" onclick="toggleQuickActions()">
-            <span>Quick Actions</span><span id="qa-chevron">▾</span>
-          </div>
-          <div class="btn-grid" id="btn-grid">
-            <button class="qbtn" onclick="quick('explain')">📖 Explain Topic</button>
-            <button class="qbtn" onclick="quick('problem')">✏️ Practice Problem</button>
-            <button class="qbtn" onclick="quick('howto')">🛠 How To</button>
-            <button class="qbtn" onclick="quick('hint')">💡 Give Hint</button>
-            <button class="qbtn" onclick="quick('explainCode')">🔍 Explain My Code</button>
-            <button class="qbtn" onclick="quick('findMistake')">🐛 Find Mistake</button>
-            <button class="qbtn" onclick="quick('improve')">⚡ Improve Code</button>
-            <button class="qbtn" onclick="quick('accessibility')">♿ Accessibility</button>
-            <button class="qbtn" onclick="quick('semantic')">🏷 Semantic HTML</button>
-            <button class="qbtn" onclick="quick('bestPractices')">⭐ Best Practices</button>
-            <button class="qbtn" onclick="quick('optimize')">🚀 Optimize</button>
-            <button class="qbtn" onclick="quick('solution')">✅ Show Solution</button>
-            <button class="qbtn full" onclick="quickEdit()">🪄 Ask AI to Edit My Code</button>
-            <button class="qbtn full" onclick="focusInput()">💬 Ask Anything…</button>
-          </div>
         </div>
 
         <div id="chat"></div>
@@ -579,6 +566,12 @@ let otherModelsFetchedAt = 0;
 let otherModelsFetchInFlight = false;
 let otherPreferredModel  = localStorage.getItem('otherPreferredModel') || '';
 
+// Per-model check status: 'unknown' | 'checking' | 'ok' | 'bad'
+// Keyed by model id. Not persisted — re-check each session since availability can change.
+let otherModelStatus = {};
+let otherModelsCheckedOnce = false;
+let checkAllInFlight = false;
+
 async function fetchOtherModels() {
   if (otherModelsFetchInFlight) return;
   otherModelsFetchInFlight = true;
@@ -596,10 +589,19 @@ async function fetchOtherModels() {
     )];
     otherModels = fresh;
     otherModelsFetchedAt = Date.now();
-    if ($count) $count.textContent = `${otherModels.length} model${otherModels.length !== 1 ? 's' : ''} loaded`;
+    const combined = getOtherModelIds();
+    // Reset status map for any models no longer in the list; keep status for ones still present
+    const newStatus = {};
+    combined.forEach(id => { newStatus[id] = otherModelStatus[id] || 'unknown'; });
+    otherModelStatus = newStatus;
+    if ($count) $count.textContent = `${combined.length} model${combined.length !== 1 ? 's' : ''} available`;
     populateOtherModelSelect();
+    if (effort === 'other' && !otherModelsCheckedOnce && combined.length > 0 && !checkAllInFlight) {
+      checkAllModels();
+    }
   } catch (err) {
-    if ($count) $count.textContent = `Fetch failed: ${err.message}`;
+    if ($count) $count.textContent = `Custom list fetch failed: ${err.message} (hardcoded models still available)`;
+    populateOtherModelSelect();
   } finally {
     otherModelsFetchInFlight = false;
   }
@@ -609,27 +611,104 @@ async function refreshOtherModels() {
   await fetchOtherModels();
 }
 
+function toggleOtherModelList() {
+  const $list = document.getElementById('otherModelList');
+  const $label = document.getElementById('otherModelToggleLabel');
+  if (!$list || !$label) return;
+  const isHidden = $list.style.display === 'none';
+  $list.style.display = isHidden ? 'block' : 'none';
+  $label.textContent = isHidden ? '▾ Hide model list' : '▸ Show model list';
+}
+
 function populateOtherModelSelect() {
-  const $sel = document.getElementById('otherModelSelect');
-  if (!$sel) return;
-  if (otherModels.length === 0) {
-    $sel.innerHTML = `<option value="">(no models loaded)</option>`;
+  const $list = document.getElementById('otherModelList');
+  if (!$list) return;
+
+  const combined = getOtherModelIds();
+
+  if (combined.length === 0) {
+    $list.innerHTML = `<div id="otherModelEmpty">No models available — click ↺ Refresh list</div>`;
     return;
   }
-  $sel.innerHTML = otherModels.map(id => `<option value="${id}">${id}</option>`).join('');
-  // Keep previously chosen preferred model if it's still in the list, else default to first
-  if (otherPreferredModel && otherModels.includes(otherPreferredModel)) {
-    $sel.value = otherPreferredModel;
-  } else {
-    otherPreferredModel = otherModels[0];
+
+  // Default preferred model if none chosen yet or no longer in list
+  if (!otherPreferredModel || !combined.includes(otherPreferredModel)) {
+    otherPreferredModel = combined[0];
     localStorage.setItem('otherPreferredModel', otherPreferredModel);
-    $sel.value = otherPreferredModel;
   }
+
+  $list.innerHTML = combined.map(id => {
+    const status = otherModelStatus[id] || 'unknown';
+    const dotClass = status === 'ok' ? 'ok' : status === 'bad' ? 'bad' : status === 'checking' ? 'checking' : '';
+    const selected = id === otherPreferredModel;
+    const label = modelLabel(id) !== id ? `${modelLabel(id)} — ${id}` : id;
+    return `<div class="other-model-row${selected ? ' selected' : ''}" onclick="setOtherPreferredModel('${id.replace(/'/g, "\\'")}')">
+      <input type="radio" class="other-model-radio" name="otherModelRadio" ${selected ? 'checked' : ''} onclick="event.stopPropagation(); setOtherPreferredModel('${id.replace(/'/g, "\\'")}')">
+      <div class="other-model-dot ${dotClass}" title="${status}"></div>
+      <div class="other-model-name">${label}</div>
+    </div>`;
+  }).join('');
 }
 
 function setOtherPreferredModel(id) {
   otherPreferredModel = id;
   localStorage.setItem('otherPreferredModel', id);
+  populateOtherModelSelect();
+}
+
+function setModelDotStatus(id, status) {
+  otherModelStatus[id] = status;
+  const $list = document.getElementById('otherModelList');
+  if (!$list) return;
+  const rows = [...$list.querySelectorAll('.other-model-row')];
+  const row = rows.find(r => r.getAttribute('onclick') === `setOtherPreferredModel('${id.replace(/'/g, "\\'")}')`);
+  if (row) {
+    const dot = row.querySelector('.other-model-dot');
+    dot.className = 'other-model-dot' + (status === 'ok' ? ' ok' : status === 'bad' ? ' bad' : status === 'checking' ? ' checking' : '');
+    dot.title = status;
+  }
+}
+
+// Cheap probe: send a minimal 1-token request to see if the model responds without error.
+async function probeModel(modelId, apiKey) {
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: modelId,
+        max_tokens: 1,
+        messages: [{ role: 'user', content: 'hi' }]
+      })
+    });
+    return res.ok;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function checkAllModels() {
+  if (checkAllInFlight) return;
+  const key = activeKey();
+  if (!key) {
+    setModelStatus('No API key available to check models with.', true);
+    return;
+  }
+  checkAllInFlight = true;
+  otherModelsCheckedOnce = true;
+  const $btn = document.getElementById('otherModelCheckBtn');
+  if ($btn) { $btn.disabled = true; $btn.textContent = 'Checking…'; }
+
+  for (const id of getOtherModelIds()) {
+    setModelDotStatus(id, 'checking');
+    const ok = await probeModel(id, key);
+    setModelDotStatus(id, ok ? 'ok' : 'bad');
+    // small delay between calls to be gentle on rate limits
+    await new Promise(r => setTimeout(r, 250));
+  }
+
+  if ($btn) { $btn.disabled = false; $btn.textContent = '✓ Check all'; }
+  checkAllInFlight = false;
 }
 
 // Manual override key (stored in localStorage, used as last resort)
@@ -724,11 +803,7 @@ let autoOn        = localStorage.getItem('auto') !== 'false';
 let history       = JSON.parse(localStorage.getItem('chat') || '[]');
 let lastAI        = '';
 let autoTimer;
-let effort        = localStorage.getItem('effort') || 'high';
-let fastModel     = localStorage.getItem('fastModel') || FAST_MODELS[0].id;
-let qaCollapsed   = localStorage.getItem('qaCollapsed') !== null
-                      ? localStorage.getItem('qaCollapsed') === 'true'
-                      : true;
+let effort        = localStorage.getItem('effort') || 'low';
 let codeContextOn = localStorage.getItem('codeContext') !== 'false';
 let editModeOn    = localStorage.getItem('editMode') === 'true';
 let aiMinimized   = localStorage.getItem('aiPaneMinimized') === 'true';
@@ -769,12 +844,8 @@ const $aiHeader       = document.getElementById('ai-pane-header');
 const $aiBody         = document.getElementById('ai-pane-body');
 const $aiResize       = document.getElementById('ai-resize-handle');
 const $hResizer       = document.getElementById('h-resizer');
-const $btnGrid        = document.getElementById('btn-grid');
-const $qaChevron      = document.getElementById('qa-chevron');
 const $codeContextBtn = document.getElementById('codeContextBtn');
 const $editModeBtn    = document.getElementById('editModeBtn');
-const $fastModelRow   = document.getElementById('fastModelRow');
-const $fastModelSelect = document.getElementById('fastModelSelect');
 const $otherModelRow   = document.getElementById('otherModelRow');
 const $modelStatusRow = document.getElementById('modelStatusRow');
 const $keyModalOverlay = document.getElementById('keyModalOverlay');
@@ -791,11 +862,8 @@ async function init() {
   runCode();
   restoreChat();
 
-  populateFastModelSelect();
-
   $previewPane.style.width = localStorage.getItem('previewWidth') || Math.round(window.innerWidth * 0.4) + 'px';
   restoreAIPane();
-  applyQA();
   updateEffortUI();
   updateCodeContextUI();
   updateEditModeUI();
@@ -1068,55 +1136,40 @@ function applyAIMinimize() {
   }
 }
 
-// ── QUICK ACTIONS COLLAPSE ───────────────────────────────────────
-function applyQA() {
-  $btnGrid.style.display = qaCollapsed ? 'none' : 'grid';
-  $qaChevron.textContent = qaCollapsed ? '▸' : '▾';
-}
-function toggleQuickActions() {
-  qaCollapsed = !qaCollapsed;
-  localStorage.setItem('qaCollapsed', qaCollapsed);
-  applyQA();
-}
-
 // ── EFFORT SELECTOR ──────────────────────────────────────────────
 function setEffort(e) {
   effort = e;
   localStorage.setItem('effort', e);
   updateEffortUI();
+  if (e === 'other' && !otherModelsCheckedOnce && getOtherModelIds().length > 0 && !checkAllInFlight) {
+    checkAllModels();
+  }
 }
 function updateEffortUI() {
   document.getElementById('effortLowBtn').classList.toggle('active', effort === 'low');
   document.getElementById('effortHighBtn').classList.toggle('active', effort === 'high');
   document.getElementById('effortOtherBtn').classList.toggle('active', effort === 'other');
-  $fastModelRow.style.display  = effort === 'low'   ? 'block' : 'none';
   $otherModelRow.style.display = effort === 'other' ? 'block' : 'none';
 }
 
-function populateFastModelSelect() {
-  $fastModelSelect.innerHTML = FAST_MODELS.map(m =>
-    `<option value="${m.id}">${m.label} — ${m.sub}</option>`
-  ).join('');
-  $fastModelSelect.value = fastModel;
-  updateEffortUI();
-}
-
-function setFastModel(id) {
-  fastModel = id;
-  localStorage.setItem('fastModel', id);
+// Combined list backing "Other": hardcoded fast + high models, plus whatever's in the GitHub file.
+function getOtherModelIds() {
+  const hardcoded = [...FAST_MODELS, ...HIGH_MODELS].map(m => m.id);
+  return [...new Set([...hardcoded, ...otherModels])];
 }
 
 function getModelChain() {
   if (effort === 'other') {
-    const ids = otherPreferredModel
-      ? [otherPreferredModel, ...otherModels]
-      : [...otherModels];
+    const all = getOtherModelIds();
+    const ids = otherPreferredModel ? [otherPreferredModel, ...all] : all;
     return [...new Set(ids)];
   }
-  const pool = effort === 'low' ? FAST_MODELS : HIGH_MODELS;
-  const preferredId = effort === 'low' ? fastModel : HIGH_MODELS[0].id;
-  const ids = [preferredId, ...pool.map(m => m.id)];
-  return [...new Set(ids)];
+  if (effort === 'low') {
+    // Fully automatic — just try the fast models in order, fastest first.
+    return FAST_MODELS.map(m => m.id);
+  }
+  // High effort
+  return HIGH_MODELS.map(m => m.id);
 }
 
 function modelLabel(id) {
@@ -1145,41 +1198,8 @@ function updateEditModeUI() {
   $editModeBtn.classList.toggle('on', editModeOn);
   $editModeBtn.textContent = editModeOn ? '✏️ Edit Mode: ON' : '✏️ Edit Mode: OFF';
 }
-function quickEdit() {
-  if (!editModeOn) { editModeOn = true; localStorage.setItem('editMode', true); updateEditModeUI(); }
-  $input.placeholder = 'Describe the change you want the AI to make to your code…';
-  focusInput();
-}
 
 // ── AI ───────────────────────────────────────────────────────────
-function getPrompt(type) {
-  const topic = $topic.value.trim() || 'HTML';
-
-  const prompts = {
-    explain:       `Explain **${topic}** clearly with beginner-friendly examples.`,
-    problem:       `Give me a beginner HTML practice problem about **${topic}**. Do not give the answer yet.`,
-    howto:         `Teach me step-by-step how to use **${topic}** in HTML.`,
-    hint:          `Give me just one helpful hint about **${topic}**. Do not give the full solution.`,
-    solution:      `Show the full solution for **${topic}** with explanations.`,
-    bestPractices: `What are the HTML best practices for **${topic}**?`,
-    explainCode:   `Explain the code currently in my editor, section by section.`,
-    findMistake:   `Find and explain all mistakes in the code currently in my editor. Don't rewrite it — just explain each issue.`,
-    improve:       `Improve the code currently in my editor while keeping the same functionality. Explain each change.`,
-    accessibility: `Review the code currently in my editor for accessibility issues and how to fix them.`,
-    semantic:      `Convert the code currently in my editor to proper semantic HTML5 and explain each change.`,
-    optimize:      `Optimize the code currently in my editor for performance and clean structure. Explain each change.`,
-  };
-
-  return prompts[type] || `Tell me about **${topic}**.`;
-}
-
-function quick(type) {
-  localStorage.setItem('topic', $topic.value);
-  callAI(getPrompt(type));
-}
-
-function focusInput() { $input.focus(); }
-
 function sendMessage() {
   const text = $input.value.trim();
   if (!text) return;
