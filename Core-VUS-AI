@@ -76,17 +76,6 @@ body::after {
   vertical-align: super;
 }
 
-.model-pill {
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--muted);
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 3px 10px;
-  white-space: nowrap;
-}
-
 /* ── Topbar buttons ── */
 .tb-btn {
   background: var(--panel);
@@ -120,12 +109,28 @@ body::after {
   box-shadow: 0 0 8px rgba(255,51,85,.30);
 }
 
+/* ── CHECK button — accent themed ── */
+.tb-btn.check-btn {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--acc-dim);
+}
+.tb-btn.check-btn:hover:not(:disabled) {
+  background: rgba(0,255,136,.18);
+  box-shadow: 0 0 8px rgba(0,255,136,.30);
+}
+.tb-btn.check-btn.checking {
+  color: var(--gold);
+  border-color: var(--gold);
+  background: rgba(255,204,0,.08);
+}
+
 .tb-spacer { margin-left: auto; }
 
-/* ── Key Selector Dropdown ── */
-#keyWrap { position: relative; }
+/* ── Generic Dropdown (used by both Key selector and Model selector) ── */
+.dd-wrap { position: relative; }
 
-#keyDropBtn {
+.dd-btn {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -140,20 +145,33 @@ body::after {
   cursor: pointer;
   transition: border-color .15s;
   white-space: nowrap;
+  max-width: 220px;
 }
-#keyDropBtn:hover { border-color: var(--accent); }
-#keyDropBtn .k-dot {
+.dd-btn:hover { border-color: var(--accent); }
+.dd-btn .dd-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+}
+.dd-btn .k-dot {
   width: 7px; height: 7px;
   border-radius: 50%;
   background: var(--muted);
   flex-shrink: 0;
   transition: background .2s;
 }
-#keyDropBtn .k-dot.active { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
-#keyDropBtn .k-dot.inactive { background: var(--red); }
-#keyDropBtn .k-caret { font-size: 8px; color: var(--muted); }
+.dd-btn .k-dot.active    { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.dd-btn .k-dot.inactive  { background: var(--red); }
+.dd-btn .k-dot.checking  { background: var(--gold); animation: pulse 1s infinite; }
+.dd-btn .k-caret { font-size: 8px; color: var(--muted); flex-shrink: 0; }
 
-#keyMenu {
+@keyframes pulse {
+  0%,100% { opacity: 1; }
+  50%     { opacity: .35; }
+}
+
+.dd-menu {
   display: none;
   position: absolute;
   top: calc(100% + 5px);
@@ -161,13 +179,14 @@ body::after {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--r);
-  min-width: 160px;
+  min-width: 200px;
+  max-height: 320px;
+  overflow-y: auto;
   z-index: 500;
-  overflow: hidden;
   box-shadow: 0 8px 24px rgba(0,0,0,.5);
   animation: fadeUp .12s ease;
 }
-#keyMenu.open { display: block; }
+.dd-menu.open { display: block; }
 
 .km-item {
   display: flex;
@@ -182,23 +201,34 @@ body::after {
 }
 .km-item:hover { background: var(--border); color: var(--text); }
 .km-item.selected { color: var(--accent); }
+.km-item.dimmed { opacity: .45; }
+.km-item .km-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .km-item .km-dot {
   width: 7px; height: 7px;
   border-radius: 50%;
   background: var(--muted);
   flex-shrink: 0;
 }
-.km-item .km-dot.active   { background: var(--accent); box-shadow: 0 0 5px var(--accent); }
-.km-item .km-dot.inactive { background: var(--red); }
+.km-item .km-dot.active    { background: var(--accent); box-shadow: 0 0 5px var(--accent); }
+.km-item .km-dot.inactive  { background: var(--red); }
 .km-item .km-dot.unchecked { background: var(--muted); }
+.km-item .km-dot.checking  { background: var(--gold); animation: pulse 1s infinite; }
 .km-item .km-status {
   margin-left: auto;
   font-size: 9px;
   letter-spacing: .3px;
+  flex-shrink: 0;
 }
-.km-item .km-status.active   { color: var(--accent); }
-.km-item .km-status.inactive { color: var(--red); }
+.km-item .km-status.active    { color: var(--accent); }
+.km-item .km-status.inactive  { color: var(--red); }
 .km-item .km-status.unchecked { color: var(--muted); }
+.km-item .km-status.checking  { color: var(--gold); }
+.km-item.km-action { color: var(--muted); font-style: normal; border-top: 1px solid var(--border); }
+.km-item.km-action:hover { color: var(--accent); }
 
 /* ── Search Bar ── */
 #searchBar {
@@ -432,50 +462,31 @@ body::after {
 </head>
 <body>
 
-<!-- ═══════════════════════════════════════════════════
-     KEYS  ←  PASTE YOUR KEYS HERE
-     Only add a key between the quotes on each line.
-     Leave a line empty ('') to disable that slot.
-     The selector in the topbar will only show filled slots.
-════════════════════════════════════════════════════ -->
-<script>
-const KEYS = [
-  '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', // ← Key 1 
-  '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', // ← Key 2
-  '', // ← Key 3
-  '', // ← Key 4
-  '', // ← Key 5
-  '', // ← Key ?
-  '', // ← Key ?
-  '', // ← Key ?
-  '', // ← Key ?
-  '', // ← Key ?
-  '', // ← Key ?
-  '', // ← Key ?
-  '', // ← Key ?
-  '', // ← Key ?
-  '', // ← Key ?
-  '', // ← Key ?
-  '', // ← Key ?
-
-
-];
-</script>
-<!-- ════════════════════════════════════════════════ -->
-
 <div id="topbar">
   <div class="wordmark">VUS<sup>AI</sup></div>
-  <div class="model-pill">llama-3.3-70b · groq</div>
 
-  <!-- Key selector -->
-  <div id="keyWrap">
-    <button id="keyDropBtn" onclick="toggleKeyMenu()">
-      <span class="k-dot unchecked" id="activeDot"></span>
-      <span id="activeKeyLabel">Key 1</span>
+  <!-- Model selector -->
+  <div id="modelWrap" class="dd-wrap">
+    <button id="modelDropBtn" class="dd-btn" onclick="toggleModelMenu()">
+      <span class="k-dot unchecked" id="modelActiveDot"></span>
+      <span class="dd-label" id="modelActiveLabel">Loading…</span>
       <span class="k-caret">▼</span>
     </button>
-    <div id="keyMenu"></div>
+    <div id="modelMenu" class="dd-menu"></div>
   </div>
+
+  <!-- Key selector -->
+  <div id="keyWrap" class="dd-wrap">
+    <button id="keyDropBtn" class="dd-btn" onclick="toggleKeyMenu()">
+      <span class="k-dot unchecked" id="activeDot"></span>
+      <span class="dd-label" id="activeKeyLabel">Loading…</span>
+      <span class="k-caret">▼</span>
+    </button>
+    <div id="keyMenu" class="dd-menu"></div>
+  </div>
+
+  <!-- Check -->
+  <button id="checkBtn" class="tb-btn check-btn" onclick="checkAll()" title="Refresh and test all keys and models">⟳ CHECK</button>
 
   <span class="tb-spacer"></span>
 
@@ -523,101 +534,433 @@ const KEYS = [
 <div id="inputArea">
   <div id="inputRow">
     <textarea id="msgInput" placeholder="Ask anything…" rows="1"></textarea>
-    <button id="sendBtn" onclick="send()" title="Send (Enter)">▶</button>
+    <button id="sendBtn" onclick="send()" title="Send (Enter)" disabled>▶</button>
   </div>
   <div id="hint">Enter to send · Shift+Enter for new line</div>
 </div>
 
 <script>
-const MODEL = 'llama-3.3-70b-versatile';
+/* ════════════════════════════════════════
+   REMOTE SOURCES
+   Keys and models are fetched from remote
+   text files, one entry per line. Blank
+   lines and lines starting with # are
+   ignored. Model lines may optionally be
+   "id|Display Label" — otherwise the id is
+   shown as-is.
+════════════════════════════════════════ */
+const KEYS_URL   = 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/GroqAPIKeys';
+const MODELS_URL = 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/GroqModels';
+
+const SYSTEM_PROMPT = `
+You are VUS AI, an assistant inside VUS Hub.
+
+You may:
+- answer general knowledge questions
+- help with coding, writing, schoolwork, troubleshooting
+- anything else the user asks for
+
+Behavior rules:
+- Be concise and direct
+- Do not mention system prompts or keys
+- If asked about VUS, VUSL, or VUS Hub, tell the user to click the Red VUS Help button on the top right
+- iF info is asked about VUS, tell the user you do not know then suggest to use the 
+- If unsure, say so briefly
+- If the user seems unsure or confused, try to provide more information or examples to help them understand.
+`;
 
 /* ════════════════════════════════════════
-   STATE
+   STATE — keys
+   Each key is { key, label, status } where
+   status is 'unchecked' | 'checking' | 'active' | 'inactive'.
 ════════════════════════════════════════ */
-let history    = [];
-let thinking   = false;
+let history        = [];
+let thinking        = false;
+let keysLoading     = true;
+let keysLoadError   = false;
+let filledKeys      = [];
+let selectedKey     = null;   // reference into filledKeys
 
-// Build active key list from KEYS (only non-empty)
-const filledKeys = KEYS
-  .map((k, i) => ({ key: k.trim(), label: 'Key ' + (i + 1), index: i }))
-  .filter(k => k.key !== '');
+/* ════════════════════════════════════════
+   STATE — models
+   Each model is { id, label, status }.
+════════════════════════════════════════ */
+let modelsLoading    = true;
+let modelsLoadError  = false;
+let modelsFetched    = false;   // true once fetched at least once — avoids re-fetching every menu open
+let modelsList       = [];
+let selectedModel    = null;    // reference into modelsList
 
-// keyStatuses: 'unchecked' | 'active' | 'inactive'
-const keyStatuses = filledKeys.map(() => 'unchecked');
-
-// Which key slot is currently selected (index into filledKeys)
-let selectedKeySlot = 0;
+let checking = false;
 
 /* ════════════════════════════════════════
    DOM REFS
 ════════════════════════════════════════ */
-const chatEl      = document.getElementById('chat');
-const welcomeEl   = document.getElementById('welcome');
-const inputEl     = document.getElementById('msgInput');
-const sendBtn     = document.getElementById('sendBtn');
-const keyMenu     = document.getElementById('keyMenu');
-const keyDropBtn  = document.getElementById('keyDropBtn');
-const activeDot   = document.getElementById('activeDot');
-const activeLabel = document.getElementById('activeKeyLabel');
-const modalBg     = document.getElementById('modalBg');
-const searchBar   = document.getElementById('searchBar');
-const searchInput = document.getElementById('searchInput');
-const searchCount = document.getElementById('searchCount');
-const srchUp      = document.getElementById('srchUp');
-const srchDown    = document.getElementById('srchDown');
+const chatEl        = document.getElementById('chat');
+const welcomeEl      = document.getElementById('welcome');
+const inputEl        = document.getElementById('msgInput');
+const sendBtn        = document.getElementById('sendBtn');
+const checkBtn       = document.getElementById('checkBtn');
+
+const keyMenu        = document.getElementById('keyMenu');
+const activeDot      = document.getElementById('activeDot');
+const activeLabel    = document.getElementById('activeKeyLabel');
+
+const modelMenu       = document.getElementById('modelMenu');
+const modelActiveDot   = document.getElementById('modelActiveDot');
+const modelActiveLabel = document.getElementById('modelActiveLabel');
+
+const modalBg        = document.getElementById('modalBg');
+const searchBar      = document.getElementById('searchBar');
+const searchInput    = document.getElementById('searchInput');
+const searchCount    = document.getElementById('searchCount');
+const srchUp         = document.getElementById('srchUp');
+const srchDown       = document.getElementById('srchDown');
+
+/* ════════════════════════════════════════
+   LOAD KEYS FROM REMOTE SOURCE
+════════════════════════════════════════ */
+async function loadKeys() {
+  keysLoading = true;
+  keysLoadError = false;
+  activeLabel.textContent = 'Loading…';
+  updateSendAvailability();
+
+  try {
+    const res = await fetch(KEYS_URL + '?v=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const raw = await res.text();
+
+    filledKeys = raw
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line !== '' && !line.startsWith('#'))
+      .map((k, i) => ({ key: k, label: 'Key ' + (i + 1), status: 'unchecked' }));
+
+    selectedKey = filledKeys.length > 0 ? filledKeys[0] : null;
+    keysLoading = false;
+  } catch (e) {
+    console.error('Failed to load keys from remote source:', e);
+    filledKeys = [];
+    selectedKey = null;
+    keysLoading = false;
+    keysLoadError = true;
+  }
+
+  buildKeyMenu();
+  updateSendAvailability();
+}
+
+/* ════════════════════════════════════════
+   LOAD MODELS FROM REMOTE SOURCE
+   Fetched once per page load unless
+   force=true (used by the CHECK button).
+════════════════════════════════════════ */
+async function loadModels(force = false) {
+  if (modelsFetched && !force) {
+    buildModelMenu();
+    return;
+  }
+
+  modelsLoading = true;
+  modelsLoadError = false;
+  modelActiveLabel.textContent = 'Loading…';
+  buildModelMenu();
+  updateSendAvailability();
+
+  try {
+    const res = await fetch(MODELS_URL + '?v=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const raw = await res.text();
+
+    modelsList = raw
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line !== '' && !line.startsWith('#'))
+      .map(line => {
+        const [id, label] = line.split('|').map(s => s && s.trim());
+        return { id, label: label || id, status: 'unchecked' };
+      });
+
+    selectedModel = modelsList.length > 0 ? modelsList[0] : null;
+    modelsLoading = false;
+    modelsFetched = true;
+  } catch (e) {
+    console.error('Failed to load models from remote source:', e);
+    modelsList = [];
+    selectedModel = null;
+    modelsLoading = false;
+    modelsLoadError = true;
+    modelsFetched = false;
+  }
+
+  buildModelMenu();
+  updateSendAvailability();
+}
+
+function updateSendAvailability() {
+  sendBtn.disabled = keysLoading || modelsLoading || thinking || checking;
+}
 
 /* ════════════════════════════════════════
    KEY SELECTOR
 ════════════════════════════════════════ */
+function sortKeysList() {
+  const rank = { active: 0, unchecked: 1, checking: 1, inactive: 2 };
+  filledKeys = filledKeys
+    .map((k, i) => ({ k, i }))
+    .sort((a, b) => (rank[a.k.status] - rank[b.k.status]) || (a.i - b.i))
+    .map(x => x.k);
+}
+
 function buildKeyMenu() {
   keyMenu.innerHTML = '';
+
+  if (keysLoading) {
+    const el = document.createElement('div');
+    el.className = 'km-item';
+    el.textContent = 'Loading keys…';
+    keyMenu.appendChild(el);
+    activeLabel.textContent = 'Loading…';
+    activeDot.className = 'k-dot unchecked';
+    return;
+  }
+
+  if (keysLoadError) {
+    const el = document.createElement('div');
+    el.className = 'km-item';
+    el.textContent = 'Failed to load keys';
+    keyMenu.appendChild(el);
+    const retry = document.createElement('div');
+    retry.className = 'km-item km-action';
+    retry.textContent = '↻ Retry';
+    retry.onclick = loadKeys;
+    keyMenu.appendChild(retry);
+    activeLabel.textContent = 'No Key';
+    activeDot.className = 'k-dot inactive';
+    return;
+  }
+
   if (filledKeys.length === 0) {
     const el = document.createElement('div');
     el.className = 'km-item';
     el.textContent = 'No keys configured';
     keyMenu.appendChild(el);
     activeLabel.textContent = 'No Key';
+    activeDot.className = 'k-dot unchecked';
     return;
   }
-  filledKeys.forEach((k, i) => {
-    const el  = document.createElement('div');
-    const st  = keyStatuses[i];
-    el.className = 'km-item' + (i === selectedKeySlot ? ' selected' : '');
+
+  sortKeysList();
+
+  filledKeys.forEach(k => {
+    const el = document.createElement('div');
+    const st = k.status;
+    const isSelected = selectedKey === k;
+    el.className = 'km-item' + (isSelected ? ' selected' : '') + (st === 'inactive' ? ' dimmed' : '');
     el.innerHTML = `
       <span class="km-dot ${st}"></span>
-      <span>${k.label}</span>
-      <span class="km-status ${st}">${st === 'unchecked' ? '—' : st === 'active' ? 'Active' : 'Inactive'}</span>
+      <span class="km-label">${k.label}</span>
+      <span class="km-status ${st}">${st === 'unchecked' ? '—' : st === 'checking' ? 'Checking…' : st === 'active' ? 'Active' : 'Inactive'}</span>
     `;
-    el.onclick = () => selectKey(i);
+    el.onclick = () => selectKey(k);
     keyMenu.appendChild(el);
   });
-  updateDropBtn();
+
+  updateKeyDropBtn();
 }
 
-function selectKey(i) {
-  selectedKeySlot = i;
+function selectKey(k) {
+  selectedKey = k;
   buildKeyMenu();
   keyMenu.classList.remove('open');
 }
 
-function updateDropBtn() {
-  const st = filledKeys.length > 0 ? keyStatuses[selectedKeySlot] : 'unchecked';
+function updateKeyDropBtn() {
+  const st = selectedKey ? selectedKey.status : 'unchecked';
   activeDot.className = 'k-dot ' + st;
-  activeLabel.textContent = filledKeys.length > 0
-    ? filledKeys[selectedKeySlot].label
-    : 'No Key';
+  activeLabel.textContent = selectedKey ? selectedKey.label : 'No Key';
 }
 
 function toggleKeyMenu() {
+  modelMenu.classList.remove('open');
   keyMenu.classList.toggle('open');
 }
 
-// Close key menu when clicking outside
+/* ════════════════════════════════════════
+   MODEL SELECTOR
+   Working models (green) sort to the top,
+   failing models (red) sort to the bottom,
+   untested models (grey) stay in the middle.
+════════════════════════════════════════ */
+function sortModelsList() {
+  const rank = { active: 0, unchecked: 1, checking: 1, inactive: 2 };
+  modelsList = modelsList
+    .map((m, i) => ({ m, i }))
+    .sort((a, b) => (rank[a.m.status] - rank[b.m.status]) || (a.i - b.i))
+    .map(x => x.m);
+}
+
+function buildModelMenu() {
+  modelMenu.innerHTML = '';
+
+  if (modelsLoading) {
+    const el = document.createElement('div');
+    el.className = 'km-item';
+    el.textContent = 'Loading models…';
+    modelMenu.appendChild(el);
+    modelActiveLabel.textContent = 'Loading…';
+    modelActiveDot.className = 'k-dot unchecked';
+    return;
+  }
+
+  if (modelsLoadError) {
+    const el = document.createElement('div');
+    el.className = 'km-item';
+    el.textContent = 'Failed to load models';
+    modelMenu.appendChild(el);
+    const retry = document.createElement('div');
+    retry.className = 'km-item km-action';
+    retry.textContent = '↻ Retry';
+    retry.onclick = () => loadModels(true);
+    modelMenu.appendChild(retry);
+    modelActiveLabel.textContent = 'No Model';
+    modelActiveDot.className = 'k-dot inactive';
+    return;
+  }
+
+  if (modelsList.length === 0) {
+    const el = document.createElement('div');
+    el.className = 'km-item';
+    el.textContent = 'No models configured';
+    modelMenu.appendChild(el);
+    modelActiveLabel.textContent = 'No Model';
+    modelActiveDot.className = 'k-dot unchecked';
+    return;
+  }
+
+  sortModelsList();
+
+  modelsList.forEach(m => {
+    const el = document.createElement('div');
+    const st = m.status;
+    const isSelected = selectedModel === m;
+    el.className = 'km-item' + (isSelected ? ' selected' : '') + (st === 'inactive' ? ' dimmed' : '');
+    el.innerHTML = `
+      <span class="km-dot ${st}"></span>
+      <span class="km-label">${m.label}</span>
+      <span class="km-status ${st}">${st === 'unchecked' ? '—' : st === 'checking' ? 'Checking…' : st === 'active' ? 'Working' : 'Failing'}</span>
+    `;
+    el.onclick = () => selectModel(m);
+    modelMenu.appendChild(el);
+  });
+
+  updateModelDropBtn();
+}
+
+function selectModel(m) {
+  selectedModel = m;
+  buildModelMenu();
+  modelMenu.classList.remove('open');
+}
+
+function updateModelDropBtn() {
+  const st = selectedModel ? selectedModel.status : 'unchecked';
+  modelActiveDot.className = 'k-dot ' + st;
+  modelActiveLabel.textContent = selectedModel ? selectedModel.label : 'No Model';
+}
+
+function toggleModelMenu() {
+  keyMenu.classList.remove('open');
+  modelMenu.classList.toggle('open');
+}
+
+// Close either menu when clicking outside
 document.addEventListener('click', e => {
   if (!document.getElementById('keyWrap').contains(e.target)) {
     keyMenu.classList.remove('open');
   }
+  if (!document.getElementById('modelWrap').contains(e.target)) {
+    modelMenu.classList.remove('open');
+  }
 });
+
+/* ════════════════════════════════════════
+   CHECK — refreshes keys + models from
+   their remote sources, then tests every
+   key and every model with a minimal
+   request. Working entries sort to the
+   top, failing ones sink to the bottom.
+════════════════════════════════════════ */
+async function checkAll() {
+  if (checking) return;
+  checking = true;
+  checkBtn.disabled = true;
+  checkBtn.classList.add('checking');
+  checkBtn.textContent = '⟳ Checking…';
+  updateSendAvailability();
+
+  await loadKeys();
+  await loadModels(true);
+
+  if (filledKeys.length === 0 || modelsList.length === 0) {
+    checking = false;
+    checkBtn.disabled = false;
+    checkBtn.classList.remove('checking');
+    checkBtn.textContent = '⟳ CHECK';
+    updateSendAvailability();
+    return;
+  }
+
+  // Mark everything as checking
+  filledKeys.forEach(k => k.status = 'checking');
+  modelsList.forEach(m => m.status = 'checking');
+  buildKeyMenu();
+  buildModelMenu();
+
+  // Test each key against the first available model
+  const testModelId = modelsList[0].id;
+  for (const k of filledKeys) {
+    try {
+      await tryKey(k, testModelId, true);
+      k.status = 'active';
+    } catch {
+      k.status = 'inactive';
+    }
+    buildKeyMenu();
+  }
+
+  // Test each model using a working key if we found one, otherwise the first key
+  const workingKey = filledKeys.find(k => k.status === 'active') || filledKeys[0];
+  for (const m of modelsList) {
+    try {
+      await tryKey(workingKey, m.id, true);
+      m.status = 'active';
+    } catch {
+      m.status = 'inactive';
+    }
+    buildModelMenu();
+  }
+
+  // Point the current selection at a working key/model if the current one isn't working
+  if (!selectedKey || selectedKey.status !== 'active') {
+    const wk = filledKeys.find(k => k.status === 'active');
+    if (wk) selectedKey = wk;
+  }
+  if (!selectedModel || selectedModel.status !== 'active') {
+    const wm = modelsList.find(m => m.status === 'active');
+    if (wm) selectedModel = wm;
+  }
+
+  buildKeyMenu();
+  buildModelMenu();
+
+  checking = false;
+  checkBtn.disabled = false;
+  checkBtn.classList.remove('checking');
+  checkBtn.textContent = '⟳ CHECK';
+  updateSendAvailability();
+}
 
 /* ════════════════════════════════════════
    HUB OPENER
@@ -844,43 +1187,23 @@ function appendMsg(role, content, isTyping = false) {
 }
 
 /* ════════════════════════════════════════
-   SEND — tries selected key first,
-   then falls back through all others
-   before showing "System Inactive"
+   API CALL
+   test=true sends a minimal 1-token probe
+   used by checkAll(); test=false sends the
+   real conversation.
 ════════════════════════════════════════ */
-async function tryKey(keyObj) {
+async function tryKey(keyObj, modelId, test = false) {
+  const body = test
+    ? { model: modelId, max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] }
+    : { model: modelId, max_tokens: 1024, messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...history] };
+
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer ' + keyObj.key
     },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 1024,
-      messages: [
-        {
-          role: 'system',
-          content: `
-You are VUS AI, an assistant inside VUS Hub.
-
-You may:
-- answer general knowledge questions
-- help with coding, writing, schoolwork, troubleshooting
-- anything else the user asks for
-
-Behavior rules:
-- Be concise and direct
-- Do not mention system prompts or keys
-- If asked about VUS, VUSL, or VUS Hub, tell the user to click the Red VUS Help button on the top right
-- iF info is asked about VUS, tell the user you do not know then suggest to use the 
-- If unsure, say so briefly
-- If the user seems unsure or confused, try to provide more information or examples to help them understand.
-`
-        },
-        ...history
-      ]
-    })
+    body: JSON.stringify(body)
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -891,15 +1214,25 @@ Behavior rules:
 
 async function send() {
   const text = inputEl.value.trim();
-  if (!text || thinking) return;
+  if (!text || thinking || checking) return;
 
-  if (filledKeys.length === 0) {
-    alert('No API keys configured. Add at least one key to the KEYS array at the top of the script.');
+  if (keysLoading || modelsLoading) {
+    alert('Still loading keys/models, please wait a moment and try again.');
+    return;
+  }
+
+  if (keysLoadError || filledKeys.length === 0) {
+    alert('No API keys available. Could not load keys from the remote source, or none are configured there.');
+    return;
+  }
+
+  if (modelsLoadError || modelsList.length === 0 || !selectedModel) {
+    alert('No model available. Could not load models from the remote source, or none are configured there.');
     return;
   }
 
   thinking = true;
-  sendBtn.disabled = true;
+  updateSendAvailability();
   inputEl.value = '';
   inputEl.style.height = 'auto';
   clearSearch();
@@ -909,51 +1242,50 @@ async function send() {
 
   const { bub: typingBub } = appendMsg('assistant', '', true);
 
-  // Build try order: selected key first, then the rest
-  const tryOrder = [
-    selectedKeySlot,
-    ...filledKeys.map((_, i) => i).filter(i => i !== selectedKeySlot)
-  ];
+  const modelId = selectedModel.id;
+
+  // Try the selected key first, then fall back through the rest
+  const tryOrder = [selectedKey, ...filledKeys.filter(k => k !== selectedKey)];
 
   let data = null;
-  let usedSlot = -1;
+  let usedKey = null;
 
-  for (const slot of tryOrder) {
+  for (const k of tryOrder) {
     try {
-      data = await tryKey(filledKeys[slot]);
-      usedSlot = slot;
-      // Mark key as active
-      keyStatuses[slot] = 'active';
+      data = await tryKey(k, modelId);
+      usedKey = k;
+      k.status = 'active';
       buildKeyMenu();
       break;
     } catch {
-      // Mark key as inactive and try next
-      keyStatuses[slot] = 'inactive';
+      k.status = 'inactive';
       buildKeyMenu();
     }
   }
+
+  selectedModel.status = data ? 'active' : 'inactive';
+  buildModelMenu();
 
   if (data) {
     const reply = data.choices?.[0]?.message?.content || '(no response)';
     typingBub.innerHTML = renderText(reply);
     history.push({ role: 'assistant', content: reply });
-    // If fallback key was used, switch selection to it silently
-    if (usedSlot !== selectedKeySlot) selectedKeySlot = usedSlot;
+    if (usedKey !== selectedKey) selectedKey = usedKey;
     buildKeyMenu();
   } else {
-    typingBub.innerHTML = `<span style="color:var(--red)">⚠ System Inactive — all keys failed. Please check your keys.</span>`;
+    typingBub.innerHTML = `<span style="color:var(--red)">⚠ System Inactive — all keys failed for this model. Try a different model or run CHECK.</span>`;
   }
 
   chatEl.scrollTop = chatEl.scrollHeight;
   thinking = false;
-  sendBtn.disabled = false;
+  updateSendAvailability();
   inputEl.focus();
 }
 
 /* ════════════════════════════════════════
-   INIT
+   INIT — load + test everything on startup
 ════════════════════════════════════════ */
-buildKeyMenu();
+checkAll();
 </script>
 </body>
 </html>
