@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Get a YouTube Data API Key</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #161b22;
+    --panel-border: #262c36;
+    --text: #e6e9ef;
+    --text-dim: #9aa4b2;
+    --accent: #4f8cff;
+    --accent-dim: #274a86;
+    --code-bg: #0a0d12;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+  }
+
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 56px 24px 120px;
+  }
+
+  header.page-head {
+    margin-bottom: 56px;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(79, 140, 255, 0.1);
+    border: 1px solid var(--accent-dim);
+    padding: 5px 10px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+  }
+
+  h1 {
+    font-size: 34px;
+    line-height: 1.25;
+    margin: 0 0 12px;
+    letter-spacing: -0.02em;
+  }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 16px;
+    max-width: 56ch;
+  }
+
+  .progress-rail {
+    position: sticky;
+    top: 0;
+    background: rgba(14, 17, 22, 0.92);
+    backdrop-filter: blur(6px);
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--panel-border);
+    z-index: 10;
+    display: flex;
+    gap: 6px;
+    max-width: 760px;
+    margin: 0 auto;
+  }
+
+  .progress-rail .dot {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--panel-border);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .progress-rail .dot .fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 0%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.1s linear;
+  }
+
+  .step {
+    display: flex;
+    gap: 20px;
+    padding: 32px 0;
+    border-top: 1px solid var(--panel-border);
+  }
+
+  .step-num {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .step-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .step-body h2 {
+    font-size: 18px;
+    margin: 4px 0 10px;
+    letter-spacing: -0.01em;
+  }
+
+  .step-body p {
+    margin: 0 0 14px;
+    color: var(--text-dim);
+    font-size: 15px;
+  }
+
+  .step-body p:last-child {
+    margin-bottom: 0;
+  }
+
+  a.link {
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px solid var(--accent-dim);
+  }
+  a.link:hover { border-bottom-color: var(--accent); }
+
+  code, .kbd {
+    font-family: var(--mono);
+    background: var(--code-bg);
+    border: 1px solid var(--panel-border);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #d7dee8;
+  }
+
+  .img-slot {
+    margin-top: 16px;
+    border-radius: 10px;
+    border: 1px solid var(--panel-border);
+    background: var(--panel);
+    overflow: hidden;
+  }
+
+  .img-slot img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .callout {
+    margin-top: 14px;
+    display: flex;
+    gap: 10px;
+    background: rgba(224, 169, 82, 0.08);
+    border: 1px solid rgba(224, 169, 82, 0.35);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 14px;
+    color: #f0d6a8;
+  }
+
+  .callout .icon { flex-shrink: 0; }
+
+  .callout.danger {
+    background: rgba(224, 90, 82, 0.08);
+    border-color: rgba(224, 90, 82, 0.35);
+    color: #f0b3ab;
+  }
+
+  .callout.success {
+    background: rgba(87, 189, 122, 0.08);
+    border-color: rgba(87, 189, 122, 0.35);
+    color: #a7e0bb;
+  }
+
+  footer {
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 1px solid var(--panel-border);
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+
+  @media (max-width: 560px) {
+    h1 { font-size: 27px; }
+    .step { gap: 14px; }
+    .step-num { width: 30px; height: 30px; font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="progress-rail" aria-hidden="true">
+  <span class="dot"><span class="fill"></span></span>
+  <span class="dot"><span class="fill"></span></span>
+  <span class="dot"><span class="fill"></span></span>
+  <span class="dot"><span class="fill"></span></span>
+  <span class="dot"><span class="fill"></span></span>
+  <span class="dot"><span class="fill"></span></span>
+  <span class="dot"><span class="fill"></span></span>
+</nav>
+
+<div class="wrap">
+
+  <header class="page-head">
+    <span class="eyebrow">Setup guide</span>
+    <h1>Getting a YouTube Data API v3 key</h1>
+    <p class="subtitle">
+      A quick walkthrough for generating your own API key from Google Cloud Console,
+      so you can start pulling data from YouTube in your project.
+    </p>
+  </header>
+
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">
+      <h2>Open the YouTube Data API v3 page</h2>
+      <p>
+        Go straight to
+        <a class="link" href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener">console.cloud.google.com/apis/library/youtube.googleapis.com</a>.
+      </p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">
+      <h2>Sign in</h2>
+      <p>If you aren't signed in already, sign up or log in with your Google account to continue.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-body">
+      <h2>Accept the Terms of Service</h2>
+      <p>Check the box agreeing to the terms of service, then click <span class="kbd">Agree and continue</span>.</p>
+      <div class="img-slot">
+        <img src="https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/Tutorials/YT-API-Key/1.Agree-and-continue.PNG" alt="Agree to terms of service and continue">
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">4</div>
+    <div class="step-body">
+      <h2>Enable the YouTube Data API v3</h2>
+      <p>Make sure your project is selected at the top, then click <span class="kbd">Enable</span>.</p>
+      <div class="img-slot">
+        <img src="https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/Tutorials/YT-API-Key/2.Enable-YT-Data.PNG" alt="Enable YouTube Data API v3">
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">5</div>
+    <div class="step-body">
+      <h2>Go to Credentials</h2>
+      <p>
+        Head to
+        <a class="link" href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">console.cloud.google.com/apis/credentials</a>.
+      </p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">6</div>
+    <div class="step-body">
+      <h2>Create an API key</h2>
+      <p>
+        On the top, click <span class="kbd">Create credentials</span>, then select <span class="kbd">API key</span>.
+      </p>
+      <div class="img-slot">
+        <img src="https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/Tutorials/YT-API-Key/3.Create-API.PNG" alt="Create credentials then API key">
+      </div>
+      <p>
+        Open the <strong>Select API restrictions</strong> dropdown, scroll down, then check/select
+        <strong>YouTube Data API v3</strong>. Click <span class="kbd">Create</span>.
+      </p>
+      <div class="img-slot">
+        <img src="https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/Tutorials/YT-API-Key/4.Select-restrictions.PNG" alt="Select API restrictions dropdown">
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">7</div>
+    <div class="step-body">
+      <h2>Copy your key</h2>
+      <p>Copy the key by clicking the copy icon, or select it manually.</p>
+      <div class="img-slot">
+        <img src="https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/Tutorials/YT-API-Key/5.Copy.PNG" alt="Copy your new API key">
+      </div>
+      <div class="callout">
+        <span class="icon">⚠️</span>
+        <span>Paste your key somewhere safe — a password manager or private notes file works well.</span>
+      </div>
+      <div class="callout danger">
+        <span class="icon">🔒</span>
+        <span>If anyone gets access to your key, it may stop working soon if it's used in unintended ways — treat it like a password.</span>
+      </div>
+      <div class="callout success">
+        <span class="icon">✅</span>
+        <span>Done! You may now use your new key.</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  (function () {
+    const fills = Array.from(document.querySelectorAll('.progress-rail .dot .fill'));
+    const total = fills.length;
+
+    function updateProgress() {
+      const doc = document.documentElement;
+      const scrollTop = doc.scrollTop || document.body.scrollTop;
+      const scrollHeight = doc.scrollHeight - doc.clientHeight;
+      // Guard against pages shorter than viewport
+      const ratio = scrollHeight > 0 ? Math.min(Math.max(scrollTop / scrollHeight, 0), 1) : 1;
+
+      const progressInDots = ratio * total; // e.g. 3.4 out of 7
+
+      fills.forEach((fill, i) => {
+        const dotProgress = Math.min(Math.max(progressInDots - i, 0), 1); // 0 to 1 per dot
+        fill.style.width = (dotProgress * 100) + '%';
+      });
+    }
+
+    window.addEventListener('scroll', updateProgress, { passive: true });
+    window.addEventListener('resize', updateProgress);
+    updateProgress();
+  })();
+</script>
+</body>
+</html>
