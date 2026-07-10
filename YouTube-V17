@@ -142,6 +142,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);ove
 
 /* WATCH LATER / PLAYLIST ACTIONS */
 .wl-acts{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+.dd-wrap{position:relative}
+.dd-menu{display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:4px 0;z-index:500;box-shadow:var(--sh);min-width:210px}
+.dd-menu.on{display:block;animation:fadeIn .1s ease}
+.dd-item{padding:8px 14px;font-size:12px;cursor:pointer;color:var(--text);white-space:nowrap;transition:background .1s}
+.dd-item:hover{background:var(--hover)}
 .abtn{padding:6px 13px;border:none;border-radius:16px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit;transition:background .15s,transform .1s;white-space:nowrap}
 .abtn:active{transform:scale(.97)}
 .a-sec{background:var(--card);color:var(--text);border:1px solid var(--border)}.a-sec:hover{background:var(--hover)}
@@ -396,9 +401,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);ove
     <div id="pg-watch-later" class="pg">
         <h1 class="pg-title">Watch Later
             <div class="wl-acts" id="wlActs" style="display:none">
-                <button class="abtn a-sec" onclick="showPanel('exportPanel')">📋 Export</button>
-                <button class="abtn a-ok" onclick="showPanel('importPanel')">📥 Import</button>
-                <button class="abtn a-sec" id="shuffleBtn" onclick="shuffleWL()">🔀 Shuffle</button>
+                <div class="dd-wrap">
+                    <button class="abtn a-sec" onclick="toggleDropdown('ddExportWL')">📋 Export ▾</button>
+                    <div class="dd-menu" id="ddExportWL">
+                        <div class="dd-item" onclick="downloadBackupTxt();closeDropdowns()">⬇ Download .txt (Full Backup)</div>
+                        <div class="dd-item" onclick="showExportLine('WL');closeDropdowns()">📄 Copy 1-line text</div>
+                    </div>
+                </div>
+                <button class="abtn a-ok" onclick="showPanel('importOnlyPanel')">📥 Import</button>
                 <button class="abtn a-bad" id="clearBtn" onclick="clearWL()">🗑 Clear</button>
             </div>
         </h1>
@@ -423,7 +433,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);ove
         </div>
 
         <div class="panel" id="exportPanel">
-            <div class="panel-title">📋 Export Watch Later — one-line string</div>
+            <div class="panel-title">📋 Export Watch Later — one-line text</div>
             <textarea id="exportArea" readonly onclick="this.select()"></textarea>
             <div class="panel-hint">Copy this whole line and paste it anywhere — a doc, a note, a message. Re-importing it recreates this list.</div>
             <div class="panel-btns">
@@ -431,21 +441,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);ove
                 <button class="pbtn pbtn-s" onclick="closePanel('exportPanel')">Close</button>
             </div>
         </div>
-        <div class="panel" id="importPanel">
-            <div class="panel-title">📥 Import — paste your exported string (or raw IDs)</div>
-            <textarea id="importArea" placeholder='Paste an exported string like:&#10;WL=(dQw4w9WgXcQ,9bZkp7q19f0)&#10;&#10;...or just plain video IDs/URLs, one per line or comma-separated — those will be added to Watch Later.'></textarea>
-            <div class="panel-hint">Full exported strings recreate playlists automatically. Plain IDs/URLs go straight into Watch Later. Duplicates are skipped.</div>
-            <div class="panel-btns">
-                <button class="pbtn pbtn-p" onclick="runImport('importArea')">Import</button>
-                <button class="pbtn pbtn-s" onclick="closePanel('importPanel')">Cancel</button>
-            </div>
-        </div>
         <div class="panel" id="importOnlyPanel">
-            <div class="panel-title">📥 Import — paste your exported string (or raw IDs)</div>
-            <textarea id="importOnlyArea" placeholder="Paste an exported string, or plain video IDs/URLs."></textarea>
-            <div class="panel-hint">Full exported strings recreate playlists automatically. Plain IDs/URLs go straight into Watch Later.</div>
+            <div class="panel-title">📥 Import — paste text or upload a file</div>
+            <textarea id="importOnlyArea" placeholder="Paste exported text (one-liner or full backup), or plain video IDs/URLs — or upload a file below."></textarea>
+            <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <label class="pbtn pbtn-s" style="cursor:pointer;margin:0" for="uploadFileWL">📁 Upload .txt file</label>
+                <input type="file" id="uploadFileWL" accept=".txt,text/plain" style="display:none" onchange="handleUploadFile(event,'importOnlyArea')">
+                <span id="uploadFileWLName" style="font-size:11px;color:var(--text2)"></span>
+            </div>
+            <div class="panel-hint">Accepts any exported text — one-liner or full backup — or plain IDs/URLs (which go straight into Watch Later). Duplicates are skipped.</div>
             <div class="panel-btns">
-                <button class="pbtn pbtn-p" onclick="runImport('importOnlyArea')">Import</button>
+                <button class="pbtn pbtn-p" onclick="runFullImport('importOnlyArea')">Import</button>
                 <button class="pbtn pbtn-s" onclick="closePanel('importOnlyPanel')">Cancel</button>
             </div>
         </div>
@@ -457,9 +463,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);ove
     <div id="pg-library" class="pg">
         <h1 class="pg-title">Library
             <div class="wl-acts" id="libActs" style="display:none">
-                <button class="abtn a-sec" onclick="showPanel('exportPanelLib')">📋 Export</button>
-                <button class="abtn a-ok" onclick="showPanel('importPanelLib')">📥 Import</button>
-                <button class="abtn a-sec" id="libShuffleBtn" onclick="shuffleLibList()">🔀 Shuffle</button>
+                <div class="dd-wrap">
+                    <button class="abtn a-sec" onclick="toggleDropdown('ddExportLib')">📋 Export ▾</button>
+                    <div class="dd-menu" id="ddExportLib">
+                        <div class="dd-item" onclick="downloadBackupTxt();closeDropdowns()">⬇ Download .txt (Full Backup)</div>
+                        <div class="dd-item" onclick="showExportLine('ALL');closeDropdowns()">📄 Copy 1-line text</div>
+                    </div>
+                </div>
+                <button class="abtn a-ok" onclick="showPanel('importOnlyPanelLib')">📥 Import</button>
                 <button class="abtn a-bad" id="libClearBtn" onclick="clearLibList()">🗑 Clear</button>
             </div>
         </h1>
@@ -487,29 +498,25 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);ove
         </div>
 
         <div class="panel" id="exportPanelLib">
-            <div class="panel-title">📋 Export this playlist — one-line string</div>
+            <div class="panel-title">📋 Export — one-line text</div>
             <textarea id="exportAreaLib" readonly onclick="this.select()"></textarea>
-            <div class="panel-hint">Copy this whole line and paste it anywhere — a doc, a note, a message. Re-importing it recreates this playlist.</div>
+            <div class="panel-hint">Copy this whole line and paste it anywhere — a doc, a note, a message. Re-importing it recreates this.</div>
             <div class="panel-btns">
                 <button class="pbtn pbtn-p" onclick="copyExportLib()">Copy to clipboard</button>
                 <button class="pbtn pbtn-s" onclick="closePanel('exportPanelLib')">Close</button>
             </div>
         </div>
-        <div class="panel" id="importPanelLib">
-            <div class="panel-title">📥 Import — paste your exported string (or raw IDs)</div>
-            <textarea id="importAreaLib" placeholder='Paste an exported string like:&#10;PL1="funny videos"=(kJQP7kiw5Fk)&#10;&#10;Plain IDs/URLs will be added to Watch Later instead.'></textarea>
-            <div class="panel-hint">Full exported strings recreate playlists automatically. Plain IDs/URLs go straight into Watch Later. Duplicates are skipped.</div>
-            <div class="panel-btns">
-                <button class="pbtn pbtn-p" onclick="runImport('importAreaLib')">Import</button>
-                <button class="pbtn pbtn-s" onclick="closePanel('importPanelLib')">Cancel</button>
-            </div>
-        </div>
         <div class="panel" id="importOnlyPanelLib">
-            <div class="panel-title">📥 Import — paste your exported string (or raw IDs)</div>
-            <textarea id="importOnlyAreaLib" placeholder="Paste an exported string, or plain video IDs/URLs."></textarea>
-            <div class="panel-hint">Full exported strings recreate playlists automatically. Plain IDs/URLs go straight into Watch Later.</div>
+            <div class="panel-title">📥 Import — paste text or upload a file</div>
+            <textarea id="importOnlyAreaLib" placeholder="Paste exported text (one-liner or full backup), or plain video IDs/URLs — or upload a file below."></textarea>
+            <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <label class="pbtn pbtn-s" style="cursor:pointer;margin:0" for="uploadFileOnlyLib">📁 Upload .txt file</label>
+                <input type="file" id="uploadFileOnlyLib" accept=".txt,text/plain" style="display:none" onchange="handleUploadFile(event,'importOnlyAreaLib')">
+                <span id="uploadFileOnlyLibName" style="font-size:11px;color:var(--text2)"></span>
+            </div>
+            <div class="panel-hint">Accepts any exported text — one-liner or full backup — or plain IDs/URLs (which go to Watch Later). Duplicates are skipped.</div>
             <div class="panel-btns">
-                <button class="pbtn pbtn-p" onclick="runImport('importOnlyAreaLib')">Import</button>
+                <button class="pbtn pbtn-p" onclick="runFullImport('importOnlyAreaLib')">Import</button>
                 <button class="pbtn pbtn-s" onclick="closePanel('importOnlyPanelLib')">Cancel</button>
             </div>
         </div>
@@ -576,10 +583,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);ove
             <div class="sc-row"><span>Close mini player</span><span class="kbd">Q</span></div>
             <div class="sc-row"><span>Pop out to window</span><span class="kbd">P</span></div>
             <div class="sc-row"><span>Play random video</span><span class="kbd">R</span></div>
-        </div>
-        <div class="sc-sec">
-            <div class="sc-lbl">Library</div>
-            <div class="sc-row"><span>Shuffle current list</span><span class="kbd">Shift + S</span></div>
         </div>
         <div class="sc-sec">
             <div class="sc-lbl">Help</div>
@@ -1332,7 +1335,7 @@ function removeVideoFromPlaylist(plKey, id) {
    WATCH LATER PAGE
 ═══════════════════════════════════════════ */
 function renderWL() {
-    closePanel('exportPanel'); closePanel('importPanel'); closePanel('importOnlyPanel');
+    closePanel('exportPanel'); closePanel('importOnlyPanel'); closeDropdowns();
 
     const grid = document.getElementById('wlGrid');
     const acts = document.getElementById('wlActs');
@@ -1368,13 +1371,6 @@ function renderWL() {
 
     grid.innerHTML = '';
     shown.forEach(v => grid.appendChild(makeCard(v.id, v.title, v.channel||'', '', '', v.thumbnail, true, 'WL')));
-}
-
-function shuffleWL() {
-    const list = allWLVideos();
-    if (list.length < 2) return;
-    for (let i=list.length-1; i>0; i--) { const j=Math.floor(Math.random()*(i+1)); [list[i],list[j]]=[list[j],list[i]]; }
-    savePlaylists(); renderWL(); showToast('Shuffled 🔀');
 }
 
 function clearWL() {
@@ -1431,7 +1427,7 @@ function updateLibCt() {
    LIBRARY PAGE (playlists + API keys)
 ═══════════════════════════════════════════ */
 function renderLibrary() {
-    closePanel('exportPanelLib'); closePanel('importPanelLib'); closePanel('importOnlyPanelLib');
+    closePanel('exportPanelLib'); closePanel('importOnlyPanelLib'); closeDropdowns();
     renderKeyList();
 
     const plKeys = Object.keys(playlists).filter(k => k !== 'WL');
@@ -1498,13 +1494,6 @@ function renderLibTabs(plKeys) {
     newBtn.className = 'pl-new'; newBtn.textContent = '+ New Playlist';
     newBtn.onclick = () => openPrompt('create');
     wrap.appendChild(newBtn);
-}
-
-function shuffleLibList() {
-    const list = playlists[curListKey]?.videos;
-    if (!list || list.length < 2) return;
-    for (let i=list.length-1; i>0; i--) { const j=Math.floor(Math.random()*(i+1)); [list[i],list[j]]=[list[j],list[i]]; }
-    savePlaylists(); renderLibrary(); showToast('Shuffled 🔀');
 }
 
 function clearLibList() {
@@ -1649,37 +1638,65 @@ document.addEventListener('click', e => {
 });
 
 /* ═══════════════════════════════════════════
-   EXPORT / IMPORT  (one-line format)
-   WL=(id,id);PL1="name"=(id,id);PL2="name"=(id)
+   EXPORT / IMPORT — plain text, no JSON
+   One-liner format:  WL=(id,id);PL="name"=(id,id);PL="name"=(id)
+   Full backup .txt uses the SAME line format, just with a header
+   and (optionally) trailing HISTORY=(id,id,...) / recent searches —
+   never channel, thumbnail, or addedAt: only what's needed to rebuild.
 ═══════════════════════════════════════════ */
-function escName(n) { return n.replace(/"/g,'\\"'); }
-function unescName(n) { return n.replace(/\\"/g,'"'); }
+const BACKUP_MARKER = '### YT-PREMIUM-K1-BACKUP ###';
+const HISTORY_CAP_ONELINE = 30; // one-liner history is capped; .txt backup keeps it all
 
-function exportAll() {
+function escName(n) { return String(n).replace(/[="();]/g, c => '\\'+c); }
+function unescName(n) { return String(n).replace(/\\([="();])/g, '$1'); }
+
+// Build the playlists portion: WL=(id,id);PL="name"=(id,id)...
+function buildPlaylistsLine() {
     const parts = [];
     Object.keys(playlists).forEach(key => {
         const pl = playlists[key];
         const ids = pl.videos.map(v=>v.id).join(',');
         if (pl.locked) parts.push(`WL=(${ids})`);
-        else parts.push(`${key}="${escName(pl.name)}"=(${ids})`);
+        else parts.push(`PL="${escName(pl.name)}"=(${ids})`);
     });
     return parts.join(';');
 }
-function exportWL() {
-    const ids = allWLVideos().map(v=>v.id).join(',');
-    return `WL=(${ids})`;
-}
+
 function exportPlaylist(key) {
     const pl = playlists[key];
     if (!pl) return '';
     const ids = pl.videos.map(v=>v.id).join(',');
-    return pl.locked ? `WL=(${ids})` : `${key}="${escName(pl.name)}"=(${ids})`;
+    return pl.locked ? `WL=(${ids})` : `PL="${escName(pl.name)}"=(${ids})`;
+}
+
+// The single "copy 1-line text" export: playlists + settings (API keys) + history capped at 30.
+function buildOneLiner(scope) {
+    const parts = [];
+    if (scope === 'WL') {
+        parts.push(exportPlaylist('WL'));
+    } else {
+        parts.push(buildPlaylistsLine());
+        if (apiKeys.length) {
+            const keyStr = apiKeys.map(k => `${escName(k.name)}:${escName(k.key)}`).join(',');
+            parts.push(`KEYS=(${keyStr})`);
+        }
+        if (hist.length) {
+            const ids = hist.slice(0, HISTORY_CAP_ONELINE).map(h=>h.id).join(',');
+            parts.push(`HIST=(${ids})`);
+        }
+    }
+    return parts.join(';');
+}
+
+function showExportLine(scope) {
+    const panelId = scope === 'WL' ? 'exportPanel' : 'exportPanelLib';
+    const areaId  = scope === 'WL' ? 'exportArea'  : 'exportAreaLib';
+    document.getElementById(areaId).value = buildOneLiner(scope);
+    showPanel(panelId);
 }
 
 function showPanel(id) {
-    ['exportPanel','importPanel','importOnlyPanel','exportPanelLib','importPanelLib','importOnlyPanelLib'].forEach(p => { if(p!==id) closePanel(p); });
-    if (id==='exportPanel') document.getElementById('exportArea').value = exportWL();
-    if (id==='exportPanelLib') document.getElementById('exportAreaLib').value = curListKey ? exportPlaylist(curListKey) : '';
+    ['exportPanel','importOnlyPanel','exportPanelLib','importOnlyPanelLib'].forEach(p => { if(p!==id) closePanel(p); });
     document.getElementById(id).classList.toggle('on');
 }
 function closePanel(id) { document.getElementById(id).classList.remove('on'); }
@@ -1693,80 +1710,186 @@ function copyExportLib() {
     navigator.clipboard.writeText(a.value).then(()=>showToast('Copied! ✓','ok')).catch(()=>{document.execCommand('copy');showToast('Copied!','ok');});
 }
 
+/* ═══════════════════════════════════════════
+   EXPORT DROPDOWNS
+═══════════════════════════════════════════ */
+function toggleDropdown(id) {
+    const isOpen = document.getElementById(id).classList.contains('on');
+    closeDropdowns();
+    if (!isOpen) document.getElementById(id).classList.add('on');
+}
+function closeDropdowns() {
+    document.querySelectorAll('.dd-menu').forEach(m => m.classList.remove('on'));
+}
+document.addEventListener('click', e => {
+    if (!e.target.closest('.dd-wrap')) closeDropdowns();
+});
+
+/* ═══════════════════════════════════════════
+   PARSING
+═══════════════════════════════════════════ */
 function extractVideoId(str) {
     try { const u=new URL(str); if(u.searchParams.has('v')) return u.searchParams.get('v'); const m=u.pathname.match(/\/(?:embed\/|shorts\/|v\/)?([A-Za-z0-9_-]{11})/); if(m) return m[1]; } catch {}
     if (/^[A-Za-z0-9_-]{11}$/.test(str)) return str; return null;
 }
 
-// Parses the WL=(...)...PL1="name"=(...) format. Returns null if it doesn't look like that format at all.
-function parseExportString(raw) {
-    const blockRe = /(WL|PL\d+)\s*=\s*(?:"((?:[^"\\]|\\.)*)"\s*=\s*)?\(([^)]*)\)/g;
-    let m, found = false;
-    const blocks = [];
+// Parses WL=(...) / PL="name"=(...) blocks. Returns [] if none found.
+function parsePlaylistBlocks(raw) {
+    const blockRe = /(WL|PL)\s*=\s*(?:"((?:[^"\\]|\\.)*)"\s*=\s*)?\(([^)]*)\)/g;
+    let m; const blocks = [];
     while ((m = blockRe.exec(raw)) !== null) {
-        found = true;
         const tag = m[1], name = m[2] ? unescName(m[2]) : null, idsRaw = m[3];
         const ids = idsRaw.split(',').map(s=>s.trim()).filter(Boolean);
         blocks.push({ tag, name, ids });
     }
-    return found ? blocks : null;
+    return blocks;
 }
 
-function runImport(areaId) {
+// Parses KEYS=(name:key,name:key) if present.
+function parseKeysBlock(raw) {
+    const m = raw.match(/KEYS\s*=\s*\(([^)]*)\)/);
+    if (!m) return [];
+    const body = m[1].trim();
+    if (!body) return [];
+    const pairs = body.split(/(?<!\\),/);
+    const out = [];
+    pairs.forEach(p => {
+        const cm = p.match(/^((?:[^\\:]|\\.)*):((?:[^\\,]|\\.)*)$/);
+        if (!cm) return;
+        const name = unescName(cm[1].trim());
+        const key = unescName(cm[2].trim());
+        if (key) out.push({ name: name || 'Imported Key', key });
+    });
+    return out;
+}
+
+// Parses HIST=(id,id,...) if present.
+function parseHistBlock(raw) {
+    const m = raw.match(/HIST\s*=\s*\(([^)]*)\)/);
+    if (!m) return [];
+    return m[1].split(',').map(s=>s.trim()).filter(Boolean);
+}
+
+function importKeys(keyPairs) {
+    let added = 0;
+    keyPairs.forEach(({name, key}) => {
+        if (apiKeys.some(k => k.key === key)) return; // skip dupes
+        apiKeys.push({ id: 'k'+Date.now()+Math.random().toString(36).slice(2,6), name, key, status: 'unknown' });
+        added++;
+    });
+    if (added) { saveKeys(); renderKeyList(); }
+    return added;
+}
+
+/* ═══════════════════════════════════════════
+   UNIFIED IMPORT — one entry point for every Import button.
+   Accepts: full backup .txt, one-liner (playlists/keys/history), or plain IDs/URLs.
+   Works whether the text was pasted or came from an uploaded file.
+═══════════════════════════════════════════ */
+function runFullImport(areaId) {
     const raw = document.getElementById(areaId).value.trim();
-    if (!raw) { showToast('Nothing to import','err'); return; }
+    if (!raw) { showToast('Nothing to import — paste text or upload a file first','err'); return; }
 
-    const blocks = parseExportString(raw);
+    // Strip the backup header/comments if present, leaving just the data line(s).
+    const body = raw.includes(BACKUP_MARKER)
+        ? raw.split('\n').filter(l => !l.trim().startsWith('#') && l.trim() !== BACKUP_MARKER).join(' ')
+        : raw;
 
-    if (blocks) {
-        // structured import: recreate/merge playlists
-        let addedVideos = 0, createdLists = 0;
-        const idsNeeded = new Set();
-        blocks.forEach(b => b.ids.forEach(id => idsNeeded.add(id)));
-        const knownMeta = {}; // id -> {title, thumbnail, channel} filled in after fetch
+    const blocks   = parsePlaylistBlocks(body);
+    const keyPairs = parseKeysBlock(body);
+    const histIds  = parseHistBlock(body);
 
-        const finish = () => {
-            blocks.forEach(b => {
-                let key;
-                if (b.tag === 'WL') key = 'WL';
-                else {
-                    // find existing playlist with same name, else create new one under next free PL id
-                    key = Object.keys(playlists).find(k => !playlists[k].locked && playlists[k].name === b.name);
-                    if (!key) { key = newPlaylistId(); playlists[key] = { name: b.name || b.tag, locked:false, videos: [] }; createdLists++; }
-                }
-                b.ids.forEach(id => {
-                    if (isInPlaylist(key, id)) return;
-                    const meta = knownMeta[id] || { title:id, thumbnail:`https://i.ytimg.com/vi/${id}/mqdefault.jpg`, channel:'' };
-                    playlists[key].videos.push({ id, title: meta.title, thumbnail: meta.thumbnail, channel: meta.channel, addedAt: new Date().toISOString() });
-                    addedVideos++;
-                });
+    if (blocks.length || keyPairs.length || histIds.length) {
+        let addedKeys = 0, addedHist = 0;
+        if (keyPairs.length) addedKeys = importKeys(keyPairs);
+        if (histIds.length) addedHist = mergeHistoryIds(histIds);
+
+        if (blocks.length) {
+            importPlaylistBlocks(blocks, () => {
+                const extras = [addedKeys?`${addedKeys} key(s)`:null, addedHist?`${addedHist} history item(s)`:null].filter(Boolean).join(', ');
+                if (extras) showToast(`Imported playlists + ${extras} ✓`, 'ok');
             });
-            savePlaylists();
-            closePanel('importPanel'); closePanel('importOnlyPanel'); closePanel('importPanelLib'); closePanel('importOnlyPanelLib');
-            if (curPage==='watch-later') renderWL();
-            else if (curPage==='library') renderLibrary();
-            showToast(`Imported ${addedVideos} video(s) across ${blocks.length} list(s)${createdLists?`, ${createdLists} new`:''}`, 'ok');
-        };
-
-        const key = getWorkingKey();
-        const idList = [...idsNeeded];
-        if (key && idList.length) {
-            const batches = [];
-            for (let i=0;i<idList.length;i+=50) batches.push(idList.slice(i,i+50));
-            Promise.all(batches.map(b => fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${b.join(',')}&key=${key}`).then(r=>r.json()).catch(()=>({}))))
-                .then(results => {
-                    results.forEach(data => (data.items||[]).forEach(item => {
-                        knownMeta[item.id] = { title:item.snippet.title, thumbnail:item.snippet.thumbnails.medium?.url||`https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`, channel:item.snippet.channelTitle||'' };
-                    }));
-                    finish();
-                }).catch(finish);
         } else {
-            finish(); // no key available — import with placeholder titles (still works, just less pretty)
+            closePanel('importOnlyPanel'); closePanel('importOnlyPanelLib');
+            const parts = [];
+            if (addedKeys) parts.push(`${addedKeys} key(s)`);
+            if (addedHist) parts.push(`${addedHist} history item(s)`);
+            showToast(parts.length ? `Imported ${parts.join(', ')} ✓` : 'Nothing new to import', parts.length ? 'ok' : 'err');
+            if (curPage==='history') renderHistory();
         }
         return;
     }
 
-    // fallback: plain IDs / URLs -> Watch Later only
+    // Fallback: plain IDs / URLs -> Watch Later
+    importPlainIds(raw);
+}
+
+// Adds history entries by ID only (title unknown until watched, so placeholder title = id).
+function mergeHistoryIds(ids) {
+    let added = 0;
+    const existing = new Set(hist.map(h=>h.id));
+    ids.forEach(id => {
+        if (existing.has(id)) return;
+        hist.push({ id, title:id, thumbnail:`https://i.ytimg.com/vi/${id}/mqdefault.jpg`, watchedAt:new Date().toISOString() });
+        added++;
+    });
+    if (added) {
+        hist.sort((a,b) => new Date(b.watchedAt) - new Date(a.watchedAt));
+        localStorage.setItem('videoHistory', JSON.stringify(hist));
+        updateHistCt();
+    }
+    return added;
+}
+
+// Structured playlist import: recreates/merges playlists from parsed blocks.
+function importPlaylistBlocks(blocks, onDone) {
+    let addedVideos = 0, createdLists = 0;
+    const idsNeeded = new Set();
+    blocks.forEach(b => b.ids.forEach(id => idsNeeded.add(id)));
+    const knownMeta = {};
+
+    const finish = () => {
+        blocks.forEach(b => {
+            let key;
+            if (b.tag === 'WL') key = 'WL';
+            else {
+                key = Object.keys(playlists).find(k => !playlists[k].locked && playlists[k].name === b.name);
+                if (!key) { key = newPlaylistId(); playlists[key] = { name: b.name || 'Imported Playlist', locked:false, videos: [] }; createdLists++; }
+            }
+            b.ids.forEach(id => {
+                if (isInPlaylist(key, id)) return;
+                const meta = knownMeta[id] || { title:id, thumbnail:`https://i.ytimg.com/vi/${id}/mqdefault.jpg`, channel:'' };
+                playlists[key].videos.push({ id, title: meta.title, thumbnail: meta.thumbnail, channel: meta.channel, addedAt: new Date().toISOString() });
+                addedVideos++;
+            });
+        });
+        savePlaylists();
+        ['importOnlyPanel','importOnlyPanelLib'].forEach(closePanel);
+        if (curPage==='watch-later') renderWL();
+        else if (curPage==='library') renderLibrary();
+        showToast(`Imported ${addedVideos} video(s) across ${blocks.length} list(s)${createdLists?`, ${createdLists} new`:''}`, 'ok');
+        if (onDone) onDone();
+    };
+
+    const key = getWorkingKey();
+    const idList = [...idsNeeded];
+    if (key && idList.length) {
+        const batches = [];
+        for (let i=0;i<idList.length;i+=50) batches.push(idList.slice(i,i+50));
+        Promise.all(batches.map(b => fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${b.join(',')}&key=${key}`).then(r=>r.json()).catch(()=>({}))))
+            .then(results => {
+                results.forEach(data => (data.items||[]).forEach(item => {
+                    knownMeta[item.id] = { title:item.snippet.title, thumbnail:item.snippet.thumbnails.medium?.url||`https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`, channel:item.snippet.channelTitle||'' };
+                }));
+                finish();
+            }).catch(finish);
+    } else {
+        finish(); // no key — import with placeholder titles
+    }
+}
+
+// Plain IDs/URLs -> Watch Later.
+function importPlainIds(raw) {
     const tokens = raw.split(/[\n,]+/).map(t=>t.trim()).filter(Boolean);
     const newIds=[], skipped=[];
     tokens.forEach(t => {
@@ -1779,7 +1902,7 @@ function runImport(areaId) {
     const key = getWorkingKey();
     if (!key) {
         newIds.forEach(id => addVideoToPlaylist('WL', {id, title:id, thumbnail:`https://i.ytimg.com/vi/${id}/mqdefault.jpg`, channel:''}));
-        closePanel('importPanel'); closePanel('importOnlyPanel'); closePanel('importPanelLib'); closePanel('importOnlyPanelLib');
+        ['importOnlyPanel','importOnlyPanelLib'].forEach(closePanel);
         if (curPage==='watch-later') renderWL();
         else if (curPage==='library') renderLibrary();
         showToast(`${newIds.length} video(s) imported (no key — titles unavailable)`, 'ok');
@@ -1797,11 +1920,57 @@ function runImport(areaId) {
                     added++;
                 });
             });
-            closePanel('importPanel'); closePanel('importOnlyPanel'); closePanel('importPanelLib'); closePanel('importOnlyPanelLib');
+            ['importOnlyPanel','importOnlyPanelLib'].forEach(closePanel);
             if (curPage==='watch-later') renderWL();
             else if (curPage==='library') renderLibrary();
             showToast(`${added} video${added!==1?'s':''} imported!${skipped.length?` (${skipped.length} skipped)`:''}`, 'ok');
         }).catch(() => showToast('Import failed — check your connection','err'));
+}
+
+/* ═══════════════════════════════════════════
+   FULL BACKUP .TXT — download & upload
+   Plain text, same line format as the one-liner, just unlimited
+   (full history, not capped at 30) and wrapped with a readable header.
+═══════════════════════════════════════════ */
+function downloadBackupTxt() {
+    const parts = [buildPlaylistsLine()];
+    if (apiKeys.length) parts.push(`KEYS=(${apiKeys.map(k => `${escName(k.name)}:${escName(k.key)}`).join(',')})`);
+    if (hist.length) parts.push(`HIST=(${hist.map(h=>h.id).join(',')})`);
+    const dataLine = parts.join(';');
+
+    const lines = [];
+    lines.push(BACKUP_MARKER);
+    lines.push('# Full backup of your YouTube Premium K1 data.');
+    lines.push('# Includes: all playlists (video IDs only), full watch history, and API keys.');
+    lines.push('# To restore: Library → Export ▾ → or just use the Import button and paste/upload this file.');
+    lines.push('# ⚠️  This file contains your API keys in plain text — store it somewhere private.');
+    lines.push('');
+    lines.push(dataLine);
+
+    const blob = new Blob([lines.join('\n')], {type:'text/plain'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+    a.href = url; a.download = `yt-premium-k1-backup-${stamp}.txt`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Full backup downloaded ⬇', 'ok');
+}
+
+/* Upload button -> reads file text into the paired textarea (user still clicks Import) */
+function handleUploadFile(evt, targetTextareaId) {
+    const file = evt.target.files && evt.target.files[0];
+    if (!file) return;
+    const nameEl = document.getElementById(targetTextareaId + 'Name');
+    if (nameEl) nameEl.textContent = file.name;
+    const reader = new FileReader();
+    reader.onload = () => {
+        document.getElementById(targetTextareaId).value = String(reader.result || '');
+        showToast(`Loaded "${file.name}" — click Import to continue`, 'ok');
+    };
+    reader.onerror = () => showToast('Could not read that file', 'err');
+    reader.readAsText(file);
+    evt.target.value = '';
 }
 
 /* ═══════════════════════════════════════════
@@ -1974,7 +2143,6 @@ function bindKeyboard() {
             case 'r':  randomVideo(); break;
             case 'q':  closeMiniPlayer(); break;
             case 'p':  popOutPlayer(); break;
-            case 'S':  if (curPage==='watch-later') shuffleWL(); else if (curPage==='library') shuffleLibList(); break;
             case '?':  openShortcuts(); break;
             case 'Escape': closeShortcuts(); break;
         }
