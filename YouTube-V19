@@ -293,6 +293,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);ove
 .settings-row-label{font-size:14px;font-weight:500}
 .settings-row-hint{font-size:12px;color:var(--text2);margin-top:2px}
 .theme-dots-lg .tdot{width:22px;height:22px}
+.mode-toggle{display:flex;background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:3px;gap:2px}
+.mode-opt{background:none;border:none;color:var(--text2);padding:6px 14px;border-radius:13px;font-size:12px;font-weight:500;font-family:inherit;cursor:pointer;transition:all .15s}
+.mode-opt:hover{color:var(--text)}
+.mode-opt.on{background:var(--accent);color:#fff}
+.public-usage-box{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.public-usage-track{width:100%;height:6px;background:var(--card);border-radius:3px;overflow:hidden}
+.public-usage-fill{height:100%;background:var(--accent);border-radius:3px;transition:width .2s}
 #customColorPicker{width:40px;height:32px;border:1px solid var(--border);border-radius:8px;background:none;cursor:pointer;padding:2px}
 #customColorPicker::-webkit-color-swatch-wrapper{padding:2px}
 #customColorPicker::-webkit-color-swatch{border-radius:5px;border:none}
@@ -567,22 +574,54 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);ove
             </div>
         </div>
 
-        <!-- API ACCESS -->
+        <!-- ACCESS MODE -->
         <div class="settings-block">
             <div class="settings-block-title">🔑 API Access</div>
-            <div class="key-hero-box">
-                <h2 style="font-size:22px;font-weight:600;margin-bottom:8px;letter-spacing:-.03em;position:relative">Get your free YouTube API key</h2>
-                <p style="font-size:13px;color:var(--text2);margin-bottom:18px;max-width:520px;position:relative">Search needs your own free key from Google — it only takes a couple of minutes. Follow the step-by-step guide, then paste your key below.</p>
-                <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;position:relative">
-                    <button class="ebtn" style="font-size:15px;padding:13px 30px;font-weight:600" onclick="openTutorial()">🎓 Get Key — Step-by-Step Guide</button>
-                    <button class="abtn a-sec" onclick="checkAllKeys()">✓ Check Keys</button>
+            <div class="settings-row" style="border-bottom:none;padding-bottom:16px">
+                <div>
+                    <div class="settings-row-label">Access mode</div>
+                    <div class="settings-row-hint">Private uses only your own key(s) — unlimited searches. Public uses a random shared key from the community list — limited to 15 searches a day.</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <div class="mode-toggle" id="accessModeWrap">
+                        <button class="mode-opt on" data-mode="private" onclick="setAccessMode('private')">🔒 Private</button>
+                        <button class="mode-opt" data-mode="public" onclick="setAccessMode('public')">🌍 Public</button>
+                    </div>
+                    <button class="abtn a-sec" onclick="window.open(S.CONTRIBUTE_URL,'_blank')">🤝 Contribute</button>
                 </div>
             </div>
-            <div id="keyList" style="margin-top:22px"></div>
-            <div class="key-add-row">
-                <input type="text" id="keyNameInput" placeholder="Label (e.g. Main, Backup)" style="max-width:160px">
-                <input type="text" id="keyValInput" placeholder="Paste your YouTube Data API key here">
-                <button class="pbtn pbtn-g" onclick="addKey()">+ Add Key</button>
+
+            <!-- PRIVATE: your own keys -->
+            <div id="privateKeySection">
+                <div class="key-hero-box">
+                    <h2 style="font-size:22px;font-weight:600;margin-bottom:8px;letter-spacing:-.03em;position:relative">Get your free YouTube API key</h2>
+                    <p style="font-size:13px;color:var(--text2);margin-bottom:18px;max-width:520px;position:relative">Your own key means your own quota — nobody else can use it up, and there's no daily search limit. It only takes a couple of minutes to get one. Follow the guide, then paste it below.</p>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;position:relative">
+                        <button class="ebtn" style="font-size:15px;padding:13px 30px;font-weight:600" onclick="openTutorial()">🎓 Get Key — Step-by-Step Guide</button>
+                        <button class="abtn a-sec" onclick="checkAllKeys()">✓ Check All Keys</button>
+                    </div>
+                </div>
+                <div id="keyList" style="margin-top:22px"></div>
+                <div class="key-add-row">
+                    <input type="text" id="keyNameInput" placeholder="Label (e.g. Main, Backup)" style="max-width:160px">
+                    <input type="text" id="keyValInput" placeholder="Paste your YouTube Data API key here">
+                    <button class="pbtn pbtn-g" onclick="addKey()">+ Add Key</button>
+                </div>
+            </div>
+
+            <!-- PUBLIC: shared key pool -->
+            <div id="publicKeySection" style="display:none">
+                <div class="panel-hint" style="margin-bottom:14px">
+                    A random key is picked from a community-contributed list for each search — no setup needed. Capped at <strong>15 searches per day</strong> to keep it fair for everyone, resetting around midnight Pacific. Switch to Private any time for unlimited searches with your own key.
+                </div>
+                <div class="public-usage-box">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                        <span id="publicUsageText" style="font-size:13px;font-weight:500">0 / 15 searches used today</span>
+                        <button class="key-mini-btn" onclick="loadPublicKeys(true).then(updatePublicUsageUI)" title="Refresh key list">🔄</button>
+                    </div>
+                    <div class="public-usage-track"><div class="public-usage-fill" id="publicUsageBar" style="width:0%"></div></div>
+                    <div id="publicKeyStatus" class="settings-row-hint" style="margin-top:8px">Loading public keys…</div>
+                </div>
             </div>
         </div>
     </div>
@@ -680,6 +719,10 @@ const S = {
     SEARCH_COUNT: 50,
     COOLDOWN: 3,
     TUTORIAL_URL: 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Tutorials/YT-API-Key/HowTo',
+    // Public key pool: plain text, one API key per line, fetched at runtime — nothing baked in.
+    PUBLIC_KEYS_URL: 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/YT-Keys',
+    CONTRIBUTE_URL: 'https://docs.google.com/forms/d/e/1FAIpQLScAo4xewC8FWKY9a8CG5uyCfb0d7UgnmlRG-xuStz5zySLN3g/viewform',
+    PUBLIC_SEARCH_LIMIT: 15, // per day, only enforced when using a public key
     FILTER_LABELS: {
         duration: { short:'≤ 4 min', medium:'4–20 min', long:'≥ 20 min' },
         sort:     { viewCount:'Most viewed', date:'Newest', rating:'Best rated' },
@@ -720,9 +763,14 @@ const filters = { duration:'', time:'', sort:'', live:'', hd:'' };
 let ctxVideo = null, mpVideoId = null, mpTitle = '', _drag = null;
 
 /* ---- API KEYS ---- */
-// keys: [{id, name, key, status:'unknown'|'checking'|'ok'|'bad'}]
+// Personal keys: [{id, name, key, status:'unknown'|'checking'|'ok'|'bad'}]
 let apiKeys = JSON.parse(localStorage.getItem('apiKeys') || '[]');
-let activeKeyIdx = 0; // rotates forward when a key fails mid-session
+// Access mode: 'private' (default, uses your own keys only) or 'public' (random shared key, capped searches/day)
+let accessMode = localStorage.getItem('accessMode') || 'private';
+let publicKeys = []; // fetched at runtime from S.PUBLIC_KEYS_URL, one key per line — never persisted to disk
+let publicKeysLoaded = false, publicKeysLoading = false;
+// Daily public search counter: { date:'YYYY-MM-DD', count: N }
+let publicUsage = JSON.parse(localStorage.getItem('publicUsage') || 'null') || { date:'', count:0 };
 
 /* ---- PLAYLISTS ---- */
 // playlists.WL = {name:'Watch Later', locked:true, videos:[{id,title,thumbnail,channel,addedAt}]}
@@ -750,6 +798,8 @@ function allWLVideos() { return playlists.WL ? playlists.WL.videos : []; }
 ═══════════════════════════════════════════ */
 window.onload = function() {
     initTheme();
+    publicSearchesUsedToday(); // rolls the daily counter over if the date changed
+    loadPublicKeys(); // load regardless of mode, so a personal key matching a public one is still detected
     renderChips();
     renderHome();
     bindSearch();
@@ -972,22 +1022,109 @@ function bindThumbCycle(card, id) {
 
 /* ═══════════════════════════════════════════
    API KEY HELPERS
+   Private mode (default): only the user's own saved keys are used. Unlimited searches.
+   Public mode: a random key is picked from a plain-text list fetched from GitHub
+   (one key per line, nothing baked into this file). Capped at PUBLIC_SEARCH_LIMIT
+   searches/day, tracked locally. If a key the user saved themselves happens to match
+   one from the public list, it's treated as public too — pasting a public key into
+   "your keys" doesn't grant unlimited access.
 ═══════════════════════════════════════════ */
-function getWorkingKey() {
-    // returns first key marked ok or unknown (untested keys are attempted optimistically)
-    const usable = apiKeys.filter(k => k.status !== 'bad');
-    return usable.length ? usable[0].key : null;
-}
-function markKeyBad(keyStr) {
-    const k = apiKeys.find(k => k.key === keyStr);
-    if (k) { k.status = 'bad'; saveKeys(); renderKeyList(); }
-}
-function markKeyOk(keyStr) {
-    const k = apiKeys.find(k => k.key === keyStr);
-    if (k && k.status !== 'ok') { k.status = 'ok'; saveKeys(); renderKeyList(); }
+function saveKeys() { localStorage.setItem('apiKeys', JSON.stringify(apiKeys)); }
+function saveAccessMode() { localStorage.setItem('accessMode', accessMode); }
+function savePublicUsage() { localStorage.setItem('publicUsage', JSON.stringify(publicUsage)); }
+
+// YouTube quota resets at midnight Pacific. Returns the ISO date string (Pacific) for "today".
+function pacificDateStamp() {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
 }
 
-function addKey() {
+function publicSearchesUsedToday() {
+    const today = pacificDateStamp();
+    if (publicUsage.date !== today) { publicUsage = { date: today, count: 0 }; savePublicUsage(); }
+    return publicUsage.count;
+}
+function publicSearchesRemaining() {
+    return Math.max(0, S.PUBLIC_SEARCH_LIMIT - publicSearchesUsedToday());
+}
+function recordPublicSearch() {
+    publicSearchesUsedToday(); // ensures today's bucket exists
+    publicUsage.count++;
+    savePublicUsage();
+}
+
+// Fetches the plain-text public key list (one key per line). Cached in memory for the session.
+async function loadPublicKeys(force) {
+    if (publicKeysLoaded && !force) return publicKeys;
+    if (publicKeysLoading) return publicKeys;
+    publicKeysLoading = true;
+    try {
+        const res = await fetch(S.PUBLIC_KEYS_URL, { cache: 'no-store' });
+        if (!res.ok) throw new Error('fetch failed: ' + res.status);
+        const text = await res.text();
+        publicKeys = text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+        publicKeysLoaded = true;
+    } catch (e) {
+        publicKeys = [];
+        publicKeysLoaded = false;
+    } finally {
+        publicKeysLoading = false;
+    }
+    return publicKeys;
+}
+
+// A personal key that happens to also appear in the public list doesn't count as "private" —
+// it's shared, so it's subject to the same daily cap.
+function isKeyPublic(keyStr) {
+    return publicKeys.includes(keyStr);
+}
+
+// Returns { key, source:'personal'|'public' } for the next key to try, or null if none available.
+// Async because public mode needs the remote list fetched first.
+async function getWorkingKey() {
+    if (accessMode === 'private') {
+        const usable = apiKeys.filter(k => k.status !== 'bad' && !isKeyPublic(k.key));
+        if (usable.length) return { key: usable[0].key, source:'personal', ref: usable[0] };
+        // Fall through: no private key on hand, but don't silently use public without consent —
+        // private mode simply has nothing to offer.
+        return null;
+    }
+
+    // Public mode
+    if (publicSearchesRemaining() <= 0) return null;
+    const list = await loadPublicKeys();
+    if (!list.length) return null;
+    const key = list[Math.floor(Math.random() * list.length)];
+    return { key, source:'public' };
+}
+
+function markKeyBad(keyRef) {
+    if (!keyRef) return;
+    if (keyRef.source === 'personal') {
+        const k = apiKeys.find(k => k.key === keyRef.key);
+        if (k) { k.status = 'bad'; saveKeys(); renderKeyList(); }
+    }
+    // public keys aren't individually tracked as bad — a bad random pick just gets retried
+    // with another random pick by the caller, up to a small retry limit.
+}
+function markKeyOk(keyRef) {
+    if (!keyRef) return;
+    if (keyRef.source === 'personal') {
+        const k = apiKeys.find(k => k.key === keyRef.key);
+        if (k && k.status !== 'ok') { k.status = 'ok'; saveKeys(); renderKeyList(); }
+    } else if (keyRef.source === 'public') {
+        recordPublicSearch();
+        updatePublicUsageUI();
+    }
+}
+
+function setAccessMode(mode) {
+    accessMode = mode;
+    saveAccessMode();
+    renderKeyList();
+    if (mode === 'public') loadPublicKeys();
+}
+
+async function addKey() {
     const nameInput = document.getElementById('keyNameInput');
     const valInput = document.getElementById('keyValInput');
     const name = nameInput.value.trim() || `Key ${apiKeys.length+1}`;
@@ -997,7 +1134,12 @@ function addKey() {
     apiKeys.push({ id: 'k'+Date.now(), name, key: val, status: 'unknown' });
     saveKeys(); nameInput.value=''; valInput.value='';
     renderKeyList();
-    showToast('Key added ✓', 'ok');
+    await loadPublicKeys();
+    if (isKeyPublic(val)) {
+        showToast('Key added — but this matches a public pool key, so it\'s still limited to 15/day', 'err');
+    } else {
+        showToast('Key added ✓', 'ok');
+    }
 }
 
 function removeKey(id) {
@@ -1006,28 +1148,58 @@ function removeKey(id) {
 }
 
 function renderKeyList() {
-    const wrap = document.getElementById('keyList');
-    if (!wrap) return;
-    if (!apiKeys.length) {
-        wrap.innerHTML = `<div style="font-size:12px;color:var(--text2);padding:10px 0">No keys added yet. Click <strong>Get Key</strong> above for a step-by-step guide, then paste it below.</div>`;
-        return;
+    const modeWrap = document.getElementById('accessModeWrap');
+    if (modeWrap) {
+        document.querySelectorAll('.mode-opt').forEach(el => el.classList.toggle('on', el.dataset.mode === accessMode));
     }
-    const firstOkIdx = apiKeys.findIndex(k => k.status !== 'bad');
-    wrap.innerHTML = '';
-    apiKeys.forEach((k, i) => {
-        const row = document.createElement('div');
-        row.className = 'key-row';
-        const masked = k.key.length > 10 ? k.key.slice(0,6) + '••••••' + k.key.slice(-4) : k.key;
-        row.innerHTML = `
-            <div class="key-dot ${k.status==='ok'?'ok':k.status==='bad'?'bad':k.status==='checking'?'checking':''}"></div>
-            <div class="key-name">${k.name}</div>
-            <div class="key-val">${masked}</div>
-            ${i===firstOkIdx ? '<span class="key-active-badge">ACTIVE</span>' : ''}
-            <button class="key-mini-btn" onclick="checkOneKey('${k.id}')" title="Check this key">🔄</button>
-            <button class="key-mini-btn red" onclick="removeKey('${k.id}')" title="Delete">✕</button>
-        `;
-        wrap.appendChild(row);
-    });
+    const publicSection = document.getElementById('publicKeySection');
+    const privateSection = document.getElementById('privateKeySection');
+    if (publicSection) publicSection.style.display = accessMode === 'public' ? 'block' : 'none';
+    if (privateSection) privateSection.style.display = accessMode === 'private' ? 'block' : 'none';
+
+    const wrap = document.getElementById('keyList');
+    if (wrap) {
+        if (!apiKeys.length) {
+            wrap.innerHTML = `<div style="font-size:12px;color:var(--text2);padding:10px 0">No keys added yet. Click <strong>Get Key</strong> above for a step-by-step guide, then paste it below.</div>`;
+        } else {
+            const usableKeys = apiKeys.filter(k => k.status !== 'bad' && !isKeyPublic(k.key));
+            const firstUsableId = usableKeys.length ? usableKeys[0].id : null;
+            wrap.innerHTML = '';
+            apiKeys.forEach((k) => {
+                const row = document.createElement('div');
+                row.className = 'key-row';
+                const masked = k.key.length > 10 ? k.key.slice(0,6) + '••••••' + k.key.slice(-4) : k.key;
+                const publicMatch = isKeyPublic(k.key);
+                row.innerHTML = `
+                    <div class="key-dot ${k.status==='ok'?'ok':k.status==='bad'?'bad':k.status==='checking'?'checking':''}"></div>
+                    <div class="key-name">${k.name}</div>
+                    <div class="key-val">${masked}</div>
+                    ${publicMatch ? '<span class="key-active-badge" style="background:rgba(224,167,42,.15);color:#e0a72a;border-color:#e0a72a">MATCHES PUBLIC POOL</span>' : ''}
+                    ${k.id===firstUsableId && accessMode==='private' && !publicMatch ? '<span class="key-active-badge">ACTIVE</span>' : ''}
+                    <button class="key-mini-btn" onclick="checkOneKey('${k.id}')" title="Check this key">🔄</button>
+                    <button class="key-mini-btn red" onclick="removeKey('${k.id}')" title="Delete">✕</button>
+                `;
+                wrap.appendChild(row);
+            });
+        }
+    }
+    if (accessMode === 'public') { loadPublicKeys(); updatePublicUsageUI(); }
+}
+
+function updatePublicUsageUI() {
+    const el = document.getElementById('publicUsageText');
+    if (!el) return;
+    const remaining = publicSearchesRemaining();
+    const used = publicSearchesUsedToday();
+    el.textContent = `${used} / ${S.PUBLIC_SEARCH_LIMIT} searches used today`;
+    const bar = document.getElementById('publicUsageBar');
+    if (bar) bar.style.width = Math.min(100, (used / S.PUBLIC_SEARCH_LIMIT) * 100) + '%';
+    const status = document.getElementById('publicKeyStatus');
+    if (status) {
+        if (!publicKeysLoaded && !publicKeysLoading) status.textContent = 'Could not load the public key list — try again.';
+        else if (publicKeysLoading) status.textContent = 'Loading public keys…';
+        else status.textContent = `${publicKeys.length} public key${publicKeys.length!==1?'s':''} available`;
+    }
 }
 
 function checkOneKey(id) {
@@ -1050,6 +1222,7 @@ function checkAllKeys() {
             .catch(() => { k.status = 'bad'; })
     )).then(() => { saveKeys(); renderKeyList(); showToast('Key check complete', 'ok'); });
 }
+
 
 /* ═══════════════════════════════════════════
    TUTORIAL (renders the markdown guide as a real HTML page)
@@ -1171,13 +1344,15 @@ function saveRecent(q) {
     localStorage.setItem('recentSearches', JSON.stringify(recents));
 }
 
-function performSearch(forceQ) {
+async function performSearch(forceQ) {
     const q = (forceQ !== undefined ? forceQ : document.getElementById('sbox').value).trim();
     if (!q) { goHome(); return; }
     const btn = document.getElementById('sbtn');
     if (btn.disabled) return;
 
-    const key = getWorkingKey();
+    if (accessMode === 'public' && publicSearchesRemaining() <= 0) { showPublicLimitState(q); return; }
+
+    const key = await getWorkingKey();
     if (!key) { showNoKeyState(q); return; }
 
     const cacheKey = q.toLowerCase() + '|' + JSON.stringify(filters);
@@ -1197,7 +1372,7 @@ function performSearch(forceQ) {
     document.getElementById('homeTitle').innerHTML = `Results for "<em>${q}</em>"`;
     updateFTags(); showSkel('homeGrid');
     document.getElementById('lmWrap').style.display = 'none';
-    doSearch(q, cacheKey, key);
+    doSearch(q, cacheKey, key, 0);
 }
 
 function showNoKeyState(q) {
@@ -1206,9 +1381,30 @@ function showNoKeyState(q) {
     _nav('home');
     document.getElementById('homeTitle').innerHTML = `Results for "<em>${q}</em>"`;
     document.getElementById('lmWrap').style.display = 'none';
+    if (accessMode === 'public') {
+        grid.innerHTML = `<div class="nores-hint">
+            <h3>Couldn't reach the public key pool</h3>
+            <p>The shared key list didn't load, or every key in it is failing right now. Try again in a bit, or add your own key for guaranteed access.</p>
+            <button class="ebtn" onclick="nav('settings')">Open Settings</button>
+        </div>`;
+    } else {
+        grid.innerHTML = `<div class="nores-hint">
+            <h3>No API key yet</h3>
+            <p>You'll need a YouTube API key to search. Add your own free key for unlimited use, or switch to Public mode for limited access with no setup.</p>
+            <button class="ebtn" onclick="nav('settings')">Open Settings → Add a Key</button>
+        </div>`;
+    }
+}
+
+function showPublicLimitState(q) {
+    const grid = document.getElementById('homeGrid');
+    hasSearched = true; curQuery = q;
+    _nav('home');
+    document.getElementById('homeTitle').innerHTML = `Results for "<em>${q}</em>"`;
+    document.getElementById('lmWrap').style.display = 'none';
     grid.innerHTML = `<div class="nores-hint">
-        <h3>No API key yet</h3>
-        <p>You'll need your own free YouTube API key to search. It only takes a couple minutes.</p>
+        <h3>Daily public search limit reached</h3>
+        <p>Public mode is capped at ${S.PUBLIC_SEARCH_LIMIT} searches a day to keep it fair for everyone. It resets around midnight Pacific — or add your own key in Settings for unlimited searches.</p>
         <button class="ebtn" onclick="nav('settings')">Open Settings → Add a Key</button>
     </div>`;
 }
@@ -1219,25 +1415,27 @@ function startCooldown() {
     const iv = setInterval(() => { s--; if(s<=0){clearInterval(iv);btn.disabled=false;btn.textContent='🔍';}else btn.textContent=s+'s'; }, 1000);
 }
 
-function doSearch(q, cacheKey, key) {
-    let url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=${S.SEARCH_COUNT}&q=${encodeURIComponent(q)}&key=${key}`;
+function doSearch(q, cacheKey, keyRef, retryCount) {
+    let url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=${S.SEARCH_COUNT}&q=${encodeURIComponent(q)}&key=${keyRef.key}`;
     if (filters.duration) url += `&videoDuration=${filters.duration}`;
     if (filters.sort)     url += `&order=${filters.sort}`;
     if (filters.live)     url += `&eventType=${filters.live}`;
     if (filters.hd)       url += `&videoDefinition=${filters.hd}`;
     if (filters.time)     url += `&publishedAfter=${new Date(Date.now()-Number(filters.time)*3600000).toISOString()}`;
-    fetch(url).then(r=>r.json()).then(d => {
+    fetch(url).then(r=>r.json()).then(async d => {
         if (d.error) {
-            markKeyBad(key);
-            const nextKey = getWorkingKey();
-            if (nextKey) { showToast('That key failed — trying another…', 'err'); doSearch(q, cacheKey, nextKey); }
-            else { showNoWorkingKeyState(q); }
+            markKeyBad(keyRef);
+            if ((retryCount||0) < 3) {
+                const nextKey = await getWorkingKey();
+                if (nextKey) { showToast('That key failed — trying another…', 'err'); doSearch(q, cacheKey, nextKey, (retryCount||0)+1); return; }
+            }
+            showNoWorkingKeyState(q);
             return;
         }
-        markKeyOk(key);
+        markKeyOk(keyRef);
         if (!d.items || !d.items.length) { showZeroResults(q); return; }
         nextPageToken = d.nextPageToken || null;
-        fetchDetails(d.items, cacheKey, d.pageInfo?.totalResults, nextPageToken, key);
+        fetchDetails(d.items, cacheKey, d.pageInfo?.totalResults, nextPageToken, keyRef);
     }).catch(() => showErr('homeGrid'));
 }
 
@@ -1249,17 +1447,19 @@ function showZeroResults(q) {
 
 function showNoWorkingKeyState(q) {
     document.getElementById('homeGrid').innerHTML = `<div class="nores-hint">
-        <h3>Your key(s) stopped working</h3>
-        <p>This can happen if a key hits its daily quota or was entered incorrectly. Check your keys or add a new one.</p>
+        <h3>All available keys stopped working</h3>
+        <p>${accessMode === 'public'
+            ? "The public keys tried just now all failed. Try again in a moment, or add your own key in Settings for reliable access."
+            : "This can happen if a key hits its daily quota or was entered incorrectly. Check your keys or add a new one."}</p>
         <button class="ebtn" onclick="nav('settings')">Open Settings → Check Keys</button>
     </div>`;
     document.getElementById('lmWrap').style.display = 'none';
 }
 
-function fetchDetails(videos, cacheKey, total, npToken, key) {
+function fetchDetails(videos, cacheKey, total, npToken, keyRef) {
     const ids = videos.map(v => v.id.videoId).filter(Boolean).join(',');
     if (!ids) return;
-    fetch(`https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics&id=${ids}&key=${key}`)
+    fetch(`https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics&id=${ids}&key=${keyRef.key}`)
         .then(r => r.json()).then(d => {
             const map = {};
             (d.items||[]).forEach(v => { map[v.id] = { duration:fmtDur(v.contentDetails.duration), views:parseInt(v.statistics.viewCount||0) }; });
@@ -1270,19 +1470,26 @@ function fetchDetails(videos, cacheKey, total, npToken, key) {
         });
 }
 
-function loadMore() {
+async function loadMore() {
     if (!nextPageToken || !curQuery) return;
-    const key = getWorkingKey();
-    if (!key) { showNoWorkingKeyState(curQuery); return; }
+    if (accessMode === 'public' && publicSearchesRemaining() <= 0) { showPublicLimitState(curQuery); return; }
+    const keyRef = await getWorkingKey();
+    if (!keyRef) { showNoWorkingKeyState(curQuery); return; }
     const btn = document.getElementById('lmBtn');
     btn.disabled = true; btn.textContent = 'Loading…';
-    let url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=${S.SEARCH_COUNT}&q=${encodeURIComponent(curQuery)}&pageToken=${nextPageToken}&key=${key}`;
+    let url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=${S.SEARCH_COUNT}&q=${encodeURIComponent(curQuery)}&pageToken=${nextPageToken}&key=${keyRef.key}`;
     if (filters.sort) url += `&order=${filters.sort}`;
     fetch(url).then(r=>r.json()).then(d => {
-        if (d.error || !d.items) { btn.disabled=false; btn.textContent='Load more videos'; showToast('Failed to load more — check your keys','err'); return; }
+        if (d.error || !d.items) {
+            markKeyBad(keyRef);
+            btn.disabled=false; btn.textContent='Load more videos';
+            showToast('That key failed — try again to use another key','err');
+            return;
+        }
+        markKeyOk(keyRef);
         nextPageToken = d.nextPageToken || null;
         const ids = d.items.map(v=>v.id.videoId).filter(Boolean).join(',');
-        fetch(`https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics&id=${ids}&key=${key}`)
+        fetch(`https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics&id=${ids}&key=${keyRef.key}`)
             .then(r=>r.json()).then(dd => {
                 const map = {};
                 (dd.items||[]).forEach(v => { map[v.id]={duration:fmtDur(v.contentDetails.duration),views:parseInt(v.statistics.viewCount||0)}; });
@@ -1925,7 +2132,7 @@ function mergeHistoryIds(ids) {
 }
 
 // Structured playlist import: recreates/merges playlists from parsed blocks.
-function importPlaylistBlocks(blocks, onDone) {
+async function importPlaylistBlocks(blocks, onDone) {
     let addedVideos = 0, createdLists = 0;
     const idsNeeded = new Set();
     blocks.forEach(b => b.ids.forEach(id => idsNeeded.add(id)));
@@ -1954,12 +2161,12 @@ function importPlaylistBlocks(blocks, onDone) {
         if (onDone) onDone();
     };
 
-    const key = getWorkingKey();
+    const keyRef = await getWorkingKey();
     const idList = [...idsNeeded];
-    if (key && idList.length) {
+    if (keyRef && idList.length) {
         const batches = [];
         for (let i=0;i<idList.length;i+=50) batches.push(idList.slice(i,i+50));
-        Promise.all(batches.map(b => fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${b.join(',')}&key=${key}`).then(r=>r.json()).catch(()=>({}))))
+        Promise.all(batches.map(b => fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${b.join(',')}&key=${keyRef.key}`).then(r=>r.json()).catch(()=>({}))))
             .then(results => {
                 results.forEach(data => (data.items||[]).forEach(item => {
                     knownMeta[item.id] = { title:item.snippet.title, thumbnail:item.snippet.thumbnails.medium?.url||`https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`, channel:item.snippet.channelTitle||'' };
@@ -1972,7 +2179,7 @@ function importPlaylistBlocks(blocks, onDone) {
 }
 
 // Plain IDs/URLs -> Watch Later.
-function importPlainIds(raw) {
+async function importPlainIds(raw) {
     const tokens = raw.split(/[\n,]+/).map(t=>t.trim()).filter(Boolean);
     const newIds=[], skipped=[];
     tokens.forEach(t => {
@@ -1982,8 +2189,8 @@ function importPlainIds(raw) {
         newIds.push(id);
     });
     if (!newIds.length) { showToast('No new valid IDs found','err'); return; }
-    const key = getWorkingKey();
-    if (!key) {
+    const keyRef = await getWorkingKey();
+    if (!keyRef) {
         newIds.forEach(id => addVideoToPlaylist('WL', {id, title:id, thumbnail:`https://i.ytimg.com/vi/${id}/mqdefault.jpg`, channel:''}));
         ['importOnlyPanel','importOnlyPanelLib'].forEach(closePanel);
         if (curPage==='watch-later') renderWL();
@@ -1994,7 +2201,7 @@ function importPlainIds(raw) {
     showToast(`Fetching ${newIds.length} video(s)…`);
     const batches=[];
     for (let i=0; i<newIds.length; i+=50) batches.push(newIds.slice(i,i+50));
-    Promise.all(batches.map(b => fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${b.join(',')}&key=${key}`).then(r=>r.json())))
+    Promise.all(batches.map(b => fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${b.join(',')}&key=${keyRef.key}`).then(r=>r.json())))
         .then(results => {
             let added=0;
             results.forEach(data => {
