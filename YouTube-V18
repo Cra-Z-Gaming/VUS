@@ -45,7 +45,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);ove
 .tdot[data-t=dim]{background:#1a1f2e;box-shadow:0 0 0 1px #4a5568}
 
 /* SIDEBAR */
-.sidebar{position:fixed;top:58px;left:0;width:232px;height:calc(100vh - 58px);background:var(--bg);border-right:1px solid var(--border);padding:10px 0;overflow-y:auto;z-index:900}
+.sidebar{position:fixed;top:58px;left:0;width:232px;height:calc(100vh - 58px);background:var(--bg);border-right:1px solid var(--border);padding:10px 0;overflow-y:auto;z-index:900;display:flex;flex-direction:column}
+.sidebar-spacer{flex:1;min-height:8px}
+.sidebar-bottom{margin-top:auto;border-top:1px solid var(--border);padding-top:6px}
 .nav-lbl{padding:12px 20px 4px;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);font-weight:500}
 .nav-item{display:flex;align-items:center;padding:9px 20px;color:var(--text);gap:14px;font-size:13px;transition:background .15s;cursor:pointer;border:none;background:none;width:100%;font-family:inherit;letter-spacing:-.01em}
 .nav-item:hover{background:var(--hover)}
@@ -283,6 +285,18 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);ove
 .key-hero-box{background:linear-gradient(135deg,var(--card),var(--bg2));border:1px solid var(--border);border-radius:16px;padding:26px 28px;position:relative;overflow:hidden}
 .key-hero-box::before{content:'';position:absolute;top:-45%;right:-8%;width:240px;height:240px;background:radial-gradient(circle,rgba(255,0,0,.16),transparent 70%);pointer-events:none}
 
+/* SETTINGS PAGE */
+.settings-block{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:20px 22px;margin-bottom:20px}
+.settings-block-title{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin-bottom:16px}
+.settings-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.settings-row:last-of-type{border-bottom:none;padding-bottom:4px}
+.settings-row-label{font-size:14px;font-weight:500}
+.settings-row-hint{font-size:12px;color:var(--text2);margin-top:2px}
+.theme-dots-lg .tdot{width:22px;height:22px}
+#customColorPicker{width:40px;height:32px;border:1px solid var(--border);border-radius:8px;background:none;cursor:pointer;padding:2px}
+#customColorPicker::-webkit-color-swatch-wrapper{padding:2px}
+#customColorPicker::-webkit-color-swatch{border-radius:5px;border:none}
+
 @media(max-width:768px){
     .sidebar{transform:translateX(-100%);transition:transform .3s}.sidebar.mob-open{transform:translateX(0)}
     .main{margin-left:0}
@@ -301,7 +315,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);ove
 <header class="header">
     <div class="logo" onclick="goHome()">
         <div class="logo-icon"></div>
-        YouTube Premium K1
+        YouTube Premium
     </div>
     <div class="search-wrap">
         <div class="search-row">
@@ -311,11 +325,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);ove
         <div class="sug-box" id="sugBox"></div>
     </div>
     <div class="header-right">
-        <div class="theme-dots" title="Theme">
-            <div class="tdot on" data-t="dark" onclick="setTheme('dark')" title="Dark"></div>
-            <div class="tdot" data-t="amoled" onclick="setTheme('amoled')" title="AMOLED Black"></div>
-            <div class="tdot" data-t="dim" onclick="setTheme('dim')" title="Dim"></div>
-        </div>
         <button class="hbtn" onclick="randomVideo()" title="Random video (R)">🎲</button>
         <button class="hbtn" onclick="openShortcuts()" title="Keyboard shortcuts (?)">⌨️</button>
         <button class="hbtn" onclick="nav('history')" title="History (Shift+H)">📖</button>
@@ -381,6 +390,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);ove
     <button class="nav-item" id="navHistory" onclick="nav('history')"><span>📖</span><span>History</span><span class="nav-ct" id="histCt"></span></button>
     <button class="nav-item" id="navWatch-later" onclick="nav('watch-later')"><span>⏰</span><span>Watch Later</span><span class="nav-dot" id="filtersDot"></span></button>
     <button class="nav-item" id="navLibrary" onclick="nav('library')"><span>📁</span><span>Library</span><span class="nav-ct" id="libCt"></span></button>
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-bottom">
+        <button class="nav-item" id="navSettings" onclick="nav('settings')"><span>⚙️</span><span>Settings</span></button>
+    </div>
 </aside>
 
 <!-- MAIN -->
@@ -522,11 +535,42 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);ove
         </div>
 
         <div class="vgrid" id="libGrid"></div>
+    </div>
 
-        <!-- API KEYS PANEL (bottom of library, hero style) -->
-        <div id="keyHero" style="margin-top:40px;padding-top:28px;border-top:1px solid var(--border)">
+    <!-- SETTINGS -->
+    <div id="pg-settings" class="pg">
+        <h1 class="pg-title">Settings</h1>
+
+        <!-- APPEARANCE -->
+        <div class="settings-block">
+            <div class="settings-block-title">🎨 Appearance</div>
+            <div class="settings-row">
+                <div>
+                    <div class="settings-row-label">Theme</div>
+                    <div class="settings-row-hint">Pick a preset, or choose your own background color.</div>
+                </div>
+                <div class="theme-dots theme-dots-lg" title="Theme">
+                    <div class="tdot on" data-t="dark" onclick="setTheme('dark')" title="Dark"></div>
+                    <div class="tdot" data-t="amoled" onclick="setTheme('amoled')" title="AMOLED Black"></div>
+                    <div class="tdot" data-t="dim" onclick="setTheme('dim')" title="Dim"></div>
+                </div>
+            </div>
+            <div class="settings-row">
+                <div>
+                    <div class="settings-row-label">Custom background color</div>
+                    <div class="settings-row-hint">Overrides the preset above with your own color.</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px">
+                    <input type="color" id="customColorPicker" value="#0f0f0f" oninput="setCustomColor(this.value)">
+                    <button class="abtn a-sec" onclick="clearCustomColor()">Reset to preset</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- API ACCESS -->
+        <div class="settings-block">
+            <div class="settings-block-title">🔑 API Access</div>
             <div class="key-hero-box">
-                <div style="font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;font-weight:600;margin-bottom:6px;position:relative">🔑 API Access</div>
                 <h2 style="font-size:22px;font-weight:600;margin-bottom:8px;letter-spacing:-.03em;position:relative">Get your free YouTube API key</h2>
                 <p style="font-size:13px;color:var(--text2);margin-bottom:18px;max-width:520px;position:relative">Search needs your own free key from Google — it only takes a couple of minutes. Follow the step-by-step guide, then paste your key below.</p>
                 <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;position:relative">
@@ -722,11 +766,48 @@ window.onload = function() {
 /* ═══════════════════════════════════════════
    THEME
 ═══════════════════════════════════════════ */
-function initTheme() { applyTheme(localStorage.getItem('theme') || 'dark'); }
-function setTheme(t) { applyTheme(t); localStorage.setItem('theme', t); }
+function initTheme() {
+    applyTheme(localStorage.getItem('theme') || 'dark');
+    const custom = localStorage.getItem('customBg');
+    if (custom) applyCustomColor(custom, false);
+}
+function setTheme(t) {
+    localStorage.removeItem('customBg');
+    applyTheme(t); localStorage.setItem('theme', t);
+    const picker = document.getElementById('customColorPicker');
+    if (picker) picker.value = '#0f0f0f';
+}
 function applyTheme(t) {
+    document.body.style.removeProperty('--bg');
+    document.body.style.removeProperty('--bg2');
     document.body.dataset.theme = t === 'dark' ? '' : t;
     document.querySelectorAll('.tdot').forEach(d => d.classList.toggle('on', d.dataset.t === t));
+}
+function setCustomColor(hex) {
+    applyCustomColor(hex, true);
+}
+function applyCustomColor(hex, save) {
+    document.querySelectorAll('.tdot').forEach(d => d.classList.remove('on'));
+    document.body.style.setProperty('--bg', hex);
+    document.body.style.setProperty('--bg2', shadeColor(hex, 8));
+    const picker = document.getElementById('customColorPicker');
+    if (picker) picker.value = hex;
+    if (save) localStorage.setItem('customBg', hex);
+}
+function clearCustomColor() {
+    localStorage.removeItem('customBg');
+    applyTheme(localStorage.getItem('theme') || 'dark');
+    const picker = document.getElementById('customColorPicker');
+    if (picker) picker.value = '#0f0f0f';
+    showToast('Reset to preset theme', 'ok');
+}
+function shadeColor(hex, percent) {
+    hex = hex.replace('#','');
+    if (hex.length===3) hex = hex.split('').map(c=>c+c).join('');
+    const num = parseInt(hex,16);
+    let r=(num>>16)+percent, g=((num>>8)&0xff)+percent, b=(num&0xff)+percent;
+    r=Math.min(255,Math.max(0,r)); g=Math.min(255,Math.max(0,g)); b=Math.min(255,Math.max(0,b));
+    return '#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
 }
 
 /* ═══════════════════════════════════════════
@@ -742,6 +823,7 @@ function nav(pg) {
     if (pg === 'watch-later') renderWL();
     if (pg === 'history') renderHistory();
     if (pg === 'library') renderLibrary();
+    if (pg === 'settings') renderKeyList();
 }
 function _nav(pg) {
     document.querySelectorAll('.pg').forEach(p => p.classList.remove('on'));
@@ -751,9 +833,11 @@ function _nav(pg) {
     const navH = document.getElementById('navHistory');
     const navW = document.getElementById('navWatch-later');
     const navL = document.getElementById('navLibrary');
+    const navS = document.getElementById('navSettings');
     if (navH) navH.classList.toggle('on', pg === 'history');
     if (navW) navW.classList.toggle('on', pg === 'watch-later');
     if (navL) navL.classList.toggle('on', pg === 'library');
+    if (navS) navS.classList.toggle('on', pg === 'settings');
     curPage = pg;
 }
 
@@ -1125,7 +1209,7 @@ function showNoKeyState(q) {
     grid.innerHTML = `<div class="nores-hint">
         <h3>No API key yet</h3>
         <p>You'll need your own free YouTube API key to search. It only takes a couple minutes.</p>
-        <button class="ebtn" onclick="nav('library')">Open Library → Add a Key</button>
+        <button class="ebtn" onclick="nav('settings')">Open Settings → Add a Key</button>
     </div>`;
 }
 
@@ -1167,7 +1251,7 @@ function showNoWorkingKeyState(q) {
     document.getElementById('homeGrid').innerHTML = `<div class="nores-hint">
         <h3>Your key(s) stopped working</h3>
         <p>This can happen if a key hits its daily quota or was entered incorrectly. Check your keys or add a new one.</p>
-        <button class="ebtn" onclick="nav('library')">Open Library → Check Keys</button>
+        <button class="ebtn" onclick="nav('settings')">Open Settings → Check Keys</button>
     </div>`;
     document.getElementById('lmWrap').style.display = 'none';
 }
@@ -1428,7 +1512,6 @@ function updateLibCt() {
 ═══════════════════════════════════════════ */
 function renderLibrary() {
     closePanel('exportPanelLib'); closePanel('importOnlyPanelLib'); closeDropdowns();
-    renderKeyList();
 
     const plKeys = Object.keys(playlists).filter(k => k !== 'WL');
     if (!curListKey || !plKeys.includes(curListKey)) curListKey = plKeys[0] || null;
@@ -1644,7 +1727,7 @@ document.addEventListener('click', e => {
    and (optionally) trailing HISTORY=(id,id,...) / recent searches —
    never channel, thumbnail, or addedAt: only what's needed to rebuild.
 ═══════════════════════════════════════════ */
-const BACKUP_MARKER = '### YT-PREMIUM-K1-BACKUP ###';
+const BACKUP_MARKER = '### YT-PREMIUM-BACKUP ###';
 const HISTORY_CAP_ONELINE = 30; // one-liner history is capped; .txt backup keeps it all
 
 function escName(n) { return String(n).replace(/[="();]/g, c => '\\'+c); }
@@ -1940,7 +2023,7 @@ function downloadBackupTxt() {
 
     const lines = [];
     lines.push(BACKUP_MARKER);
-    lines.push('# Full backup of your YouTube Premium K1 data.');
+    lines.push('# Full backup of your YouTube Premium data.');
     lines.push('# Includes: all playlists (video IDs only), full watch history, and API keys.');
     lines.push('# To restore: Library → Export ▾ → or just use the Import button and paste/upload this file.');
     lines.push('# ⚠️  This file contains your API keys in plain text — store it somewhere private.');
@@ -1951,7 +2034,7 @@ function downloadBackupTxt() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     const stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
-    a.href = url; a.download = `yt-premium-k1-backup-${stamp}.txt`;
+    a.href = url; a.download = `yt-premium-backup-${stamp}.txt`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
     showToast('Full backup downloaded ⬇', 'ok');
