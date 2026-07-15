@@ -1,9 +1,21 @@
+<!--Version 3 -->
+
+<!--This is a game launcher that requests code from 2 github pages, one being mine, one being from "CoolDude2349"
+<!--once you click a game and it opens, you can reopen that game as many time as you want while offline (as long as the tab is open)
+<!--if you want other versions of this or even other projects ive worked on, i will leave the link here
+<!--/sites.google.com/view/projexe \-->
+<!-- pastebin.com/raw/RM4T5VqY (backup) -->
+
+<!=========================================
+<you can delete everything above this text
+<!=========================================
+
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>VUSL V16</title>
+<title>VUSL V17</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800;900&display=swap" rel="stylesheet">
 <style>
 /* ══ ROOT ══ */
@@ -154,6 +166,11 @@ body::after {
 }
 .pack-tab:hover { color: var(--text); }
 .pack-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.pack-tab.pinned-right { margin-left: auto; }
+.pack-tab.tab-allgames { color: var(--blue); }
+.pack-tab.tab-allgames.active { color: var(--accent); }
+.pack-tab.tab-allgames .tab-badge { background: rgba(68,136,255,.14); color: var(--blue); }
+.pack-tab.tab-allgames.active .tab-badge { background: var(--acc-dim); color: var(--accent); }
 
 .tab-badge {
   font-family: var(--mono);
@@ -254,7 +271,7 @@ body::after {
   cursor: pointer;
   user-select: none;
   transition: border-color .15s, color .15s, transform .1s, background .15s;
-  max-width: 260px;
+  max-width: 280px;
 }
 .game-card:hover:not(.loading) {
   border-color: var(--accent);
@@ -293,6 +310,22 @@ body::after {
 .card-star:hover { color: var(--gold); transform: scale(1.25); }
 .card-star.on    { color: var(--gold); }
 
+.card-source-tag {
+  font-size: 10px;
+  flex-shrink: 0;
+  opacity: .6;
+}
+
+.card-remove {
+  font-size: 11px;
+  flex-shrink: 0;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 1px;
+  transition: color .15s, transform .15s;
+}
+.card-remove:hover { color: var(--red); transform: scale(1.25); }
+
 /* ══ EMPTY STATE ══ */
 .empty-state {
   display: flex;
@@ -312,29 +345,16 @@ body::after {
 .ext-config {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
   max-width: 420px;
   margin-top: 8px;
 }
-.ext-config input,
-.ext-config textarea {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  color: var(--text);
-  font-family: var(--mono);
-  font-size: 11px;
-  padding: 8px 12px;
-  outline: none;
-  transition: border-color .2s;
-  width: 100%;
+.ext-upload-row {
+  display: flex;
+  gap: 8px;
 }
-.ext-config input:focus,
-.ext-config textarea:focus { border-color: var(--accent); }
-.ext-config textarea { resize: vertical; min-height: 90px; }
-.ext-config input::placeholder,
-.ext-config textarea::placeholder { color: var(--muted); }
+.ext-upload-row .btn { flex: 1; justify-content: center; }
 .ext-note { font-size: 9px; color: var(--muted); text-align: left; }
 
 /* ══ TOAST ══ */
@@ -376,19 +396,62 @@ body::after {
   padding: 11px;
   z-index: 8000;
   animation: slideDown .3s ease;
+  cursor: pointer;
 }
 @keyframes slideDown {
   from { transform: translateY(-100%); }
   to   { transform: translateY(0); }
 }
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ══ CONFIRM MODAL (duplicate-upload prompt) ══ */
+#confirmModal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  z-index: 9500;
+  align-items: center;
+  justify-content: center;
+}
+#confirmModal .box {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 20px;
+  max-width: 340px;
+  width: 90%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+#confirmModal h3 {
+  font-family: var(--display);
+  font-size: 14px;
+  color: var(--text);
+}
+#confirmModal p {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+#confirmModal .row {
+  display: flex;
+  gap: 8px;
+}
+#confirmModal .row .btn { flex: 1; justify-content: center; }
 </style>
 </head>
 <body>
 
 <div id="topbar">
-  <div class="wordmark">VUSL<sup>V16</sup></div>
+  <div class="wordmark">VUSL<sup>V17</sup></div>
   <button class="btn btn-primary"   id="loadAllBtn" onclick="startLoadAll()">⬇ Load All</button>
   <button class="btn btn-ghost"     id="retryBtn"   onclick="retryFailed()" style="display:none">↺ Retry Failed</button>
+  <button class="btn btn-secondary" id="refreshBtn" onclick="manualRefresh()">⟳ Refresh</button>
   <button class="btn btn-red"                       onclick="clearCache()">🗑 Clear Cache</button>
   <span id="statusLine">—</span>
 </div>
@@ -411,23 +474,56 @@ body::after {
 <div id="toast"></div>
 <div id="notifBanner" onclick="this.style.display='none'"></div>
 
+<div id="confirmModal">
+  <div class="box">
+    <h3 id="confirmTitle">Duplicate files found</h3>
+    <p id="confirmBody"></p>
+    <div class="row">
+      <button class="btn btn-secondary" id="confirmSkip">Skip duplicates</button>
+      <button class="btn btn-red" id="confirmOverwrite">Overwrite</button>
+    </div>
+  </div>
+</div>
+
+<!-- hidden file inputs for external uploads -->
+<input type="file" id="fileInputFiles" accept=".html,.htm" multiple style="display:none">
+<input type="file" id="fileInputFolder" webkitdirectory directory multiple style="display:none">
+
 <script>
 /* ════════════════════════════════════════════════════
-   VUSL V16 — Optimized Multi-Pack Game Launcher
+   VUSL V17 — Optimized Multi-Pack Game Launcher
 
-   Perf improvements over original:
+   Changes from V16:
+   ⓐ External tab rebuilt: upload individual files or
+      whole folders (webkitdirectory) instead of a
+      base-URL + filename-list config. Content is read
+      directly into IndexedDB — no network fetch needed.
+   ⓑ New uploads merge with existing external games
+      instead of overwriting. If new filenames collide
+      with already-uploaded ones, a modal asks whether
+      to skip duplicates or overwrite them.
+   ⓒ External tab moved to the far right of the tab bar
+      (pinned via CSS margin-left:auto), Favorites sits
+      just before it.
+   ⓓ New "Refresh" button — re-runs scanCache() on demand
+      so newly-downloaded games show their cached outline
+      immediately without needing a full page reload.
+   ⓔ Clear Cache now warns separately about external
+      uploads, since those can't be re-downloaded from
+      GitHub — clearing purges them permanently.
+   ⓕ Per-card remove (🗑) for external games only.
+   ⓖ Guarded key parsing (packId/filename) against
+      filenames/pack ids that might contain ":" by using
+      a reserved separator lookup instead of naive split.
+
+   Perf improvements carried over from V16:
    ① cardNodeCache  — O(1) DOM lookups in setCardStatus
-                      (was O(n) querySelector every update)
    ② renderGrid     — DocumentFragment batch insert
-                      + only rebuilds on pack/filter change
-                      (was full innerHTML wipe every keypress)
-   ③ Search debounce — 120 ms rAF-gated, not every keystroke
-   ④ MAX_PAR 10→25  — two origins → can saturate both
+   ③ Search debounce — 120 ms, not every keystroke
+   ④ MAX_PAR 25     — two origins → can saturate both
    ⑤ scanCache      — getAllKeys once; Set lookup O(1)
-   ⑥ Rescan strategy — tab-focus visibilitychange only
-                      (was blind setInterval every 90 s)
-   ⑦ renderStatus   — single cached element refs,
-                      no repeated getElementById
+   ⑥ Rescan strategy — tab-focus visibilitychange + manual refresh button
+   ⑦ renderStatus   — single cached element refs
 ════════════════════════════════════════════════════ */
 
 /* ── Source Base URLs ─────────────────────────────── */
@@ -470,6 +566,10 @@ function resolveSource(filename) {
 }
 
 /* ── Pack Definitions ─────────────────────────────── */
+/* Order here = tab render order. favorites/external are
+   pinned to the right visually via CSS, but we still
+   keep favorites before external in source order so the
+   "pinned-right" class only needs to hit the very last tab. */
 const PACKS = {
   vusl: {
     id: "vusl", label: "VUSL", emoji: "🎮",
@@ -513,21 +613,33 @@ const PACKS = {
       "worldshardestgame2.html","wrestlebros.html"
     ]
   },
-  external: { id: "external", label: "External", emoji: "🌐", base: "", games: [] },
-  favorites: { id: "favorites", label: "Favs", emoji: "⭐", base: null, games: [] }
+  allgames:  { id: "allgames",  label: "All Games", emoji: "🗂", games: [], isVirtual: true },
+  favorites: { id: "favorites", label: "Favs", emoji: "⭐", games: [] },
+  external:  { id: "external",  label: "External", emoji: "🌐", games: [], isExternal: true }
 };
 
 /* ── State ─────────────────────────────────────────── */
 let activePack = "vusl";
 let favorites  = new Set(JSON.parse(localStorage.getItem("vusl15-favs") || "[]"));
-let extCfg     = JSON.parse(localStorage.getItem("vusl15-ext") || "null");
 
-if (extCfg) {
-  PACKS.external.base  = extCfg.base  || "";
-  PACKS.external.games = extCfg.games || [];
+// External pack manifest is just filenames — actual HTML content lives in IndexedDB.
+// (localStorage kept small on purpose; never stash game HTML there.)
+PACKS.external.games = JSON.parse(localStorage.getItem("vusl17-ext-manifest") || "[]");
+
+function saveExternalManifest() {
+  localStorage.setItem("vusl17-ext-manifest", JSON.stringify(PACKS.external.games));
 }
 
 // statusMap: "packId:filename" → "unknown"|"loading"|"cached"|"failed"
+// Use a NUL-ish separator that can't appear in filenames/pack ids to avoid
+// ambiguity if either ever contains a colon.
+const SEP = "\u0001";
+function idbKey(packId, filename) { return packId + SEP + filename; }
+function splitKey(key) {
+  const i = key.indexOf(SEP);
+  return [key.slice(0, i), key.slice(i + 1)];
+}
+
 const statusMap = new Map();
 
 // ① PERF: O(1) card DOM lookup — populated in renderGrid, cleared on re-render
@@ -536,33 +648,35 @@ const cardNodeCache = new Map(); // key → card HTMLElement
 // Queue
 const loadQueue   = [];
 const activeLoads = new Set();
-const MAX_PAR     = 25; // ④ was 10; two origins → can saturate both
+const MAX_PAR     = 25;
 
 let loadingAll    = false;
 let loadAllTarget = 0;
 let loadAllSettled = 0;
 let retryTimer    = null;
 
-// ③ Search debounce state
-let searchRafId   = null;
-let pendingSearch = false;
-
 /* ── Cached element refs (⑦) ──────────────────────── */
-const $statusLine  = document.getElementById("statusLine");
+const $statusLine   = document.getElementById("statusLine");
 const $progressWrap = document.getElementById("progressWrap");
 const $progressFill = document.getElementById("progressFill");
-const $retryBtn     = document.getElementById("retryBtn");
-const $loadAllBtn   = document.getElementById("loadAllBtn");
-const $gameArea     = document.getElementById("gameArea");
+const $retryBtn      = document.getElementById("retryBtn");
+const $loadAllBtn     = document.getElementById("loadAllBtn");
+const $refreshBtn     = document.getElementById("refreshBtn");
+const $gameArea      = document.getElementById("gameArea");
 const $countLabel   = document.getElementById("countLabel");
-const $search       = document.getElementById("search");
-const $packTabs     = document.getElementById("packTabs");
-const $toast        = document.getElementById("toast");
-const $notifBanner  = document.getElementById("notifBanner");
+const $search        = document.getElementById("search");
+const $packTabs      = document.getElementById("packTabs");
+const $toast          = document.getElementById("toast");
+const $notifBanner   = document.getElementById("notifBanner");
+const $confirmModal  = document.getElementById("confirmModal");
+const $confirmTitle  = document.getElementById("confirmTitle");
+const $confirmBody   = document.getElementById("confirmBody");
+const $confirmSkip   = document.getElementById("confirmSkip");
+const $confirmOverwrite = document.getElementById("confirmOverwrite");
+const $fileInputFiles  = document.getElementById("fileInputFiles");
+const $fileInputFolder = document.getElementById("fileInputFolder");
 
 /* ── Helpers ────────────────────────────────────────── */
-function idbKey(packId, filename) { return packId + ":" + filename; }
-
 function prettyName(filename) {
   const base = filename.replace(/\.(html|htm)$/i, "");
   return base.replace(/(\D)(\d+)$/, "$1 $2");
@@ -584,7 +698,7 @@ function esc(s = "") {
 let db;
 async function initDB() {
   return new Promise((res, rej) => {
-    const r = indexedDB.open("VUSL_V16_DB", 1);
+    const r = indexedDB.open("VUSL_V17_DB", 1);
     r.onupgradeneeded = e => {
       const d = e.target.result;
       if (!d.objectStoreNames.contains("html")) d.createObjectStore("html");
@@ -610,6 +724,27 @@ function dbPut(key, html) {
   });
 }
 
+/* Batch write — one transaction for many key/value pairs.
+   Far faster than N separate dbPut() transactions, which is
+   what made multi-file uploads feel slow. */
+function dbPutMany(entries) { // entries: [[key, html], ...]
+  return new Promise((res, rej) => {
+    const tx    = db.transaction("html", "readwrite");
+    const store = tx.objectStore("html");
+    for (const [key, html] of entries) store.put(html, key);
+    tx.oncomplete = () => res(true);
+    tx.onerror    = () => rej(tx.error);
+  });
+}
+
+function dbDelete(key) {
+  return new Promise(res => {
+    const r = db.transaction("html","readwrite").objectStore("html").delete(key);
+    r.onsuccess = () => res(true);
+    r.onerror   = () => res(false);
+  });
+}
+
 function dbGetAllKeys() {
   return new Promise(res => {
     const r = db.transaction("html","readonly").objectStore("html").getAllKeys();
@@ -628,7 +763,6 @@ function dbClearAll() {
 
 /* ── Cache Scan (⑤ O(1) Set lookup) ────────────────── */
 async function scanCache() {
-  // Build a Set once — O(1) per lookup vs O(n) array.includes
   const cachedKeys = new Set(await dbGetAllKeys());
   for (const [pid, pack] of Object.entries(PACKS)) {
     if (pid === "favorites") continue;
@@ -638,6 +772,53 @@ async function scanCache() {
       statusMap.set(k, cachedKeys.has(k) ? "cached" : (statusMap.get(k) === "failed" ? "failed" : "unknown"));
     }
   }
+}
+
+/* ⓓ Manual refresh — re-scans IndexedDB and rebuilds the whole screen
+ * (tabs + grid + status line) so newly downloaded/uploaded games show
+ * their correct outline immediately. Shows a brief full-screen overlay
+ * so it's unmistakable that something actually happened, rather than
+ * a silent DOM patch a user might miss. */
+let refreshOverlayEl = null;
+function showRefreshOverlay(msg) {
+  if (!refreshOverlayEl) {
+    refreshOverlayEl = document.createElement("div");
+    refreshOverlayEl.id = "refreshOverlay";
+    refreshOverlayEl.style.cssText = `
+      position:fixed; inset:0; background:rgba(10,10,13,.72);
+      display:flex; align-items:center; justify-content:center;
+      z-index:9700; font-family:var(--display); font-size:14px;
+      font-weight:800; letter-spacing:1px; color:var(--accent);
+      flex-direction:column; gap:10px;
+    `;
+    document.body.appendChild(refreshOverlayEl);
+  }
+  refreshOverlayEl.innerHTML = `<div style="font-size:26px;animation:spin .8s linear infinite">⟳</div><div>${esc(msg)}</div>`;
+  refreshOverlayEl.style.display = "flex";
+}
+function hideRefreshOverlay() {
+  if (refreshOverlayEl) refreshOverlayEl.style.display = "none";
+}
+
+async function fullScreenRefresh(reason) {
+  showRefreshOverlay(reason || "Refreshing…");
+  await scanCache();
+  renderPackTabs();
+  renderGrid();
+  refreshStatus();
+  // small delay so the overlay is actually perceptible even when the
+  // scan/render finish near-instantly on a fast machine
+  await new Promise(r => setTimeout(r, 260));
+  hideRefreshOverlay();
+}
+
+async function manualRefresh() {
+  $refreshBtn.disabled = true;
+  $refreshBtn.textContent = "⟳ …";
+  await fullScreenRefresh("Refreshing cache status…");
+  $refreshBtn.disabled = false;
+  $refreshBtn.textContent = "⟳ Refresh";
+  toast("Refreshed cache status", "info", 1400);
 }
 
 /* ── Toast & Notif ──────────────────────────────────── */
@@ -653,6 +834,26 @@ function showBanner(msg, ms = 4000) {
   $notifBanner.textContent   = msg;
   $notifBanner.style.display = "block";
   setTimeout(() => { $notifBanner.style.display = "none"; }, ms);
+}
+
+/* ── Confirm Modal (Promise-based) ─────────────────── */
+function askConfirm(title, body, { confirmLabel = "Overwrite", skipLabel = "Skip duplicates" } = {}) {
+  return new Promise(resolve => {
+    $confirmTitle.textContent = title;
+    $confirmBody.textContent  = body;
+    $confirmSkip.textContent  = skipLabel;
+    $confirmOverwrite.textContent = confirmLabel;
+    $confirmModal.style.display = "flex";
+
+    function cleanup(result) {
+      $confirmModal.style.display = "none";
+      $confirmSkip.onclick = null;
+      $confirmOverwrite.onclick = null;
+      resolve(result);
+    }
+    $confirmSkip.onclick      = () => cleanup("skip");
+    $confirmOverwrite.onclick = () => cleanup("overwrite");
+  });
 }
 
 /* ── Progress Bar ───────────────────────────────────── */
@@ -684,26 +885,36 @@ function refreshStatus() {
 /* ── Get Games for Active Pack ─────────────────────── */
 function getActiveGames() {
   if (activePack === "favorites") {
-    return [...favorites].map(k => {
-      const ci = k.indexOf(":");
-      return [k.slice(0, ci), k.slice(ci + 1)];
-    });
+    return [...favorites].map(k => splitKey(k));
+  }
+  if (activePack === "allgames") {
+    // Combine every real pack (not favorites/allgames itself) into one list.
+    const combined = [];
+    for (const [pid, pack] of Object.entries(PACKS)) {
+      if (pid === "favorites" || pid === "allgames") continue;
+      for (const fn of pack.games) combined.push([pid, fn]);
+    }
+    return combined;
   }
   return (PACKS[activePack]?.games || []).map(fn => [activePack, fn]);
 }
 
 /* ── Pack Tabs ──────────────────────────────────────── */
 function renderPackTabs() {
-  // ② Use DocumentFragment
   const frag = document.createDocumentFragment();
-  for (const [id, pack] of Object.entries(PACKS)) {
+  const ids  = Object.keys(PACKS); // vusl, favorites, external (external renders last => far right)
+  ids.forEach((id, idx) => {
+    const pack  = PACKS[id];
     const count = id === "favorites" ? favorites.size : (pack.games?.length || 0);
     const tab   = document.createElement("div");
-    tab.className = "pack-tab" + (id === activePack ? " active" : "");
+    tab.className = "pack-tab"
+      + (id === activePack ? " active" : "")
+      + (idx === ids.length - 1 ? " pinned-right" : "")
+      + (id === "allgames" ? " tab-allgames" : "");
     tab.innerHTML = `${pack.emoji} ${pack.label} <span class="tab-badge">${count}</span>`;
     tab.onclick   = () => switchPack(id);
     frag.appendChild(tab);
-  }
+  });
   $packTabs.innerHTML = "";
   $packTabs.appendChild(frag);
 }
@@ -716,13 +927,9 @@ function switchPack(id) {
   refreshStatus();
 }
 
-/* ── Search Debounce (③) ─────────────────────────────
- * Wire up once here instead of inline oninput.
- * Defers renderGrid to next animation frame after
- * 120 ms of inactivity — eliminates per-keystroke
- * full DOM rebuilds on fast typers.
- * ─────────────────────────────────────────────────── */
+/* ── Search Debounce (③) ─────────────────────────────── */
 let searchDebounceTimer = null;
+let searchRafId = null;
 $search.addEventListener("input", () => {
   clearTimeout(searchDebounceTimer);
   searchDebounceTimer = setTimeout(() => {
@@ -733,16 +940,15 @@ $search.addEventListener("input", () => {
 
 /* ── Grid Render (② DocumentFragment, cache clear) ── */
 function renderGrid() {
-  // Clear card node cache on every full re-render
   cardNodeCache.clear();
 
   const frag  = document.createDocumentFragment();
   const query = $search.value.trim().toLowerCase();
 
-  // External pack config UI
+  // External pack empty state (upload UI)
   if (activePack === "external" && PACKS.external.games.length === 0) {
     $gameArea.innerHTML = "";
-    $gameArea.appendChild(makeExtConfigPanel());
+    $gameArea.appendChild(makeExtUploadPanel());
     $countLabel.textContent = "0 games";
     return;
   }
@@ -765,11 +971,17 @@ function renderGrid() {
 
   $countLabel.textContent = filtered.length + " game" + (filtered.length !== 1 ? "s" : "");
 
+  // Show upload row above the grid on the external tab even when non-empty
+  if (activePack === "external") {
+    frag.appendChild(makeExtUploadBar());
+  }
+
   if (filtered.length === 0) {
     const e = document.createElement("div");
     e.className = "empty-state";
     e.innerHTML = `<div class="big">🔍</div><h2>No results</h2><p>No games match "<strong>${esc(query)}</strong>"</p>`;
     $gameArea.innerHTML = "";
+    $gameArea.appendChild(frag);
     $gameArea.appendChild(e);
     return;
   }
@@ -795,7 +1007,6 @@ function renderGrid() {
     frag.appendChild(sec);
   }
 
-  // Single reflow — swap entire content in one shot
   $gameArea.innerHTML = "";
   $gameArea.appendChild(frag);
 }
@@ -805,6 +1016,7 @@ function makeCard(packId, filename) {
   const key    = idbKey(packId, filename);
   const status = statusMap.get(key) || "unknown";
   const isFav  = favorites.has(key);
+  const isExt  = packId === "external";
 
   const card = document.createElement("div");
   card.className   = "game-card " + status;
@@ -819,6 +1031,8 @@ function makeCard(packId, filename) {
   nm.textContent = prettyName(filename);
   nm.title       = filename;
 
+
+
   const star = document.createElement("span");
   star.className   = "card-star" + (isFav ? " on" : "");
   star.textContent = isFav ? "⭐" : "☆";
@@ -827,19 +1041,36 @@ function makeCard(packId, filename) {
 
   card.appendChild(si);
   card.appendChild(nm);
+
+  if (activePack === "allgames") {
+    const tag = document.createElement("span");
+    tag.className   = "card-source-tag";
+    tag.textContent = PACKS[packId]?.emoji || "";
+    tag.title       = PACKS[packId]?.label || packId;
+    card.appendChild(tag);
+  }
+
   card.appendChild(star);
+
+  if (isExt) {
+    const rm = document.createElement("span");
+    rm.className   = "card-remove";
+    rm.textContent = "🗑";
+    rm.title       = "Remove uploaded game";
+    rm.addEventListener("click", e => { e.stopPropagation(); removeExternalGame(filename); });
+    card.appendChild(rm);
+  }
+
   card.addEventListener("click", () => launchGame(packId, filename));
 
-  // ① Register in cache for O(1) updates
   cardNodeCache.set(key, card);
-
   return card;
 }
 
 /* ① setCardStatus — O(1) via cardNodeCache ──────────── */
 function setCardStatus(key, status) {
   statusMap.set(key, status);
-  const card = cardNodeCache.get(key); // was: querySelector (O(n))
+  const card = cardNodeCache.get(key);
   if (!card) return;
   card.className = "game-card " + status;
   const si = card.querySelector(".card-status");
@@ -866,49 +1097,138 @@ function toggleFav(packId, filename) {
   renderPackTabs();
 }
 
-/* ── External Pack Config ───────────────────────────── */
-function makeExtConfigPanel() {
+/* ══════════════════════════════════════════════════════
+   ⓐⓑ External Tab — file/folder upload, merge not overwrite
+════════════════════════════════════════════════════════ */
+
+function makeExtUploadBar() {
+  const bar = document.createElement("div");
+  bar.className = "ext-upload-row";
+  bar.style.marginBottom = "14px";
+  bar.innerHTML = `
+    <button class="btn btn-secondary" id="btnUploadFiles">📄 Upload Files</button>
+    <button class="btn btn-secondary" id="btnUploadFolder">📁 Upload Folder</button>
+  `;
+  bar.querySelector("#btnUploadFiles").onclick  = () => $fileInputFiles.click();
+  bar.querySelector("#btnUploadFolder").onclick = () => $fileInputFolder.click();
+  return bar;
+}
+
+function makeExtUploadPanel() {
   const wrap = document.createElement("div");
   wrap.className = "empty-state";
   wrap.innerHTML = `
     <div class="big">🌐</div>
     <h2>External Pack</h2>
-    <p>Configure a base URL and game list to load games from another source.</p>
+    <p>Upload your own HTML games from files or an entire folder. They're stored locally and play offline just like the built-in packs.</p>
     <div class="ext-config">
-      <input id="extBase" type="text"
-        placeholder="Base URL — e.g. https://example.com/games/"
-        value="${esc(PACKS.external.base)}">
-      <textarea id="extGames"
-        placeholder="One filename per line, e.g.&#10;game1.html&#10;game2.html">${(PACKS.external.games || []).join("\n")}</textarea>
-      <p class="ext-note">Files must be publicly accessible HTML. Base URL is prepended to each filename.</p>
-      <button class="btn btn-primary" onclick="saveExtPack()">Load External Pack</button>
+      <div class="ext-upload-row">
+        <button class="btn btn-primary" id="btnUploadFilesEmpty">📄 Upload Files</button>
+        <button class="btn btn-primary" id="btnUploadFolderEmpty">📁 Upload Folder</button>
+      </div>
+      <p class="ext-note">Accepts .html / .htm files. Uploading again later adds new games — it won't erase what's already here.</p>
     </div>
   `;
+  wrap.querySelector("#btnUploadFilesEmpty").onclick  = () => $fileInputFiles.click();
+  wrap.querySelector("#btnUploadFolderEmpty").onclick = () => $fileInputFolder.click();
   return wrap;
 }
 
-function saveExtPack() {
-  const base  = (document.getElementById("extBase")?.value || "").trim();
-  const raw   = (document.getElementById("extGames")?.value || "").trim();
-  const games = raw.split("\n").map(l => l.trim()).filter(l => l.length > 0);
-  if (!base || games.length === 0) {
-    toast("Enter a base URL and at least one filename", "error"); return;
+async function handleExternalUpload(fileList) {
+  const htmlFiles = [...fileList].filter(f => /\.(html?|HTML?)$/.test(f.name));
+  if (htmlFiles.length === 0) {
+    toast("No .html/.htm files found in selection", "error");
+    return;
   }
-  PACKS.external.base  = base;
-  PACKS.external.games = games;
-  extCfg = { base, games };
-  localStorage.setItem("vusl15-ext", JSON.stringify(extCfg));
-  for (const fn of games) statusMap.delete(idbKey("external", fn));
-  scanCache().then(() => { renderPackTabs(); renderGrid(); refreshStatus(); });
-  toast(`✔ Loaded ${games.length} games from external pack`, "success");
+
+  const existing = new Set(PACKS.external.games);
+  const duplicates = htmlFiles.filter(f => existing.has(f.name));
+  let mode = "skip"; // default safe behavior when there are dupes
+  if (duplicates.length > 0) {
+    mode = await askConfirm(
+      "Duplicate files found",
+      `${duplicates.length} of ${htmlFiles.length} file${htmlFiles.length > 1 ? "s" : ""} share a name with games already uploaded. Skip duplicates (keep existing versions) or overwrite them with the new files?`
+    );
+  }
+
+  // Decide which files actually get written before touching disk at all.
+  const toWrite = [];
+  let added = 0, overwritten = 0, skipped = 0;
+  for (const file of htmlFiles) {
+    const isDup = existing.has(file.name);
+    if (isDup && mode === "skip") { skipped++; continue; }
+    toWrite.push(file);
+    if (isDup) overwritten++;
+    else { added++; existing.add(file.name); PACKS.external.games.push(file.name); }
+  }
+
+  showRefreshOverlay(`Storing ${toWrite.length} game${toWrite.length !== 1 ? "s" : ""}…`);
+
+  // Read every file's text in parallel (previously one-at-a-time,
+  // serialized behind each IndexedDB write).
+  const texts = await Promise.all(toWrite.map(f => f.text()));
+
+  // Single IndexedDB transaction for the whole batch instead of one
+  // transaction per file — this is the main reason uploads felt slow.
+  const entries = toWrite.map((file, i) => [idbKey("external", file.name), texts[i]]);
+  await dbPutMany(entries);
+  for (const [key] of entries) statusMap.set(key, "cached");
+
+  saveExternalManifest();
+
+  // ⓔ Always do a full visible refresh after upload — regardless of which
+  // tab the user is currently on — so games show as cached immediately
+  // without needing to click a tab. Previously this silently patched the
+  // DOM, which could look like nothing happened if the user wasn't
+  // already looking at the External tab.
+  await fullScreenRefresh("Finishing up…");
+
+  const parts = [];
+  if (added)       parts.push(`${added} added`);
+  if (overwritten) parts.push(`${overwritten} overwritten`);
+  if (skipped)     parts.push(`${skipped} skipped`);
+  toast(`✔ Upload complete — ${parts.join(", ")}`, "success", 3200);
+}
+
+$fileInputFiles.addEventListener("change", e => {
+  if (e.target.files.length) handleExternalUpload(e.target.files);
+  e.target.value = ""; // allow re-selecting the same file later
+});
+$fileInputFolder.addEventListener("change", e => {
+  if (e.target.files.length) handleExternalUpload(e.target.files);
+  e.target.value = "";
+});
+
+async function removeExternalGame(filename) {
+  const key = idbKey("external", filename);
+  await dbDelete(key);
+  statusMap.delete(key);
+  PACKS.external.games = PACKS.external.games.filter(f => f !== filename);
+  saveExternalManifest();
+  favorites.delete(key);
+  localStorage.setItem("vusl15-favs", JSON.stringify([...favorites]));
+  renderPackTabs();
+  renderGrid();
+  refreshStatus();
+  toast(`Removed "${prettyName(filename)}"`, "info");
 }
 
 /* ── Launch Game ────────────────────────────────────── */
 async function launchGame(packId, filename) {
-  const key    = idbKey(packId, filename);
+  const key = idbKey(packId, filename);
+
+  // External games have no network fallback — they only exist in IndexedDB.
+  if (packId === "external") {
+    const cached = await dbGet(key);
+    if (cached) { openGame(cached, ""); return; }
+    toast("This uploaded game is missing from storage — try re-uploading it", "error");
+    setCardStatus(key, "failed");
+    return;
+  }
+
   const cached = await dbGet(key);
   if (cached) {
-    const base = packId === "vusl" ? resolveSource(filename) : (PACKS[packId]?.base || "");
+    const base = resolveSource(filename);
     openGame(cached, base);
     return;
   }
@@ -933,9 +1253,9 @@ function openGame(html, base) {
   w.document.close();
 }
 
-/* ── Fetch ──────────────────────────────────────────── */
+/* ── Fetch (network packs only) ─────────────────────── */
 async function fetchGame(packId, filename) {
-  const base = packId === "vusl" ? resolveSource(filename) : (PACKS[packId]?.base || "");
+  const base = resolveSource(filename);
   const r    = await fetch(base + filename);
   if (!r.ok) throw new Error("HTTP " + r.status);
   const html = await r.text();
@@ -944,6 +1264,7 @@ async function fetchGame(packId, filename) {
 
 /* ── Load Queue ─────────────────────────────────────── */
 function enqueue(packId, filename, front = false) {
+  if (packId === "external") return; // external games are already local, never queued
   const key = idbKey(packId, filename);
   const s   = statusMap.get(key);
   if (s === "cached" || s === "loading") return;
@@ -982,8 +1303,13 @@ function processQueue() {
 async function startLoadAll() {
   if (loadingAll) return;
 
+  if (activePack === "external") {
+    toast("External games are already stored locally — nothing to load", "info");
+    return;
+  }
+
   const uncached = getActiveGames().filter(([pid, fn]) =>
-    statusMap.get(idbKey(pid, fn)) !== "cached"
+    pid !== "external" && statusMap.get(idbKey(pid, fn)) !== "cached"
   );
   if (uncached.length === 0) { toast("✔ All games already cached", "success"); return; }
 
@@ -1025,9 +1351,8 @@ function retryFailed() {
   let count = 0;
   for (const [key, s] of statusMap.entries()) {
     if (s !== "failed") continue;
-    const ci       = key.indexOf(":");
-    const packId   = key.slice(0, ci);
-    const filename = key.slice(ci + 1);
+    const [packId, filename] = splitKey(key);
+    if (packId === "external") continue; // nothing to retry — no network source
     statusMap.set(key, "unknown");
     enqueue(packId, filename, true);
     count++;
@@ -1035,26 +1360,53 @@ function retryFailed() {
   if (count > 0) {
     processQueue();
     toast(`↺ Retrying ${count} failed game${count > 1 ? "s" : ""}…`, "info");
+  } else {
+    toast("Nothing to retry", "info");
   }
 }
 
 /* ── Clear Cache ────────────────────────────────────── */
 async function clearCache() {
+  const hasExternal = PACKS.external.games.length > 0;
+  if (hasExternal) {
+    const mode = await askConfirm(
+      "Clear cache",
+      "This will also permanently delete your uploaded External games, since they can't be re-downloaded. Keep external uploads, or clear everything?",
+      { confirmLabel: "Clear everything", skipLabel: "Keep external uploads" }
+    );
+    if (mode === "skip") {
+      // Clear only non-external entries
+      const keys = await dbGetAllKeys();
+      for (const k of keys) {
+        const [pid] = splitKey(k);
+        if (pid !== "external") await dbDelete(k);
+      }
+      for (const [pid, pack] of Object.entries(PACKS)) {
+        if (pid === "favorites" || pid === "external") continue;
+        for (const fn of pack.games) statusMap.set(idbKey(pid, fn), "unknown");
+      }
+      renderGrid();
+      refreshStatus();
+      toast("Cache cleared (external uploads kept)", "info");
+      return;
+    }
+  }
+
   await dbClearAll();
   statusMap.clear();
+  PACKS.external.games = [];
+  saveExternalManifest();
   for (const [pid, pack] of Object.entries(PACKS)) {
     if (pid === "favorites") continue;
     for (const fn of pack.games) statusMap.set(idbKey(pid, fn), "unknown");
   }
+  renderPackTabs();
   renderGrid();
   refreshStatus();
   toast("Cache cleared", "info");
 }
 
-/* ── ⑥ Tab-focus rescan (replaces blind setInterval) ──
- * Only re-checks IndexedDB when the user switches back
- * to this tab — avoids 90 s polling entirely.
- * ─────────────────────────────────────────────────── */
+/* ── ⑥ Tab-focus rescan ──────────────────────────────── */
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
     scanCache().then(() => { renderGrid(); refreshStatus(); });
