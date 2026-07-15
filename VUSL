@@ -1,5 +1,3 @@
-<!--Version 17.3-->
-
 <!--This is a game launcher that requests code from 2 github pages, one being mine, one being from "CoolDude2349"
 <!--once you click a game and it opens, you can reopen that game as many time as you want while offline (as long as the tab is open)
 <!--if you want other versions of this or even other projects ive worked on, i will leave the link here
@@ -594,16 +592,7 @@ const POPULAR_GAMES = [
   "bloonsTD5.html",
   "polytrack.html",
   "sprunki.html",
-  "1.8.html",
-  "chess.html",
-  "candycrush.html",
-  "angrybirds.html",
-  "",
-  "",
-  "",
-  "",
-  "",
-  "",
+  "footballlegends.html",
   "ovo.html"
 ];
 
@@ -647,7 +636,45 @@ const PACKS = {
       "superliquidsoccer.html","tabletennisworldtour.html","territorialio.html",
       "theimpossiblequiz.html","theimpossiblequiz2.html","thisistheonlylevel.html",
       "timeshooter2.html","tinyfishing.html","vexx3m2.html","wheely.html",
-      "worldshardestgame2.html","wrestlebros.html"
+      "worldshardestgame2.html","wrestlebros.html",
+      "bouncymotors.html","bowmasters.html","boxingrandom.htm","cardrawing.html",
+      "choppyorc.html","clusterrush.html","crazycrashlanding.html","crazymotorcycle.html",
+      "deathchase.html","deathrun3D.html","demolitionderbycrashracing.html","doodlejump.html",
+      "drawclimber.html","dreadheadparkour.htm","driftboss.htm","drivemad.htm",
+      "ducklife5.html","ducklingsio.html","elasticface.htm","escaperoad.html",
+      "escaperoad2.html","evilglitch.html","fancypantsadventure2.html","floodrunner2.html",
+      "floodrunner3.html","floodrunner4.html","fnaf.html","fnaf2.html",
+      "fnaf3.html","fnaf4.html","funnybattle.html","funnybattle2.html",
+      "funnymadracing.html","funnyshooter2.html","geometrydashlite.html","geometryvibes.html",
+      "getontop.html","gladihoppers.html","googlebaseball.html","googledino.html",
+      "granny.html","granny2.html","guesstheiranswer.html","hanger2.html",
+      "happywheels.html","helixjump.html","highwaytraffic.html","ironsnout.html",
+      "jetpackjoyride.html","karatebros.html","kartbros.html","learntofly3.html",
+      "learntoflyidle.html","madalinstuntcars2.html","melonplayground.html","minesweeper.html",
+      "monkeymart.htm","monstertracks.html","motox3m3.html","noobminer.html",
+      "oppositeday.html","ovo2.html","ovo3dimensions.html","pacman.html",
+      "papascheeseria.html","papashotdoggeria.html","papasscooperia.html","papassushiria.html",
+      "papastacomia.html","papaswingeria.html","paperio2.htm","parkingfury2.html",
+      "parkingfury3.html","picosschool.html","pingpongchaos.html","pixelspeedrun.html",
+      "plantsvszombies.html","plonky.html","pou.html","ragdollhit.html",
+      "redball4vol1.html","redball4vol2.html","redball4vol3.html","riddleschool2.html",
+      "riddletransfer.html","riddletransfer2.html","rocketsoccerderby.html","rooftopsnipers.htm",
+      "run.html","run3.html","sandgame.html","shortlife.html",
+      "slope2player.html","slope3.html","slowroads.html","sm63.html",
+      "snowrider.htm","snowroad.htm","soccerbros.html","soccerrandom.htm",
+      "spacebarclicker.html","spaceiskey2.html","stack.html","stacktris.html",
+      "stickarchersbattle.html","stickfighter.html","stickmanhook.html","subwaysurfersbeijing.html",
+      "subwaysurfershavana.html","subwaysurferssanfrancisco.html","superbikethechampion.html","superhot.html",
+      "superstarcar.html","tag.html","taproad.html","templeofboom.html",
+      "templerun2.htm","thereisnog.html","theyarecoming.html","thisistheonlyleveltoo.html",
+      "timeshooter3.htm","tombofthemask.htm","trapthecat.html","triviacrack.html",
+      "tubejumpers.html","tunnelrush.html","unicyclehero.html","vex4.html",
+      "vex5.html","vex6.htm","vex7.htm","vex8.htm",
+      "vexx3m.html","volleyrandom.html","wartheknights.html","webecomewhatwebehold.html",
+      "wheeliebike.html","wheely2.html","wheely3.html","wheely4.html",
+      "wheely5.html","wheely6.html","wheely7.html","wheely8.html",
+      "wordleunlimited.html","worldshardestgame.html","worldshardestgame3.html",
+      "zombierush.html"
     ]
   },
   allgames:  { id: "allgames",  label: "All Games", emoji: "🗂", games: [], isVirtual: true },
