@@ -1,4 +1,4 @@
-<!--Version 17 -->
+<!--Version 17.3-->
 
 <!--This is a game launcher that requests code from 2 github pages, one being mine, one being from "CoolDude2349"
 <!--once you click a game and it opens, you can reopen that game as many time as you want while offline (as long as the tab is open)
@@ -248,6 +248,10 @@ body::after {
   padding-bottom: 6px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 9px;
+}
+.section-head.popular-head {
+  color: var(--gold);
+  border-bottom-color: rgba(255,204,0,.25);
 }
 
 .game-grid {
@@ -570,6 +574,39 @@ function resolveSource(filename) {
    pinned to the right visually via CSS, but we still
    keep favorites before external in source order so the
    "pinned-right" class only needs to hit the very last tab. */
+/* ── Popular Games (VUSL tab only) ──────────────────────
+ * Add/remove filenames here to control what shows up in the
+ * "Popular" section at the top of the VUSL tab. Must match
+ * the exact filename as it appears in PACKS.vusl.games below
+ * (case-sensitive, including .html/.htm extension).
+ * Games listed here still also appear in their normal A–Z
+ * letter section — this list only controls the extra
+ * "Popular" shortcut group, it doesn't remove them from anywhere.
+ * ─────────────────────────────────────────────────────── */
+const POPULAR_GAMES = [
+  "geometrydash.html",
+  "slope.html",
+  "retrobowl.html",
+  "1v1.lol.html",
+  "basketrandom.html",
+  "eggycar.html",
+  "amongus.html",
+  "bloonsTD5.html",
+  "polytrack.html",
+  "sprunki.html",
+  "1.8.html",
+  "chess.html",
+  "candycrush.html",
+  "angrybirds.html",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "ovo.html"
+];
+
 const PACKS = {
   vusl: {
     id: "vusl", label: "VUSL", emoji: "🎮",
@@ -986,6 +1023,26 @@ function renderGrid() {
     return;
   }
 
+  // Popular section — VUSL tab only, and only when not actively searching
+  // (keeps search results a single clean list rather than duplicating hits).
+  if (activePack === "vusl" && !query && POPULAR_GAMES.length > 0) {
+    const popularSet = new Set(POPULAR_GAMES);
+    const popularPairs = filtered.filter(([, fn]) => popularSet.has(fn));
+    if (popularPairs.length > 0) {
+      const sec  = document.createElement("div");
+      sec.className = "section";
+      const head = document.createElement("div");
+      head.className   = "section-head popular-head";
+      head.textContent = "🔥 Popular";
+      const grid = document.createElement("div");
+      grid.className   = "game-grid";
+      for (const pair of popularPairs) grid.appendChild(makeCard(...pair));
+      sec.appendChild(head);
+      sec.appendChild(grid);
+      frag.appendChild(sec);
+    }
+  }
+
   // Group by first letter
   const groups = {};
   for (const pair of filtered) {
@@ -1063,18 +1120,25 @@ function makeCard(packId, filename) {
 
   card.addEventListener("click", () => launchGame(packId, filename));
 
-  cardNodeCache.set(key, card);
+  // A game can now appear twice in the DOM (Popular section + its normal
+  // A–Z section), so cardNodeCache stores an array of nodes per key rather
+  // than a single node — otherwise only the last-created copy would ever
+  // get its status/star updated, leaving the other one visually stale.
+  if (!cardNodeCache.has(key)) cardNodeCache.set(key, []);
+  cardNodeCache.get(key).push(card);
   return card;
 }
 
 /* ① setCardStatus — O(1) via cardNodeCache ──────────── */
 function setCardStatus(key, status) {
   statusMap.set(key, status);
-  const card = cardNodeCache.get(key);
-  if (!card) return;
-  card.className = "game-card " + status;
-  const si = card.querySelector(".card-status");
-  if (si) si.textContent = statusIcon(status);
+  const cards = cardNodeCache.get(key);
+  if (!cards) return;
+  for (const card of cards) {
+    card.className = "game-card " + status;
+    const si = card.querySelector(".card-status");
+    if (si) si.textContent = statusIcon(status);
+  }
   refreshStatus();
 }
 
@@ -1086,12 +1150,14 @@ function toggleFav(packId, filename) {
   else         { favorites.add(key);   toast("⭐ Added to favorites", "success"); }
   localStorage.setItem("vusl15-favs", JSON.stringify([...favorites]));
 
-  const card = cardNodeCache.get(key);
-  if (card) {
-    const star = card.querySelector(".card-star");
-    if (star) {
-      star.className   = "card-star" + (favorites.has(key) ? " on" : "");
-      star.textContent = favorites.has(key) ? "⭐" : "☆";
+  const cards = cardNodeCache.get(key);
+  if (cards) {
+    for (const card of cards) {
+      const star = card.querySelector(".card-star");
+      if (star) {
+        star.className   = "card-star" + (favorites.has(key) ? " on" : "");
+        star.textContent = favorites.has(key) ? "⭐" : "☆";
+      }
     }
   }
   renderPackTabs();
