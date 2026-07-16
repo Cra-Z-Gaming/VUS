@@ -159,7 +159,7 @@
   #toolbar {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: 9px;
     padding: 9px 21px;
     border-top: 1.5px solid #1f2937;
@@ -206,8 +206,6 @@
   #composerInputWrap {
     flex: 1;
     display: flex;
-    flex-direction: column;
-    gap: 4px;
   }
   #msgInput {
     padding: 13.5px 18px;
@@ -224,10 +222,8 @@
   }
   #msgInput:focus { border-color: #22c55e; }
   #charCounter {
-    font-size: 15px;
+    font-size: 14.5px;
     color: #64748b;
-    text-align: right;
-    padding: 0 6px;
   }
   #charCounter.warn { color: #f59e0b; }
   #charCounter.limit { color: #ef4444; }
@@ -290,13 +286,16 @@
   <button id="jumpToBottomBtn">↓ Jump to latest</button>
   <div id="typingBar" style="display:none;padding:6px 21px;font-size:17.2px;color:#64748b;font-style:italic;flex-shrink:0"></div>
   <div id="toolbar">
+    <button id="uploadImageBtn" class="toolbar-btn" style="display:none">📎 Image</button>
+    <input id="imageFileInput" type="file" accept="image/*" style="display:none">
+    <span id="charCounter">500</span>
+    <div style="flex:1"></div>
     <button id="autoScrollBtn" class="toolbar-btn active">Auto Scroll: On</button>
     <button id="clearChatBtn" class="toolbar-btn">Clear Chat</button>
   </div>
   <div id="composer">
     <div id="composerInputWrap">
       <textarea id="msgInput" rows="1" placeholder="Type a message…" maxlength="500"></textarea>
-      <div id="charCounter">500</div>
     </div>
     <button id="sendBtn">Send</button>
   </div>
@@ -325,7 +324,7 @@
 <script>
 /* ── Fill this in with your real Firebase project config ── */
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyDxMfGQ_xk-au8YgOvxxxxxxxxxxx",
+  apiKey: "AIzaSyDxMfGQ_xk-au8YgOvaFO2R9LxAe-pa9Rg",
   authDomain: "vus-chat.firebaseapp.com",
   databaseURL: "https://vus-chat-default-rtdb.firebaseio.com",
   projectId: "vus-chat",
@@ -358,6 +357,7 @@ const ChatBackend = {
   _connectedRef: null,
   _presenceRef: null,
   _myPresenceRef: null,
+  _myLeaveEventRef: null,
   _nameColorsRef: null,
 
   init() {
@@ -379,6 +379,21 @@ const ChatBackend = {
   watchMessages(onMessage) {
     this._ref.limitToLast(MAX_MESSAGES).on("child_added", snap => {
       onMessage({ id: snap.key, ...snap.val() });
+    });
+  },
+
+  // Sends an already-compressed base64 data URL as a message. No Firebase
+  // Storage involved — this stays on the free Spark plan, at the cost of
+  // bulkier message payloads than a real file host would give you. The
+  // image is compressed/resized client-side (see compressImageFile)
+  // before this is ever called, to keep that payload size reasonable.
+  async sendImage(name, dataUrl) {
+    const color = await this.getNameColor(name);
+    return this._ref.push({
+      name: name,
+      imageData: dataUrl,
+      ts: firebase.database.ServerValue.TIMESTAMP,
+      ...(color ? { bubble: color.bubble, textColor: color.text } : {})
     });
   },
 
@@ -430,12 +445,34 @@ const ChatBackend = {
     return Object.prototype.hasOwnProperty.call(val, key);
   },
 
+  // Posts join/leave messages to the room feed itself (not just updating
+  // presence data), so they show up inline in the chat like any other
+  // message — just rendered without a bubble via msg.system.
   claimPresence(name) {
-    // Release any previous claim first (e.g. on rename)
+    // Release any previous claim first (e.g. on rename) — this does NOT
+    // post a "left" message, since renaming isn't actually leaving.
     this.releasePresence();
     this._myPresenceRef = this._presenceRef.child(this._safeKey(name));
+
+    // onDisconnect() can only set/remove a VALUE at a ref — it can't push
+    // a new message directly. So on disconnect we write a "leave event"
+    // marker here; watchLeaveEvents() (wired once, globally) listens for
+    // these and turns each one into an actual system message in the feed.
+    // This is the only reliable way to detect a real disconnect (closed
+    // tab, crash, lost connection) — client-side-only code can't run once
+    // the tab is actually gone.
+    const leaveEventRef = this._db.ref("rooms/" + ROOM_ID + "/leaveEvents").push();
+    leaveEventRef.onDisconnect().set({ name, ts: firebase.database.ServerValue.TIMESTAMP });
+    this._myLeaveEventRef = leaveEventRef;
+
     this._myPresenceRef.onDisconnect().remove();
     this._myPresenceRef.set(true);
+
+    this._ref.push({
+      system: true,
+      text: name + " joined",
+      ts: firebase.database.ServerValue.TIMESTAMP
+    });
   },
 
   releasePresence() {
@@ -443,6 +480,30 @@ const ChatBackend = {
       this._myPresenceRef.remove();
       this._myPresenceRef = null;
     }
+    // Cancel the pending onDisconnect leave-event write, since we're
+    // leaving on purpose right now (e.g. renaming) rather than actually
+    // disconnecting — we don't want a stray "X left" firing later.
+    if (this._myLeaveEventRef) {
+      this._myLeaveEventRef.onDisconnect().cancel();
+      this._myLeaveEventRef = null;
+    }
+  },
+
+  // Listens for leave-event markers written by onDisconnect() (see
+  // claimPresence above) and turns each one into a normal system message
+  // in the chat feed, then clears the marker so it's a one-shot.
+  watchLeaveEvents() {
+    const leaveEventsRef = this._db.ref("rooms/" + ROOM_ID + "/leaveEvents");
+    leaveEventsRef.on("child_added", snap => {
+      const val = snap.val();
+      if (!val) return;
+      this._ref.push({
+        system: true,
+        text: val.name + " left",
+        ts: firebase.database.ServerValue.TIMESTAMP
+      });
+      snap.ref.remove();
+    });
   },
 
   // Calls onCount(number) any time the set of currently-connected names
@@ -516,6 +577,8 @@ const $changeNameBtn = document.getElementById("changeNameBtn");
 const $typingBar     = document.getElementById("typingBar");
 const $autoScrollBtn = document.getElementById("autoScrollBtn");
 const $clearChatBtn  = document.getElementById("clearChatBtn");
+const $uploadImageBtn = document.getElementById("uploadImageBtn");
+const $imageFileInput = document.getElementById("imageFileInput");
 const $jumpToBottomBtn = document.getElementById("jumpToBottomBtn");
 const $charCounter    = document.getElementById("charCounter");
 const $globalClearPanel = document.getElementById("globalClearPanel");
@@ -579,13 +642,36 @@ function renderMessage(msg) {
 
   const bubble = document.createElement("div");
   bubble.className = "msg-bubble";
-  bubble.textContent = msg.text; // textContent, not innerHTML — avoids any HTML injection
+
+  if (msg.imageData) {
+    // Image messages carry a base64 data URL directly (no Firebase Storage
+    // — that needs the paid Blaze plan). Capped width/height keeps a large
+    // photo from blowing out the layout; clicking opens it full-size in a
+    // new tab.
+    const link = document.createElement("a");
+    link.href = msg.imageData;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    const img = document.createElement("img");
+    img.src = msg.imageData;
+    img.alt = "Shared image";
+    img.style.cssText = "max-width:100%;max-height:280px;border-radius:10px;display:block";
+    link.appendChild(img);
+    bubble.appendChild(link);
+    bubble.style.padding = "6px";
+  } else {
+    bubble.textContent = msg.text; // textContent, not innerHTML — avoids any HTML injection
+  }
+
   // Color is baked into the message at send time (see ChatBackend.send),
   // so it's visible to everyone and reflects whatever color was locked in
   // at the moment this specific message was sent — changing your color
-  // later never repaints older messages.
-  if (msg.bubble) bubble.style.background = msg.bubble;
-  if (msg.textColor) bubble.style.color = msg.textColor;
+  // later never repaints older messages. Only applied to text bubbles;
+  // image bubbles keep the default background so photos aren't tinted.
+  if (!msg.imageData) {
+    if (msg.bubble) bubble.style.background = msg.bubble;
+    if (msg.textColor) bubble.style.color = msg.textColor;
+  }
 
   el.appendChild(meta);
   el.appendChild(bubble);
@@ -835,6 +921,94 @@ function autosizeInput() {
   $msgInput.style.height = Math.min($msgInput.scrollHeight, 135) + "px";
 }
 
+const MAX_IMAGE_SOURCE_BYTES = 15 * 1024 * 1024; // reject absurdly large source files outright
+const IMAGE_MAX_DIMENSION = 1000; // px, longest side after resize
+const IMAGE_JPEG_QUALITY = 0.7;
+
+// Resizes + re-encodes an image file entirely in the browser (canvas ->
+// JPEG data URL), since we're storing images directly in Realtime
+// Database rather than a file host. This keeps each message's payload
+// from being an untouched multi-MB photo — a typical phone photo comes
+// down to a few hundred KB after this.
+function compressImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Couldn't read file"));
+    reader.onload = () => {
+      img.onerror = () => reject(new Error("Couldn't decode image"));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > IMAGE_MAX_DIMENSION || height > IMAGE_MAX_DIMENSION) {
+          const scale = IMAGE_MAX_DIMENSION / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", IMAGE_JPEG_QUALITY));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function sendImageFile(file) {
+  // Hard gate: images can only ever be sent by this browser tab if the
+  // mod code has been entered successfully this session. This function
+  // is also only reachable via $uploadImageBtn, which stays hidden
+  // (display:none) until modMenuUnlocked flips true — but we double-check
+  // here too, since it's cheap and it's the actual send path.
+  if (!modMenuUnlocked) return;
+
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    $connError.textContent = "That file isn't an image.";
+    $connError.style.display = "block";
+    return;
+  }
+  if (file.size > MAX_IMAGE_SOURCE_BYTES) {
+    $connError.textContent = "Image is too large.";
+    $connError.style.display = "block";
+    return;
+  }
+  if (Date.now() - lastSentAt < SEND_COOLDOWN_MS) return; // same cooldown as text messages
+
+  lastSentAt = Date.now();
+  updateSendButtonState();
+  $uploadImageBtn.disabled = true;
+  $uploadImageBtn.textContent = "Uploading…";
+
+  compressImageFile(file)
+    .then(dataUrl => ChatBackend.sendImage(myName, dataUrl))
+    .then(() => {
+      autoScroll = true;
+      setAutoScrollUI();
+    })
+    .catch(() => {
+      $connError.textContent = "Image failed to send — check your connection.";
+      $connError.style.display = "block";
+    })
+    .finally(() => {
+      $uploadImageBtn.disabled = false;
+      $uploadImageBtn.textContent = "📎 Image";
+      $imageFileInput.value = "";
+    });
+}
+
+$uploadImageBtn.addEventListener("click", () => {
+  if (!modMenuUnlocked) return; // extra guard, button shouldn't even be visible
+  $imageFileInput.click();
+});
+$imageFileInput.addEventListener("change", () => {
+  const file = $imageFileInput.files[0];
+  sendImageFile(file);
+});
+
 function updateCharCounter() {
   const remaining = MAX_CHARS - $msgInput.value.length;
   $charCounter.textContent = remaining;
@@ -876,9 +1050,28 @@ $clearChatBtn.addEventListener("click", () => {
  * IMPORTANT: this is a client-side-only gate. The "password" check runs
  * in the browser, so it is visible to anyone who opens dev tools or reads
  * this file's source — it is a deterrent against casual misuse, not real
- * security. Do not treat this as an access-control mechanism. */
+ * security. Do not treat this as an access-control mechanism.
+ *
+ * Images are entirely SESSION-LOCAL and PER-BROWSER-TAB:
+ *  - There is no room-wide "images enabled" setting anymore, and nothing
+ *    is written to Firebase about this. It lives only in the
+ *    imagesEnabledForMe variable below.
+ *  - It always starts false on every fresh page load, for everyone,
+ *    including whoever knows the code — the code has to be re-entered
+ *    each session, and the toggle has to be turned on again each time.
+ *  - The upload button ($uploadImageBtn) is display:none from the moment
+ *    the page loads and stays that way unless BOTH modMenuUnlocked is
+ *    true AND imagesEnabledForMe is true. No other user, and no future
+ *    visit by the same person, ever sees it without redoing both steps.
+ */
 const MOD_MENU_CODE = "2212";
 let modMenuUnlocked = false;
+let imagesEnabledForMe = false; // session-local only, never persisted, never shared
+
+function updateUploadButtonVisibility() {
+  const visible = modMenuUnlocked && imagesEnabledForMe;
+  $uploadImageBtn.style.display = visible ? "inline-block" : "none";
+}
 
 function renderModMenuLogin() {
   $globalClearPanel.innerHTML = "";
@@ -911,6 +1104,7 @@ function renderModMenuLogin() {
   const trySubmit = () => {
     if (input.value === MOD_MENU_CODE) {
       modMenuUnlocked = true;
+      updateUploadButtonVisibility();
       renderModMenu();
     } else {
       err.textContent = "Incorrect code.";
@@ -1045,6 +1239,43 @@ async function renderModMenu() {
     }
   });
   $globalClearPanel.appendChild(confirmBtn);
+
+  const divider = document.createElement("div");
+  divider.style.cssText = "height:1px;background:#334155;margin:12px 0";
+  $globalClearPanel.appendChild(divider);
+
+  const imgTitle = document.createElement("div");
+  imgTitle.textContent = "Images (this session, just you)";
+  imgTitle.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:8px";
+  $globalClearPanel.appendChild(imgTitle);
+
+  const imgRow = document.createElement("div");
+  imgRow.style.cssText = "display:flex;align-items:center;justify-content:space-between;margin-bottom:6px";
+  const imgLabel = document.createElement("label");
+  imgLabel.textContent = "Allow images (me)";
+  imgLabel.style.color = "#94a3b8";
+  const imgToggle = document.createElement("button");
+  imgToggle.className = "toolbar-btn" + (imagesEnabledForMe ? " active" : "");
+  imgToggle.textContent = imagesEnabledForMe ? "On" : "Off";
+  imgToggle.style.cssText = "padding:4px 14px";
+  imgToggle.addEventListener("click", () => {
+    // Purely local state — nothing written to Firebase, nothing shared,
+    // nothing persisted. Resets to Off on every reload/new tab, and only
+    // ever exists in memory for this one browser session after the code
+    // has been entered correctly.
+    imagesEnabledForMe = !imagesEnabledForMe;
+    imgToggle.className = "toolbar-btn" + (imagesEnabledForMe ? " active" : "");
+    imgToggle.textContent = imagesEnabledForMe ? "On" : "Off";
+    updateUploadButtonVisibility();
+  });
+  imgRow.appendChild(imgLabel);
+  imgRow.appendChild(imgToggle);
+  $globalClearPanel.appendChild(imgRow);
+
+  const imgNote = document.createElement("div");
+  imgNote.textContent = "Only affects you, only this session. No one else ever gets an image button, and this resets to Off next time you open the chat.";
+  imgNote.style.cssText = "color:#64748b;font-size:12px;line-height:1.4;margin-bottom:4px";
+  $globalClearPanel.appendChild(imgNote);
 
   const closeBtn = document.createElement("button");
   closeBtn.textContent = "Close";
@@ -1212,7 +1443,15 @@ function init() {
     $onlineCount.textContent = count + " online";
   });
   ChatBackend.watchMessages(renderMessage);
+  ChatBackend.watchLeaveEvents();
   ChatBackend.watchTyping(renderTyping, () => myName);
+
+  // Upload button starts (and stays) hidden until the mod code is entered
+  // AND the "Allow images (me)" toggle is switched on inside the menu —
+  // both gates are purely local to this browser session, nothing is
+  // fetched or watched from Firebase for this anymore.
+  updateUploadButtonVisibility();
+
   $emptyState.style.display = "flex";
   updateCharCounter();
 
