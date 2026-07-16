@@ -262,8 +262,9 @@
 <body>
 
 <div class="chat-header" style="position:relative;display:grid;grid-template-columns:1fr auto 1fr;align-items:center">
-  <div style="position:relative;justify-self:start">
+  <div style="position:relative;justify-self:start;display:flex;align-items:center;gap:6px">
     <span id="onlineDot" class="chat-online-dot offline" style="cursor:pointer;display:inline-block;padding:10px;margin:-10px;vertical-align:middle"></span>
+    <span id="onlineCount" style="font-size:14.5px;color:#64748b;margin-left:8px"></span>
     <div id="globalClearPanel" style="display:none;position:absolute;top:28px;left:-10px;background:#1e293b;border:1.5px solid #334155;border-radius:10px;padding:12px;z-index:10;width:240px;font-size:15px;font-weight:400"></div>
   </div>
   <div style="justify-self:center">VUS Chat</div>
@@ -324,7 +325,7 @@
 <script>
 /* ── Fill this in with your real Firebase project config ── */
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyDxMfGQ_xk-au8YgOvaFO2R9LxAe-pa9Rg",
+  apiKey: "AIzaSyDxMfGQ_xk-au8YgOvxxxxxxxxxxx",
   authDomain: "vus-chat.firebaseapp.com",
   databaseURL: "https://vus-chat-default-rtdb.firebaseio.com",
   projectId: "vus-chat",
@@ -444,6 +445,17 @@ const ChatBackend = {
     }
   },
 
+  // Calls onCount(number) any time the set of currently-connected names
+  // changes. Reuses the same presence/ node that isNameTaken() checks, so
+  // this count reflects exactly who's actively holding a name claim right
+  // now (including guests) — not total visits or messages sent.
+  watchPresenceCount(onCount) {
+    this._presenceRef.on("value", snap => {
+      const val = snap.val() || {};
+      onCount(Object.keys(val).length);
+    });
+  },
+
   // ── Typing presence ──
   // Each connected client writes to typing/<sanitizedName> while actively
   // typing, with a server timestamp so everyone can sort by "who started
@@ -497,6 +509,7 @@ const $emptyState  = document.getElementById("emptyState");
 const $msgInput    = document.getElementById("msgInput");
 const $sendBtn     = document.getElementById("sendBtn");
 const $onlineDot   = document.getElementById("onlineDot");
+const $onlineCount = document.getElementById("onlineCount");
 const $connError   = document.getElementById("connError");
 const $youAre      = document.getElementById("youAre");
 const $changeNameBtn = document.getElementById("changeNameBtn");
@@ -1195,6 +1208,9 @@ function init() {
   }
 
   ChatBackend.watchConnection(setConnectionStatus);
+  ChatBackend.watchPresenceCount(count => {
+    $onlineCount.textContent = count + " online";
+  });
   ChatBackend.watchMessages(renderMessage);
   ChatBackend.watchTyping(renderTyping, () => myName);
   $emptyState.style.display = "flex";
