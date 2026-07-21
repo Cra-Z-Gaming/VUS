@@ -33,6 +33,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);ove
 .sug-rm{margin-left:auto;font-size:11px;padding:2px 5px;border-radius:3px;transition:color .1s;line-height:1}
 .sug-rm:hover{color:var(--accent)}
 .header-right{display:flex;align-items:center;gap:5px;margin-left:auto;flex-shrink:0}
+.quota-badge{font-size:11px;font-weight:500;color:var(--text2);background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:5px 11px;white-space:nowrap;flex-shrink:0;transition:color .2s,border-color .2s;cursor:default;font-family:'DM Mono',monospace}
+.quota-badge.low{color:#e0a72a;border-color:#e0a72a}
+.quota-badge.zero{color:var(--accent);border-color:var(--accent)}
+.quota-badge.unlimited{color:#4caf50;border-color:#4caf50}
+@media(max-width:768px){.quota-badge{display:none}}
 .hbtn{width:34px;height:34px;border-radius:50%;background:transparent;border:none;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;transition:background .15s;position:relative}
 .hbtn:hover{background:var(--hover)}
 .badge{position:absolute;top:1px;right:1px;background:var(--accent);color:#fff;font-size:9px;font-weight:700;min-width:14px;height:14px;border-radius:7px;line-height:14px;text-align:center;padding:0 2px;display:none}
@@ -331,6 +336,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);ove
         </div>
         <div class="sug-box" id="sugBox"></div>
     </div>
+    <div class="quota-badge" id="quotaBadge" title="Click to open Settings" onclick="nav('settings')"></div>
     <div class="header-right">
         <button class="hbtn" onclick="randomVideo()" title="Random video (R)">🎲</button>
         <button class="hbtn" onclick="openShortcuts()" title="Keyboard shortcuts (?)">⌨️</button>
@@ -799,6 +805,7 @@ function allWLVideos() { return playlists.WL ? playlists.WL.videos : []; }
 window.onload = function() {
     initTheme();
     publicSearchesUsedToday(); // rolls the daily counter over if the date changed
+    updateQuotaBadge();
     loadPublicKeys(); // load regardless of mode, so a personal key matching a public one is still detected
     renderChips();
     renderHome();
@@ -812,6 +819,7 @@ window.onload = function() {
     updateHistCt();
     updateLibCt();
     renderKeyList();
+    updateQuotaBadge();
 };
 
 /* ═══════════════════════════════════════════
@@ -1115,6 +1123,7 @@ function markKeyOk(keyRef) {
     } else if (keyRef.source === 'public') {
         recordPublicSearch();
         updatePublicUsageUI();
+        updateQuotaBadge();
     }
 }
 
@@ -1122,6 +1131,7 @@ function setAccessMode(mode) {
     accessMode = mode;
     saveAccessMode();
     renderKeyList();
+    updateQuotaBadge();
     if (mode === 'public') loadPublicKeys();
 }
 
@@ -1185,6 +1195,25 @@ function renderKeyList() {
         }
     }
     if (accessMode === 'public') { loadPublicKeys(); updatePublicUsageUI(); }
+}
+
+function updateQuotaBadge() {
+    const badge = document.getElementById('quotaBadge');
+    if (!badge) return;
+    badge.classList.remove('low','zero','unlimited');
+    if (accessMode === 'private') {
+        badge.textContent = 'Unlimited ∞ searches';
+        badge.classList.add('unlimited');
+    } else {
+        const remaining = publicSearchesRemaining();
+        if (remaining <= 0) {
+            badge.textContent = 'No searches left';
+            badge.classList.add('zero');
+        } else {
+            badge.textContent = `${remaining} search${remaining===1?'':'es'} left`;
+            if (remaining <= 3) badge.classList.add('low');
+        }
+    }
 }
 
 function updatePublicUsageUI() {
