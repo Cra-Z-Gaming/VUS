@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>File Opener</title>
+    <title>File & URL Opener</title>
 
     <style>
         * {
@@ -52,6 +52,26 @@
 
         input[type="file"] {
             display: none;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: white;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+
+        input[type="text"]::placeholder {
+            color: #64748b;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #22c55e;
         }
 
         .file-label {
@@ -127,8 +147,8 @@
 
 <body>
 
-    <h1>File Opener</h1>
-    <p class="subtitle">Open local files in about:blank</p>
+    <h1>File & URL Opener</h1>
+    <p class="subtitle">Open local files or embed a site in about:blank</p>
 
     <!-- File Section -->
     <div class="section">
@@ -142,6 +162,17 @@
 
         <button id="fileBtn" onclick="openFile()" disabled>
             Open File
+        </button>
+    </div>
+
+    <!-- URL Section -->
+    <div class="section">
+        <div class="section-label">Open URL</div>
+
+        <input type="text" id="urlInput" placeholder="Enter full URL (e.g., https://example.com)">
+
+        <button onclick="launchSite()">
+            Open Page
         </button>
     </div>
 
@@ -228,6 +259,40 @@
             }
 
             reader.readAsText(selectedFile);
+        }
+
+        function launchSite() {
+            let targetUrl = document.getElementById('urlInput').value.trim();
+
+            if (!targetUrl) {
+                showToast("Enter a URL first");
+                return;
+            }
+
+            if (!/^https?:\/\//i.test(targetUrl)) {
+                targetUrl = 'https://' + targetUrl;
+            }
+
+            const win = window.open('about:blank', '_blank');
+
+            if (!win) {
+                showToast("Popup blocked — allow popups for this page");
+                return;
+            }
+
+            const doc = win.document;
+            doc.body.style.margin = '0';
+            doc.body.style.padding = '0';
+            doc.body.style.overflow = 'hidden';
+
+            const iframe = doc.createElement('iframe');
+            iframe.src = targetUrl;
+            iframe.style.width = '100vw';
+            iframe.style.height = '100vh';
+            iframe.style.border = 'none';
+            iframe.style.display = 'block';
+
+            doc.body.appendChild(iframe);
         }
     </script>
 
