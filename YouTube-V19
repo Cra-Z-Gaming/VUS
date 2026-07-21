@@ -584,15 +584,15 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);ove
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                     <div class="mode-toggle" id="accessModeWrap">
-                        <button class="mode-opt on" data-mode="private" onclick="setAccessMode('private')">🔒 Private</button>
-                        <button class="mode-opt" data-mode="public" onclick="setAccessMode('public')">🌍 Public</button>
+                        <button class="mode-opt" data-mode="private" onclick="setAccessMode('private')">🔒 Private</button>
+                        <button class="mode-opt on" data-mode="public" onclick="setAccessMode('public')">🌍 Public</button>
                     </div>
                     <button class="abtn a-sec" onclick="window.open(S.CONTRIBUTE_URL,'_blank')">🤝 Contribute</button>
                 </div>
             </div>
 
             <!-- PRIVATE: your own keys -->
-            <div id="privateKeySection">
+            <div id="privateKeySection" style="display:none">
                 <div class="key-hero-box">
                     <h2 style="font-size:22px;font-weight:600;margin-bottom:8px;letter-spacing:-.03em;position:relative">Get your free YouTube API key</h2>
                     <p style="font-size:13px;color:var(--text2);margin-bottom:18px;max-width:520px;position:relative">Your own key means your own quota — nobody else can use it up, and there's no daily search limit. It only takes a couple of minutes to get one. Follow the guide, then paste it below.</p>
@@ -610,7 +610,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);ove
             </div>
 
             <!-- PUBLIC: shared key pool -->
-            <div id="publicKeySection" style="display:none">
+            <div id="publicKeySection">
                 <div class="panel-hint" style="margin-bottom:14px">
                     A random key is picked from a community-contributed list for each search — no setup needed. Capped at <strong>15 searches per day</strong> to keep it fair for everyone, resetting around midnight Pacific. Switch to Private any time for unlimited searches with your own key.
                 </div>
@@ -766,7 +766,7 @@ let ctxVideo = null, mpVideoId = null, mpTitle = '', _drag = null;
 // Personal keys: [{id, name, key, status:'unknown'|'checking'|'ok'|'bad'}]
 let apiKeys = JSON.parse(localStorage.getItem('apiKeys') || '[]');
 // Access mode: 'private' (default, uses your own keys only) or 'public' (random shared key, capped searches/day)
-let accessMode = localStorage.getItem('accessMode') || 'private';
+let accessMode = localStorage.getItem('accessMode') || 'public';
 let publicKeys = []; // fetched at runtime from S.PUBLIC_KEYS_URL, one key per line — never persisted to disk
 let publicKeysLoaded = false, publicKeysLoading = false;
 // Daily public search counter: { date:'YYYY-MM-DD', count: N }
@@ -811,6 +811,7 @@ window.onload = function() {
     updateBadge();
     updateHistCt();
     updateLibCt();
+    renderKeyList();
 };
 
 /* ═══════════════════════════════════════════
