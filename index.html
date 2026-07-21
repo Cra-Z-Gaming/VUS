@@ -51,6 +51,24 @@
   }
   .hub-footer-link:hover { color: #4ade80; }
   .hub-footer-link svg { width: 14px; height: 14px; }
+
+  .qa-btn {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    background: #22c55e;
+    color: #000;
+    border: none;
+    border-radius: 10px;
+    padding: 14px 22px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    transition: background 0.15s, transform 0.15s;
+    z-index: 100;
+  }
+  .qa-btn:hover { background: #4ade80; transform: scale(1.05); }
 </style>
 </head>
 <body>
@@ -76,6 +94,8 @@
   </a>
 </div>
 
+<button class="qa-btn" id="qaBtn">Q/A</button>
+
 <script>
 const apps = {
   home: [
@@ -94,7 +114,7 @@ const apps = {
   tools: [
     { name: "AI Code Editor", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/AI-HTML-Studio", desc: "Code editor with AI — replace, add, and delete specific lines" },
     { name: "Code Editor", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/HTML%20Editor", desc: "Live code editor" },
-    { name: "about:blank opener", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/about%3Ablank%20opener", desc: "Opens files as about:blank" },
+    { name: "about:blank opener", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/about%3Ablank-opener", desc: "Opens files and sites as about:blank, many sites block cloaking" },
     { name: "Timer", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Timer", desc: "Stopwatch + countdown timer" },
     { name: "Local Music Player", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/vus-music-player.html", desc: "You need your own music files to start listening." },
     { name: "File + Folder Viewer", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/File%20Viewer", desc: "Browse your files and folders" },
@@ -126,6 +146,89 @@ const apps = {
     { name: "", url: "", desc: "" }
   ]
 };
+
+// ---- Q/A LIST ----
+// Add entries here as people respond via the Rate/Suggest form.
+// Just fill in "q" and "a" for each — leave "a" blank until you've answered it.
+const qaEntries = [
+  { q: "maybe make it so that you can open links in the about:blank opener?", a: "i just added a cloaker but many sites do not allow it, so it kinda sucks" },
+  { q: "make more tools", a: "PLEASE be more specific, id be glad to appempt to make what you ask, just dont ask for roblox or fortnite XD" },
+  { q: "", a: "" },
+  { q: "", a: "" },
+  { q: "", a: "" },
+  { q: "", a: "" },
+  { q: "", a: "" },
+  { q: "", a: "" },
+  { q: "", a: "" },
+  { q: "", a: "" }
+];
+
+function openQA() {
+  const filled = qaEntries.filter(item => (item.q && item.q.trim() !== "") || (item.a && item.a.trim() !== ""));
+
+  const rows = filled.length === 0
+    ? `<div class="qa-empty">Nothing here yet.</div>`
+    : filled.map((item, i) => `
+    <div class="qa-row">
+      <div class="qa-num">${i + 1}</div>
+      <div class="qa-body">
+        <div class="qa-line"><span class="qa-label">Q:</span> <span class="qa-text">${escapeHtml(item.q)}</span></div>
+        <div class="qa-line"><span class="qa-label">A:</span> <span class="qa-text">${escapeHtml(item.a)}</span></div>
+      </div>
+    </div>
+  `).join("");
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>VUS Hub — Q/A</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f172a; color: #f1f5f9; font-family: Arial, sans-serif; padding: 24px; }
+  h1 { font-size: 20px; margin-bottom: 16px; border-bottom: 1px solid #1f2937; padding-bottom: 12px; }
+  .qa-row {
+    display: flex;
+    gap: 12px;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+  .qa-num { color: #22c55e; font-weight: bold; min-width: 24px; }
+  .qa-body { flex: 1; }
+  .qa-line { font-size: 14px; margin-bottom: 6px; color: #f1f5f9; }
+  .qa-line:last-child { margin-bottom: 0; }
+  .qa-label { color: #94a3b8; font-weight: bold; margin-right: 4px; }
+  .qa-text:empty::before { content: "(empty)"; color: #475569; font-style: italic; }
+  .qa-empty { color: #475569; font-size: 14px; text-align: center; padding: 32px 0; }
+</style>
+</head>
+<body>
+  <h1>Q/A — Rate / Suggest Responses</h1>
+  ${rows}
+</body>
+</html>`;
+
+  const win = window.open("about:blank", "_blank");
+  if (!win) {
+    setStatus("Popup blocked — allow popups for this site.", true);
+    return;
+  }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
+
+function escapeHtml(str) {
+  return (str || "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+document.getElementById("qaBtn").onclick = openQA;
+// ---- END Q/A LIST ----
 
 let current = "home";
 
