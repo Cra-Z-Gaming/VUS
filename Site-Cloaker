@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>URL to Blank Launcher</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 50px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Embed Site in about:blank</h2>
+    <input type="text" id="urlInput" placeholder="Enter full URL (e.g., https://example.com)">
+    <button onclick="launchSite()">Open Page</button>
+</div>
+
+<script>
+function launchSite() {
+    // Get the URL from the input box
+    let targetUrl = document.getElementById('urlInput').value.trim();
+    
+    // Ensure the URL starts with http:// or https://
+    if (!/^https?:\/\//i.test(targetUrl)) {
+        targetUrl = 'https://' + targetUrl;
+    }
+
+    // Open a completely empty about:blank page in a new tab
+    const blankWindow = window.open('about:blank', '_blank');
+
+    if (blankWindow) {
+        // Create a document inside the new blank window
+        const doc = blankWindow.document;
+
+        // Set up CSS to remove margins and scrollbars from the blank window
+        doc.body.style.margin = '0';
+        doc.body.style.padding = '0';
+        doc.body.style.overflow = 'hidden';
+
+        // Create the iframe element
+        const iframe = doc.createElement('iframe');
+        
+        // Point the iframe to the user's URL
+        iframe.src = targetUrl;
+        
+        // Force the iframe to fill 100% of the browser view
+        iframe.style.width = '100vw';
+        iframe.style.height = '100vh';
+        iframe.style.border = 'none';
+        iframe.style.display = 'block';
+
+        // Inject the iframe into the blank window's body
+        doc.body.appendChild(iframe);
+    } else {
+        alert('Pop-up blocked! Please allow pop-ups for this page to work.');
+    }
+}
+</script>
+
+</body>
+</html>
