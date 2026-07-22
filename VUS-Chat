@@ -260,8 +260,9 @@
 <div class="chat-header" style="position:relative;display:grid;grid-template-columns:1fr auto 1fr;align-items:center">
   <div style="position:relative;justify-self:start;display:flex;align-items:center;gap:6px">
     <span id="onlineDot" class="chat-online-dot offline" style="cursor:pointer;display:inline-block;padding:10px;margin:-10px;vertical-align:middle"></span>
-    <span id="onlineCount" style="font-size:14.5px;color:#64748b;margin-left:8px"></span>
+    <span id="onlineCount" style="font-size:14.5px;color:#64748b;margin-left:8px;cursor:pointer"></span>
     <div id="globalClearPanel" style="display:none;position:absolute;top:28px;left:-10px;background:#1e293b;border:1.5px solid #334155;border-radius:10px;padding:12px;z-index:10;width:240px;font-size:15px;font-weight:400"></div>
+    <div id="onlineListPanel" style="display:none;position:absolute;top:28px;left:-10px;background:#1e293b;border:1.5px solid #334155;border-radius:10px;padding:12px;z-index:10;width:220px;font-size:14px;font-weight:400;max-height:280px;overflow-y:auto"></div>
   </div>
   <div style="justify-self:center">VUS Chat</div>
   <div style="font-size:16.5px;color:#475569;display:flex;align-items:center;gap:12px;justify-self:end">
@@ -452,7 +453,7 @@ const ChatBackend = {
     this._myLeaveEventRef = leaveEventRef;
 
     this._myPresenceRef.onDisconnect().remove();
-    this._myPresenceRef.set(true);
+    this._myPresenceRef.set({ joinedAt: firebase.database.ServerValue.TIMESTAMP });
 
     if (!this._silentSession) {
       this._ref.push({
@@ -510,6 +511,22 @@ const ChatBackend = {
     });
   },
 
+  // Calls onList(array of {name, joinedAt}) any time presence changes.
+  // Reuses the same presence/ node as everything else here, so this is
+  // exactly the set of currently-connected names, each with the server
+  // timestamp of when they claimed presence (may be null very briefly
+  // right after joining, before the server timestamp round-trips back).
+  watchPresenceList(onList) {
+    this._presenceRef.on("value", snap => {
+      const val = snap.val() || {};
+      const list = Object.entries(val).map(([key, v]) => ({
+        name: key,
+        joinedAt: (v && typeof v === "object") ? (v.joinedAt || null) : null
+      }));
+      onList(list);
+    });
+  },
+
   // ── Typing presence ──
   setTyping(name) {
     if (!this._myTypingRef) {
@@ -561,6 +578,7 @@ const $imageFileInput = document.getElementById("imageFileInput");
 const $jumpToBottomBtn = document.getElementById("jumpToBottomBtn");
 const $charCounter    = document.getElementById("charCounter");
 const $globalClearPanel = document.getElementById("globalClearPanel");
+const $onlineListPanel = document.getElementById("onlineListPanel");
 
 let myName = "";
 let messageCount = 0;
@@ -678,6 +696,18 @@ function randomGuestName() {
   return "Guest " + n;
 }
 
+function randomSpectatorName() {
+  const n = Math.floor(Math.random() * 999) + 1;
+  return "Spectator #" + n;
+}
+
+// True if a name contains "spectator" anywhere, case-insensitive — used to
+// mute chat for auto-assigned spectators AND anyone who manually renames
+// into something containing that word.
+function isSpectatorName(name) {
+  return /spectator/i.test(name || "");
+}
+
 async function attemptJoin(rawName, isRename, errEl, submitBtn, joinSilently) {
   const name = rawName.trim().replace(/ {2,}/g, " ");
   if (!name) {
@@ -725,7 +755,8 @@ async function attemptJoin(rawName, isRename, errEl, submitBtn, joinSilently) {
   $changeNameBtn.style.display = "inline-block";
   $joinScreen.style.display = "none";
   $chatScreen.style.display = "flex";
-  $msgInput.focus();
+  updateComposerLockState();
+  if (!isSpectatorName(myName)) $msgInput.focus();
   scrollToBottom();
 }
 
@@ -834,7 +865,29 @@ function updateSendButtonState() {
   }
 }
 
+// Locks the composer whenever the current name contains "spectator"
+// (case-insensitive) — covers auto-assigned spectators AND anyone who
+// manually renames into something with that word in it. Swaps the
+// placeholder/button to prompt a rename instead of silently no-opping.
+function updateComposerLockState() {
+  if (isSpectatorName(myName)) {
+    $msgInput.disabled = true;
+    $msgInput.placeholder = "Rename to chat — you're spectating";
+    $sendBtn.disabled = false; // stays clickable so it can open rename
+    $sendBtn.classList.remove("cooldown");
+    $sendBtn.textContent = "Rename to chat";
+  } else {
+    $msgInput.disabled = false;
+    $msgInput.placeholder = "Type a message…";
+    updateSendButtonState();
+  }
+}
+
 function sendMessage() {
+  if (isSpectatorName(myName)) {
+    openChangeName();
+    return;
+  }
   if (Date.now() - lastSentAt < SEND_COOLDOWN_MS) return;
   const text = $msgInput.value.trim();
   if (!text) return;
@@ -1015,13 +1068,12 @@ function leaveSilently() {
 function renderPreCodeActions(container) {
   if (!myName) {
     const specBtn = document.createElement("button");
-    specBtn.textContent = "Join silently / as Spectator ";
+    specBtn.textContent = "Join as Spectator";
     specBtn.className = "toolbar-btn";
     specBtn.style.cssText = "width:100%;margin-bottom:8px";
     specBtn.addEventListener("click", () => {
       closeClearPanel();
-      $joinScreen.style.display = "flex";
-      renderJoinNameEntrySpectator();
+      joinAsSpectatorAuto();
     });
     container.appendChild(specBtn);
   } else {
@@ -1038,50 +1090,30 @@ function renderPreCodeActions(container) {
   container.appendChild(divider);
 }
 
-// Name entry variant used for "Join as Spectator" — same validation as a
-// normal join, just tags the resulting session as silent.
-function renderJoinNameEntrySpectator() {
-  $joinCard.innerHTML = "";
+// "Join as Spectator" — no name screen at all. Auto-assigns "Spectator #N",
+// retrying on the rare collision, then joins silently (no join/leave log).
+// Does NOT touch localStorage's saved name, so leaving spectator mode
+// later (rename/leave) still returns to the person's real saved identity.
+async function joinAsSpectatorAuto() {
+  const dummyErr = { textContent: "" };
+  let name = randomSpectatorName();
+  for (let attempt = 0; attempt < 8; attempt++) {
+    try {
+      const taken = await ChatBackend.isNameTaken(name);
+      if (!taken) break;
+    } catch (e) { break; } // if the check fails, just proceed with what we have
+    name = randomSpectatorName();
+  }
 
-  const h2 = document.createElement("h2");
-  h2.textContent = "Join as Spectator";
-  const p = document.createElement("p");
-  p.textContent = "Pick a display name. You can watch and chat, but your join/leave won't be logged.";
-
-  const input = document.createElement("input");
-  input.id = "nameInput";
-  input.type = "text";
-  input.placeholder = "Your name…";
-  input.maxLength = 24;
-  input.autocomplete = "off";
-
-  const errEl = document.createElement("div");
-  errEl.id = "joinError";
-
-  const joinBtn = document.createElement("button");
-  joinBtn.id = "joinBtn";
-  joinBtn.textContent = "Join Silently";
-
-  const submit = () => attemptJoin(input.value, false, errEl, joinBtn, true);
-  joinBtn.addEventListener("click", submit);
-  input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
-
-  const backBtn = document.createElement("button");
-  backBtn.className = "join-secondary-btn";
-  backBtn.textContent = "Back";
-  backBtn.addEventListener("click", () => {
-    const savedName = localStorage.getItem(NAME_STORAGE_KEY);
-    if (savedName) renderJoinReturning(savedName); else renderJoinNameEntry(false);
-  });
-
-  $joinCard.appendChild(h2);
-  $joinCard.appendChild(p);
-  $joinCard.appendChild(input);
-  $joinCard.appendChild(errEl);
-  $joinCard.appendChild(joinBtn);
-  $joinCard.appendChild(backBtn);
-
-  input.focus();
+  myName = name;
+  isSpectator = true;
+  ChatBackend.claimPresence(myName, true);
+  $youAre.textContent = "You: " + name;
+  $changeNameBtn.style.display = "inline-block";
+  $joinScreen.style.display = "none";
+  $chatScreen.style.display = "flex";
+  updateComposerLockState();
+  scrollToBottom();
 }
 
 function renderModMenuLogin() {
@@ -1299,6 +1331,7 @@ function closeClearPanel() {
 }
 
 function openModMenu() {
+  closeOnlineListPanel();
   $globalClearPanel.style.display = "block";
   if (modMenuUnlocked) {
     renderModMenu();
@@ -1306,6 +1339,84 @@ function openModMenu() {
     renderModMenuLogin();
   }
 }
+
+/* ── Online list panel (click "N online" text) ── */
+let latestPresenceList = [];
+let onlineListRefreshTimer = null;
+
+function formatElapsed(joinedAt) {
+  if (!joinedAt) return "just now";
+  const secs = Math.max(0, Math.floor((Date.now() - joinedAt) / 1000));
+  if (secs < 60) return "just now";
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return mins + "m";
+  const hrs = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return hrs + "h" + (remMins ? " " + remMins + "m" : "");
+}
+
+function renderOnlineListPanel() {
+  $onlineListPanel.innerHTML = "";
+
+  const title = document.createElement("div");
+  title.textContent = "Online now";
+  title.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:8px";
+  $onlineListPanel.appendChild(title);
+
+  if (latestPresenceList.length === 0) {
+    const empty = document.createElement("div");
+    empty.textContent = "No one online.";
+    empty.style.cssText = "color:#64748b;font-size:13.5px";
+    $onlineListPanel.appendChild(empty);
+    return;
+  }
+
+  // Longest-present first, so regulars float to the top.
+  const sorted = [...latestPresenceList].sort((a, b) => (a.joinedAt || Date.now()) - (b.joinedAt || Date.now()));
+
+  sorted.forEach(entry => {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px solid #273549;font-size:13.5px";
+    const nameEl = document.createElement("span");
+    nameEl.textContent = entry.name;
+    nameEl.style.cssText = "color:#f1f5f9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+    const timeEl = document.createElement("span");
+    timeEl.textContent = formatElapsed(entry.joinedAt);
+    timeEl.style.cssText = "color:#64748b;flex-shrink:0";
+    row.appendChild(nameEl);
+    row.appendChild(timeEl);
+    $onlineListPanel.appendChild(row);
+  });
+}
+
+function closeOnlineListPanel() {
+  $onlineListPanel.style.display = "none";
+  clearInterval(onlineListRefreshTimer);
+}
+
+function openOnlineListPanel() {
+  closeClearPanel(); // don't show both panels at once
+  $onlineListPanel.style.display = "block";
+  renderOnlineListPanel();
+  clearInterval(onlineListRefreshTimer);
+  onlineListRefreshTimer = setInterval(renderOnlineListPanel, 30000);
+}
+
+$onlineCount.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const isOpen = $onlineListPanel.style.display === "block";
+  if (isOpen) {
+    closeOnlineListPanel();
+  } else {
+    openOnlineListPanel();
+  }
+});
+
+document.addEventListener("click", (e) => {
+  if ($onlineListPanel.style.display === "block" && !$onlineListPanel.contains(e.target) && e.target !== $onlineCount) {
+    closeOnlineListPanel();
+  }
+});
 
 $onlineDot.addEventListener("click", (e) => {
   e.stopPropagation();
@@ -1421,6 +1532,10 @@ function init() {
   ChatBackend.watchConnection(setConnectionStatus);
   ChatBackend.watchPresenceCount(count => {
     $onlineCount.textContent = count + " online";
+  });
+  ChatBackend.watchPresenceList(list => {
+    latestPresenceList = list;
+    if ($onlineListPanel.style.display === "block") renderOnlineListPanel();
   });
   ChatBackend.watchMessages(renderMessage);
   ChatBackend.watchLeaveEvents();
