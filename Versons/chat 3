@@ -1,0 +1,1562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VUS Chat</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: #0f172a;
+    color: #f1f5f9;
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  .chat-header {
+    padding: 18px 21px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 24px;
+    font-weight: 500;
+    border-bottom: 1.5px solid #1f2937;
+    flex-shrink: 0;
+  }
+  .chat-header .room-name { color: #94a3b8; font-size: 18px; font-weight: 400; }
+  .chat-online-dot {
+    display: inline-block;
+    width: 10.5px;
+    height: 10.5px;
+    border-radius: 50%;
+    background: #22c55e;
+    margin-right: 7.5px;
+  }
+  .chat-online-dot.offline { background: #ef4444; }
+
+  /* ── Join screen (asks for a name before entering) ── */
+  #joinScreen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  #joinCard {
+    width: 100%;
+    max-width: 280px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  #joinScreen h2 { font-size: 19px; font-weight: 500; margin-bottom: 2px; text-align: center; }
+  #joinScreen p { font-size: 13.5px; color: #94a3b8; text-align: center; margin-bottom: 4px; line-height: 1.4; }
+  #nameInput {
+    width: 100%;
+    padding: 10px 13px;
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 9px;
+    color: #f1f5f9;
+    font-size: 15px;
+    outline: none;
+  }
+  #nameInput:focus { border-color: #22c55e; }
+  #joinBtn {
+    width: 100%;
+    padding: 10px 13px;
+    background: #22c55e;
+    border: none;
+    border-radius: 9px;
+    color: #000;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  #joinBtn:hover { background: #4ade80; }
+  #joinBtn:disabled { opacity: .5; cursor: not-allowed; }
+  #joinError { font-size: 13px; color: #ef4444; min-height: 18px; }
+  .join-secondary-btn {
+    width: 100%;
+    padding: 9px 13px;
+    background: transparent;
+    border: 1.5px solid #334155;
+    border-radius: 9px;
+    color: #94a3b8;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .join-secondary-btn:hover { color: #f1f5f9; border-color: #475569; }
+  .join-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    color: #475569;
+    font-size: 12px;
+  }
+  .join-divider::before, .join-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: #334155;
+  }
+
+  /* ── Chat screen ── */
+  #chatScreen { display: none; flex: 1; flex-direction: column; min-height: 0; }
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 21px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  #messages::-webkit-scrollbar { width: 7.5px; }
+  #messages::-webkit-scrollbar-thumb { background: #334155; border-radius: 4.5px; }
+
+  .msg { max-width: 82%; display: flex; flex-direction: column; gap: 3px; }
+  .msg.mine { align-self: flex-end; align-items: flex-end; }
+  .msg-meta { font-size: 16.5px; color: #64748b; padding: 0 6px; }
+  .msg-bubble {
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 15px;
+    padding: 12px 16.5px;
+    font-size: 20.2px;
+    line-height: 1.4;
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+  .msg.mine .msg-bubble { background: #14532d; border-color: #166534; }
+  .msg.system { align-self: center; max-width: 100%; }
+  .msg.system .msg-bubble {
+    background: transparent;
+    border: none;
+    color: #64748b;
+    font-size: 17.2px;
+    font-style: italic;
+    padding: 3px;
+  }
+
+  #emptyState {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #475569;
+    font-size: 19.5px;
+    text-align: center;
+    padding: 30px;
+  }
+
+  /* ── Toolbar (auto-scroll / clear chat) ── */
+  #toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 9px;
+    padding: 9px 21px;
+    border-top: 1.5px solid #1f2937;
+    flex-shrink: 0;
+  }
+  .toolbar-btn {
+    background: transparent;
+    border: 1.5px solid #334155;
+    color: #94a3b8;
+    font-size: 15.8px;
+    padding: 6px 12px;
+    border-radius: 9px;
+    cursor: pointer;
+  }
+  .toolbar-btn:hover { color: #f1f5f9; border-color: #475569; }
+  .toolbar-btn.active {
+    background: rgba(34,197,94,.12);
+    border-color: #22c55e;
+    color: #4ade80;
+  }
+  #jumpToBottomBtn {
+    display: none;
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    color: #f1f5f9;
+    font-size: 15.8px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    align-self: center;
+    margin: 0 auto 6px auto;
+  }
+  #jumpToBottomBtn:hover { border-color: #475569; }
+
+  /* ── Composer ── */
+  #composer {
+    display: flex;
+    gap: 12px;
+    padding: 15px 18px;
+    border-top: 1.5px solid #1f2937;
+    flex-shrink: 0;
+    align-items: flex-end;
+  }
+  #composerInputWrap {
+    flex: 1;
+    display: flex;
+  }
+  #msgInput {
+    padding: 13.5px 18px;
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 12px;
+    color: #f1f5f9;
+    font-size: 20.2px;
+    outline: none;
+    resize: none;
+    max-height: 135px;
+    font-family: inherit;
+    width: 100%;
+  }
+  #msgInput:focus { border-color: #22c55e; }
+  #charCounter {
+    font-size: 14.5px;
+    color: #64748b;
+  }
+  #charCounter.warn { color: #f59e0b; }
+  #charCounter.limit { color: #ef4444; }
+  #sendBtn {
+    padding: 0 24px;
+    height: 51px;
+    background: #22c55e;
+    border: none;
+    border-radius: 12px;
+    color: #000;
+    font-weight: 600;
+    font-size: 19.5px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  #sendBtn:hover { background: #4ade80; }
+  #sendBtn:disabled { opacity: .5; cursor: not-allowed; }
+
+  #connError {
+    display: none;
+    padding: 12px 21px;
+    background: rgba(239,68,68,.1);
+    border-top: 1.5px solid rgba(239,68,68,.3);
+    color: #ef4444;
+    font-size: 17.2px;
+    flex-shrink: 0;
+  }
+  #changeNameBtn:hover { color: #f1f5f9 !important; border-color: #475569 !important; }
+  #sendBtn.cooldown { background: #334155; color: #64748b; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<div class="chat-header" style="position:relative;display:grid;grid-template-columns:1fr auto 1fr;align-items:center">
+  <div style="position:relative;justify-self:start;display:flex;align-items:center;gap:6px">
+    <span id="onlineDot" class="chat-online-dot offline" style="cursor:pointer;display:inline-block;padding:10px;margin:-10px;vertical-align:middle"></span>
+    <span id="onlineCount" style="font-size:14.5px;color:#64748b;margin-left:8px;cursor:pointer"></span>
+    <div id="globalClearPanel" style="display:none;position:absolute;top:28px;left:-10px;background:#1e293b;border:1.5px solid #334155;border-radius:10px;padding:12px;z-index:10;width:240px;font-size:15px;font-weight:400"></div>
+    <div id="onlineListPanel" style="display:none;position:absolute;top:28px;left:-10px;background:#1e293b;border:1.5px solid #334155;border-radius:10px;padding:12px;z-index:10;width:220px;font-size:14px;font-weight:400;max-height:280px;overflow-y:auto"></div>
+  </div>
+  <div style="justify-self:center">VUS Chat</div>
+  <div style="font-size:16.5px;color:#475569;display:flex;align-items:center;gap:12px;justify-self:end">
+    <span id="youAre"></span>
+    <button id="changeNameBtn" style="display:none;background:transparent;border:1.5px solid #334155;color:#64748b;font-size:15.8px;padding:4.5px 10.5px;border-radius:9px;cursor:pointer">Change name</button>
+  </div>
+</div>
+
+<div id="connError"></div>
+
+<!-- Join screen: ask for a display name before entering the room.
+     Content is built dynamically in JS depending on whether a previous
+     name is saved (renderJoinReturning / renderJoinNameEntry). -->
+<div id="joinScreen">
+  <div id="joinCard"></div>
+</div>
+
+<!-- Chat screen: shown after joining -->
+<div id="chatScreen">
+  <div id="messages"></div>
+  <div id="emptyState" style="display:none">No messages yet — say hi!</div>
+  <button id="jumpToBottomBtn">↓ Jump to latest</button>
+  <div id="typingBar" style="display:none;padding:6px 21px;font-size:17.2px;color:#64748b;font-style:italic;flex-shrink:0"></div>
+  <div id="toolbar">
+    <button id="uploadImageBtn" class="toolbar-btn" style="display:none">📎 Image</button>
+    <input id="imageFileInput" type="file" accept="image/*" style="display:none">
+    <span id="charCounter">500</span>
+    <div style="flex:1"></div>
+    <button id="autoScrollBtn" class="toolbar-btn active">Auto Scroll: On</button>
+    <button id="clearChatBtn" class="toolbar-btn">Clear Chat</button>
+  </div>
+  <div id="composer">
+    <div id="composerInputWrap">
+      <textarea id="msgInput" rows="1" placeholder="Type a message…" maxlength="500"></textarea>
+    </div>
+    <button id="sendBtn">Send</button>
+  </div>
+</div>
+
+<!--
+  ═══════════════════════════════════════════════════════════
+  FIREBASE SETUP REQUIRED — read this before this chat will work
+  ═══════════════════════════════════════════════════════════
+  1. Go to https://console.firebase.google.com and create a free project.
+  2. In the project, go to "Build" → "Realtime Database" → "Create Database".
+     Start in TEST MODE for now (anyone can read/write — fine for a small
+     public chat room, but you can lock it down later with Firebase rules).
+  3. Go to Project Settings (gear icon) → General → "Your apps" → click the
+     "</>" web icon to register a web app. It'll give you a config object
+     that looks like the FIREBASE_CONFIG placeholder below.
+  4. Copy that object and paste it in place of FIREBASE_CONFIG below.
+  5. That's it — no server to run, this connects directly from the browser.
+
+  Room name: change ROOM_ID below if you want multiple separate chat rooms
+  (e.g. one for VUS Hub, one for VUSL) using the same Firebase project.
+  ═══════════════════════════════════════════════════════════
+-->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+/* ── Fill this in with your real Firebase project config ── */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDxMfGQ_xk-au8YgOvaFO2R9LxAe-pa9Rg",
+  authDomain: "vus-chat.firebaseapp.com",
+  databaseURL: "https://vus-chat-default-rtdb.firebaseio.com",
+  projectId: "vus-chat",
+  storageBucket: "vus-chat.firebasestorage.app",
+  messagingSenderId: "134456894391",
+  appId: "1:134456894391:web:bdf28487bf2b2eae593e32"
+};
+
+/* Change this to run multiple separate chat rooms off one Firebase project */
+const ROOM_ID = "vus-hub-main";
+
+/* Only keep the most recent N messages loaded/rendered, to keep things fast
+   even after thousands of messages accumulate over time. */
+const MAX_MESSAGES = 200;
+
+const MAX_CHARS = 500;
+
+/* ══════════════════════════════════════════════════════════
+   Backend abstraction layer.
+   Every actual Firebase call is isolated in this one object so
+   that swapping to a different backend later (Supabase, a custom
+   server, etc.) only means rewriting the functions below —
+   nothing in the UI code below needs to change.
+   ══════════════════════════════════════════════════════════ */
+const ChatBackend = {
+  _db: null,
+  _ref: null,
+  _typingRef: null,
+  _myTypingRef: null,
+  _connectedRef: null,
+  _presenceRef: null,
+  _myPresenceRef: null,
+  _myLeaveEventRef: null,
+  _nameColorsRef: null,
+
+  init() {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    this._db = firebase.database();
+    this._ref = this._db.ref("rooms/" + ROOM_ID + "/messages");
+    this._typingRef = this._db.ref("rooms/" + ROOM_ID + "/typing");
+    this._presenceRef = this._db.ref("rooms/" + ROOM_ID + "/presence");
+    this._nameColorsRef = this._db.ref("rooms/" + ROOM_ID + "/nameColors");
+    this._connectedRef = this._db.ref(".info/connected");
+  },
+
+  // Calls onStatus(true/false) whenever the connection state changes
+  watchConnection(onStatus) {
+    this._connectedRef.on("value", snap => onStatus(snap.val() === true));
+  },
+
+  // Calls onMessage(msgObject) for every existing + new message
+  watchMessages(onMessage) {
+    this._ref.limitToLast(MAX_MESSAGES).on("child_added", snap => {
+      onMessage({ id: snap.key, ...snap.val() });
+    });
+  },
+
+  // Sends an already-compressed base64 data URL as a message. No Firebase
+  // Storage involved — this stays on the free Spark plan, at the cost of
+  // bulkier message payloads than a real file host would give you. The
+  // image is compressed/resized client-side (see compressImageFile)
+  // before this is ever called, to keep that payload size reasonable.
+  async sendImage(name, dataUrl) {
+    const color = await this.getNameColor(name);
+    return this._ref.push({
+      name: name,
+      imageData: dataUrl,
+      ts: firebase.database.ServerValue.TIMESTAMP,
+      ...(color ? { bubble: color.bubble, textColor: color.text } : {})
+    });
+  },
+
+  // Sends one message. If this name has a locked-in color, it's baked
+  // into the message itself at send time — so changing your color later
+  // only affects messages sent after the change, never past ones.
+  async send(name, text) {
+    const color = await this.getNameColor(name);
+    return this._ref.push({
+      name: name,
+      text: text,
+      ts: firebase.database.ServerValue.TIMESTAMP,
+      ...(color ? { bubble: color.bubble, textColor: color.text } : {})
+    });
+  },
+
+  // ── Per-name bubble color (write-once) ──
+  async getNameColor(name) {
+    const snap = await this._nameColorsRef.child(this._safeKey(name)).get();
+    return snap.exists() ? snap.val() : null;
+  },
+
+  async claimColor(name, bubble, text) {
+    const key = this._safeKey(name);
+    const ref = this._nameColorsRef.child(key);
+    const existing = await ref.get();
+    if (existing.exists()) {
+      return { ok: false, reason: "already-set" };
+    }
+    await ref.set({ bubble, text });
+    return { ok: true };
+  },
+
+  // ── Presence / name reservation ──
+  async isNameTaken(name) {
+    const snap = await this._presenceRef.get();
+    const val = snap.val() || {};
+    const key = this._safeKey(name);
+    return Object.prototype.hasOwnProperty.call(val, key);
+  },
+
+  // Posts join/leave messages to the room feed itself (not just updating
+  // presence data), so they show up inline in the chat like any other
+  // message — just rendered without a bubble via msg.system.
+  // `silent` (spectator mode) skips the join/leave feed messages entirely,
+  // while still claiming presence so the online count/list stays accurate.
+  claimPresence(name, silent) {
+    this.releasePresence();
+    this._myPresenceRef = this._presenceRef.child(this._safeKey(name));
+    this._silentSession = !!silent;
+
+    const leaveEventRef = this._db.ref("rooms/" + ROOM_ID + "/leaveEvents").push();
+    if (!this._silentSession) {
+      leaveEventRef.onDisconnect().set({ name, ts: firebase.database.ServerValue.TIMESTAMP });
+    }
+    this._myLeaveEventRef = leaveEventRef;
+
+    this._myPresenceRef.onDisconnect().remove();
+    this._myPresenceRef.set({ joinedAt: firebase.database.ServerValue.TIMESTAMP });
+
+    if (!this._silentSession) {
+      this._ref.push({
+        system: true,
+        text: name + " joined",
+        ts: firebase.database.ServerValue.TIMESTAMP
+      });
+    }
+  },
+
+  // Drops presence right now without ever posting a "left" message,
+  // regardless of whether this session was silent/spectator or normal.
+  // Used by the "Leave Silently" mod-menu action.
+  releasePresenceSilently() {
+    if (this._myLeaveEventRef) {
+      this._myLeaveEventRef.onDisconnect().cancel();
+      this._myLeaveEventRef = null;
+    }
+    if (this._myPresenceRef) {
+      this._myPresenceRef.onDisconnect().cancel();
+      this._myPresenceRef.remove();
+      this._myPresenceRef = null;
+    }
+  },
+
+  releasePresence() {
+    if (this._myPresenceRef) {
+      this._myPresenceRef.remove();
+      this._myPresenceRef = null;
+    }
+    if (this._myLeaveEventRef) {
+      this._myLeaveEventRef.onDisconnect().cancel();
+      this._myLeaveEventRef = null;
+    }
+  },
+
+  watchLeaveEvents() {
+    const leaveEventsRef = this._db.ref("rooms/" + ROOM_ID + "/leaveEvents");
+    leaveEventsRef.on("child_added", snap => {
+      const val = snap.val();
+      if (!val) return;
+      this._ref.push({
+        system: true,
+        text: val.name + " left",
+        ts: firebase.database.ServerValue.TIMESTAMP
+      });
+      snap.ref.remove();
+    });
+  },
+
+  watchPresenceCount(onCount) {
+    this._presenceRef.on("value", snap => {
+      const val = snap.val() || {};
+      onCount(Object.keys(val).length);
+    });
+  },
+
+  // Calls onList(array of {name, joinedAt}) any time presence changes.
+  // Reuses the same presence/ node as everything else here, so this is
+  // exactly the set of currently-connected names, each with the server
+  // timestamp of when they claimed presence (may be null very briefly
+  // right after joining, before the server timestamp round-trips back).
+  watchPresenceList(onList) {
+    this._presenceRef.on("value", snap => {
+      const val = snap.val() || {};
+      const list = Object.entries(val).map(([key, v]) => ({
+        name: key,
+        joinedAt: (v && typeof v === "object") ? (v.joinedAt || null) : null
+      }));
+      onList(list);
+    });
+  },
+
+  // ── Typing presence ──
+  setTyping(name) {
+    if (!this._myTypingRef) {
+      this._myTypingRef = this._typingRef.child(this._safeKey(name));
+      this._myTypingRef.onDisconnect().remove();
+    }
+    this._myTypingRef.set({ name: name, ts: firebase.database.ServerValue.TIMESTAMP });
+  },
+
+  clearTyping() {
+    if (this._myTypingRef) this._myTypingRef.remove();
+  },
+
+  watchTyping(onChange, excludeNameFn) {
+    this._typingRef.on("value", snap => {
+      const val = snap.val() || {};
+      const currentExclude = excludeNameFn();
+      const entries = Object.values(val)
+        .filter(e => e && e.name !== currentExclude)
+        .sort((a, b) => (a.ts || 0) - (b.ts || 0))
+        .map(e => e.name);
+      onChange(entries);
+    });
+  },
+
+  _safeKey(name) {
+    return name.replace(/[.#$\[\]/]/g, "_");
+  }
+};
+
+/* ── DOM refs ── */
+const $joinScreen  = document.getElementById("joinScreen");
+const $joinCard    = document.getElementById("joinCard");
+const $chatScreen  = document.getElementById("chatScreen");
+const $messages    = document.getElementById("messages");
+const $emptyState  = document.getElementById("emptyState");
+const $msgInput    = document.getElementById("msgInput");
+const $sendBtn     = document.getElementById("sendBtn");
+const $onlineDot   = document.getElementById("onlineDot");
+const $onlineCount = document.getElementById("onlineCount");
+const $connError   = document.getElementById("connError");
+const $youAre      = document.getElementById("youAre");
+const $changeNameBtn = document.getElementById("changeNameBtn");
+const $typingBar     = document.getElementById("typingBar");
+const $autoScrollBtn = document.getElementById("autoScrollBtn");
+const $clearChatBtn  = document.getElementById("clearChatBtn");
+const $uploadImageBtn = document.getElementById("uploadImageBtn");
+const $imageFileInput = document.getElementById("imageFileInput");
+const $jumpToBottomBtn = document.getElementById("jumpToBottomBtn");
+const $charCounter    = document.getElementById("charCounter");
+const $globalClearPanel = document.getElementById("globalClearPanel");
+const $onlineListPanel = document.getElementById("onlineListPanel");
+
+let myName = "";
+let messageCount = 0;
+let autoScroll = true;
+let isSpectator = false; // this session joined silently (no join/leave log)
+
+const NAME_STORAGE_KEY = "vusChatName";
+const SEND_COOLDOWN_MS = 3000;
+let lastSentAt = 0;
+let cooldownTimer = null;
+
+let isCurrentlyTyping = false;
+let typingStopTimer = null;
+
+function esc(s = "") {
+  return String(s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function formatTime(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function isNearBottom() {
+  return $messages.scrollHeight - $messages.scrollTop - $messages.clientHeight < 120;
+}
+
+function scrollToBottom() {
+  requestAnimationFrame(() => { $messages.scrollTop = $messages.scrollHeight; });
+  $jumpToBottomBtn.style.display = "none";
+}
+
+function renderMessage(msg) {
+  $emptyState.style.display = "none";
+
+  if (msg.system) {
+    const sysEl = document.createElement("div");
+    sysEl.className = "msg system";
+    const sysBubble = document.createElement("div");
+    sysBubble.className = "msg-bubble";
+    sysBubble.textContent = msg.text;
+    sysEl.appendChild(sysBubble);
+    $messages.appendChild(sysEl);
+    messageCount++;
+    if (autoScroll) scrollToBottom();
+    return;
+  }
+
+  const mine = msg.name === myName;
+  const el = document.createElement("div");
+  el.className = "msg" + (mine ? " mine" : "");
+
+  const meta = document.createElement("div");
+  meta.className = "msg-meta";
+  meta.textContent = (mine ? "You" : esc(msg.name)) + (msg.ts ? " · " + formatTime(msg.ts) : "");
+
+  const bubble = document.createElement("div");
+  bubble.className = "msg-bubble";
+
+  if (msg.imageData) {
+    const link = document.createElement("a");
+    link.href = msg.imageData;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    const img = document.createElement("img");
+    img.src = msg.imageData;
+    img.alt = "Shared image";
+    img.style.cssText = "max-width:100%;max-height:280px;border-radius:10px;display:block";
+    link.appendChild(img);
+    bubble.appendChild(link);
+    bubble.style.padding = "6px";
+  } else {
+    bubble.textContent = msg.text;
+  }
+
+  if (!msg.imageData) {
+    if (msg.bubble) bubble.style.background = msg.bubble;
+    if (msg.textColor) bubble.style.color = msg.textColor;
+  }
+
+  el.appendChild(meta);
+  el.appendChild(bubble);
+  $messages.appendChild(el);
+
+  messageCount++;
+  while (messageCount > MAX_MESSAGES) {
+    const first = $messages.querySelector(".msg");
+    if (!first) break;
+    first.remove();
+    messageCount--;
+  }
+
+  if (autoScroll && (isNearBottom() || mine)) {
+    scrollToBottom();
+  } else if (!isNearBottom()) {
+    $jumpToBottomBtn.style.display = "block";
+  }
+}
+
+function setConnectionStatus(isOnline) {
+  $onlineDot.className = "chat-online-dot" + (isOnline ? "" : " offline");
+  if (isOnline) {
+    $connError.style.display = "none";
+  } else {
+    $connError.textContent = "Disconnected — trying to reconnect…";
+    $connError.style.display = "block";
+  }
+}
+
+function randomGuestName() {
+  const n = Math.floor(Math.random() * 999) + 1;
+  return "Guest " + n;
+}
+
+function randomSpectatorName() {
+  const n = Math.floor(Math.random() * 999) + 1;
+  return "Spectator #" + n;
+}
+
+// True if a name contains "spectator" anywhere, case-insensitive — used to
+// mute chat for auto-assigned spectators AND anyone who manually renames
+// into something containing that word.
+function isSpectatorName(name) {
+  return /spectator/i.test(name || "");
+}
+
+async function attemptJoin(rawName, isRename, errEl, submitBtn, joinSilently) {
+  const name = rawName.trim().replace(/ {2,}/g, " ");
+  if (!name) {
+    errEl.textContent = "Enter a name to continue.";
+    return;
+  }
+  if (name.length > 24) {
+    errEl.textContent = "Name is too long (max 24 characters).";
+    return;
+  }
+
+  if (isRename && name === myName) {
+    $chatScreen.style.display = "flex";
+    $joinScreen.style.display = "none";
+    return;
+  }
+
+  if (submitBtn) submitBtn.disabled = true;
+  errEl.textContent = "";
+  try {
+    const taken = await ChatBackend.isNameTaken(name);
+    if (taken) {
+      errEl.textContent = "That name is already used.";
+      if (submitBtn) submitBtn.disabled = false;
+      return;
+    }
+  } catch (e) {
+    errEl.textContent = "Couldn't check name availability — try again.";
+    if (submitBtn) submitBtn.disabled = false;
+    return;
+  }
+  if (submitBtn) submitBtn.disabled = false;
+
+  if (isRename && isCurrentlyTyping) {
+    ChatBackend.clearTyping();
+    isCurrentlyTyping = false;
+  }
+  ChatBackend._myTypingRef = null;
+
+  myName = name;
+  isSpectator = !!joinSilently;
+  localStorage.setItem(NAME_STORAGE_KEY, name);
+  ChatBackend.claimPresence(myName, isSpectator);
+  $youAre.textContent = "You: " + name + (isSpectator ? " (spectating)" : "");
+  $changeNameBtn.style.display = "inline-block";
+  $joinScreen.style.display = "none";
+  $chatScreen.style.display = "flex";
+  updateComposerLockState();
+  if (!isSpectatorName(myName)) $msgInput.focus();
+  scrollToBottom();
+}
+
+function renderJoinReturning(savedName) {
+  $joinCard.innerHTML = "";
+
+  const h2 = document.createElement("h2");
+  h2.textContent = "Welcome back";
+  const p = document.createElement("p");
+  p.textContent = "Continue as \u201c" + savedName + "\u201d?";
+
+  const errEl = document.createElement("div");
+  errEl.id = "joinError";
+
+  const yesBtn = document.createElement("button");
+  yesBtn.id = "joinBtn";
+  yesBtn.textContent = "Continue as " + savedName;
+  yesBtn.addEventListener("click", () => attemptJoin(savedName, false, errEl, yesBtn));
+
+  const noBtn = document.createElement("button");
+  noBtn.className = "join-secondary-btn";
+  noBtn.textContent = "No, use a different name";
+  noBtn.addEventListener("click", () => renderJoinNameEntry());
+
+  $joinCard.appendChild(h2);
+  $joinCard.appendChild(p);
+  $joinCard.appendChild(yesBtn);
+  $joinCard.appendChild(noBtn);
+  $joinCard.appendChild(errEl);
+}
+
+function renderJoinNameEntry(isRename) {
+  $joinCard.innerHTML = "";
+
+  const h2 = document.createElement("h2");
+  h2.textContent = isRename ? "Change your name" : "Join the chat";
+  const p = document.createElement("p");
+  p.textContent = "Pick a display name. Anyone here can see your messages in real time.";
+
+  const input = document.createElement("input");
+  input.id = "nameInput";
+  input.type = "text";
+  input.placeholder = "Your name…";
+  input.maxLength = 24;
+  input.autocomplete = "off";
+  if (isRename) input.value = myName;
+
+  const errEl = document.createElement("div");
+  errEl.id = "joinError";
+
+  const joinBtn = document.createElement("button");
+  joinBtn.id = "joinBtn";
+  joinBtn.textContent = isRename ? "Save" : "Join Chat";
+
+  const submit = () => attemptJoin(input.value, !!isRename, errEl, joinBtn);
+  joinBtn.addEventListener("click", submit);
+  input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
+
+  $joinCard.appendChild(h2);
+  $joinCard.appendChild(p);
+  $joinCard.appendChild(input);
+  $joinCard.appendChild(errEl);
+  $joinCard.appendChild(joinBtn);
+
+  if (!isRename) {
+    const divider = document.createElement("div");
+    divider.className = "join-divider";
+    divider.textContent = "or";
+
+    const guestBtn = document.createElement("button");
+    guestBtn.className = "join-secondary-btn";
+    guestBtn.textContent = "Join as Guest";
+    guestBtn.addEventListener("click", () => {
+      const guestName = randomGuestName();
+      input.value = guestName;
+      submit();
+    });
+
+    $joinCard.appendChild(divider);
+    $joinCard.appendChild(guestBtn);
+  }
+
+  input.focus();
+  if (isRename) input.select();
+}
+
+function openChangeName() {
+  $chatScreen.style.display = "none";
+  $joinScreen.style.display = "flex";
+  renderJoinNameEntry(true);
+}
+
+function updateSendButtonState() {
+  const elapsed = Date.now() - lastSentAt;
+  const remaining = SEND_COOLDOWN_MS - elapsed;
+  if (remaining > 0) {
+    $sendBtn.disabled = true;
+    $sendBtn.classList.add("cooldown");
+    $sendBtn.textContent = Math.ceil(remaining / 1000) + "s";
+    clearTimeout(cooldownTimer);
+    cooldownTimer = setTimeout(updateSendButtonState, 250);
+  } else {
+    $sendBtn.disabled = false;
+    $sendBtn.classList.remove("cooldown");
+    $sendBtn.textContent = "Send";
+  }
+}
+
+// Locks the composer whenever the current name contains "spectator"
+// (case-insensitive) — covers auto-assigned spectators AND anyone who
+// manually renames into something with that word in it. Swaps the
+// placeholder/button to prompt a rename instead of silently no-opping.
+function updateComposerLockState() {
+  if (isSpectatorName(myName)) {
+    $msgInput.disabled = true;
+    $msgInput.placeholder = "Rename to chat — you're spectating";
+    $sendBtn.disabled = false; // stays clickable so it can open rename
+    $sendBtn.classList.remove("cooldown");
+    $sendBtn.textContent = "Rename to chat";
+  } else {
+    $msgInput.disabled = false;
+    $msgInput.placeholder = "Type a message…";
+    updateSendButtonState();
+  }
+}
+
+function sendMessage() {
+  if (isSpectatorName(myName)) {
+    openChangeName();
+    return;
+  }
+  if (Date.now() - lastSentAt < SEND_COOLDOWN_MS) return;
+  const text = $msgInput.value.trim();
+  if (!text) return;
+
+  lastSentAt = Date.now();
+  updateSendButtonState();
+  stopTyping();
+
+  ChatBackend.send(myName, text)
+    .then(() => {
+      $msgInput.value = "";
+      autosizeInput();
+      updateCharCounter();
+      autoScroll = true;
+      setAutoScrollUI();
+    })
+    .catch(() => {
+      $connError.textContent = "Message failed to send — check your connection.";
+      $connError.style.display = "block";
+    })
+    .finally(() => { $msgInput.focus(); });
+}
+
+function autosizeInput() {
+  $msgInput.style.height = "auto";
+  $msgInput.style.height = Math.min($msgInput.scrollHeight, 135) + "px";
+}
+
+const MAX_IMAGE_SOURCE_BYTES = 15 * 1024 * 1024;
+const IMAGE_MAX_DIMENSION = 1000;
+const IMAGE_JPEG_QUALITY = 0.7;
+
+function compressImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Couldn't read file"));
+    reader.onload = () => {
+      img.onerror = () => reject(new Error("Couldn't decode image"));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > IMAGE_MAX_DIMENSION || height > IMAGE_MAX_DIMENSION) {
+          const scale = IMAGE_MAX_DIMENSION / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", IMAGE_JPEG_QUALITY));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function sendImageFile(file) {
+  if (!modMenuUnlocked) return;
+
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    $connError.textContent = "That file isn't an image.";
+    $connError.style.display = "block";
+    return;
+  }
+  if (file.size > MAX_IMAGE_SOURCE_BYTES) {
+    $connError.textContent = "Image is too large.";
+    $connError.style.display = "block";
+    return;
+  }
+  if (Date.now() - lastSentAt < SEND_COOLDOWN_MS) return;
+
+  lastSentAt = Date.now();
+  updateSendButtonState();
+  $uploadImageBtn.disabled = true;
+  $uploadImageBtn.textContent = "Uploading…";
+
+  compressImageFile(file)
+    .then(dataUrl => ChatBackend.sendImage(myName, dataUrl))
+    .then(() => {
+      autoScroll = true;
+      setAutoScrollUI();
+    })
+    .catch(() => {
+      $connError.textContent = "Image failed to send — check your connection.";
+      $connError.style.display = "block";
+    })
+    .finally(() => {
+      $uploadImageBtn.disabled = false;
+      $uploadImageBtn.textContent = "📎 Image";
+      $imageFileInput.value = "";
+    });
+}
+
+$uploadImageBtn.addEventListener("click", () => {
+  if (!modMenuUnlocked) return;
+  $imageFileInput.click();
+});
+$imageFileInput.addEventListener("change", () => {
+  const file = $imageFileInput.files[0];
+  sendImageFile(file);
+});
+
+function updateCharCounter() {
+  const remaining = MAX_CHARS - $msgInput.value.length;
+  $charCounter.textContent = remaining;
+  $charCounter.classList.toggle("warn", remaining <= 50 && remaining > 10);
+  $charCounter.classList.toggle("limit", remaining <= 10);
+}
+
+function setAutoScrollUI() {
+  $autoScrollBtn.textContent = "Auto Scroll: " + (autoScroll ? "On" : "Off");
+  $autoScrollBtn.classList.toggle("active", autoScroll);
+  if (autoScroll) scrollToBottom();
+}
+
+$autoScrollBtn.addEventListener("click", () => {
+  autoScroll = !autoScroll;
+  setAutoScrollUI();
+});
+
+$messages.addEventListener("scroll", () => {
+  if (isNearBottom()) {
+    $jumpToBottomBtn.style.display = "none";
+  }
+});
+
+$jumpToBottomBtn.addEventListener("click", () => {
+  scrollToBottom();
+});
+
+$clearChatBtn.addEventListener("click", () => {
+  $messages.innerHTML = "";
+  messageCount = 0;
+  $emptyState.style.display = "flex";
+  $jumpToBottomBtn.style.display = "none";
+});
+
+/* ── Mod Menu (hidden behind the status dot) ────────────────────────── */
+const MOD_MENU_CODE = "2212";
+let modMenuUnlocked = false;
+let imagesEnabledForMe = false;
+
+function updateUploadButtonVisibility() {
+  const visible = modMenuUnlocked && imagesEnabledForMe;
+  $uploadImageBtn.style.display = visible ? "inline-block" : "none";
+}
+
+// Leaves the room right now with zero trace in the chat feed — no "X left"
+// message gets posted, regardless of whether this session joined normally
+// or as a spectator. Then drops back to the join screen so a new
+// name/spectator choice can be made without reloading the page.
+function leaveSilently() {
+  ChatBackend.releasePresenceSilently();
+  stopTyping();
+  myName = "";
+  isSpectator = false;
+  $changeNameBtn.style.display = "none";
+  $youAre.textContent = "";
+  closeClearPanel();
+  $chatScreen.style.display = "none";
+  $joinScreen.style.display = "flex";
+  const savedName = localStorage.getItem(NAME_STORAGE_KEY);
+  if (savedName) {
+    renderJoinReturning(savedName);
+  } else {
+    renderJoinNameEntry(false);
+  }
+}
+
+// Pre-code-entry actions shown above "Enter code:" — available to anyone,
+// no password needed. "Join as Spectator" only makes sense before you've
+// joined; "Leave Silently" only makes sense once you have joined. We show
+// whichever applies.
+function renderPreCodeActions(container) {
+  if (!myName) {
+    const specBtn = document.createElement("button");
+    specBtn.textContent = "Join as Spectator";
+    specBtn.className = "toolbar-btn";
+    specBtn.style.cssText = "width:100%;margin-bottom:8px";
+    specBtn.addEventListener("click", () => {
+      closeClearPanel();
+      joinAsSpectatorAuto();
+    });
+    container.appendChild(specBtn);
+  } else {
+    const leaveBtn = document.createElement("button");
+    leaveBtn.textContent = "Leave Silently";
+    leaveBtn.className = "toolbar-btn";
+    leaveBtn.style.cssText = "width:100%;margin-bottom:8px";
+    leaveBtn.addEventListener("click", leaveSilently);
+    container.appendChild(leaveBtn);
+  }
+
+  const divider = document.createElement("div");
+  divider.style.cssText = "height:1px;background:#334155;margin:2px 0 10px 0";
+  container.appendChild(divider);
+}
+
+// "Join as Spectator" — no name screen at all. Auto-assigns "Spectator #N",
+// retrying on the rare collision, then joins silently (no join/leave log).
+// Does NOT touch localStorage's saved name, so leaving spectator mode
+// later (rename/leave) still returns to the person's real saved identity.
+async function joinAsSpectatorAuto() {
+  const dummyErr = { textContent: "" };
+  let name = randomSpectatorName();
+  for (let attempt = 0; attempt < 8; attempt++) {
+    try {
+      const taken = await ChatBackend.isNameTaken(name);
+      if (!taken) break;
+    } catch (e) { break; } // if the check fails, just proceed with what we have
+    name = randomSpectatorName();
+  }
+
+  myName = name;
+  isSpectator = true;
+  ChatBackend.claimPresence(myName, true);
+  $youAre.textContent = "You: " + name;
+  $changeNameBtn.style.display = "inline-block";
+  $joinScreen.style.display = "none";
+  $chatScreen.style.display = "flex";
+  updateComposerLockState();
+  scrollToBottom();
+}
+
+function renderModMenuLogin() {
+  $globalClearPanel.innerHTML = "";
+
+  renderPreCodeActions($globalClearPanel);
+
+  const label = document.createElement("div");
+  label.textContent = "Enter code:";
+  label.style.marginBottom = "6px";
+  label.style.color = "#94a3b8";
+
+  const input = document.createElement("input");
+  input.type = "password";
+  input.inputMode = "numeric";
+  input.style.cssText = "width:100%;padding:8px 10px;background:#0f172a;border:1.5px solid #334155;border-radius:8px;color:#f1f5f9;font-size:15px;outline:none;margin-bottom:8px";
+
+  const err = document.createElement("div");
+  err.style.cssText = "color:#ef4444;font-size:13.5px;min-height:18px;margin-bottom:4px";
+
+  const row = document.createElement("div");
+  row.style.cssText = "display:flex;gap:6px";
+
+  const submitBtn = document.createElement("button");
+  submitBtn.textContent = "Submit";
+  submitBtn.className = "toolbar-btn";
+  submitBtn.style.flex = "1";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.className = "toolbar-btn";
+  cancelBtn.style.flex = "1";
+
+  const trySubmit = () => {
+    if (input.value === MOD_MENU_CODE) {
+      modMenuUnlocked = true;
+      updateUploadButtonVisibility();
+      renderModMenu();
+    } else {
+      err.textContent = "Incorrect code.";
+      input.value = "";
+      input.focus();
+    }
+  };
+
+  submitBtn.addEventListener("click", trySubmit);
+  input.addEventListener("keydown", e => { if (e.key === "Enter") trySubmit(); });
+  cancelBtn.addEventListener("click", closeClearPanel);
+
+  row.appendChild(submitBtn);
+  row.appendChild(cancelBtn);
+  $globalClearPanel.appendChild(label);
+  $globalClearPanel.appendChild(input);
+  $globalClearPanel.appendChild(err);
+  $globalClearPanel.appendChild(row);
+  input.focus();
+}
+
+async function renderModMenu() {
+  $globalClearPanel.innerHTML = "";
+  $globalClearPanel.style.width = "260px";
+
+  renderPreCodeActions($globalClearPanel);
+
+  const title = document.createElement("div");
+  title.textContent = "Customize your bubble";
+  title.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:10px";
+  $globalClearPanel.appendChild(title);
+
+  const loading = document.createElement("div");
+  loading.textContent = "Loading…";
+  loading.style.cssText = "color:#64748b;font-size:14px";
+  $globalClearPanel.appendChild(loading);
+
+  let existing = null;
+  try {
+    existing = myName ? await ChatBackend.getNameColor(myName) : null;
+  } catch (e) { /* treat as no existing color if the check fails */ }
+
+  loading.remove();
+
+  const alreadyLocked = !!existing;
+
+  if (alreadyLocked) {
+    const lockedNote = document.createElement("div");
+    lockedNote.textContent = "This name has already locked in a color — it can't be changed again.";
+    lockedNote.style.cssText = "color:#f59e0b;font-size:13px;margin-bottom:10px;line-height:1.4";
+    $globalClearPanel.appendChild(lockedNote);
+  }
+
+  let pendingBubble = (existing && existing.bubble) || "#14532d";
+  let pendingText = (existing && existing.text) || "#f1f5f9";
+
+  const previewWrap = document.createElement("div");
+  previewWrap.style.cssText = "margin-bottom:10px";
+  const previewLabel = document.createElement("div");
+  previewLabel.textContent = "Preview";
+  previewLabel.style.cssText = "color:#94a3b8;font-size:13px;margin-bottom:4px";
+  const previewBubble = document.createElement("div");
+  previewBubble.className = "msg-bubble";
+  previewBubble.textContent = "Example message text";
+  previewBubble.style.cssText = `background:${pendingBubble};color:${pendingText};font-size:16px;padding:10px 14px;display:inline-block;max-width:100%;`;
+  previewWrap.appendChild(previewLabel);
+  previewWrap.appendChild(previewBubble);
+  $globalClearPanel.appendChild(previewWrap);
+
+  const makeColorRow = (labelText, currentValue, onChange, disabled) => {
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "display:flex;align-items:center;justify-content:space-between;margin-bottom:8px";
+    const lbl = document.createElement("label");
+    lbl.textContent = labelText;
+    lbl.style.color = "#94a3b8";
+    const colorInput = document.createElement("input");
+    colorInput.type = "color";
+    colorInput.value = currentValue;
+    colorInput.disabled = !!disabled;
+    colorInput.style.cssText = "width:36px;height:28px;border:none;background:none;cursor:pointer;padding:0" + (disabled ? ";opacity:.5;cursor:not-allowed" : "");
+    colorInput.addEventListener("input", () => onChange(colorInput.value));
+    wrap.appendChild(lbl);
+    wrap.appendChild(colorInput);
+    return wrap;
+  };
+
+  $globalClearPanel.appendChild(
+    makeColorRow("Bubble color", pendingBubble, (val) => {
+      pendingBubble = val;
+      previewBubble.style.background = val;
+    }, alreadyLocked)
+  );
+  $globalClearPanel.appendChild(
+    makeColorRow("Text color", pendingText, (val) => {
+      pendingText = val;
+      previewBubble.style.color = val;
+    }, alreadyLocked)
+  );
+
+  const note = document.createElement("div");
+  note.textContent = "Note: a color can only be set once per name — choose carefully.";
+  note.style.cssText = "color:#64748b;font-size:12.5px;margin-bottom:10px;line-height:1.4";
+  $globalClearPanel.appendChild(note);
+
+  const confirmErr = document.createElement("div");
+  confirmErr.style.cssText = "color:#ef4444;font-size:13px;min-height:16px;margin-bottom:4px";
+  $globalClearPanel.appendChild(confirmErr);
+
+  const confirmBtn = document.createElement("button");
+  confirmBtn.textContent = alreadyLocked ? "Already locked in" : "Confirm";
+  confirmBtn.className = "toolbar-btn";
+  confirmBtn.style.cssText = "width:100%;margin-top:4px";
+  confirmBtn.disabled = alreadyLocked;
+  confirmBtn.addEventListener("click", async () => {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "Saving…";
+    try {
+      const result = await ChatBackend.claimColor(myName, pendingBubble, pendingText);
+      if (result.ok) {
+        renderModMenu();
+      } else {
+        confirmErr.textContent = "This name already has a color set.";
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = "Already locked in";
+      }
+    } catch (e) {
+      confirmErr.textContent = "Couldn't save — try again.";
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "Confirm";
+    }
+  });
+  $globalClearPanel.appendChild(confirmBtn);
+
+  const divider = document.createElement("div");
+  divider.style.cssText = "height:1px;background:#334155;margin:12px 0";
+  $globalClearPanel.appendChild(divider);
+
+  const imgTitle = document.createElement("div");
+  imgTitle.textContent = "Images (this session, just you)";
+  imgTitle.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:8px";
+  $globalClearPanel.appendChild(imgTitle);
+
+  const imgRow = document.createElement("div");
+  imgRow.style.cssText = "display:flex;align-items:center;justify-content:space-between;margin-bottom:6px";
+  const imgLabel = document.createElement("label");
+  imgLabel.textContent = "Allow images (me)";
+  imgLabel.style.color = "#94a3b8";
+  const imgToggle = document.createElement("button");
+  imgToggle.className = "toolbar-btn" + (imagesEnabledForMe ? " active" : "");
+  imgToggle.textContent = imagesEnabledForMe ? "On" : "Off";
+  imgToggle.style.cssText = "padding:4px 14px";
+  imgToggle.addEventListener("click", () => {
+    imagesEnabledForMe = !imagesEnabledForMe;
+    imgToggle.className = "toolbar-btn" + (imagesEnabledForMe ? " active" : "");
+    imgToggle.textContent = imagesEnabledForMe ? "On" : "Off";
+    updateUploadButtonVisibility();
+  });
+  imgRow.appendChild(imgLabel);
+  imgRow.appendChild(imgToggle);
+  $globalClearPanel.appendChild(imgRow);
+
+  const imgNote = document.createElement("div");
+  imgNote.textContent = "Only affects you, only this session. No one else ever gets an image button, and this resets to Off next time you open the chat.";
+  imgNote.style.cssText = "color:#64748b;font-size:12px;line-height:1.4;margin-bottom:4px";
+  $globalClearPanel.appendChild(imgNote);
+
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "Close";
+  closeBtn.className = "toolbar-btn";
+  closeBtn.style.cssText = "width:100%;margin-top:6px";
+  closeBtn.addEventListener("click", closeClearPanel);
+  $globalClearPanel.appendChild(closeBtn);
+}
+
+function closeClearPanel() {
+  $globalClearPanel.style.display = "none";
+  if (!modMenuUnlocked) $globalClearPanel.innerHTML = "";
+}
+
+function openModMenu() {
+  closeOnlineListPanel();
+  $globalClearPanel.style.display = "block";
+  if (modMenuUnlocked) {
+    renderModMenu();
+  } else {
+    renderModMenuLogin();
+  }
+}
+
+/* ── Online list panel (click "N online" text) ── */
+let latestPresenceList = [];
+let onlineListRefreshTimer = null;
+
+function formatElapsed(joinedAt) {
+  if (!joinedAt) return "just now";
+  const secs = Math.max(0, Math.floor((Date.now() - joinedAt) / 1000));
+  if (secs < 60) return "just now";
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return mins + "m";
+  const hrs = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return hrs + "h" + (remMins ? " " + remMins + "m" : "");
+}
+
+function renderOnlineListPanel() {
+  $onlineListPanel.innerHTML = "";
+
+  const title = document.createElement("div");
+  title.textContent = "Online now";
+  title.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:8px";
+  $onlineListPanel.appendChild(title);
+
+  if (latestPresenceList.length === 0) {
+    const empty = document.createElement("div");
+    empty.textContent = "No one online.";
+    empty.style.cssText = "color:#64748b;font-size:13.5px";
+    $onlineListPanel.appendChild(empty);
+    return;
+  }
+
+  // Longest-present first, so regulars float to the top.
+  const sorted = [...latestPresenceList].sort((a, b) => (a.joinedAt || Date.now()) - (b.joinedAt || Date.now()));
+
+  sorted.forEach(entry => {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px solid #273549;font-size:13.5px";
+    const nameEl = document.createElement("span");
+    nameEl.textContent = entry.name;
+    nameEl.style.cssText = "color:#f1f5f9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+    const timeEl = document.createElement("span");
+    timeEl.textContent = formatElapsed(entry.joinedAt);
+    timeEl.style.cssText = "color:#64748b;flex-shrink:0";
+    row.appendChild(nameEl);
+    row.appendChild(timeEl);
+    $onlineListPanel.appendChild(row);
+  });
+}
+
+function closeOnlineListPanel() {
+  $onlineListPanel.style.display = "none";
+  clearInterval(onlineListRefreshTimer);
+}
+
+function openOnlineListPanel() {
+  closeClearPanel(); // don't show both panels at once
+  $onlineListPanel.style.display = "block";
+  renderOnlineListPanel();
+  clearInterval(onlineListRefreshTimer);
+  onlineListRefreshTimer = setInterval(renderOnlineListPanel, 30000);
+}
+
+$onlineCount.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const isOpen = $onlineListPanel.style.display === "block";
+  if (isOpen) {
+    closeOnlineListPanel();
+  } else {
+    openOnlineListPanel();
+  }
+});
+
+document.addEventListener("click", (e) => {
+  if ($onlineListPanel.style.display === "block" && !$onlineListPanel.contains(e.target) && e.target !== $onlineCount) {
+    closeOnlineListPanel();
+  }
+});
+
+$onlineDot.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const isOpen = $globalClearPanel.style.display === "block";
+  if (isOpen) {
+    closeClearPanel();
+  } else {
+    openModMenu();
+  }
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key !== ".") return;
+  if (!modMenuUnlocked) return;
+  const active = document.activeElement;
+  const isTypingSomewhere = active && (active.tagName === "TEXTAREA" || active.tagName === "INPUT");
+  if (isTypingSomewhere) return;
+  const isOpen = $globalClearPanel.style.display === "block";
+  if (isOpen) {
+    closeClearPanel();
+  } else {
+    openModMenu();
+  }
+});
+
+document.addEventListener("click", (e) => {
+  if (!modMenuUnlocked && $globalClearPanel.style.display === "block" && !$globalClearPanel.contains(e.target)) {
+    closeClearPanel();
+  }
+});
+
+/* ── Typing indicator ── */
+function handleTypingActivity() {
+  const hasText = $msgInput.value.trim().length > 0;
+  clearTimeout(typingStopTimer);
+
+  if (hasText) {
+    if (!isCurrentlyTyping) {
+      isCurrentlyTyping = true;
+      ChatBackend.setTyping(myName);
+    } else {
+      ChatBackend.setTyping(myName);
+    }
+    typingStopTimer = setTimeout(stopTyping, 2000);
+  } else {
+    stopTyping();
+  }
+}
+
+function stopTyping() {
+  clearTimeout(typingStopTimer);
+  if (isCurrentlyTyping) {
+    isCurrentlyTyping = false;
+    ChatBackend.clearTyping();
+  }
+}
+
+function renderTyping(names) {
+  if (names.length === 0) {
+    $typingBar.style.display = "none";
+    return;
+  }
+  const shown = names.slice(0, 3);
+  const extra = names.length - shown.length;
+  let text = shown.map(esc).join(", ");
+  if (extra > 0) text += `, +${extra} more`;
+  text += (names.length === 1 ? " is typing…" : " are typing…");
+  $typingBar.textContent = text;
+  $typingBar.style.display = "block";
+}
+
+/* ── Wire up events ── */
+$changeNameBtn.addEventListener("click", openChangeName);
+
+$sendBtn.addEventListener("click", sendMessage);
+$msgInput.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+$msgInput.addEventListener("input", () => { autosizeInput(); handleTypingActivity(); updateCharCounter(); });
+
+/* ── Boot ── */
+function init() {
+  const usingPlaceholderConfig = FIREBASE_CONFIG.apiKey === "PASTE_YOUR_API_KEY_HERE";
+  if (usingPlaceholderConfig) {
+    $joinCard.innerHTML = `
+      <h2>Chat not set up yet</h2>
+      <p>
+        This chat needs a free Firebase project connected before it'll work.
+        Open this file's code and fill in FIREBASE_CONFIG near the bottom —
+        instructions are in the comment right above it.
+      </p>
+    `;
+    return;
+  }
+
+  try {
+    ChatBackend.init();
+  } catch (e) {
+    $joinCard.innerHTML = `<h2>Couldn't connect</h2><p>${esc(e.message || "Unknown error")}</p>`;
+    return;
+  }
+
+  const savedName = localStorage.getItem(NAME_STORAGE_KEY);
+  if (savedName) {
+    renderJoinReturning(savedName);
+  } else {
+    renderJoinNameEntry(false);
+  }
+
+  ChatBackend.watchConnection(setConnectionStatus);
+  ChatBackend.watchPresenceCount(count => {
+    $onlineCount.textContent = count + " online";
+  });
+  ChatBackend.watchPresenceList(list => {
+    latestPresenceList = list;
+    if ($onlineListPanel.style.display === "block") renderOnlineListPanel();
+  });
+  ChatBackend.watchMessages(renderMessage);
+  ChatBackend.watchLeaveEvents();
+  ChatBackend.watchTyping(renderTyping, () => myName);
+
+  updateUploadButtonVisibility();
+
+  $emptyState.style.display = "flex";
+  updateCharCounter();
+
+  window.addEventListener("beforeunload", () => {
+    stopTyping();
+    if (isSpectator) {
+      ChatBackend.releasePresence();
+    } else {
+      ChatBackend.releasePresence();
+    }
+  });
+}
+
+init();
+</script>
+</body>
+</html>
