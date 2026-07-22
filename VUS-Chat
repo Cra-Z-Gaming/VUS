@@ -411,11 +411,6 @@ const ChatBackend = {
   },
 
   // ── Per-name bubble color (write-once) ──
-  // Colors live at nameColors/<sanitizedName> and are visible to everyone,
-  // since messages carry them. A name can only claim a color once —
-  // claimColor() checks for an existing record first and rejects if one
-  // is already there, so this is enforced globally (any tab, any device),
-  // not just locally.
   async getNameColor(name) {
     const snap = await this._nameColorsRef.child(this._safeKey(name)).get();
     return snap.exists() ? snap.val() : null;
@@ -433,11 +428,6 @@ const ChatBackend = {
   },
 
   // ── Presence / name reservation ──
-  // Each connected client claims presence/<sanitizedName> for as long as
-  // their tab is open, with onDisconnect() cleanup so a closed/crashed tab
-  // frees the name automatically. isNameTaken() reads this list once
-  // (a plain .get(), not a live subscription) right before joining/renaming
-  // so we're checking against the current state at the moment of the attempt.
   async isNameTaken(name) {
     const snap = await this._presenceRef.get();
     const val = snap.val() || {};
@@ -448,31 +438,44 @@ const ChatBackend = {
   // Posts join/leave messages to the room feed itself (not just updating
   // presence data), so they show up inline in the chat like any other
   // message — just rendered without a bubble via msg.system.
-  claimPresence(name) {
-    // Release any previous claim first (e.g. on rename) — this does NOT
-    // post a "left" message, since renaming isn't actually leaving.
+  // `silent` (spectator mode) skips the join/leave feed messages entirely,
+  // while still claiming presence so the online count/list stays accurate.
+  claimPresence(name, silent) {
     this.releasePresence();
     this._myPresenceRef = this._presenceRef.child(this._safeKey(name));
+    this._silentSession = !!silent;
 
-    // onDisconnect() can only set/remove a VALUE at a ref — it can't push
-    // a new message directly. So on disconnect we write a "leave event"
-    // marker here; watchLeaveEvents() (wired once, globally) listens for
-    // these and turns each one into an actual system message in the feed.
-    // This is the only reliable way to detect a real disconnect (closed
-    // tab, crash, lost connection) — client-side-only code can't run once
-    // the tab is actually gone.
     const leaveEventRef = this._db.ref("rooms/" + ROOM_ID + "/leaveEvents").push();
-    leaveEventRef.onDisconnect().set({ name, ts: firebase.database.ServerValue.TIMESTAMP });
+    if (!this._silentSession) {
+      leaveEventRef.onDisconnect().set({ name, ts: firebase.database.ServerValue.TIMESTAMP });
+    }
     this._myLeaveEventRef = leaveEventRef;
 
     this._myPresenceRef.onDisconnect().remove();
     this._myPresenceRef.set(true);
 
-    this._ref.push({
-      system: true,
-      text: name + " joined",
-      ts: firebase.database.ServerValue.TIMESTAMP
-    });
+    if (!this._silentSession) {
+      this._ref.push({
+        system: true,
+        text: name + " joined",
+        ts: firebase.database.ServerValue.TIMESTAMP
+      });
+    }
+  },
+
+  // Drops presence right now without ever posting a "left" message,
+  // regardless of whether this session was silent/spectator or normal.
+  // Used by the "Leave Silently" mod-menu action.
+  releasePresenceSilently() {
+    if (this._myLeaveEventRef) {
+      this._myLeaveEventRef.onDisconnect().cancel();
+      this._myLeaveEventRef = null;
+    }
+    if (this._myPresenceRef) {
+      this._myPresenceRef.onDisconnect().cancel();
+      this._myPresenceRef.remove();
+      this._myPresenceRef = null;
+    }
   },
 
   releasePresence() {
@@ -480,18 +483,12 @@ const ChatBackend = {
       this._myPresenceRef.remove();
       this._myPresenceRef = null;
     }
-    // Cancel the pending onDisconnect leave-event write, since we're
-    // leaving on purpose right now (e.g. renaming) rather than actually
-    // disconnecting — we don't want a stray "X left" firing later.
     if (this._myLeaveEventRef) {
       this._myLeaveEventRef.onDisconnect().cancel();
       this._myLeaveEventRef = null;
     }
   },
 
-  // Listens for leave-event markers written by onDisconnect() (see
-  // claimPresence above) and turns each one into a normal system message
-  // in the chat feed, then clears the marker so it's a one-shot.
   watchLeaveEvents() {
     const leaveEventsRef = this._db.ref("rooms/" + ROOM_ID + "/leaveEvents");
     leaveEventsRef.on("child_added", snap => {
@@ -506,10 +503,6 @@ const ChatBackend = {
     });
   },
 
-  // Calls onCount(number) any time the set of currently-connected names
-  // changes. Reuses the same presence/ node that isNameTaken() checks, so
-  // this count reflects exactly who's actively holding a name claim right
-  // now (including guests) — not total visits or messages sent.
   watchPresenceCount(onCount) {
     this._presenceRef.on("value", snap => {
       const val = snap.val() || {};
@@ -518,18 +511,9 @@ const ChatBackend = {
   },
 
   // ── Typing presence ──
-  // Each connected client writes to typing/<sanitizedName> while actively
-  // typing, with a server timestamp so everyone can sort by "who started
-  // typing first" (insertion order) rather than alphabetically. Removing
-  // the node (on send/clear/disconnect) is what makes someone drop out of
-  // the indicator immediately.
-
   setTyping(name) {
     if (!this._myTypingRef) {
       this._myTypingRef = this._typingRef.child(this._safeKey(name));
-      // Auto-clear this client's typing entry if they lose connection
-      // (closed tab, network drop, etc.) instead of leaving a stale
-      // "X is typing" forever.
       this._myTypingRef.onDisconnect().remove();
     }
     this._myTypingRef.set({ name: name, ts: firebase.database.ServerValue.TIMESTAMP });
@@ -539,10 +523,6 @@ const ChatBackend = {
     if (this._myTypingRef) this._myTypingRef.remove();
   },
 
-  // Calls onChange(sortedArrayOfNames) any time the typing set changes.
-  // excludeNameFn is a function (not a plain string) so this always reads
-  // the *current* value of myName — important since the name can change
-  // mid-session via "Change name" and this listener is only attached once.
   watchTyping(onChange, excludeNameFn) {
     this._typingRef.on("value", snap => {
       const val = snap.val() || {};
@@ -556,7 +536,6 @@ const ChatBackend = {
   },
 
   _safeKey(name) {
-    // Firebase keys can't contain ".", "#", "$", "[", "]", or "/"
     return name.replace(/[.#$\[\]/]/g, "_");
   }
 };
@@ -586,6 +565,7 @@ const $globalClearPanel = document.getElementById("globalClearPanel");
 let myName = "";
 let messageCount = 0;
 let autoScroll = true;
+let isSpectator = false; // this session joined silently (no join/leave log)
 
 const NAME_STORAGE_KEY = "vusChatName";
 const SEND_COOLDOWN_MS = 3000;
@@ -644,10 +624,6 @@ function renderMessage(msg) {
   bubble.className = "msg-bubble";
 
   if (msg.imageData) {
-    // Image messages carry a base64 data URL directly (no Firebase Storage
-    // — that needs the paid Blaze plan). Capped width/height keeps a large
-    // photo from blowing out the layout; clicking opens it full-size in a
-    // new tab.
     const link = document.createElement("a");
     link.href = msg.imageData;
     link.target = "_blank";
@@ -660,14 +636,9 @@ function renderMessage(msg) {
     bubble.appendChild(link);
     bubble.style.padding = "6px";
   } else {
-    bubble.textContent = msg.text; // textContent, not innerHTML — avoids any HTML injection
+    bubble.textContent = msg.text;
   }
 
-  // Color is baked into the message at send time (see ChatBackend.send),
-  // so it's visible to everyone and reflects whatever color was locked in
-  // at the moment this specific message was sent — changing your color
-  // later never repaints older messages. Only applied to text bubbles;
-  // image bubbles keep the default background so photos aren't tinted.
   if (!msg.imageData) {
     if (msg.bubble) bubble.style.background = msg.bubble;
     if (msg.textColor) bubble.style.color = msg.textColor;
@@ -678,8 +649,6 @@ function renderMessage(msg) {
   $messages.appendChild(el);
 
   messageCount++;
-  // Trim old messages from the DOM once we exceed the cap, so long-running
-  // sessions don't slowly bloat memory/layout cost.
   while (messageCount > MAX_MESSAGES) {
     const first = $messages.querySelector(".msg");
     if (!first) break;
@@ -687,9 +656,6 @@ function renderMessage(msg) {
     messageCount--;
   }
 
-  // Auto-scroll to the bottom only if the "Auto Scroll" toggle is on and
-  // the user was already near the bottom (or it's their own message) —
-  // so someone scrolling up to read history doesn't get yanked down.
   if (autoScroll && (isNearBottom() || mine)) {
     scrollToBottom();
   } else if (!isNearBottom()) {
@@ -707,25 +673,12 @@ function setConnectionStatus(isOnline) {
   }
 }
 
-/* ── Join screen rendering ──────────────────────────────────────────
- * The join card has three possible views:
- *  1. renderJoinReturning() — shown when a name is saved from a previous
- *     visit: "Continue as X?" with Yes / "No, use a different name".
- *  2. renderJoinNameEntry() — manual name entry, plus a "Join as Guest"
- *     shortcut for first-time visitors. Also reused for rename.
- * attemptJoin() does the actual validation + Firebase claim + transition
- * into the chat screen, shared by both entry paths.
- */
-
 function randomGuestName() {
-  const n = Math.floor(Math.random() * 999) + 1; // 1–999
+  const n = Math.floor(Math.random() * 999) + 1;
   return "Guest " + n;
 }
 
-async function attemptJoin(rawName, isRename, errEl, submitBtn) {
-  // Collapse runs of consecutive spaces into a single space so
-  // "John  Doe" and "John Doe" can't both exist as distinct names
-  // while looking identical in the UI.
+async function attemptJoin(rawName, isRename, errEl, submitBtn, joinSilently) {
   const name = rawName.trim().replace(/ {2,}/g, " ");
   if (!name) {
     errEl.textContent = "Enter a name to continue.";
@@ -736,7 +689,6 @@ async function attemptJoin(rawName, isRename, errEl, submitBtn) {
     return;
   }
 
-  // If unchanged during a rename, no need to re-check/re-claim anything.
   if (isRename && name === myName) {
     $chatScreen.style.display = "flex";
     $joinScreen.style.display = "none";
@@ -759,20 +711,17 @@ async function attemptJoin(rawName, isRename, errEl, submitBtn) {
   }
   if (submitBtn) submitBtn.disabled = false;
 
-  // If renaming mid-session, make sure the old name's typing entry (if any)
-  // is cleared before we start writing under the new name.
   if (isRename && isCurrentlyTyping) {
     ChatBackend.clearTyping();
     isCurrentlyTyping = false;
   }
-  // Old typing ref is tied to the old name — reset so a new one gets
-  // created under the new name next time the user types.
   ChatBackend._myTypingRef = null;
 
   myName = name;
+  isSpectator = !!joinSilently;
   localStorage.setItem(NAME_STORAGE_KEY, name);
-  ChatBackend.claimPresence(myName);
-  $youAre.textContent = "You: " + name;
+  ChatBackend.claimPresence(myName, isSpectator);
+  $youAre.textContent = "You: " + name + (isSpectator ? " (spectating)" : "");
   $changeNameBtn.style.display = "inline-block";
   $joinScreen.style.display = "none";
   $chatScreen.style.display = "flex";
@@ -841,9 +790,6 @@ function renderJoinNameEntry(isRename) {
   $joinCard.appendChild(errEl);
   $joinCard.appendChild(joinBtn);
 
-  // "Join as Guest" is only offered for first-time visitors (no saved
-  // name) and for the initial join — not shown during a rename, since
-  // renaming implies they already have an identity here.
   if (!isRename) {
     const divider = document.createElement("div");
     divider.className = "join-divider";
@@ -867,9 +813,6 @@ function renderJoinNameEntry(isRename) {
 }
 
 function openChangeName() {
-  // Reuse the join screen as the rename screen — same validation, same UI,
-  // just skip straight back into the chat instead of showing it as a
-  // first-time join.
   $chatScreen.style.display = "none";
   $joinScreen.style.display = "flex";
   renderJoinNameEntry(true);
@@ -892,20 +835,19 @@ function updateSendButtonState() {
 }
 
 function sendMessage() {
-  if (Date.now() - lastSentAt < SEND_COOLDOWN_MS) return; // still cooling down
+  if (Date.now() - lastSentAt < SEND_COOLDOWN_MS) return;
   const text = $msgInput.value.trim();
   if (!text) return;
 
   lastSentAt = Date.now();
   updateSendButtonState();
-  stopTyping(); // sending counts as "done typing" — clears you from the indicator
+  stopTyping();
 
   ChatBackend.send(myName, text)
     .then(() => {
       $msgInput.value = "";
       autosizeInput();
       updateCharCounter();
-      // Sending your own message should always bring you to the bottom.
       autoScroll = true;
       setAutoScrollUI();
     })
@@ -921,15 +863,10 @@ function autosizeInput() {
   $msgInput.style.height = Math.min($msgInput.scrollHeight, 135) + "px";
 }
 
-const MAX_IMAGE_SOURCE_BYTES = 15 * 1024 * 1024; // reject absurdly large source files outright
-const IMAGE_MAX_DIMENSION = 1000; // px, longest side after resize
+const MAX_IMAGE_SOURCE_BYTES = 15 * 1024 * 1024;
+const IMAGE_MAX_DIMENSION = 1000;
 const IMAGE_JPEG_QUALITY = 0.7;
 
-// Resizes + re-encodes an image file entirely in the browser (canvas ->
-// JPEG data URL), since we're storing images directly in Realtime
-// Database rather than a file host. This keeps each message's payload
-// from being an untouched multi-MB photo — a typical phone photo comes
-// down to a few hundred KB after this.
 function compressImageFile(file) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -958,11 +895,6 @@ function compressImageFile(file) {
 }
 
 function sendImageFile(file) {
-  // Hard gate: images can only ever be sent by this browser tab if the
-  // mod code has been entered successfully this session. This function
-  // is also only reachable via $uploadImageBtn, which stays hidden
-  // (display:none) until modMenuUnlocked flips true — but we double-check
-  // here too, since it's cheap and it's the actual send path.
   if (!modMenuUnlocked) return;
 
   if (!file) return;
@@ -976,7 +908,7 @@ function sendImageFile(file) {
     $connError.style.display = "block";
     return;
   }
-  if (Date.now() - lastSentAt < SEND_COOLDOWN_MS) return; // same cooldown as text messages
+  if (Date.now() - lastSentAt < SEND_COOLDOWN_MS) return;
 
   lastSentAt = Date.now();
   updateSendButtonState();
@@ -1001,7 +933,7 @@ function sendImageFile(file) {
 }
 
 $uploadImageBtn.addEventListener("click", () => {
-  if (!modMenuUnlocked) return; // extra guard, button shouldn't even be visible
+  if (!modMenuUnlocked) return;
   $imageFileInput.click();
 });
 $imageFileInput.addEventListener("change", () => {
@@ -1016,7 +948,6 @@ function updateCharCounter() {
   $charCounter.classList.toggle("limit", remaining <= 10);
 }
 
-/* ── Auto Scroll toggle ── */
 function setAutoScrollUI() {
   $autoScrollBtn.textContent = "Auto Scroll: " + (autoScroll ? "On" : "Off");
   $autoScrollBtn.classList.toggle("active", autoScroll);
@@ -1038,7 +969,6 @@ $jumpToBottomBtn.addEventListener("click", () => {
   scrollToBottom();
 });
 
-/* ── Clear Chat (local only — just wipes what's rendered in this tab) ── */
 $clearChatBtn.addEventListener("click", () => {
   $messages.innerHTML = "";
   messageCount = 0;
@@ -1046,35 +976,119 @@ $clearChatBtn.addEventListener("click", () => {
   $jumpToBottomBtn.style.display = "none";
 });
 
-/* ── Mod Menu (hidden behind the status dot) ──────────────────────────
- * IMPORTANT: this is a client-side-only gate. The "password" check runs
- * in the browser, so it is visible to anyone who opens dev tools or reads
- * this file's source — it is a deterrent against casual misuse, not real
- * security. Do not treat this as an access-control mechanism.
- *
- * Images are entirely SESSION-LOCAL and PER-BROWSER-TAB:
- *  - There is no room-wide "images enabled" setting anymore, and nothing
- *    is written to Firebase about this. It lives only in the
- *    imagesEnabledForMe variable below.
- *  - It always starts false on every fresh page load, for everyone,
- *    including whoever knows the code — the code has to be re-entered
- *    each session, and the toggle has to be turned on again each time.
- *  - The upload button ($uploadImageBtn) is display:none from the moment
- *    the page loads and stays that way unless BOTH modMenuUnlocked is
- *    true AND imagesEnabledForMe is true. No other user, and no future
- *    visit by the same person, ever sees it without redoing both steps.
- */
+/* ── Mod Menu (hidden behind the status dot) ────────────────────────── */
 const MOD_MENU_CODE = "2212";
 let modMenuUnlocked = false;
-let imagesEnabledForMe = false; // session-local only, never persisted, never shared
+let imagesEnabledForMe = false;
 
 function updateUploadButtonVisibility() {
   const visible = modMenuUnlocked && imagesEnabledForMe;
   $uploadImageBtn.style.display = visible ? "inline-block" : "none";
 }
 
+// Leaves the room right now with zero trace in the chat feed — no "X left"
+// message gets posted, regardless of whether this session joined normally
+// or as a spectator. Then drops back to the join screen so a new
+// name/spectator choice can be made without reloading the page.
+function leaveSilently() {
+  ChatBackend.releasePresenceSilently();
+  stopTyping();
+  myName = "";
+  isSpectator = false;
+  $changeNameBtn.style.display = "none";
+  $youAre.textContent = "";
+  closeClearPanel();
+  $chatScreen.style.display = "none";
+  $joinScreen.style.display = "flex";
+  const savedName = localStorage.getItem(NAME_STORAGE_KEY);
+  if (savedName) {
+    renderJoinReturning(savedName);
+  } else {
+    renderJoinNameEntry(false);
+  }
+}
+
+// Pre-code-entry actions shown above "Enter code:" — available to anyone,
+// no password needed. "Join as Spectator" only makes sense before you've
+// joined; "Leave Silently" only makes sense once you have joined. We show
+// whichever applies.
+function renderPreCodeActions(container) {
+  if (!myName) {
+    const specBtn = document.createElement("button");
+    specBtn.textContent = "Join silently / as Spectator ";
+    specBtn.className = "toolbar-btn";
+    specBtn.style.cssText = "width:100%;margin-bottom:8px";
+    specBtn.addEventListener("click", () => {
+      closeClearPanel();
+      $joinScreen.style.display = "flex";
+      renderJoinNameEntrySpectator();
+    });
+    container.appendChild(specBtn);
+  } else {
+    const leaveBtn = document.createElement("button");
+    leaveBtn.textContent = "Leave Silently";
+    leaveBtn.className = "toolbar-btn";
+    leaveBtn.style.cssText = "width:100%;margin-bottom:8px";
+    leaveBtn.addEventListener("click", leaveSilently);
+    container.appendChild(leaveBtn);
+  }
+
+  const divider = document.createElement("div");
+  divider.style.cssText = "height:1px;background:#334155;margin:2px 0 10px 0";
+  container.appendChild(divider);
+}
+
+// Name entry variant used for "Join as Spectator" — same validation as a
+// normal join, just tags the resulting session as silent.
+function renderJoinNameEntrySpectator() {
+  $joinCard.innerHTML = "";
+
+  const h2 = document.createElement("h2");
+  h2.textContent = "Join as Spectator";
+  const p = document.createElement("p");
+  p.textContent = "Pick a display name. You can watch and chat, but your join/leave won't be logged.";
+
+  const input = document.createElement("input");
+  input.id = "nameInput";
+  input.type = "text";
+  input.placeholder = "Your name…";
+  input.maxLength = 24;
+  input.autocomplete = "off";
+
+  const errEl = document.createElement("div");
+  errEl.id = "joinError";
+
+  const joinBtn = document.createElement("button");
+  joinBtn.id = "joinBtn";
+  joinBtn.textContent = "Join Silently";
+
+  const submit = () => attemptJoin(input.value, false, errEl, joinBtn, true);
+  joinBtn.addEventListener("click", submit);
+  input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
+
+  const backBtn = document.createElement("button");
+  backBtn.className = "join-secondary-btn";
+  backBtn.textContent = "Back";
+  backBtn.addEventListener("click", () => {
+    const savedName = localStorage.getItem(NAME_STORAGE_KEY);
+    if (savedName) renderJoinReturning(savedName); else renderJoinNameEntry(false);
+  });
+
+  $joinCard.appendChild(h2);
+  $joinCard.appendChild(p);
+  $joinCard.appendChild(input);
+  $joinCard.appendChild(errEl);
+  $joinCard.appendChild(joinBtn);
+  $joinCard.appendChild(backBtn);
+
+  input.focus();
+}
+
 function renderModMenuLogin() {
   $globalClearPanel.innerHTML = "";
+
+  renderPreCodeActions($globalClearPanel);
+
   const label = document.createElement("div");
   label.textContent = "Enter code:";
   label.style.marginBottom = "6px";
@@ -1130,6 +1144,8 @@ async function renderModMenu() {
   $globalClearPanel.innerHTML = "";
   $globalClearPanel.style.width = "260px";
 
+  renderPreCodeActions($globalClearPanel);
+
   const title = document.createElement("div");
   title.textContent = "Customize your bubble";
   title.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:10px";
@@ -1145,8 +1161,7 @@ async function renderModMenu() {
     existing = myName ? await ChatBackend.getNameColor(myName) : null;
   } catch (e) { /* treat as no existing color if the check fails */ }
 
-  $globalClearPanel.innerHTML = "";
-  $globalClearPanel.appendChild(title);
+  loading.remove();
 
   const alreadyLocked = !!existing;
 
@@ -1160,9 +1175,6 @@ async function renderModMenu() {
   let pendingBubble = (existing && existing.bubble) || "#14532d";
   let pendingText = (existing && existing.text) || "#f1f5f9";
 
-  // Live example bubble — updates instantly as the color pickers move,
-  // so you can see exactly what your messages will look like before
-  // confirming (since confirming locks it in permanently for this name).
   const previewWrap = document.createElement("div");
   previewWrap.style.cssText = "margin-bottom:10px";
   const previewLabel = document.createElement("div");
@@ -1259,10 +1271,6 @@ async function renderModMenu() {
   imgToggle.textContent = imagesEnabledForMe ? "On" : "Off";
   imgToggle.style.cssText = "padding:4px 14px";
   imgToggle.addEventListener("click", () => {
-    // Purely local state — nothing written to Firebase, nothing shared,
-    // nothing persisted. Resets to Off on every reload/new tab, and only
-    // ever exists in memory for this one browser session after the code
-    // has been entered correctly.
     imagesEnabledForMe = !imagesEnabledForMe;
     imgToggle.className = "toolbar-btn" + (imagesEnabledForMe ? " active" : "");
     imgToggle.textContent = imagesEnabledForMe ? "On" : "Off";
@@ -1287,10 +1295,6 @@ async function renderModMenu() {
 
 function closeClearPanel() {
   $globalClearPanel.style.display = "none";
-  // Keep innerHTML intact once unlocked, so re-opening via "." or the dot
-  // goes straight back to the customize menu instead of re-asking for the
-  // code. Only the login step gets wiped away, since that shouldn't
-  // persist as visible DOM while hidden.
   if (!modMenuUnlocked) $globalClearPanel.innerHTML = "";
 }
 
@@ -1313,10 +1317,6 @@ $onlineDot.addEventListener("click", (e) => {
   }
 });
 
-// "." toggles the menu open/closed once unlocked — but only when the
-// person isn't actively typing somewhere (message box, name field, or
-// the code input itself), so a literal period in a message doesn't
-// accidentally trigger it.
 document.addEventListener("keydown", (e) => {
   if (e.key !== ".") return;
   if (!modMenuUnlocked) return;
@@ -1331,20 +1331,13 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-// Click-away no longer closes the panel once unlocked — it stays open
-// until explicitly closed via the dot, the Close button, or ".". Before
-// unlocking, click-away still dismisses the login prompt.
 document.addEventListener("click", (e) => {
   if (!modMenuUnlocked && $globalClearPanel.style.display === "block" && !$globalClearPanel.contains(e.target)) {
     closeClearPanel();
   }
 });
 
-/* ── Typing indicator ──────────────────────────────────
- * Fires setTyping() while the user has text in the box, and clears it
- * (stopTyping) 2s after they stop pressing keys, or immediately when they
- * send/clear the message. A short debounce avoids writing to Firebase on
- * every keystroke. */
+/* ── Typing indicator ── */
 function handleTypingActivity() {
   const hasText = $msgInput.value.trim().length > 0;
   clearTimeout(typingStopTimer);
@@ -1354,9 +1347,6 @@ function handleTypingActivity() {
       isCurrentlyTyping = true;
       ChatBackend.setTyping(myName);
     } else {
-      // refresh the timestamp/presence periodically so a long pause
-      // doesn't get treated as "still typing" forever if we ever add
-      // a server-side expiry later
       ChatBackend.setTyping(myName);
     }
     typingStopTimer = setTimeout(stopTyping, 2000);
@@ -1373,13 +1363,6 @@ function stopTyping() {
   }
 }
 
-/* Renders "john, bob, garry, +7 more are typing" from a name array that's
- * already sorted oldest-typing-first by ChatBackend.watchTyping. Only the
- * first 3 are named; everyone else folds into the "+N more" count. This
- * naturally satisfies the rotation behavior: when the 1st person sends,
- * they disappear from the array, the old 4th person becomes the new 3rd,
- * and the "+N more" count drops by one — all from re-sorting on the next
- * Firebase update, no special-case code needed. */
 function renderTyping(names) {
   if (names.length === 0) {
     $typingBar.style.display = "none";
@@ -1428,9 +1411,6 @@ function init() {
     return;
   }
 
-  // First-time visitors (no saved name) go straight to name entry, with a
-  // "Join as Guest" shortcut. Returning visitors get a "continue as X?"
-  // prompt instead, so they don't have to retype their name every visit.
   const savedName = localStorage.getItem(NAME_STORAGE_KEY);
   if (savedName) {
     renderJoinReturning(savedName);
@@ -1446,22 +1426,18 @@ function init() {
   ChatBackend.watchLeaveEvents();
   ChatBackend.watchTyping(renderTyping, () => myName);
 
-  // Upload button starts (and stays) hidden until the mod code is entered
-  // AND the "Allow images (me)" toggle is switched on inside the menu —
-  // both gates are purely local to this browser session, nothing is
-  // fetched or watched from Firebase for this anymore.
   updateUploadButtonVisibility();
 
   $emptyState.style.display = "flex";
   updateCharCounter();
 
-  // Clear this client's typing flag and release their claimed name if they
-  // close/refresh the tab while mid-session (in addition to the
-  // onDisconnect() server-side cleanup, this catches the common case
-  // faster on the client that's actually leaving).
   window.addEventListener("beforeunload", () => {
     stopTyping();
-    ChatBackend.releasePresence();
+    if (isSpectator) {
+      ChatBackend.releasePresence();
+    } else {
+      ChatBackend.releasePresence();
+    }
   });
 }
 
