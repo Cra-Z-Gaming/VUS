@@ -286,6 +286,11 @@
   <div id="emptyState" style="display:none">No messages yet — say hi!</div>
   <button id="jumpToBottomBtn">↓ Jump to latest</button>
   <div id="typingBar" style="display:none;padding:6px 21px;font-size:17.2px;color:#64748b;font-style:italic;flex-shrink:0"></div>
+  <div id="pendingImageBar" style="display:none;padding:10px 21px;border-top:1.5px solid #1f2937;align-items:center;gap:12px;flex-shrink:0">
+    <img id="pendingImagePreview" style="max-height:60px;max-width:90px;border-radius:8px;object-fit:cover;display:block">
+    <span style="flex:1;font-size:14.5px;color:#94a3b8">Image ready — click Send to post it</span>
+    <button id="cancelPendingImageBtn" class="toolbar-btn">Cancel</button>
+  </div>
   <div id="toolbar">
     <button id="uploadImageBtn" class="toolbar-btn" style="display:none">📎 Image</button>
     <input id="imageFileInput" type="file" accept="image/*" style="display:none">
@@ -579,6 +584,9 @@ const $jumpToBottomBtn = document.getElementById("jumpToBottomBtn");
 const $charCounter    = document.getElementById("charCounter");
 const $globalClearPanel = document.getElementById("globalClearPanel");
 const $onlineListPanel = document.getElementById("onlineListPanel");
+const $pendingImageBar = document.getElementById("pendingImageBar");
+const $pendingImagePreview = document.getElementById("pendingImagePreview");
+const $cancelPendingImageBtn = document.getElementById("cancelPendingImageBtn");
 
 let myName = "";
 let messageCount = 0;
@@ -889,7 +897,41 @@ function sendMessage() {
     return;
   }
   if (Date.now() - lastSentAt < SEND_COOLDOWN_MS) return;
+
   const text = $msgInput.value.trim();
+
+  // A staged image takes priority: send it now. If there's also caption
+  // text typed in, send that as a separate follow-up message right after,
+  // so neither gets silently dropped.
+  if (pendingImageDataUrl) {
+    const imageToSend = pendingImageDataUrl;
+    clearPendingImage();
+
+    lastSentAt = Date.now();
+    updateSendButtonState();
+    stopTyping();
+
+    ChatBackend.sendImage(myName, imageToSend)
+      .then(() => {
+        if (text) {
+          return ChatBackend.send(myName, text);
+        }
+      })
+      .then(() => {
+        $msgInput.value = "";
+        autosizeInput();
+        updateCharCounter();
+        autoScroll = true;
+        setAutoScrollUI();
+      })
+      .catch(() => {
+        $connError.textContent = "Image failed to send — check your connection.";
+        $connError.style.display = "block";
+      })
+      .finally(() => { $msgInput.focus(); });
+    return;
+  }
+
   if (!text) return;
 
   lastSentAt = Date.now();
@@ -947,8 +989,16 @@ function compressImageFile(file) {
   });
 }
 
-function sendImageFile(file) {
-  if (!modMenuUnlocked) return;
+let pendingImageDataUrl = null; // compressed, staged image waiting for the user to hit Send
+
+function clearPendingImage() {
+  pendingImageDataUrl = null;
+  $pendingImageBar.style.display = "none";
+  $pendingImagePreview.src = "";
+}
+
+function stageImageFile(file) {
+  if (!modMenuUnlocked || !imagesEnabledForMe) return;
 
   if (!file) return;
   if (!file.type.startsWith("image/")) {
@@ -961,21 +1011,18 @@ function sendImageFile(file) {
     $connError.style.display = "block";
     return;
   }
-  if (Date.now() - lastSentAt < SEND_COOLDOWN_MS) return;
 
-  lastSentAt = Date.now();
-  updateSendButtonState();
   $uploadImageBtn.disabled = true;
-  $uploadImageBtn.textContent = "Uploading…";
+  $uploadImageBtn.textContent = "Processing…";
 
   compressImageFile(file)
-    .then(dataUrl => ChatBackend.sendImage(myName, dataUrl))
-    .then(() => {
-      autoScroll = true;
-      setAutoScrollUI();
+    .then(dataUrl => {
+      pendingImageDataUrl = dataUrl;
+      $pendingImagePreview.src = dataUrl;
+      $pendingImageBar.style.display = "flex";
     })
     .catch(() => {
-      $connError.textContent = "Image failed to send — check your connection.";
+      $connError.textContent = "Couldn't process that image — try another.";
       $connError.style.display = "block";
     })
     .finally(() => {
@@ -985,13 +1032,15 @@ function sendImageFile(file) {
     });
 }
 
+$cancelPendingImageBtn.addEventListener("click", clearPendingImage);
+
 $uploadImageBtn.addEventListener("click", () => {
   if (!modMenuUnlocked) return;
   $imageFileInput.click();
 });
 $imageFileInput.addEventListener("change", () => {
   const file = $imageFileInput.files[0];
-  sendImageFile(file);
+  stageImageFile(file);
 });
 
 function updateCharCounter() {
@@ -1046,6 +1095,7 @@ function updateUploadButtonVisibility() {
 function leaveSilently() {
   ChatBackend.releasePresenceSilently();
   stopTyping();
+  clearPendingImage();
   myName = "";
   isSpectator = false;
   $changeNameBtn.style.display = "none";
@@ -1499,6 +1549,34 @@ $msgInput.addEventListener("keydown", e => {
   }
 });
 $msgInput.addEventListener("input", () => { autosizeInput(); handleTypingActivity(); updateCharCounter(); });
+
+// Paste-an-image support: only active when image uploads are unlocked via
+// the mod menu (same gate as the 📎 button — modMenuUnlocked AND
+// imagesEnabledForMe). If the clipboard paste contains an image, it's sent
+// through the same compress+send pipeline as a picked file, immediately,
+// matching the upload button's behavior. If the clipboard has no image
+// (just text), this does nothing and lets the paste proceed normally.
+$msgInput.addEventListener("paste", (e) => {
+  if (!modMenuUnlocked || !imagesEnabledForMe) return; // let normal text paste happen
+
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+
+  let imageFile = null;
+  for (const item of items) {
+    if (item.type && item.type.startsWith("image/")) {
+      imageFile = item.getAsFile();
+      break;
+    }
+  }
+  if (!imageFile) return; // no image in clipboard — fall through to normal text paste
+
+  // There IS an image — stop it from being pasted as garbage text/inline
+  // data and stage it for sending (waits for the user to click Send,
+  // same as the file picker).
+  e.preventDefault();
+  stageImageFile(imageFile);
+});
 
 /* ── Boot ── */
 function init() {
