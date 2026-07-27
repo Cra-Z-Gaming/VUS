@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VUS Notes</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: #0f172a;
+    color: #f1f5f9;
+    font-family: Arial, sans-serif;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ── */
+  #sidebar {
+    width: 260px;
+    min-width: 260px;
+    background: #1e293b;
+    border-right: 1px solid #334155;
+    display: flex;
+    flex-direction: column;
+    transition: margin-left 0.2s;
+  }
+  #sidebar.collapsed { margin-left: -260px; }
+
+  #sidebarHeader {
+    padding: 14px 12px;
+    border-bottom: 1px solid #334155;
+  }
+  #newPageBtn {
+    width: 100%;
+    padding: 10px;
+    background: #22c55e;
+    border: none;
+    border-radius: 8px;
+    color: #000;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  #newPageBtn:hover { background: #4ade80; }
+
+  #searchWrap {
+    padding: 10px 12px;
+    border-bottom: 1px solid #334155;
+  }
+  #searchInput {
+    width: 100%;
+    padding: 8px 10px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: #f1f5f9;
+    font-size: 13px;
+    outline: none;
+  }
+  #searchInput:focus { border-color: #22c55e; }
+  #searchInput::placeholder { color: #64748b; }
+
+  #tabList {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px;
+  }
+  #tabList::-webkit-scrollbar { width: 5px; }
+  #tabList::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+
+  .tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13.5px;
+    color: #94a3b8;
+    transition: background 0.1s;
+    position: relative;
+    user-select: none;
+  }
+  .tab:hover { background: #334155; color: #f1f5f9; }
+  .tab.active { background: #334155; color: #f1f5f9; }
+  .tab-icon { font-size: 13px; flex-shrink: 0; }
+  .tab-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tab-menu-btn {
+    opacity: 0;
+    background: none;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .tab:hover .tab-menu-btn,
+  .tab.active .tab-menu-btn { opacity: 1; }
+  .tab-menu-btn:hover { background: #475569; color: #f1f5f9; }
+
+  /* ── Tab Menu Dropdown ── */
+  .tab-dropdown {
+    position: absolute;
+    right: 6px;
+    top: 36px;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 4px;
+    z-index: 100;
+    min-width: 130px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  }
+  .tab-dropdown-item {
+    padding: 8px 12px;
+    font-size: 13px;
+    color: #f1f5f9;
+    cursor: pointer;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .tab-dropdown-item:hover { background: #334155; }
+  .tab-dropdown-item.delete { color: #ef4444; }
+  .tab-dropdown-item.delete:hover { background: rgba(239,68,68,0.15); }
+
+  #sidebarFooter {
+    padding: 10px 12px;
+    border-top: 1px solid #334155;
+    font-size: 11px;
+    color: #475569;
+    text-align: center;
+  }
+
+  /* ── Main Area ── */
+  #main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  #topBar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid #1f2937;
+    flex-shrink: 0;
+  }
+  #toggleSidebarBtn {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 6px;
+  }
+  #toggleSidebarBtn:hover { background: #1e293b; color: #f1f5f9; }
+  #pageTitle {
+    font-size: 15px;
+    font-weight: 500;
+    color: #f1f5f9;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #charCount {
+    font-size: 12px;
+    color: #64748b;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #editorWrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 16px 20px;
+    min-height: 0;
+  }
+  #editor {
+    flex: 1;
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: #f1f5f9;
+    font-size: 15px;
+    line-height: 1.7;
+    resize: none;
+    outline: none;
+    font-family: inherit;
+  }
+  #editor::placeholder { color: #475569; }
+
+  #renameModalOverlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+  #renameModal {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 20px;
+    width: 320px;
+  }
+  #renameModal h3 {
+    font-size: 15px;
+    margin-bottom: 12px;
+    color: #f1f5f9;
+  }
+  #renameInput {
+    width: 100%;
+    padding: 10px 12px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    color: #f1f5f9;
+    font-size: 14px;
+    outline: none;
+    margin-bottom: 12px;
+  }
+  #renameInput:focus { border-color: #22c55e; }
+  .modal-btns {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+  .modal-btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    border: none;
+  }
+  .modal-btn.cancel {
+    background: transparent;
+    border: 1px solid #334155;
+    color: #94a3b8;
+  }
+  .modal-btn.cancel:hover { border-color: #475569; color: #f1f5f9; }
+  .modal-btn.confirm {
+    background: #22c55e;
+    color: #000;
+    font-weight: 600;
+  }
+  .modal-btn.confirm:hover { background: #4ade80; }
+</style>
+<base target="_blank">
+</head>
+<body>
+
+<!-- Sidebar -->
+<div id="sidebar">
+  <div id="sidebarHeader">
+    <button id="newPageBtn">+ New page</button>
+  </div>
+  <div id="searchWrap">
+    <input id="searchInput" type="text" placeholder="Search notes…" autocomplete="off">
+  </div>
+  <div id="tabList"></div>
+  <div id="sidebarFooter">Auto-saved to browser</div>
+</div>
+
+<!-- Main -->
+<div id="main">
+  <div id="topBar">
+    <button id="toggleSidebarBtn">☰</button>
+    <div id="pageTitle">Untitled</div>
+    <div id="charCount">0 chars</div>
+  </div>
+  <div id="editorWrap">
+    <textarea id="editor" placeholder="Start typing…"></textarea>
+  </div>
+</div>
+
+<!-- Rename Modal -->
+<div id="renameModalOverlay">
+  <div id="renameModal">
+    <h3>Rename page</h3>
+    <input id="renameInput" type="text" placeholder="Page name…" autocomplete="off">
+    <div class="modal-btns">
+      <button class="modal-btn cancel" id="renameCancel">Cancel</button>
+      <button class="modal-btn confirm" id="renameConfirm">Rename</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = "vusNotes_v1";
+let pages = [];
+let activeId = null;
+let renameTargetId = null;
+let openDropdownId = null;
+
+/* ── DOM refs ── */
+const $sidebar = document.getElementById("sidebar");
+const $tabList = document.getElementById("tabList");
+const $editor = document.getElementById("editor");
+const $pageTitle = document.getElementById("pageTitle");
+const $charCount = document.getElementById("charCount");
+const $searchInput = document.getElementById("searchInput");
+const $renameOverlay = document.getElementById("renameModalOverlay");
+const $renameInput = document.getElementById("renameInput");
+
+/* ── Storage ── */
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      pages = parsed.pages || [];
+      activeId = parsed.activeId || null;
+    }
+  } catch (e) {}
+  if (pages.length === 0) {
+    createPage("Untitled");
+  }
+  if (!activeId || !pages.find(p => p.id === activeId)) {
+    activeId = pages[0].id;
+  }
+}
+
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ pages, activeId }));
+}
+
+/* ── Page CRUD ── */
+function createPage(name, content) {
+  const id = "p_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+  const page = {
+    id,
+    name: name || "Untitled",
+    content: content || "",
+    createdAt: Date.now()
+  };
+  pages.push(page);
+  activeId = id;
+  save();
+  renderTabs();
+  loadPage(id);
+  return page;
+}
+
+function deletePage(id) {
+  pages = pages.filter(p => p.id !== id);
+  if (pages.length === 0) {
+    createPage("Untitled");
+    return;
+  }
+  if (activeId === id) {
+    activeId = pages[pages.length - 1].id;
+  }
+  save();
+  renderTabs();
+  loadPage(activeId);
+}
+
+function duplicatePage(id) {
+  const orig = pages.find(p => p.id === id);
+  if (!orig) return;
+  createPage(orig.name + " (copy)", orig.content);
+}
+
+function renamePage(id, newName) {
+  const page = pages.find(p => p.id === id);
+  if (page) {
+    page.name = newName.trim() || "Untitled";
+    save();
+    renderTabs();
+    if (activeId === id) $pageTitle.textContent = page.name;
+  }
+}
+
+/* ── Editor ── */
+function loadPage(id) {
+  const page = pages.find(p => p.id === id);
+  if (!page) return;
+  activeId = id;
+  $editor.value = page.content;
+  $pageTitle.textContent = page.name;
+  updateCharCount();
+  renderTabs();
+  save();
+  $editor.focus();
+}
+
+function updateActiveContent() {
+  const page = pages.find(p => p.id === activeId);
+  if (page) {
+    page.content = $editor.value;
+    updateCharCount();
+    save();
+  }
+}
+
+function updateCharCount() {
+  $charCount.textContent = $editor.value.length.toLocaleString() + " chars";
+}
+
+/* ── Tabs rendering ── */
+function renderTabs() {
+  const query = $searchInput.value.trim().toLowerCase();
+  const filtered = pages.filter(p =>
+    p.name.toLowerCase().includes(query) ||
+    p.content.toLowerCase().includes(query)
+  );
+
+  $tabList.innerHTML = "";
+
+  if (filtered.length === 0) {
+    $tabList.innerHTML = `<div style="padding:20px;text-align:center;color:#64748b;font-size:13px">No matches</div>`;
+    return;
+  }
+
+  filtered.forEach(page => {
+    const tab = document.createElement("div");
+    tab.className = "tab" + (page.id === activeId ? " active" : "");
+
+    const icon = document.createElement("span");
+    icon.className = "tab-icon";
+    icon.textContent = "📝";
+
+    const name = document.createElement("span");
+    name.className = "tab-name";
+    name.textContent = page.name;
+
+    const menuBtn = document.createElement("button");
+    menuBtn.className = "tab-menu-btn";
+    menuBtn.innerHTML = "&#x22EE;"; // vertical ellipsis
+    menuBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleDropdown(page.id, menuBtn);
+    });
+
+    tab.appendChild(icon);
+    tab.appendChild(name);
+    tab.appendChild(menuBtn);
+
+    tab.addEventListener("click", () => {
+      closeDropdown();
+      loadPage(page.id);
+    });
+
+    $tabList.appendChild(tab);
+  });
+}
+
+/* ── Dropdown menu ── */
+function toggleDropdown(pageId, btnEl) {
+  if (openDropdownId === pageId) {
+    closeDropdown();
+    return;
+  }
+  closeDropdown();
+  openDropdownId = pageId;
+
+  const dropdown = document.createElement("div");
+  dropdown.className = "tab-dropdown";
+  dropdown.id = "activeDropdown";
+
+  const renameItem = document.createElement("div");
+  renameItem.className = "tab-dropdown-item";
+  renameItem.innerHTML = "✏️ Rename";
+  renameItem.addEventListener("click", (e) => {
+    e.stopPropagation();
+    closeDropdown();
+    openRenameModal(pageId);
+  });
+
+  const dupeItem = document.createElement("div");
+  dupeItem.className = "tab-dropdown-item";
+  dupeItem.innerHTML = "📄 Duplicate";
+  dupeItem.addEventListener("click", (e) => {
+    e.stopPropagation();
+    closeDropdown();
+    duplicatePage(pageId);
+  });
+
+  const delItem = document.createElement("div");
+  delItem.className = "tab-dropdown-item delete";
+  delItem.innerHTML = "🗑️ Delete";
+  delItem.addEventListener("click", (e) => {
+    e.stopPropagation();
+    closeDropdown();
+    deletePage(pageId);
+  });
+
+  dropdown.appendChild(renameItem);
+  dropdown.appendChild(dupeItem);
+  dropdown.appendChild(delItem);
+
+  btnEl.parentElement.appendChild(dropdown);
+}
+
+function closeDropdown() {
+  const existing = document.getElementById("activeDropdown");
+  if (existing) existing.remove();
+  openDropdownId = null;
+}
+
+/* ── Rename modal ── */
+function openRenameModal(pageId) {
+  renameTargetId = pageId;
+  const page = pages.find(p => p.id === pageId);
+  $renameInput.value = page ? page.name : "";
+  $renameOverlay.style.display = "flex";
+  $renameInput.focus();
+  $renameInput.select();
+}
+
+function closeRenameModal() {
+  $renameOverlay.style.display = "none";
+  renameTargetId = null;
+}
+
+function confirmRename() {
+  if (renameTargetId) {
+    renamePage(renameTargetId, $renameInput.value);
+  }
+  closeRenameModal();
+}
+
+/* ── Event listeners ── */
+document.getElementById("newPageBtn").addEventListener("click", () => {
+  createPage("Untitled");
+});
+
+document.getElementById("toggleSidebarBtn").addEventListener("click", () => {
+  $sidebar.classList.toggle("collapsed");
+});
+
+$editor.addEventListener("input", updateActiveContent);
+
+$searchInput.addEventListener("input", renderTabs);
+
+$renameCancel.addEventListener("click", closeRenameModal);
+$renameConfirm.addEventListener("click", confirmRename);
+$renameInput.addEventListener("keydown", e => {
+  if (e.key === "Enter") confirmRename();
+  if (e.key === "Escape") closeRenameModal();
+});
+$renameOverlay.addEventListener("click", e => {
+  if (e.target === $renameOverlay) closeRenameModal();
+});
+
+document.addEventListener("click", () => closeDropdown());
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") closeDropdown();
+});
+
+// Auto-resize textarea
+$editor.style.height = "auto";
+$editor.style.height = $editor.scrollHeight + "px";
+
+/* ── Boot ── */
+load();
+renderTabs();
+loadPage(activeId);
+</script>
+</body>
+</html>
