@@ -88,12 +88,32 @@
   }
   .tab:hover { background: #334155; color: #f1f5f9; }
   .tab.active { background: #334155; color: #f1f5f9; }
+  .tab.selected {
+    outline: 2px solid #22c55e;
+    outline-offset: -2px;
+  }
   .tab-icon { font-size: 13px; flex-shrink: 0; }
   .tab-name {
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* Selection checkbox */
+  .tab-check {
+    display: none;
+    width: 16px;
+    height: 16px;
+    accent-color: #22c55e;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  body.select-mode .tab-check {
+    display: block;
+  }
+  body.select-mode .tab-icon {
+    display: none;
   }
 
   /* Inline actions — ONLY show when CTRL is held AND tab is hovered */
@@ -133,6 +153,7 @@
     flex-shrink: 0;
   }
   .tab:hover .tab-menu-btn { opacity: 1; }
+  body.select-mode .tab-menu-btn { display: none; }
   .tab-menu-btn:hover { background: #475569; color: #f1f5f9; }
 
   /* ── Tab Menu Dropdown ── */
@@ -289,6 +310,58 @@
     font-weight: 600;
   }
   .modal-btn.confirm:hover { background: #4ade80; }
+  .modal-btn.danger {
+    background: #ef4444;
+    color: #fff;
+    font-weight: 600;
+  }
+  .modal-btn.danger:hover { background: #f87171; }
+
+  /* Selection bar */
+  #selectionBar {
+    display: none;
+    padding: 10px 12px;
+    background: #1e293b;
+    border-bottom: 1px solid #334155;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  body.select-mode #selectionBar {
+    display: flex;
+  }
+  body.select-mode #sidebarHeader {
+    display: none;
+  }
+  #selectionCount {
+    font-size: 13px;
+    color: #94a3b8;
+    flex: 1;
+  }
+  .sel-btn {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    border: none;
+    font-weight: 600;
+  }
+  .sel-btn.cancel {
+    background: transparent;
+    border: 1px solid #334155;
+    color: #94a3b8;
+  }
+  .sel-btn.cancel:hover { border-color: #475569; color: #f1f5f9; }
+  .sel-btn.delete {
+    background: #ef4444;
+    color: #fff;
+  }
+  .sel-btn.delete:hover { background: #f87171; }
+  .sel-btn.select-all {
+    background: #334155;
+    color: #f1f5f9;
+  }
+  .sel-btn.select-all:hover { background: #475569; }
 
   /* Hint for CTRL shortcut */
   #ctrlHint {
@@ -318,6 +391,12 @@
 <div id="sidebar">
   <div id="sidebarHeader">
     <button id="newPageBtn">+ New page</button>
+  </div>
+  <div id="selectionBar">
+    <span id="selectionCount">0 selected</span>
+    <button class="sel-btn select-all" id="selectAllBtn">Select all</button>
+    <button class="sel-btn cancel" id="cancelSelectBtn">Cancel</button>
+    <button class="sel-btn delete" id="deleteSelectedBtn">Delete</button>
   </div>
   <div id="searchWrap">
     <input id="searchInput" type="text" placeholder="Search notes…" autocomplete="off">
@@ -350,6 +429,18 @@
   </div>
 </div>
 
+<!-- Mass Delete Confirm Modal -->
+<div id="massDeleteOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;align-items:center;justify-content:center">
+  <div style="background:#1e293b;border:1px solid #334155;border-radius:12px;padding:20px;width:320px">
+    <h3 style="font-size:15px;margin-bottom:8px;color:#f1f5f9">Delete pages?</h3>
+    <p id="massDeleteText" style="font-size:13px;color:#94a3b8;margin-bottom:16px;line-height:1.4">This will delete 0 pages. This cannot be undone.</p>
+    <div class="modal-btns">
+      <button class="modal-btn cancel" id="massDeleteCancel">Cancel</button>
+      <button class="modal-btn danger" id="massDeleteConfirm">Delete</button>
+    </div>
+  </div>
+</div>
+
 <div id="ctrlHint">CTRL held — hover a tab to see actions</div>
 
 <script>
@@ -358,6 +449,8 @@ let pages = [];
 let activeId = null;
 let renameTargetId = null;
 let openDropdownId = null;
+let selectedIds = new Set();
+let selectMode = false;
 
 /* ── DOM refs ── */
 const $sidebar = document.getElementById("sidebar");
@@ -370,6 +463,11 @@ const $renameOverlay = document.getElementById("renameModalOverlay");
 const $renameInput = document.getElementById("renameInput");
 const $renameCancel = document.getElementById("renameCancel");
 const $renameConfirm = document.getElementById("renameConfirm");
+const $selectionCount = document.getElementById("selectionCount");
+const $massDeleteOverlay = document.getElementById("massDeleteOverlay");
+const $massDeleteText = document.getElementById("massDeleteText");
+const $massDeleteCancel = document.getElementById("massDeleteCancel");
+const $massDeleteConfirm = document.getElementById("massDeleteConfirm");
 
 /* ── Storage ── */
 function load() {
@@ -405,6 +503,70 @@ function load() {
 
 function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ pages, activeId }));
+}
+
+/* ── Selection mode ── */
+function enterSelectMode() {
+  selectMode = true;
+  selectedIds.clear();
+  document.body.classList.add("select-mode");
+  updateSelectionUI();
+  renderTabs();
+}
+
+function exitSelectMode() {
+  selectMode = false;
+  selectedIds.clear();
+  document.body.classList.remove("select-mode");
+  renderTabs();
+}
+
+function toggleSelect(id) {
+  if (selectedIds.has(id)) {
+    selectedIds.delete(id);
+  } else {
+    selectedIds.add(id);
+  }
+  updateSelectionUI();
+  renderTabs();
+}
+
+function selectAllVisible() {
+  const query = $searchInput.value.trim().toLowerCase();
+  const filtered = pages.filter(p =>
+    p.name.toLowerCase().includes(query) ||
+    p.content.toLowerCase().includes(query)
+  );
+  filtered.forEach(p => selectedIds.add(p.id));
+  updateSelectionUI();
+  renderTabs();
+}
+
+function updateSelectionUI() {
+  $selectionCount.textContent = selectedIds.size + " selected";
+}
+
+function deleteSelected() {
+  if (selectedIds.size === 0) return;
+  $massDeleteText.textContent = "This will delete " + selectedIds.size + " page" + (selectedIds.size > 1 ? "s" : "") + ". This cannot be undone.";
+  $massDeleteOverlay.style.display = "flex";
+}
+
+function confirmMassDelete() {
+  pages = pages.filter(p => !selectedIds.has(p.id));
+  if (pages.length === 0) {
+    const id = "p_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+    pages = [{ id, name: "Untitled", content: "", createdAt: Date.now() }];
+    activeId = id;
+  } else if (selectedIds.has(activeId)) {
+    activeId = pages[pages.length - 1].id;
+  }
+  selectedIds.clear();
+  save();
+  renderTabs();
+  loadPage(activeId);
+  exitSelectMode();
+  $massDeleteOverlay.style.display = "none";
 }
 
 /* ── Page CRUD ── */
@@ -456,6 +618,7 @@ function renamePage(id, newName) {
 
 /* ── Editor ── */
 function loadPage(id) {
+  if (selectMode) return; // don't switch pages while selecting
   const page = pages.find(p => p.id === id);
   if (!page) return;
   activeId = id;
@@ -497,7 +660,17 @@ function renderTabs() {
 
   filtered.forEach(page => {
     const tab = document.createElement("div");
-    tab.className = "tab" + (page.id === activeId ? " active" : "");
+    tab.className = "tab" + (page.id === activeId ? " active" : "") + (selectedIds.has(page.id) ? " selected" : "");
+
+    // Checkbox for selection mode
+    const check = document.createElement("input");
+    check.type = "checkbox";
+    check.className = "tab-check";
+    check.checked = selectedIds.has(page.id);
+    check.addEventListener("change", (e) => {
+      e.stopPropagation();
+      toggleSelect(page.id);
+    });
 
     const icon = document.createElement("span");
     icon.className = "tab-icon";
@@ -551,14 +724,26 @@ function renderTabs() {
       toggleDropdown(page.id, menuBtn);
     });
 
+    tab.appendChild(check);
     tab.appendChild(icon);
     tab.appendChild(name);
     tab.appendChild(actions);
     tab.appendChild(menuBtn);
 
     tab.addEventListener("click", () => {
-      closeDropdown();
-      loadPage(page.id);
+      if (selectMode) {
+        toggleSelect(page.id);
+      } else {
+        closeDropdown();
+        loadPage(page.id);
+      }
+    });
+
+    // Right-click to enter select mode on this tab
+    tab.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      if (!selectMode) enterSelectMode();
+      toggleSelect(page.id);
     });
 
     $tabList.appendChild(tab);
@@ -605,9 +790,20 @@ function toggleDropdown(pageId, btnEl) {
     deletePage(pageId);
   });
 
+  const selectItem = document.createElement("div");
+  selectItem.className = "tab-dropdown-item";
+  selectItem.innerHTML = "☑️ Select multiple…";
+  selectItem.addEventListener("click", (e) => {
+    e.stopPropagation();
+    closeDropdown();
+    enterSelectMode();
+    toggleSelect(pageId);
+  });
+
   dropdown.appendChild(renameItem);
   dropdown.appendChild(dupeItem);
   dropdown.appendChild(delItem);
+  dropdown.appendChild(selectItem);
 
   btnEl.parentElement.appendChild(dropdown);
 }
@@ -663,9 +859,25 @@ $renameOverlay.addEventListener("click", e => {
   if (e.target === $renameOverlay) closeRenameModal();
 });
 
+// Selection bar buttons
+document.getElementById("cancelSelectBtn").addEventListener("click", exitSelectMode);
+document.getElementById("selectAllBtn").addEventListener("click", selectAllVisible);
+document.getElementById("deleteSelectedBtn").addEventListener("click", deleteSelected);
+
+$massDeleteCancel.addEventListener("click", () => {
+  $massDeleteOverlay.style.display = "none";
+});
+$massDeleteConfirm.addEventListener("click", confirmMassDelete);
+$massDeleteOverlay.addEventListener("click", e => {
+  if (e.target === $massDeleteOverlay) $massDeleteOverlay.style.display = "none";
+});
+
 document.addEventListener("click", () => closeDropdown());
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape") closeDropdown();
+  if (e.key === "Escape") {
+    closeDropdown();
+    if (selectMode) exitSelectMode();
+  }
 });
 
 /* ── CTRL hold for inline actions ── */
