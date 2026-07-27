@@ -1,6 +1,3 @@
-please dont use this yet because im still working on it zzz
-<br>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -99,18 +96,13 @@ please dont use this yet because im still working on it zzz
     white-space: nowrap;
   }
 
-  /* Inline actions - hidden by default, shown on hover or when CTRL is held */
+  /* Inline actions — ONLY show when CTRL is held AND tab is hovered */
   .tab-actions {
     display: none;
     gap: 2px;
     flex-shrink: 0;
   }
-  .tab:hover .tab-actions,
   body.ctrl-held .tab:hover .tab-actions {
-    display: flex;
-  }
-  /* When CTRL is held, show actions on ALL tabs (not just hovered) for discoverability */
-  body.ctrl-held .tab .tab-actions {
     display: flex;
   }
 
@@ -127,7 +119,7 @@ please dont use this yet because im still working on it zzz
   .tab-action-btn:hover { background: #475569; color: #f1f5f9; }
   .tab-action-btn.delete:hover { background: rgba(239,68,68,0.2); color: #ef4444; }
 
-  /* 3-dot menu button - always visible as fallback */
+  /* 3-dot menu button — always shows on hover as fallback */
   .tab-menu-btn {
     opacity: 0;
     background: none;
@@ -358,7 +350,7 @@ please dont use this yet because im still working on it zzz
   </div>
 </div>
 
-<div id="ctrlHint">CTRL held — click icons to act on tabs</div>
+<div id="ctrlHint">CTRL held — hover a tab to see actions</div>
 
 <script>
 const STORAGE_KEY = "vusNotes_v2";
@@ -515,7 +507,7 @@ function renderTabs() {
     name.className = "tab-name";
     name.textContent = page.name;
 
-    // Inline action buttons (visible on hover or when CTRL held)
+    // Inline action buttons — ONLY visible when CTRL held + hovered
     const actions = document.createElement("div");
     actions.className = "tab-actions";
 
