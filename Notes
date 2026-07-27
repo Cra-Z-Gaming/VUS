@@ -317,15 +317,16 @@
   }
   .modal-btn.danger:hover { background: #f87171; }
 
-  /* Selection bar */
+  /* Selection bar — compact single-line layout */
   #selectionBar {
     display: none;
-    padding: 10px 12px;
+    padding: 10px 10px;
     background: #1e293b;
     border-bottom: 1px solid #334155;
     align-items: center;
-    gap: 10px;
+    gap: 6px;
     flex-shrink: 0;
+    white-space: nowrap;
   }
   body.select-mode #selectionBar {
     display: flex;
@@ -334,17 +335,23 @@
     display: none;
   }
   #selectionCount {
-    font-size: 13px;
+    font-size: 12px;
     color: #94a3b8;
     flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .sel-btn {
-    padding: 6px 12px;
+    padding: 5px 8px;
     border-radius: 6px;
-    font-size: 12px;
+    font-size: 11px;
     cursor: pointer;
     border: none;
     font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .sel-btn.cancel {
     background: transparent;
@@ -618,7 +625,7 @@ function renamePage(id, newName) {
 
 /* ── Editor ── */
 function loadPage(id) {
-  if (selectMode) return; // don't switch pages while selecting
+  if (selectMode) return;
   const page = pages.find(p => p.id === id);
   if (!page) return;
   activeId = id;
@@ -662,7 +669,6 @@ function renderTabs() {
     const tab = document.createElement("div");
     tab.className = "tab" + (page.id === activeId ? " active" : "") + (selectedIds.has(page.id) ? " selected" : "");
 
-    // Checkbox for selection mode
     const check = document.createElement("input");
     check.type = "checkbox";
     check.className = "tab-check";
@@ -680,7 +686,6 @@ function renderTabs() {
     name.className = "tab-name";
     name.textContent = page.name;
 
-    // Inline action buttons — ONLY visible when CTRL held + hovered
     const actions = document.createElement("div");
     actions.className = "tab-actions";
 
@@ -715,7 +720,6 @@ function renderTabs() {
     actions.appendChild(dupeBtn);
     actions.appendChild(delBtn);
 
-    // 3-dot menu fallback
     const menuBtn = document.createElement("button");
     menuBtn.className = "tab-menu-btn";
     menuBtn.innerHTML = "&#x22EE;";
@@ -739,7 +743,6 @@ function renderTabs() {
       }
     });
 
-    // Right-click to enter select mode on this tab
     tab.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       if (!selectMode) enterSelectMode();
@@ -750,7 +753,7 @@ function renderTabs() {
   });
 }
 
-/* ── Dropdown menu (fallback) ── */
+/* ── Dropdown menu ── */
 function toggleDropdown(pageId, btnEl) {
   if (openDropdownId === pageId) {
     closeDropdown();
@@ -859,7 +862,6 @@ $renameOverlay.addEventListener("click", e => {
   if (e.target === $renameOverlay) closeRenameModal();
 });
 
-// Selection bar buttons
 document.getElementById("cancelSelectBtn").addEventListener("click", exitSelectMode);
 document.getElementById("selectAllBtn").addEventListener("click", selectAllVisible);
 document.getElementById("deleteSelectedBtn").addEventListener("click", deleteSelected);
