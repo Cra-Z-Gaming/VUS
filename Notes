@@ -1,4 +1,5 @@
-please dont use this yet because im still working on it
+please dont use this yet because im still working on it zzz
+<br>
 
 <!DOCTYPE html>
 <html lang="en">
@@ -19,15 +20,15 @@ please dont use this yet because im still working on it
 
   /* ── Sidebar ── */
   #sidebar {
-    width: 260px;
-    min-width: 260px;
+    width: 280px;
+    min-width: 280px;
     background: #1e293b;
     border-right: 1px solid #334155;
     display: flex;
     flex-direction: column;
     transition: margin-left 0.2s;
   }
-  #sidebar.collapsed { margin-left: -260px; }
+  #sidebar.collapsed { margin-left: -280px; }
 
   #sidebarHeader {
     padding: 14px 12px;
@@ -97,6 +98,36 @@ please dont use this yet because im still working on it
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
+  /* Inline actions - hidden by default, shown on hover or when CTRL is held */
+  .tab-actions {
+    display: none;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+  .tab:hover .tab-actions,
+  body.ctrl-held .tab:hover .tab-actions {
+    display: flex;
+  }
+  /* When CTRL is held, show actions on ALL tabs (not just hovered) for discoverability */
+  body.ctrl-held .tab .tab-actions {
+    display: flex;
+  }
+
+  .tab-action-btn {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 3px 5px;
+    border-radius: 4px;
+    font-size: 12px;
+    line-height: 1;
+  }
+  .tab-action-btn:hover { background: #475569; color: #f1f5f9; }
+  .tab-action-btn.delete:hover { background: rgba(239,68,68,0.2); color: #ef4444; }
+
+  /* 3-dot menu button - always visible as fallback */
   .tab-menu-btn {
     opacity: 0;
     background: none;
@@ -107,9 +138,9 @@ please dont use this yet because im still working on it
     border-radius: 4px;
     font-size: 14px;
     line-height: 1;
+    flex-shrink: 0;
   }
-  .tab:hover .tab-menu-btn,
-  .tab.active .tab-menu-btn { opacity: 1; }
+  .tab:hover .tab-menu-btn { opacity: 1; }
   .tab-menu-btn:hover { background: #475569; color: #f1f5f9; }
 
   /* ── Tab Menu Dropdown ── */
@@ -266,6 +297,26 @@ please dont use this yet because im still working on it
     font-weight: 600;
   }
   .modal-btn.confirm:hover { background: #4ade80; }
+
+  /* Hint for CTRL shortcut */
+  #ctrlHint {
+    position: fixed;
+    bottom: 12px;
+    right: 16px;
+    font-size: 12px;
+    color: #64748b;
+    background: #1e293b;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid #334155;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+    z-index: 50;
+  }
+  body.ctrl-held #ctrlHint {
+    opacity: 1;
+  }
 </style>
 <base target="_blank">
 </head>
@@ -307,8 +358,10 @@ please dont use this yet because im still working on it
   </div>
 </div>
 
+<div id="ctrlHint">CTRL held — click icons to act on tabs</div>
+
 <script>
-const STORAGE_KEY = "vusNotes_v1";
+const STORAGE_KEY = "vusNotes_v2";
 let pages = [];
 let activeId = null;
 let renameTargetId = null;
@@ -323,20 +376,36 @@ const $charCount = document.getElementById("charCount");
 const $searchInput = document.getElementById("searchInput");
 const $renameOverlay = document.getElementById("renameModalOverlay");
 const $renameInput = document.getElementById("renameInput");
+const $renameCancel = document.getElementById("renameCancel");
+const $renameConfirm = document.getElementById("renameConfirm");
 
 /* ── Storage ── */
 function load() {
+  let loaded = false;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      pages = parsed.pages || [];
-      activeId = parsed.activeId || null;
+      if (Array.isArray(parsed.pages)) {
+        pages = parsed.pages;
+        activeId = parsed.activeId || null;
+        loaded = true;
+      }
     }
   } catch (e) {}
-  if (pages.length === 0) {
-    createPage("Untitled");
+
+  if (!loaded || pages.length === 0) {
+    const id = "p_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+    pages = [{
+      id,
+      name: "Untitled",
+      content: "",
+      createdAt: Date.now()
+    }];
+    activeId = id;
+    save();
   }
+
   if (!activeId || !pages.find(p => p.id === activeId)) {
     activeId = pages[0].id;
   }
@@ -446,9 +515,45 @@ function renderTabs() {
     name.className = "tab-name";
     name.textContent = page.name;
 
+    // Inline action buttons (visible on hover or when CTRL held)
+    const actions = document.createElement("div");
+    actions.className = "tab-actions";
+
+    const renameBtn = document.createElement("button");
+    renameBtn.className = "tab-action-btn";
+    renameBtn.innerHTML = "✏️";
+    renameBtn.title = "Rename";
+    renameBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openRenameModal(page.id);
+    });
+
+    const dupeBtn = document.createElement("button");
+    dupeBtn.className = "tab-action-btn";
+    dupeBtn.innerHTML = "📄";
+    dupeBtn.title = "Duplicate";
+    dupeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      duplicatePage(page.id);
+    });
+
+    const delBtn = document.createElement("button");
+    delBtn.className = "tab-action-btn delete";
+    delBtn.innerHTML = "🗑️";
+    delBtn.title = "Delete";
+    delBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deletePage(page.id);
+    });
+
+    actions.appendChild(renameBtn);
+    actions.appendChild(dupeBtn);
+    actions.appendChild(delBtn);
+
+    // 3-dot menu fallback
     const menuBtn = document.createElement("button");
     menuBtn.className = "tab-menu-btn";
-    menuBtn.innerHTML = "&#x22EE;"; // vertical ellipsis
+    menuBtn.innerHTML = "&#x22EE;";
     menuBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       toggleDropdown(page.id, menuBtn);
@@ -456,6 +561,7 @@ function renderTabs() {
 
     tab.appendChild(icon);
     tab.appendChild(name);
+    tab.appendChild(actions);
     tab.appendChild(menuBtn);
 
     tab.addEventListener("click", () => {
@@ -467,7 +573,7 @@ function renderTabs() {
   });
 }
 
-/* ── Dropdown menu ── */
+/* ── Dropdown menu (fallback) ── */
 function toggleDropdown(pageId, btnEl) {
   if (openDropdownId === pageId) {
     closeDropdown();
@@ -570,9 +676,20 @@ document.addEventListener("keydown", e => {
   if (e.key === "Escape") closeDropdown();
 });
 
-// Auto-resize textarea
-$editor.style.height = "auto";
-$editor.style.height = $editor.scrollHeight + "px";
+/* ── CTRL hold for inline actions ── */
+document.addEventListener("keydown", e => {
+  if (e.key === "Control" && !e.repeat) {
+    document.body.classList.add("ctrl-held");
+  }
+});
+document.addEventListener("keyup", e => {
+  if (e.key === "Control") {
+    document.body.classList.remove("ctrl-held");
+  }
+});
+window.addEventListener("blur", () => {
+  document.body.classList.remove("ctrl-held");
+});
 
 /* ── Boot ── */
 load();
