@@ -921,7 +921,8 @@ Object.keys(apps).forEach(key => {
   btn.className = "hub-tab" + (key === currentTab ? " active" : "");
   btn.setAttribute("role", "tab");
   btn.setAttribute("aria-selected", key === currentTab ? "true" : "false");
-  btn.innerHTML = tabLabels[key] + '<span class="tab-count">' + apps[key].length + '</span>';
+  const count = apps[key].filter(app => app.name && app.name.trim() !== "").length;
+  btn.innerHTML = tabLabels[key] + '<span class="tab-count">' + count + '</span>';
   btn.onclick = () => switchTab(key);
   tabsEl.appendChild(btn);
   tabButtons.push({ key, el: btn });
