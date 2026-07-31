@@ -1,4 +1,4 @@
-easy 2 Tap links:
+EASY 2 Tap links:
 
 [CodePen](https://codepen.io/vladiscool2212/pen/poBKwpz)
 
