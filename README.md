@@ -1,9 +1,12 @@
 easy 2 Tap links:
 
-(https://codepen.io/vladiscool2212/pen/poBKwpz)
-(https://cra-z-gaming.github.io/VUS)
-(https://vus-orcin.vercel.app)
-(https://vush.my.canva.site)
+[CodePen](https://codepen.io/vladiscool2212/pen/poBKwpz)
+
+[GitHub](https://cra-z-gaming.github.io/VUS)
+
+[Vercel](https://vus-orcin.vercel.app)
+
+[Canva](https://vush.my.canva.site)
 
 
 I made this for myself and probably my whole school, but since my school likes to be a **BEAAACH** about games and websites, I'm not really supposed to share them anymore.
