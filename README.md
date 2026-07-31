@@ -69,4 +69,4 @@ this project is free to make and is fully open source. i do not mind you using a
 
 2 - Donations: this is 100% optional but GREATLY appreciated: Cashapp $vlad118
 
-Donations would definitely make me happy and motivated to make more projects or more buttons with code that live in VUS Hub
+Donations would definitely make me happy and motivated to make more projects that live in VUS Hub
