@@ -299,7 +299,9 @@
 
 </div>
 
-<script>
+<script type="module">
+import { onOnlineCount } from "./firebase.js";
+
 // ===================== FEATURED (hardcoded names, URLs pulled from apps.json) =====================
 const FEATURED_NAMES = ["VUS Launcher", "VUS AI Chat", "Chat Room"];
 
@@ -387,6 +389,16 @@ renderRecent();
 // (storage event fires across same-origin documents, e.g. this iframe + the parent)
 window.addEventListener("storage", (e) => {
   if (e.key === RECENT_APPS_KEY) renderRecent();
+});
+
+// ===================== ONLINE COUNT (display only) =====================
+// home.html only reads the live presence count from firebase.js — it does not
+// initialize its own Firebase connection or register a presence session.
+// That's handled globally, once, from index.html so users count as online on
+// every tab, not just while the Home tab is open.
+onOnlineCount((count) => {
+  const el = document.getElementById("onlineCount");
+  if (el) el.textContent = count;
 });
 </script>
 </body>
