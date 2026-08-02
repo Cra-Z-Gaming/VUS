@@ -48,10 +48,56 @@
     gap: 8px;
   }
 
+  .home-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 22px;
+    flex-wrap: wrap;
+  }
+
   .home-sub {
     font-size: 13px;
     color: var(--fg-muted);
-    margin-bottom: 22px;
+  }
+
+  /* ---- Online now (corner badge) ---- */
+  .online-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 7px 14px 7px 12px;
+    backdrop-filter: blur(12px);
+    white-space: nowrap;
+  }
+
+  .online-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .online-count {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fg);
+  }
+
+  .online-label {
+    font-size: 12px;
+    color: var(--fg-muted);
   }
 
   .widget-grid {
@@ -104,12 +150,17 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    width: 100%;
     padding: 8px 8px;
     border-radius: 9px;
+    border: none;
+    background: transparent;
     cursor: pointer;
     transition: background 0.2s;
     text-decoration: none;
     color: inherit;
+    font-family: var(--font);
+    text-align: left;
   }
 
   .widget-row:hover {
@@ -151,38 +202,6 @@
     font-size: 13px;
     color: var(--fg-dim);
     padding: 8px;
-  }
-
-  /* ---- Online now ---- */
-  .online-stat {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .online-dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    background: var(--accent);
-    box-shadow: 0 0 8px var(--accent);
-    animation: pulse 2s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
-
-  .online-count {
-    font-family: var(--mono);
-    font-size: 22px;
-    font-weight: 600;
-    color: var(--fg);
-  }
-
-  .online-label {
-    font-size: 12px;
-    color: var(--fg-muted);
   }
 
   /* ---- Socials ---- */
@@ -227,8 +246,17 @@
 </head>
 <body>
 
-<div class="home-title">👋 Welcome to VUS</div>
-<div class="home-sub">Your dashboard for everything VUS Hub</div>
+<div class="home-top">
+  <div>
+    <div class="home-title">👋 Welcome to VUS</div>
+    <div class="home-sub">Your dashboard for everything VUS Hub</div>
+  </div>
+  <div class="online-badge">
+    <span class="online-dot"></span>
+    <span class="online-count" id="onlineCount">12</span>
+    <span class="online-label">online</span>
+  </div>
+</div>
 
 <div class="widget-grid">
 
@@ -242,18 +270,6 @@
   <div class="widget-card">
     <div class="widget-header"><span class="emoji">⭐</span> Featured</div>
     <div class="widget-list" id="featuredList"></div>
-  </div>
-
-  <!-- Online Now -->
-  <div class="widget-card">
-    <div class="widget-header"><span class="emoji">🌐</span> Online Now</div>
-    <div class="online-stat">
-      <span class="online-dot"></span>
-      <div>
-        <div class="online-count" id="onlineCount">12</div>
-        <div class="online-label">users online</div>
-      </div>
-    </div>
   </div>
 
   <!-- Socials -->
@@ -284,14 +300,9 @@
 </div>
 
 <script>
-// ===================== FEATURED (hardcoded) =====================
-const FEATURED_APPS = [
-  { name: "VUS Launcher", icon: "🎮", color: "green" },
-  { name: "VUS AI", icon: "AI", color: "violet" },
-  { name: "Chat Room", icon: "Chat", color: "blue" }
-];
+// ===================== FEATURED (hardcoded names, URLs pulled from apps.json) =====================
+const FEATURED_NAMES = ["VUS Launcher", "VUS AI Chat", "Chat Room"];
 
-// ===================== RECENTLY USED (from localStorage) =====================
 const RECENT_APPS_KEY = "vus_recent_apps";
 
 function escapeHtml(str) {
@@ -305,39 +316,71 @@ function rowIcon(icon, color, name) {
   return `<span class="row-icon ${color || 'green'}">${escapeHtml(label)}</span>`;
 }
 
-function renderFeatured() {
-  const list = document.getElementById("featuredList");
-  list.innerHTML = FEATURED_APPS.map(app => `
-    <div class="widget-row">
+// Opens an app the same way the main hub does (cloaked fetch for raw.githubusercontent.com
+// links, direct new-tab for everything else), reusing the parent page's logic since this
+// widget lives in a same-origin iframe. Falls back to a plain new-tab open if that's ever
+// unavailable (e.g. loaded standalone outside the iframe).
+function openAppFromWidget(app) {
+  if (!app || !app.url) return;
+  try {
+    if (window.parent && window.parent !== window && typeof window.parent.openApp === "function") {
+      window.parent.openApp(app);
+      return;
+    }
+  } catch (e) {
+    // cross-origin or unavailable — fall through to direct open
+  }
+  window.open(app.url, "_blank", "noopener");
+}
+
+function renderRowButtons(containerId, appList, emptyMessage) {
+  const list = document.getElementById(containerId);
+
+  if (!appList.length) {
+    list.innerHTML = `<div class="widget-empty">${escapeHtml(emptyMessage)}</div>`;
+    return;
+  }
+
+  list.innerHTML = appList.map((app, i) => `
+    <button class="widget-row" type="button" data-index="${i}">
       ${rowIcon(app.icon, app.color, app.name)}
       <span class="row-name">${escapeHtml(app.name)}</span>
-    </div>
+    </button>
   `).join("");
+
+  Array.from(list.children).forEach((btn, i) => {
+    btn.addEventListener("click", () => openAppFromWidget(appList[i]));
+  });
 }
 
 function renderRecent() {
-  const list = document.getElementById("recentList");
   let recent = [];
   try {
     recent = JSON.parse(localStorage.getItem(RECENT_APPS_KEY) || "[]");
   } catch (e) {
     recent = [];
   }
-
-  if (!recent.length) {
-    list.innerHTML = '<div class="widget-empty">Nothing opened yet — your recent apps will show up here.</div>';
-    return;
-  }
-
-  list.innerHTML = recent.slice(0, 5).map(app => `
-    <div class="widget-row">
-      ${rowIcon(app.icon, app.color, app.name)}
-      <span class="row-name">${escapeHtml(app.name)}</span>
-    </div>
-  `).join("");
+  renderRowButtons("recentList", recent.slice(0, 5), "Nothing opened yet — your recent apps will show up here.");
 }
 
-renderFeatured();
+function renderFeatured(featuredApps) {
+  renderRowButtons("featuredList", featuredApps, "No featured apps set.");
+}
+
+// Pull the real app entries (with URLs) from apps.json so Featured buttons open correctly.
+fetch("apps.json")
+  .then(r => r.json())
+  .then(data => {
+    const allApps = [].concat(data.apps || [], data.hubs || [], data.tools || [], data.links || []);
+    const featured = FEATURED_NAMES
+      .map(name => allApps.find(a => a.name === name))
+      .filter(Boolean);
+    renderFeatured(featured);
+  })
+  .catch(() => {
+    renderFeatured([]);
+  });
+
 renderRecent();
 
 // Refresh "Recently Used" if the parent tab logs a new click while Home is open
