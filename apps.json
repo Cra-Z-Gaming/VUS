@@ -1,8 +1,8 @@
 {
 "home":[
-{"name":"","url":"","desc":"","icon":"","color":""},
-{"name":"","url":"","desc":"","icon":"","color":""},
-{"name":"","url":"","desc":"","icon":"","color":""},
+{"name":"VUS Launcher","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL","desc":"Main game hub — V17.4","icon":"🎮","color":"green"},
+{"name":"VUS AI Chat","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Core-VUS-AI","desc":"VUS AI - Groq, blocked in many schools","icon":"AI","color":"violet"},
+{"name":"Chat Room","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/VUS-Chat","desc":"Talk to people who also use VUS Hub","icon":"Chat","color":"blue"},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
@@ -30,7 +30,7 @@
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
-{"name":"","url":"","desc":"","icon":"","color":""},
+{"name":"TESTING / PRE-RELEASE","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/testing/refs/heads/main/index.html","desc":"","icon":"⚠️","color":"black"},
 {"name":"","url":"","desc":"","icon":"","color":""}
 ],
 "hubs":[
@@ -40,7 +40,6 @@
 {"name":"Polaris Hub","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUSL/refs/heads/main/Other/PolarisHub","desc":"has ALOT of games, havent counted yet","icon":"Polaris","color":"black"},
 {"name":"Wither Games","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUSL/refs/heads/main/Other/wither","desc":"144 popular/intresting games","icon":"Wither","color":"red"},
 {"name":"gn-math","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUSL/refs/heads/main/Other/gn-math","desc":"Well known game site","icon":"GN","color":"red"},
-{"name":"TESTING / PRE-RELEASE","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/testing/refs/heads/main/index.html","desc":"","icon":"⚠️","color":"black"},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
