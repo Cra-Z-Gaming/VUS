@@ -313,6 +313,25 @@
     .search-shortcut { display: none; }
   }
 
+  /* ---- Home dashboard iframe ---- */
+  .home-frame {
+    display: none;
+    width: 100%;
+    min-height: 200px;
+    height: calc(100vh - 260px);
+    border: none;
+    border-radius: var(--radius);
+    background: transparent;
+  }
+
+  .home-frame.active {
+    display: block;
+  }
+
+  @media (max-width: 480px) {
+    .home-frame { height: calc(100vh - 300px); }
+  }
+
   /* ---- Cards ---- */
   .hub-card {
     background: var(--card);
@@ -756,7 +775,7 @@
   </header>
 
   <!-- Search -->
-  <div class="search-wrap">
+  <div class="search-wrap" id="searchWrap">
     <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
     </svg>
@@ -771,6 +790,9 @@
 
   <!-- Grid -->
   <main class="hub-grid" id="grid" role="tabpanel"></main>
+
+  <!-- Home dashboard (widgets) -->
+  <iframe class="home-frame" id="homeFrame" src="home.html" title="Home" role="tabpanel"></iframe>
 
   <!-- Footer -->
   <footer class="hub-footer">
@@ -849,8 +871,12 @@ function buildTabs() {
     btn.className = "hub-tab" + (key === currentTab ? " active" : "");
     btn.setAttribute("role", "tab");
     btn.setAttribute("aria-selected", key === currentTab ? "true" : "false");
-    const count = apps[key].filter(app => app.name && app.name.trim() !== "").length;
-    btn.innerHTML = tabLabels[key] + '<span class="tab-count">' + count + '</span>';
+    if (key === "home") {
+      btn.innerHTML = tabLabels[key];
+    } else {
+      const count = apps[key].filter(app => app.name && app.name.trim() !== "").length;
+      btn.innerHTML = tabLabels[key] + '<span class="tab-count">' + count + '</span>';
+    }
     btn.onclick = () => switchTab(key);
     tabsEl.appendChild(btn);
     tabButtons.push({ key, el: btn });
@@ -909,6 +935,19 @@ document.addEventListener("keydown", (e) => {
 function render() {
   if (!apps) return;
   const grid = document.getElementById("grid");
+  const homeFrame = document.getElementById("homeFrame");
+
+  // Home tab shows the widget dashboard (home.html) instead of the card grid
+  if (currentTab === "home") {
+    grid.style.display = "none";
+    homeFrame.classList.add("active");
+    document.getElementById("searchWrap").style.display = "none";
+    return;
+  }
+  homeFrame.classList.remove("active");
+  grid.style.display = "";
+  document.getElementById("searchWrap").style.display = "";
+
   grid.innerHTML = "";
 
   let items = apps[currentTab].filter(app => app.url && app.url.trim() !== "");
@@ -960,9 +999,36 @@ function render() {
   });
 }
 
+// ===================== RECENTLY USED TRACKING =====================
+// Shared with home.html (loaded in an iframe) via localStorage, same-origin.
+const RECENT_APPS_KEY = "vus_recent_apps";
+const RECENT_APPS_MAX = 8;
+
+function trackRecentApp(app) {
+  if (!app || !app.name) return;
+  try {
+    let recent = JSON.parse(localStorage.getItem(RECENT_APPS_KEY) || "[]");
+    // Remove any existing entry for this app (by name) so it moves to the front
+    recent = recent.filter(r => r.name !== app.name);
+    recent.unshift({
+      name: app.name,
+      url: app.url || "",
+      icon: app.icon || "",
+      color: app.color || "",
+      ts: Date.now()
+    });
+    if (recent.length > RECENT_APPS_MAX) recent = recent.slice(0, RECENT_APPS_MAX);
+    localStorage.setItem(RECENT_APPS_KEY, JSON.stringify(recent));
+  } catch (e) {
+    // localStorage unavailable or full — fail silently, this is a non-critical feature
+  }
+}
+
 // ===================== OPEN APP =====================
 function openApp(app) {
   if (!app.url) return;
+
+  trackRecentApp(app);
 
   // Direct links (non-github raw) open normally
   if (!app.url.includes("raw.githubusercontent.com")) {
