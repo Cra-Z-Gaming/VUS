@@ -838,7 +838,7 @@ setInterval(updateClock, 1000);
 updateClock();
 
 // ===================== TABS =====================
-const tabLabels = { home: "Home", tools: "Tools", links: "Links" };
+const tabLabels = { home: "Home", apps: "Apps", hubs: "Hubs", tools: "Tools", links: "Links" };
 const tabsEl = document.getElementById("tabs");
 const tabIndicator = document.getElementById("tabIndicator");
 const tabButtons = [];
@@ -1043,12 +1043,18 @@ function loadApps() {
       return r.json();
     })
     .then(data => {
-      apps = { home: data.home || [], tools: data.tools || [], links: data.links || [] };
+      apps = {
+        home: data.home || [],
+        apps: data.apps || [],
+        hubs: data.hubs || [],
+        tools: data.tools || [],
+        links: data.links || []
+      };
       qaEntries = data.qa || [];
     })
     .catch(() => {
       showToast("Failed to load app list", "err");
-      apps = { home: [], tools: [], links: [] };
+      apps = { home: [], apps: [], hubs: [], tools: [], links: [] };
       qaEntries = [];
     });
 }
