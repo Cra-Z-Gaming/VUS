@@ -146,6 +146,15 @@
     overflow: hidden;
   }
 
+  .logo-mark img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    position: relative;
+    z-index: 1;
+  }
+
   .logo-mark::after {
     content: '';
     position: absolute;
@@ -766,7 +775,7 @@
 
   <header class="hub-header">
     <div class="hub-logo">
-      <div class="logo-mark">V</div>
+      <div class="logo-mark"><img src="https://github.com/Cra-Z-Gaming/VUS/raw/refs/heads/main/logo" alt="VUS Hub logo" onerror="this.style.display='none';this.parentElement.textContent='V';"></div>
       <span class="logo-text">VUS Hub</span>
     </div>
     <div class="header-right">
@@ -937,29 +946,58 @@ function render() {
   const grid = document.getElementById("grid");
   const homeFrame = document.getElementById("homeFrame");
 
-  // Home tab shows the widget dashboard (home.html) instead of the card grid
+  document.getElementById("searchWrap").style.display = "";
+
+  // Home tab: show the widget dashboard normally, but switch to a cross-tab
+  // title-only search view (reusing the same card grid) while there's a query.
   if (currentTab === "home") {
-    grid.style.display = "none";
-    homeFrame.classList.add("active");
-    document.getElementById("searchWrap").style.display = "none";
+    searchInput.placeholder = "Search all apps...";
+
+    if (!searchQuery) {
+      grid.style.display = "none";
+      homeFrame.classList.add("active");
+      return;
+    }
+
+    homeFrame.classList.remove("active");
+    grid.style.display = "";
+    grid.innerHTML = "";
+
+    // Search titles only, across every real tab (exclude "home" itself, which has no cards)
+    const searchableTabs = Object.keys(apps).filter(key => key !== "home");
+    let results = [];
+    searchableTabs.forEach(tabKey => {
+      apps[tabKey]
+        .filter(app => app.url && app.url.trim() !== "" && app.name.toLowerCase().includes(searchQuery))
+        .forEach(app => results.push({ ...app, _tab: tabKey }));
+    });
+
+    renderCards(grid, results, true);
     return;
   }
+
+  searchInput.placeholder = "Search apps and tools...";
   homeFrame.classList.remove("active");
   grid.style.display = "";
-  document.getElementById("searchWrap").style.display = "";
 
   grid.innerHTML = "";
 
   let items = apps[currentTab].filter(app => app.url && app.url.trim() !== "");
 
-  // Filter by search
+  // Filter by search (titles only)
   if (searchQuery) {
     items = items.filter(app =>
-      app.name.toLowerCase().includes(searchQuery) ||
-      app.desc.toLowerCase().includes(searchQuery)
+      app.name.toLowerCase().includes(searchQuery)
     );
   }
 
+  renderCards(grid, items, false);
+}
+
+// Renders a list of app cards into the given grid element.
+// fromHomeSearch: when true, clicking a card switches to that app's own tab
+// first (so the tab bar/state stays correct), then opens it.
+function renderCards(grid, items, fromHomeSearch) {
   if (items.length === 0) {
     const empty = document.createElement("div");
     empty.className = "hub-empty";
@@ -993,8 +1031,17 @@ function render() {
       </svg>
     `;
 
-    card.onclick = () => openApp(app);
-    card.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openApp(app); } };
+    const activate = () => {
+      if (fromHomeSearch && app._tab) {
+        searchInput.value = "";
+        searchQuery = "";
+        switchTab(app._tab);
+      }
+      openApp(app);
+    };
+
+    card.onclick = activate;
+    card.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); } };
     grid.appendChild(card);
   });
 }
