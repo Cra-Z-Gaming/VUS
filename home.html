@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VUS Hub</title>
+<title>VUS Hub — Home</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -249,7 +249,7 @@
 <div class="home-top">
   <div>
     <div class="home-title">👋 Welcome to VUS</div>
-    <div class="home-sub">Dashboard for VUS Hub</div>
+    <div class="home-sub">Your dashboard for everything VUS Hub</div>
   </div>
   <div class="online-badge">
     <span class="online-dot"></span>
@@ -299,8 +299,35 @@
 
 </div>
 
-<script type="module">
-import { onOnlineCount } from "./firebase.js";
+<script>
+// firebase.js is loaded dynamically below via a Blob-wrapped module import.
+// This avoids relying on a static `import ... from "./firebase.js"`, which
+// only resolves correctly when home.html has a real same-folder base URL.
+// Since home.html can be loaded via srcdoc (injected by index.html's Home
+// tab) or fetched raw directly, there's no reliable relative base to use —
+// so we always fetch firebase.js by absolute URL and load it as a module.
+let onOnlineCount = () => {}; // no-op fallback until firebase.js loads
+
+fetch("https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/firebase.js?v=" + Date.now())
+  .then(r => {
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.text();
+  })
+  .then(code => {
+    const blob = new Blob([code], { type: "application/javascript" });
+    const blobUrl = URL.createObjectURL(blob);
+    return import(blobUrl);
+  })
+  .then(mod => {
+    onOnlineCount = mod.onOnlineCount;
+    onOnlineCount((count) => {
+      const el = document.getElementById("onlineCount");
+      if (el) el.textContent = count;
+    });
+  })
+  .catch(() => {
+    console.warn("VUS Hub: failed to load firebase.js for online count.");
+  });
 
 // ===================== FEATURED (hardcoded names, URLs pulled from apps.json) =====================
 const FEATURED_NAMES = ["VUS Launcher", "VUS AI Chat", "Chat Room"];
@@ -370,7 +397,7 @@ function renderFeatured(featuredApps) {
 }
 
 // Pull the real app entries (with URLs) from apps.json so Featured buttons open correctly.
-fetch("apps.json")
+fetch("https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/apps.json?v=" + Date.now())
   .then(r => r.json())
   .then(data => {
     const allApps = [].concat(data.apps || [], data.hubs || [], data.tools || [], data.links || []);
@@ -389,16 +416,6 @@ renderRecent();
 // (storage event fires across same-origin documents, e.g. this iframe + the parent)
 window.addEventListener("storage", (e) => {
   if (e.key === RECENT_APPS_KEY) renderRecent();
-});
-
-// ===================== ONLINE COUNT (display only) =====================
-// home.html only reads the live presence count from firebase.js — it does not
-// initialize its own Firebase connection or register a presence session.
-// That's handled globally, once, from index.html so users count as online on
-// every tab, not just while the Home tab is open.
-onOnlineCount((count) => {
-  const el = document.getElementById("onlineCount");
-  if (el) el.textContent = count;
 });
 </script>
 </body>
