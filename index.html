@@ -1553,9 +1553,7 @@ function closeSettings() {
 settingsBtn.onclick = openSettings;
 settingsClose.onclick = closeSettings;
 
-settingsOverlay.addEventListener("click", (e) => {
-  if (e.target === settingsOverlay) closeSettings();
-});
+// Click-outside-to-close intentionally disabled — only the X button closes this modal.
 
 document.getElementById("settingsSave").onclick = () => {
   settingsDraft.siteName = settingSiteNameInput.value.trim() || DEFAULT_SETTINGS.siteName;
@@ -1619,10 +1617,7 @@ function closeQA() {
 document.getElementById("qaBtn").onclick = openQA;
 document.getElementById("qaClose").onclick = closeQA;
 
-// Close on overlay click (not modal body)
-qaOverlay.addEventListener("click", (e) => {
-  if (e.target === qaOverlay) closeQA();
-});
+// Click-outside-to-close intentionally disabled — only the X button closes this modal.
 
 // ===================== LOAD DATA & INIT =====================
 function loadApps() {
