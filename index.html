@@ -146,6 +146,15 @@
     overflow: hidden;
   }
 
+  .logo-mark img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    position: relative;
+    z-index: 1;
+  }
+
   .logo-mark::after {
     content: '';
     position: absolute;
@@ -311,6 +320,25 @@
     .hub-grid { grid-template-columns: 1fr; }
     .hub-header { flex-wrap: wrap; gap: 12px; }
     .search-shortcut { display: none; }
+  }
+
+  /* ---- Home dashboard iframe ---- */
+  .home-frame {
+    display: none;
+    width: 100%;
+    min-height: 200px;
+    height: calc(100vh - 260px);
+    border: none;
+    border-radius: var(--radius);
+    background: transparent;
+  }
+
+  .home-frame.active {
+    display: block;
+  }
+
+  @media (max-width: 480px) {
+    .home-frame { height: calc(100vh - 300px); }
   }
 
   /* ---- Cards ---- */
@@ -747,7 +775,7 @@
 
   <header class="hub-header">
     <div class="hub-logo">
-      <div class="logo-mark">V</div>
+      <div class="logo-mark"><img src="https://github.com/Cra-Z-Gaming/VUS/raw/refs/heads/main/logo" alt="VUS Hub logo" onerror="this.style.display='none';this.parentElement.textContent='V';"></div>
       <span class="logo-text">VUS Hub</span>
     </div>
     <div class="header-right">
@@ -756,7 +784,7 @@
   </header>
 
   <!-- Search -->
-  <div class="search-wrap">
+  <div class="search-wrap" id="searchWrap">
     <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
     </svg>
@@ -771,6 +799,9 @@
 
   <!-- Grid -->
   <main class="hub-grid" id="grid" role="tabpanel"></main>
+
+  <!-- Home dashboard (widgets) -->
+  <iframe class="home-frame" id="homeFrame" title="Home" role="tabpanel"></iframe>
 
   <!-- Footer -->
   <footer class="hub-footer">
@@ -796,81 +827,9 @@
 
 <script>
 // ===================== DATA =====================
-const apps = {
-  home: [
-    { name: "VUS Launcher", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL", desc: "Main game hub — V17.4", icon: "🎮", color: "green" },
-    { name: "YouTube V20", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/YouTube-V20", desc: "Playlists, Settings, Private + Public Keys", icon: "YT", color: "rose" },
-    { name: "VUS AI Chat", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Core-VUS-AI", desc: "VUS AI - Groq, blocked in many schools", icon: "AI", color: "violet" },
-    { name: "Chat Room", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/VUS-Chat", desc: "Talk to people who also use VUS Hub", icon: "Chat", color: "blue" },
-    { name: "NautilusOS", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/NautilusOS", desc: "may not work", icon: "NOS", color: "cyan" },
-    { name: "", url: "", desc: "", icon: "", color: "" },
-    { name: "KBH Games", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUSL/refs/heads/main/Other/KBH-Games.html", desc: "not sure if it works, but its more games", icon: "KBH", color: "blue" },
-    { name: "REIDS GAMES", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUSL/refs/heads/main/Other/REIDS-GAMES", desc: "found another site that works similar to mine but its for games and some movies", icon: "REID", color: "red" },
-    { name: "Greeni", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUSL/refs/heads/main/Other/Greeni", desc: "movies and games", icon: "", color: "green" },
-    { name: "Polaris Hub", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUSL/refs/heads/main/Other/PolarisHub", desc: "has ALOT of games, havent counted yet", icon: "Polaris", color: "black" },
-    { name: "Wither Games", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUSL/refs/heads/main/Other/wither", desc: "144 popular/intresting games", icon: "Wither", color: "red" },
-    { name: "gn-math", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUSL/refs/heads/main/Other/gn-math", desc: "Well known game site", icon: "GN", color: "red" },
-    { name: "", url: "", desc: "", icon: "", color: "" },
-    { name: "", url: "", desc: "", icon: "", color: "" },
-    { name: "", url: "", desc: "", icon: "", color: "" },
-    { name: "", url: "", desc: "", icon: "", color: "" },
-    { name: "", url: "", desc: "", icon: "", color: "" },
-    { name: "TESTING / PRE-RELEASE", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/testing/refs/heads/main/index.html", desc: "", icon: "⚠️", color: "black" }
-  ],
-  tools: [
-    { name: "AI Code Editor", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/AI-HTML-Studio", desc: "Code editor with AI — replace, add, and delete specific lines", icon: "CE", color: "violet" },
-    { name: "Code Editor", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/HTML%20Editor", desc: "Live HTML code editor with preview", icon: "CE", color: "blue" },
-    { name: "about:blank Opener", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/about%3Ablank-opener", desc: "Opens files and sites as about:blank - many sites block cloaking", icon: "AB", color: "amber" },
-    { name: "Timer", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Timer", desc: "Stopwatch + countdown timer", icon: "⏰", color: "orange" },
-    { name: "Local Music Player", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/vus-music-player.html", desc: "Play your own music files locally", icon: "LMP", color: "rose" },
-    { name: "File + Folder Viewer", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/File%20Viewer", desc: "Browse your local files and folders", icon: "FV", color: "lime" },
-    { name: "Groq API Keys", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/GroqKeys-NeatUI", desc: "Free Groq API keys for anyone", icon: "GK", color: "green" },
-    { name: "Notes", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Notes", desc: "Keep text saved easily in your browser", icon: "📝", color: "amber" },
-    { name: "", url: "", desc: "", icon: "", color: "" },
-    { name: "", url: "", desc: "", icon: "", color: "" },
-    { name: "", url: "", desc: "", icon: "", color: "" },
-    { name: "", url: "", desc: "", icon: "", color: "" },
-    { name: "", url: "", desc: "", icon: "", color: "" },
-    { name: "", url: "", desc: "", icon: "", color: "" },
-    { name: "", url: "", desc: "", icon: "", color: "" },
-    { name: "", url: "", desc: "", icon: "", color: "" },
-    { name: "", url: "", desc: "", icon: "", color: "" },
-    { name: "", url: "", desc: "", icon: "", color: "" }
-  ],
-  links: [
-    { name: "Scratch", url: "https://scratch.mit.edu/", desc: "Games, music, and animations by the community", icon: "S", color: "orange" },
-    { name: "Keep VUS AI Alive", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Keep%20VUS%20AI%20Alive", desc: "Create and send your key to keep VUS AI alive", icon: "KA", color: "green" },
-    { name: "Get YouTube Key", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Tutorials/YT-API-Key/HowTo", desc: "How to get a YouTube Data API v3 key", icon: "YTK", color: "rose" },
-    { name: "Google Doodles", url: "https://share.google/wN47yxVARg0bCBcDl", desc: "Minesweeper, Solitaire, Snake and many more Google games", icon: "GD", color: "blue" },
-    { name: "How to setup VUS", url: "https://sites.google.com/view/vusag", desc: "if you wanna share this site easily you can refer them to this link", icon: "🔗", color: "white" },
-    { name: "", url: "", desc: "", icon: "", color: "" },
-    { name: "", url: "", desc: "", icon: "", color: "" },
-    { name: "", url: "", desc: "", icon: "", color: "" },
-    { name: "", url: "", desc: "", icon: "", color: "" },
-    { name: "", url: "", desc: "", icon: "", color: "" },
-    { name: "", url: "", desc: "", icon: "", color: "" },
-    { name: "", url: "", desc: "", icon: "", color: "" }
-  ]
-};
-
-const qaEntries = [
-  { q: "maybe make it so that you can open links in the about:blank opener?", a: "i just added a cloaker but many sites do not allow it, so it kinda sucks" },
-  { q: "make more tools", a: "PLEASE be more specific, id be glad to attempt to make what you ask, just dont ask for roblox or fortnite XD" },
-  { q: "dude thank you SO much for this. ts is genuinely fu___ng incredible thank you so so much random stranger on the internet. im finally out of the dreadful grasp of lightspeed filter agent", a: "your welcome stranger, if you would like to message me personally you can find my socials here: pastebin.com/RM4T5VqY" },
-  { q: "fix the youtube","a":"im considering finding work-arounds but i cant promise it"},
-  { q: "I can open the youtube videos it says that chrome blocked it","a":"yeah ur gonna explode in 4 days sorry"},
-  { q: "add pintrest in vus -some dude in chat","a":"im gonna try rn, ill edit this message after i stop trying or find a diffrent thingy"},
-  { q: "", a: "" },
-  { q: "", a: "" },
-  { q: "", a: "" },
-  { q: "", a: "" },
-  { q: "", a: "" },
-  { q: "", a: "" },
-  { q: "", a: "" },
-  { q: "", a: "" },
-  { q: "", a: "" },
-  { q: "", a: "" }
-];
+// App list and Q/A data are now loaded dynamically from apps.json (see loadApps() below).
+let apps = null;
+let qaEntries = [];
 
 // ===================== STATE =====================
 let currentTab = "home";
@@ -910,22 +869,28 @@ setInterval(updateClock, 1000);
 updateClock();
 
 // ===================== TABS =====================
-const tabLabels = { home: "Home", tools: "Tools", links: "Links" };
+const tabLabels = { home: "Home", apps: "Apps", hubs: "Hubs", tools: "Tools", links: "Links" };
 const tabsEl = document.getElementById("tabs");
 const tabIndicator = document.getElementById("tabIndicator");
 const tabButtons = [];
 
-Object.keys(apps).forEach(key => {
-  const btn = document.createElement("button");
-  btn.className = "hub-tab" + (key === currentTab ? " active" : "");
-  btn.setAttribute("role", "tab");
-  btn.setAttribute("aria-selected", key === currentTab ? "true" : "false");
-  const count = apps[key].filter(app => app.name && app.name.trim() !== "").length;
-  btn.innerHTML = tabLabels[key] + '<span class="tab-count">' + count + '</span>';
-  btn.onclick = () => switchTab(key);
-  tabsEl.appendChild(btn);
-  tabButtons.push({ key, el: btn });
-});
+function buildTabs() {
+  Object.keys(apps).forEach(key => {
+    const btn = document.createElement("button");
+    btn.className = "hub-tab" + (key === currentTab ? " active" : "");
+    btn.setAttribute("role", "tab");
+    btn.setAttribute("aria-selected", key === currentTab ? "true" : "false");
+    if (key === "home") {
+      btn.innerHTML = tabLabels[key];
+    } else {
+      const count = apps[key].filter(app => app.name && app.name.trim() !== "").length;
+      btn.innerHTML = tabLabels[key] + '<span class="tab-count">' + count + '</span>';
+    }
+    btn.onclick = () => switchTab(key);
+    tabsEl.appendChild(btn);
+    tabButtons.push({ key, el: btn });
+  });
+}
 
 function switchTab(key) {
   currentTab = key;
@@ -947,8 +912,6 @@ function updateIndicator() {
   tabIndicator.style.width = btnRect.width + "px";
 }
 
-// Initialize indicator after layout
-requestAnimationFrame(() => updateIndicator());
 window.addEventListener("resize", updateIndicator);
 
 // ===================== SEARCH =====================
@@ -977,21 +940,97 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+// ===================== HOME DASHBOARD LOADER =====================
+// raw.githubusercontent.com always serves text/plain, so an <iframe src="...">
+// pointed at it would just show the raw source instead of rendering it. Instead,
+// fetch the HTML as text (same technique the cloak-open button uses) and inject
+// it into the iframe via srcdoc, which does render normally. Loaded once and
+// cached so switching back to Home doesn't re-fetch every time.
+const HOME_HTML_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/home.html";
+let homeFrameLoaded = false;
+let homeFrameLoading = false;
+
+function loadHomeFrame() {
+  if (homeFrameLoaded || homeFrameLoading) return;
+  homeFrameLoading = true;
+
+  fetch(HOME_HTML_URL + "?v=" + Date.now())
+    .then(r => {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    })
+    .then(html => {
+      const homeFrame = document.getElementById("homeFrame");
+      homeFrame.srcdoc = html;
+      homeFrameLoaded = true;
+    })
+    .catch(() => {
+      showToast("Failed to load Home dashboard", "err");
+    })
+    .finally(() => {
+      homeFrameLoading = false;
+    });
+}
+
 // ===================== RENDER GRID =====================
 function render() {
+  if (!apps) return;
   const grid = document.getElementById("grid");
+  const homeFrame = document.getElementById("homeFrame");
+
+  document.getElementById("searchWrap").style.display = "";
+
+  // Home tab: show the widget dashboard normally, but switch to a cross-tab
+  // title-only search view (reusing the same card grid) while there's a query.
+  if (currentTab === "home") {
+    searchInput.placeholder = "Search all apps...";
+
+    if (!searchQuery) {
+      grid.style.display = "none";
+      homeFrame.classList.add("active");
+      loadHomeFrame();
+      return;
+    }
+
+    homeFrame.classList.remove("active");
+    grid.style.display = "";
+    grid.innerHTML = "";
+
+    // Search titles only, across every real tab (exclude "home" itself, which has no cards)
+    const searchableTabs = Object.keys(apps).filter(key => key !== "home");
+    let results = [];
+    searchableTabs.forEach(tabKey => {
+      apps[tabKey]
+        .filter(app => app.url && app.url.trim() !== "" && app.name.toLowerCase().includes(searchQuery))
+        .forEach(app => results.push({ ...app, _tab: tabKey }));
+    });
+
+    renderCards(grid, results, true);
+    return;
+  }
+
+  searchInput.placeholder = "Search apps and tools...";
+  homeFrame.classList.remove("active");
+  grid.style.display = "";
+
   grid.innerHTML = "";
 
   let items = apps[currentTab].filter(app => app.url && app.url.trim() !== "");
 
-  // Filter by search
+  // Filter by search (titles only)
   if (searchQuery) {
     items = items.filter(app =>
-      app.name.toLowerCase().includes(searchQuery) ||
-      app.desc.toLowerCase().includes(searchQuery)
+      app.name.toLowerCase().includes(searchQuery)
     );
   }
 
+  renderCards(grid, items, false);
+}
+
+// Renders a list of app cards into the given grid element.
+// fromHomeSearch: when true, clicking a card switches to that app's own tab
+// first (so the tab bar/state stays correct), then opens it.
+function renderCards(grid, items, fromHomeSearch) {
   if (items.length === 0) {
     const empty = document.createElement("div");
     empty.className = "hub-empty";
@@ -1025,15 +1064,51 @@ function render() {
       </svg>
     `;
 
-    card.onclick = () => openApp(app);
-    card.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openApp(app); } };
+    const activate = () => {
+      if (fromHomeSearch && app._tab) {
+        searchInput.value = "";
+        searchQuery = "";
+        switchTab(app._tab);
+      }
+      openApp(app);
+    };
+
+    card.onclick = activate;
+    card.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); } };
     grid.appendChild(card);
   });
+}
+
+// ===================== RECENTLY USED TRACKING =====================
+// Shared with home.html (loaded in an iframe) via localStorage, same-origin.
+const RECENT_APPS_KEY = "vus_recent_apps";
+const RECENT_APPS_MAX = 8;
+
+function trackRecentApp(app) {
+  if (!app || !app.name) return;
+  try {
+    let recent = JSON.parse(localStorage.getItem(RECENT_APPS_KEY) || "[]");
+    // Remove any existing entry for this app (by name) so it moves to the front
+    recent = recent.filter(r => r.name !== app.name);
+    recent.unshift({
+      name: app.name,
+      url: app.url || "",
+      icon: app.icon || "",
+      color: app.color || "",
+      ts: Date.now()
+    });
+    if (recent.length > RECENT_APPS_MAX) recent = recent.slice(0, RECENT_APPS_MAX);
+    localStorage.setItem(RECENT_APPS_KEY, JSON.stringify(recent));
+  } catch (e) {
+    // localStorage unavailable or full — fail silently, this is a non-critical feature
+  }
 }
 
 // ===================== OPEN APP =====================
 function openApp(app) {
   if (!app.url) return;
+
+  trackRecentApp(app);
 
   // Direct links (non-github raw) open normally
   if (!app.url.includes("raw.githubusercontent.com")) {
@@ -1106,8 +1181,65 @@ qaOverlay.addEventListener("click", (e) => {
   if (e.target === qaOverlay) closeQA();
 });
 
-// ===================== INIT =====================
-render();
+// ===================== LOAD DATA & INIT =====================
+function loadApps() {
+  return fetch("https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/apps.json?v=" + Date.now())
+    .then(r => {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    })
+    .then(data => {
+      apps = {
+        home: data.home || [],
+        apps: data.apps || [],
+        hubs: data.hubs || [],
+        tools: data.tools || [],
+        links: data.links || []
+      };
+      qaEntries = data.qa || [];
+    })
+    .catch(() => {
+      showToast("Failed to load app list", "err");
+      apps = { home: [], apps: [], hubs: [], tools: [], links: [] };
+      qaEntries = [];
+    });
+}
+
+loadApps().then(() => {
+  buildTabs();
+  requestAnimationFrame(() => updateIndicator());
+  render();
+});
+</script>
+
+<!-- Firebase connection + online presence tracking (runs globally, all tabs) -->
+<script>
+// raw.githubusercontent.com always serves Content-Type: text/plain, and browsers
+// enforce strict MIME type checking on <script type="module">, so pointing src=
+// directly at the raw URL gets silently blocked. Instead: fetch the source as
+// text, wrap it in a Blob with the correct JS MIME type, and load *that* as the
+// module. This lets Firebase presence tracking work even when index.html itself
+// is opened via document.write() from a raw-fetch (e.g. the "Open" cloak button),
+// where there's no real page origin to resolve a relative "firebase.js" against.
+(function loadFirebaseModule() {
+  fetch("https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/firebase.js?v=" + Date.now())
+    .then(r => {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    })
+    .then(code => {
+      const blob = new Blob([code], { type: "application/javascript" });
+      const blobUrl = URL.createObjectURL(blob);
+      const script = document.createElement("script");
+      script.type = "module";
+      script.src = blobUrl;
+      document.body.appendChild(script);
+    })
+    .catch(() => {
+      // Non-critical: online presence tracking just won't run this session.
+      console.warn("VUS Hub: failed to load firebase.js for presence tracking.");
+    });
+})();
 </script>
 </body>
 </html>
