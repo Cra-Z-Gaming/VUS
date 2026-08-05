@@ -513,7 +513,7 @@
   .qa-btn {
     position: fixed;
     bottom: 24px;
-    left: 24px;
+    right: 24px;
     background: linear-gradient(135deg, var(--accent), #10b981);
     color: #000;
     border: none;
@@ -539,6 +539,39 @@
   .qa-btn:active { transform: scale(0.98); }
 
   .qa-btn svg { width: 18px; height: 18px; }
+
+  /* ---- Settings Button ---- */
+  .settings-btn {
+    position: fixed;
+    bottom: 24px;
+    left: 24px;
+    background: var(--bg-elevated);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 24px;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: var(--font);
+    cursor: pointer;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    backdrop-filter: blur(12px);
+  }
+
+  .settings-btn:hover {
+    transform: scale(1.05) translateY(-2px);
+    border-color: var(--border-hover);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+
+  .settings-btn:active { transform: scale(0.98); }
+
+  .settings-btn svg { width: 18px; height: 18px; }
 
   /* ---- Toast ---- */
   .toast-container {
@@ -676,6 +709,164 @@
   .qa-body::-webkit-scrollbar-track { background: transparent; }
   .qa-body::-webkit-scrollbar-thumb { background: var(--fg-dim); border-radius: 3px; }
 
+  /* ---- Settings form ---- */
+  .settings-section {
+    margin-bottom: 24px;
+  }
+
+  .settings-section:last-child { margin-bottom: 0; }
+
+  .settings-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fg);
+    margin-bottom: 4px;
+    display: block;
+  }
+
+  .settings-sub {
+    font-size: 12px;
+    color: var(--fg-dim);
+    margin-bottom: 12px;
+  }
+
+  .settings-input {
+    width: 100%;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 11px 14px;
+    font-size: 14px;
+    font-family: var(--font);
+    color: var(--fg);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .settings-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+
+  .settings-input::placeholder { color: var(--fg-dim); }
+
+  .settings-option-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 8px;
+  }
+
+  .settings-option {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: var(--font);
+    color: var(--fg-muted);
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s, background 0.2s;
+    text-align: center;
+  }
+
+  .settings-option:hover {
+    border-color: var(--border-hover);
+    color: var(--fg);
+  }
+
+  .settings-option.active {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--fg);
+  }
+
+  .settings-file-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .settings-file-btn {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: var(--font);
+    color: var(--fg);
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  .settings-file-btn:hover {
+    border-color: var(--border-hover);
+    background: var(--card-hover);
+  }
+
+  .settings-file-name {
+    font-size: 12px;
+    color: var(--fg-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 220px;
+  }
+
+  .settings-warning {
+    font-size: 12px;
+    color: #fbbf24;
+    background: rgba(245,158,11,0.08);
+    border: 1px solid rgba(245,158,11,0.25);
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-top: 10px;
+    line-height: 1.5;
+  }
+
+  .settings-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 20px;
+    margin-top: 4px;
+    border-top: 1px solid var(--border);
+  }
+
+  .settings-btn-secondary,
+  .settings-btn-primary {
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: var(--font);
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+  }
+
+  .settings-btn-secondary {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--fg-muted);
+  }
+
+  .settings-btn-secondary:hover { color: var(--fg); background: var(--card-hover); }
+
+  .settings-btn-primary {
+    background: linear-gradient(135deg, var(--accent), #10b981);
+    border: none;
+    color: #000;
+  }
+
+  .settings-btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(34,197,94,0.35);
+  }
+
+  .settings-btn-primary:active { transform: translateY(0); }
+
   .qa-row {
     display: flex;
     gap: 16px;
@@ -770,13 +961,69 @@
   </div>
 </div>
 
+<!-- Settings Modal -->
+<div class="qa-overlay" id="settingsOverlay">
+  <div class="qa-modal">
+    <div class="qa-header">
+      <h2>Settings</h2>
+      <button class="qa-close" id="settingsClose" aria-label="Close Settings panel">&times;</button>
+    </div>
+    <div class="qa-body" id="settingsBody">
+
+      <div class="settings-section">
+        <label class="settings-label" for="settingSiteName">Site Name</label>
+        <div class="settings-sub">Shown in the header next to the logo.</div>
+        <input class="settings-input" id="settingSiteName" type="text" placeholder="VUS Hub" maxlength="40" autocomplete="off">
+      </div>
+
+      <div class="settings-section">
+        <label class="settings-label">Default Tab</label>
+        <div class="settings-sub">Which tab loads when you open the site.</div>
+        <div class="settings-option-grid" id="settingDefaultTab"></div>
+      </div>
+
+      <div class="settings-section">
+        <label class="settings-label">Background</label>
+        <div class="settings-sub">Choose the background style for VUS Hub.</div>
+        <div class="settings-option-grid" id="settingBackgroundMode">
+          <button type="button" class="settings-option" data-bg-mode="default">Default</button>
+          <button type="button" class="settings-option" data-bg-mode="block">Solid Block</button>
+          <button type="button" class="settings-option" data-bg-mode="image">Custom Image</button>
+        </div>
+
+        <div id="settingBlockColorWrap" style="display:none; margin-top:12px;">
+          <label class="settings-label" for="settingBlockColor">Block Color</label>
+          <input class="settings-input" id="settingBlockColor" type="color" value="#0a0e1a" style="height:44px; padding:4px; cursor:pointer;">
+        </div>
+
+        <div id="settingImageWrap" style="display:none; margin-top:12px;">
+          <div class="settings-file-row">
+            <button type="button" class="settings-file-btn" id="settingImageBtn">Choose Image</button>
+            <span class="settings-file-name" id="settingImageName">No file selected</span>
+          </div>
+          <input type="file" id="settingImageInput" accept="image/*" style="display:none;">
+          <div class="settings-warning">
+            Large images are stored as-is in your browser's local storage, which has a limited size (usually a few MB total). Big files may fail to save or slow things down — smaller images work best.
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-footer">
+        <button type="button" class="settings-btn-secondary" id="settingsReset">Reset to Defaults</button>
+        <button type="button" class="settings-btn-primary" id="settingsSave">Save Changes</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
 <!-- Main app -->
 <div class="app-shell">
 
   <header class="hub-header">
     <div class="hub-logo">
       <div class="logo-mark"><img src="https://github.com/Cra-Z-Gaming/VUS/raw/refs/heads/main/logo" alt="VUS Hub logo" onerror="this.style.display='none';this.parentElement.textContent='V';"></div>
-      <span class="logo-text">VUS Hub</span>
+      <span class="logo-text" id="siteNameDisplay">VUS Hub</span>
     </div>
     <div class="header-right">
       <div class="clock-display" id="clock"></div>
@@ -816,6 +1063,15 @@
     </a>
   </footer>
 </div>
+
+<!-- Settings floating button -->
+<button class="settings-btn" id="settingsBtn" aria-label="Open Settings panel">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  </svg>
+  Settings
+</button>
 
 <!-- Q/A floating button -->
 <button class="qa-btn" id="qaBtn" aria-label="Open Q/A panel">
@@ -1138,6 +1394,193 @@ function openApp(app) {
       showToast("Failed to load " + app.name, "err");
     });
 }
+
+// ===================== SETTINGS =====================
+const SETTINGS_KEY = "vus_settings";
+const DEFAULT_SETTINGS = {
+  siteName: "VUS Hub",
+  defaultTab: "home",
+  backgroundMode: "default", // "default" | "block" | "image"
+  backgroundColor: "#0a0e1a",
+  backgroundImage: "" // data URL
+};
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return { ...DEFAULT_SETTINGS };
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+  } catch (e) {
+    return { ...DEFAULT_SETTINGS };
+  }
+}
+
+function saveSettingsToStorage(settings) {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    return true;
+  } catch (e) {
+    // Most likely a quota error from a large background image
+    return false;
+  }
+}
+
+let currentSettings = loadSettings();
+
+// Apply site name immediately (element already exists in the DOM at this point)
+function applySiteName(name) {
+  const display = document.getElementById("siteNameDisplay");
+  if (display) display.textContent = name || DEFAULT_SETTINGS.siteName;
+  document.title = (name || DEFAULT_SETTINGS.siteName);
+}
+
+// Apply background immediately. "default" leaves the existing animated
+// background/orbs untouched; "block" and "image" cover them with a solid
+// color or image on the body itself.
+function applyBackground(settings) {
+  const canvas = document.querySelector(".bg-canvas");
+  if (settings.backgroundMode === "block") {
+    document.body.style.background = settings.backgroundColor || DEFAULT_SETTINGS.backgroundColor;
+    document.body.style.backgroundImage = "none";
+    if (canvas) canvas.style.display = "none";
+  } else if (settings.backgroundMode === "image" && settings.backgroundImage) {
+    document.body.style.background = "#0a0e1a";
+    document.body.style.backgroundImage = `url("${settings.backgroundImage}")`;
+    document.body.style.backgroundSize = "cover";
+    document.body.style.backgroundPosition = "center";
+    document.body.style.backgroundAttachment = "fixed";
+    if (canvas) canvas.style.display = "none";
+  } else {
+    // default
+    document.body.style.background = "";
+    document.body.style.backgroundImage = "";
+    if (canvas) canvas.style.display = "";
+  }
+}
+
+// Apply currentTab from saved settings before buildTabs()/render() run.
+// This only takes effect on initial load; switching tabs afterward behaves normally.
+currentTab = currentSettings.defaultTab || DEFAULT_SETTINGS.defaultTab;
+applySiteName(currentSettings.siteName);
+applyBackground(currentSettings);
+
+// ---- Settings modal wiring ----
+const settingsOverlay = document.getElementById("settingsOverlay");
+const settingsBtn = document.getElementById("settingsBtn");
+const settingsClose = document.getElementById("settingsClose");
+const settingSiteNameInput = document.getElementById("settingSiteName");
+const settingDefaultTabWrap = document.getElementById("settingDefaultTab");
+const settingBgModeWrap = document.getElementById("settingBackgroundMode");
+const settingBlockColorWrap = document.getElementById("settingBlockColorWrap");
+const settingBlockColorInput = document.getElementById("settingBlockColor");
+const settingImageWrap = document.getElementById("settingImageWrap");
+const settingImageBtn = document.getElementById("settingImageBtn");
+const settingImageInput = document.getElementById("settingImageInput");
+const settingImageName = document.getElementById("settingImageName");
+
+// Draft state while the modal is open — only written to currentSettings/storage on Save
+let settingsDraft = { ...currentSettings };
+
+function buildDefaultTabOptions() {
+  settingDefaultTabWrap.innerHTML = "";
+  Object.keys(tabLabels).forEach(key => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "settings-option" + (settingsDraft.defaultTab === key ? " active" : "");
+    btn.textContent = tabLabels[key];
+    btn.dataset.tabKey = key;
+    btn.onclick = () => {
+      settingsDraft.defaultTab = key;
+      Array.from(settingDefaultTabWrap.children).forEach(c =>
+        c.classList.toggle("active", c.dataset.tabKey === key)
+      );
+    };
+    settingDefaultTabWrap.appendChild(btn);
+  });
+}
+
+function updateBackgroundModeUI() {
+  Array.from(settingBgModeWrap.children).forEach(btn =>
+    btn.classList.toggle("active", btn.dataset.bgMode === settingsDraft.backgroundMode)
+  );
+  settingBlockColorWrap.style.display = settingsDraft.backgroundMode === "block" ? "" : "none";
+  settingImageWrap.style.display = settingsDraft.backgroundMode === "image" ? "" : "none";
+}
+
+Array.from(settingBgModeWrap.children).forEach(btn => {
+  btn.onclick = () => {
+    settingsDraft.backgroundMode = btn.dataset.bgMode;
+    updateBackgroundModeUI();
+  };
+});
+
+settingBlockColorInput.addEventListener("input", (e) => {
+  settingsDraft.backgroundColor = e.target.value;
+});
+
+settingImageBtn.onclick = () => settingImageInput.click();
+
+settingImageInput.addEventListener("change", (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  settingImageName.textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = () => {
+    settingsDraft.backgroundImage = reader.result;
+  };
+  reader.onerror = () => {
+    showToast("Failed to read image file", "err");
+  };
+  reader.readAsDataURL(file);
+});
+
+function openSettings() {
+  settingsDraft = { ...currentSettings };
+  settingSiteNameInput.value = currentSettings.siteName || "";
+  settingBlockColorInput.value = currentSettings.backgroundColor || DEFAULT_SETTINGS.backgroundColor;
+  settingImageName.textContent = currentSettings.backgroundImage ? "Image saved" : "No file selected";
+  buildDefaultTabOptions();
+  updateBackgroundModeUI();
+  settingsOverlay.classList.add("open");
+  settingsClose.focus();
+}
+
+function closeSettings() {
+  settingsOverlay.classList.remove("open");
+  settingsBtn.focus();
+}
+
+settingsBtn.onclick = openSettings;
+settingsClose.onclick = closeSettings;
+
+settingsOverlay.addEventListener("click", (e) => {
+  if (e.target === settingsOverlay) closeSettings();
+});
+
+document.getElementById("settingsSave").onclick = () => {
+  settingsDraft.siteName = settingSiteNameInput.value.trim() || DEFAULT_SETTINGS.siteName;
+
+  const ok = saveSettingsToStorage(settingsDraft);
+  if (!ok) {
+    showToast("Failed to save — image may be too large for local storage", "err");
+    return;
+  }
+
+  currentSettings = { ...settingsDraft };
+  applySiteName(currentSettings.siteName);
+  applyBackground(currentSettings);
+  showToast("Settings saved", "ok");
+  closeSettings();
+};
+
+document.getElementById("settingsReset").onclick = () => {
+  settingsDraft = { ...DEFAULT_SETTINGS };
+  settingSiteNameInput.value = settingsDraft.siteName;
+  settingBlockColorInput.value = settingsDraft.backgroundColor;
+  settingImageName.textContent = "No file selected";
+  buildDefaultTabOptions();
+  updateBackgroundModeUI();
+};
 
 // ===================== Q/A MODAL =====================
 const qaOverlay = document.getElementById("qaOverlay");
