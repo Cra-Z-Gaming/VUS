@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VUS Hub — Analytics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --bg-elevated: #111827;
+    --card: rgba(17, 24, 39, 0.6);
+    --card-hover: rgba(30, 41, 59, 0.7);
+    --border: rgba(51, 65, 85, 0.5);
+    --border-hover: rgba(74, 222, 128, 0.3);
+    --fg: #f1f5f9;
+    --fg-muted: #94a3b8;
+    --fg-dim: #475569;
+    --accent: #22c55e;
+    --accent-glow: rgba(34, 197, 94, 0.15);
+    --accent-soft: rgba(34, 197, 94, 0.08);
+    --danger: #ef4444;
+    --radius: 14px;
+    --font: 'Space Grotesk', sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font);
+    min-height: 100vh;
+  }
+
+  .page-shell {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 32px 20px 60px;
+  }
+
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+
+  .page-title {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+
+  .page-sub {
+    font-size: 14px;
+    color: var(--fg-muted);
+    margin-top: 4px;
+  }
+
+  .back-link {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--fg-muted);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    transition: color 0.15s, border-color 0.15s;
+  }
+
+  .back-link:hover {
+    color: var(--fg);
+    border-color: var(--border-hover);
+  }
+
+  .back-link svg { width: 14px; height: 14px; }
+
+  .controls-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+
+  .control-label {
+    font-size: 13px;
+    color: var(--fg-muted);
+    font-weight: 500;
+  }
+
+  .date-select {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 14px;
+    font-family: var(--font);
+    color: var(--fg);
+    outline: none;
+    cursor: pointer;
+    min-width: 220px;
+    transition: border-color 0.2s;
+  }
+
+  .date-select:focus { border-color: var(--accent); }
+
+  .refresh-btn {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: var(--font);
+    color: var(--fg);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  .refresh-btn:hover {
+    border-color: var(--border-hover);
+    background: var(--card-hover);
+  }
+
+  .refresh-btn svg { width: 14px; height: 14px; }
+
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  @media (max-width: 640px) {
+    .stat-row { grid-template-columns: 1fr; }
+  }
+
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    backdrop-filter: blur(12px);
+  }
+
+  .stat-label {
+    font-size: 12px;
+    color: var(--fg-muted);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+
+  .stat-value {
+    font-size: 26px;
+    font-weight: 700;
+    font-family: var(--mono);
+    color: var(--fg);
+  }
+
+  .stat-value.accent { color: var(--accent); }
+
+  .chart-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px 20px 16px;
+    backdrop-filter: blur(12px);
+  }
+
+  .chart-wrap {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 340px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .chart-bar-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 1 0 32px;
+    min-width: 32px;
+    height: 100%;
+  }
+
+  .bar-track {
+    width: 100%;
+    max-width: 40px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    position: relative;
+  }
+
+  .chart-bar {
+    width: 100%;
+    background: linear-gradient(180deg, var(--accent), #10b981);
+    border-radius: 6px 6px 0 0;
+    min-height: 3px;
+    transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 4px;
+    position: relative;
+    cursor: default;
+  }
+
+  .chart-bar:hover {
+    filter: brightness(1.15);
+  }
+
+  .bar-value-inside {
+    font-size: 11px;
+    font-weight: 700;
+    font-family: var(--mono);
+    color: #06210f;
+  }
+
+  .bar-value-above {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: var(--mono);
+    color: var(--fg-muted);
+    white-space: nowrap;
+  }
+
+  .chart-bar-label {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--fg-dim);
+    margin-top: 8px;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .chart-empty {
+    text-align: center;
+    padding: 80px 0;
+    color: var(--fg-dim);
+    font-size: 15px;
+    width: 100%;
+  }
+
+  .chart-loading {
+    text-align: center;
+    padding: 80px 0;
+    color: var(--fg-muted);
+    font-size: 14px;
+    width: 100%;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chart-bar { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page-shell">
+
+  <div class="page-header">
+    <div>
+      <div class="page-title">📊 VUS Hub Analytics</div>
+      <div class="page-sub">Hourly tab-open counts, tracked forever, browsable by day.</div>
+    </div>
+    <a class="back-link" href="https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/index.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+      </svg>
+      Back to VUS Hub
+    </a>
+  </div>
+
+  <div class="controls-bar">
+    <span class="control-label">Viewing:</span>
+    <select class="date-select" id="dateSelect"></select>
+    <button class="refresh-btn" id="refreshBtn" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+      </svg>
+      Refresh
+    </button>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="stat-label">Total This Day</div>
+      <div class="stat-value accent" id="statTotal">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Peak Hour</div>
+      <div class="stat-value" id="statPeak">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Active Hours</div>
+      <div class="stat-value" id="statActiveHours">—</div>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-wrap" id="chartWrap">
+      <div class="chart-loading">Loading analytics…</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// firebase.js is loaded dynamically via a Blob-wrapped module import, same
+// technique used elsewhere in VUS Hub (index.html, home.html). This lets
+// analytics.html work correctly whether it's hosted normally or fetched raw
+// (e.g. via the "Open" cloak button pattern) — there's no reliable relative
+// base URL to depend on in the raw-fetch case, and raw.githubusercontent.com
+// serves everything as text/plain, which browsers block for a normal
+// <script type="module" src="..."> due to strict MIME-type checking.
+const FIREBASE_JS_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/firebase.js";
+
+let VUSAnalyticsAPI = null;
+
+const chartWrap = document.getElementById("chartWrap");
+const dateSelect = document.getElementById("dateSelect");
+const refreshBtn = document.getElementById("refreshBtn");
+const statTotal = document.getElementById("statTotal");
+const statPeak = document.getElementById("statPeak");
+const statActiveHours = document.getElementById("statActiveHours");
+
+function formatDateLabel(dateKey, todayKey) {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  const label = date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  return dateKey === todayKey ? `${label} (Today)` : label;
+}
+
+function formatHourLabel(hour) {
+  if (hour === 0) return "12a";
+  if (hour === 12) return "12p";
+  return hour < 12 ? `${hour}a` : `${hour - 12}p`;
+}
+
+function formatHourRange(hour) {
+  const start = formatHourLabel(hour);
+  const end = formatHourLabel((hour + 1) % 24);
+  return start + "\u2013" + end;
+}
+
+// A bar needs roughly this many pixels of height for an 11px number to
+// visibly fit inside it without looking cramped or overflowing.
+const MIN_HEIGHT_PX_FOR_INSIDE_LABEL = 22;
+const CHART_HEIGHT_PX = 340; // must match .chart-wrap's CSS height
+
+function renderChart(hours) {
+  const total = hours.reduce((a, b) => a + b, 0);
+  const max = Math.max(...hours, 1);
+
+  statTotal.textContent = total;
+
+  if (total === 0) {
+    chartWrap.innerHTML = '<div class="chart-empty">No visitors recorded for this day.</div>';
+    statPeak.textContent = "—";
+    statActiveHours.textContent = "0 / 24";
+    return;
+  }
+
+  const peakHour = hours.indexOf(max);
+  statPeak.textContent = formatHourRange(peakHour);
+  statActiveHours.textContent = hours.filter(c => c > 0).length + " / 24";
+
+  const bars = hours.map((count, hour) => {
+    const heightPct = count === 0 ? 0 : Math.max((count / max) * 100, 3);
+    const heightPx = (heightPct / 100) * CHART_HEIGHT_PX;
+    const showLabel = count > 0;
+    const labelFitsInside = showLabel && heightPx >= MIN_HEIGHT_PX_FOR_INSIDE_LABEL;
+
+    const insideLabel = labelFitsInside ? '<span class="bar-value-inside">' + count + '</span>' : "";
+    const aboveLabel = (showLabel && !labelFitsInside) ? '<span class="bar-value-above">' + count + '</span>' : "";
+
+    return '' +
+      '<div class="chart-bar-col">' +
+        '<div class="bar-track">' +
+          aboveLabel +
+          '<div class="chart-bar" style="height:' + heightPct + '%" title="' + formatHourRange(hour) + ': ' + count + ' tab-open' + (count === 1 ? '' : 's') + '">' +
+            insideLabel +
+          '</div>' +
+        '</div>' +
+        '<span class="chart-bar-label">' + formatHourLabel(hour) + '</span>' +
+      '</div>';
+  }).join("");
+
+  chartWrap.innerHTML = bars;
+}
+
+async function loadAndRenderDay(dateKey) {
+  chartWrap.innerHTML = '<div class="chart-loading">Loading…</div>';
+  if (!VUSAnalyticsAPI) {
+    chartWrap.innerHTML = '<div class="chart-loading">Connecting to Firebase…</div>';
+    return;
+  }
+  try {
+    const hours = await VUSAnalyticsAPI.getHourlyVisits(dateKey);
+    renderChart(hours);
+  } catch (e) {
+    chartWrap.innerHTML = '<div class="chart-empty">Failed to load analytics data.</div>';
+  }
+}
+
+async function populateDatePicker(preserveSelection) {
+  const todayKey = VUSAnalyticsAPI ? VUSAnalyticsAPI.getDayKey(new Date()) : null;
+  const previousValue = preserveSelection ? dateSelect.value : null;
+
+  let dayKeys = [];
+  if (VUSAnalyticsAPI) {
+    try {
+      dayKeys = await VUSAnalyticsAPI.getAnalyticsDayKeys();
+    } catch (e) {
+      dayKeys = [];
+    }
+  }
+
+  if (todayKey && dayKeys.indexOf(todayKey) === -1) {
+    dayKeys.unshift(todayKey);
+  }
+  dayKeys.sort().reverse();
+
+  dateSelect.innerHTML = "";
+
+  if (dayKeys.length === 0) {
+    const opt = document.createElement("option");
+    opt.textContent = "No data yet";
+    opt.disabled = true;
+    dateSelect.appendChild(opt);
+    return null;
+  }
+
+  dayKeys.forEach(function(key) {
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = formatDateLabel(key, todayKey);
+    dateSelect.appendChild(opt);
+  });
+
+  const target = (previousValue && dayKeys.indexOf(previousValue) !== -1) ? previousValue : dayKeys[0];
+  dateSelect.value = target;
+  return target;
+}
+
+dateSelect.addEventListener("change", function(e) {
+  loadAndRenderDay(e.target.value);
+});
+
+refreshBtn.addEventListener("click", async function() {
+  const key = await populateDatePicker(true);
+  if (key) loadAndRenderDay(key);
+});
+
+async function init() {
+  const key = await populateDatePicker(false);
+  if (key) loadAndRenderDay(key);
+}
+
+fetch(FIREBASE_JS_URL + "?v=" + Date.now())
+  .then(function(r) {
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.text();
+  })
+  .then(function(code) {
+    const blob = new Blob([code], { type: "application/javascript" });
+    const blobUrl = URL.createObjectURL(blob);
+    return import(blobUrl);
+  })
+  .then(function(mod) {
+    VUSAnalyticsAPI = {
+      getHourlyVisits: mod.getHourlyVisits,
+      getAnalyticsDayKeys: mod.getAnalyticsDayKeys,
+      getDayKey: mod.getDayKey
+    };
+    init();
+  })
+  .catch(function() {
+    chartWrap.innerHTML = '<div class="chart-empty">Failed to connect to Firebase. Try refreshing the page.</div>';
+  });
+</script>
+</body>
+</html>
