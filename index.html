@@ -1492,6 +1492,13 @@ function openApp(app) {
 
   trackRecentApp(app);
 
+  // Log this click for the "Most Clicked" analytics view. Guarded since
+  // firebase.js loads asynchronously (via blob-URL import) and may not have
+  // finished setting up window.VUSAnalytics yet on a very fast first click.
+  if (window.VUSAnalytics && typeof window.VUSAnalytics.trackAppClick === "function") {
+    window.VUSAnalytics.trackAppClick(app.name);
+  }
+
   // Direct links (non-github raw) open normally
   if (!app.url.includes("raw.githubusercontent.com")) {
     window.open(app.url, "_blank", "noopener");

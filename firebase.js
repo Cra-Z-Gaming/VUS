@@ -199,6 +199,57 @@ async function getAnalyticsDayKeys() {
   return Object.keys(val).sort().reverse();
 }
 
+// ===================== APP CLICK ANALYTICS =====================
+// Realtime Database structure:
+//   /analytics/{YYYY-MM-DD}/clicks/{sanitizedAppName} -> a running integer count
+// Incremented once per actual app open (i.e. from openApp() in index.html),
+// not just from a tab being open — this tracks what people actually click,
+// scoped per day to match the hourly chart's per-day browsing.
+
+// Firebase Realtime Database keys can't contain . # $ [ ] / or control
+// characters, and app names may contain any of these (e.g. "about:blank
+// Opener", "File + Folder Viewer"). Replace disallowed characters with a
+// safe placeholder so every app name maps to a valid, collision-resistant key.
+function sanitizeAppKey(name) {
+  return encodeURIComponent(name || "unknown").replace(/[.#$/\[\]%]/g, "_");
+}
+
+/**
+ * Increments today's click count for the given app name. Call this once per
+ * actual app open (from openApp()), not per tab-view. Runs from index.html
+ * only — home.html's widget buttons call window.parent.openApp(), which
+ * routes through the same index.html instance, so clicks from Home still
+ * count correctly without home.html needing its own Firebase connection.
+ * @param {string} appName
+ */
+function trackAppClick(appName) {
+  if (!appName) return;
+  const key = dayKey(new Date());
+  const safeName = sanitizeAppKey(appName);
+  const clickRef = ref(db, `analytics/${key}/clicks/${safeName}`);
+  runTransaction(clickRef, (current) => {
+    const entry = current || { name: appName, count: 0 };
+    return { name: appName, count: (entry.count || 0) + 1 };
+  }).catch((err) => {
+    console.error("VUS Hub: click tracking write failed:", err);
+  });
+}
+
+/**
+ * Reads all app click counts for a given day (defaults to today, local
+ * time), sorted most-clicked first. Used by the "Dev Info" admin dashboard.
+ * @param {string} [dateKey] - "YYYY-MM-DD"; defaults to today
+ * @returns {Promise<{name: string, count: number}[]>}
+ */
+async function getAppClicks(dateKey) {
+  const key = dateKey || dayKey(new Date());
+  const snap = await get(ref(db, `analytics/${key}/clicks`));
+  const val = snap.val() || {};
+  return Object.values(val)
+    .filter(entry => entry && entry.name)
+    .sort((a, b) => b.count - a.count);
+}
+
 // Auto-start presence tracking and analytics only when this module is loaded
 // in the top-level document (index.html). home.html loads in an <iframe>,
 // and although it also imports this file to read the live count via
@@ -231,9 +282,9 @@ if (isTopLevelWindow) {
   }
 }
 
-export { app, db, onOnlineCount, getHourlyVisits, getAnalyticsDayKeys, dayKey as getDayKey };
+export { app, db, onOnlineCount, getHourlyVisits, getAnalyticsDayKeys, getAppClicks, trackAppClick, dayKey as getDayKey };
 
 // Also expose on window for any non-module inline script in index.html that
 // wants to read the live count without adding its own <script type="module">.
 window.VUSPresence = { onOnlineCount };
-window.VUSAnalytics = { getHourlyVisits, getAnalyticsDayKeys, getDayKey: dayKey };
+window.VUSAnalytics = { getHourlyVisits, getAnalyticsDayKeys, getAppClicks, trackAppClick, getDayKey: dayKey };

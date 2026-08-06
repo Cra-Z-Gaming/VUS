@@ -65,6 +65,7 @@
   .back-link {
     font-size: 13px;
     font-weight: 500;
+    font-family: var(--font);
     color: var(--fg-muted);
     text-decoration: none;
     display: flex;
@@ -74,6 +75,7 @@
     border-radius: 8px;
     border: 1px solid var(--border);
     background: var(--card);
+    cursor: pointer;
     transition: color 0.15s, border-color 0.15s;
   }
 
@@ -173,12 +175,60 @@
 
   .stat-value.accent { color: var(--accent); }
 
+  .stat-desc {
+    font-size: 11.5px;
+    color: var(--fg-dim);
+    margin-top: 6px;
+    line-height: 1.4;
+  }
+
+  .chart-card-header {
+    margin-bottom: 18px;
+  }
+
+  .chart-card-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--fg);
+    margin-bottom: 4px;
+  }
+
+  .chart-card-sub {
+    font-size: 12.5px;
+    color: var(--fg-muted);
+    line-height: 1.5;
+    max-width: 640px;
+  }
+
   .chart-card {
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 16px;
     padding: 24px 20px 16px;
     backdrop-filter: blur(12px);
+  }
+
+  .chart-area {
+    display: flex;
+    gap: 8px;
+  }
+
+  .chart-yaxis {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 340px;
+    padding-bottom: 26px; /* aligns with chart-bar-label height below the bars */
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .chart-yaxis-label {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--fg-dim);
+    line-height: 1;
+    transform: translateY(-50%);
   }
 
   .chart-wrap {
@@ -188,6 +238,16 @@
     height: 340px;
     overflow-x: auto;
     padding-bottom: 4px;
+    flex: 1;
+    position: relative;
+    background-image: repeating-linear-gradient(
+      to top,
+      var(--border) 0,
+      var(--border) 1px,
+      transparent 1px,
+      transparent 25%
+    );
+    background-size: 100% 100%;
   }
 
   .chart-bar-col {
@@ -277,6 +337,122 @@
   @media (prefers-reduced-motion: reduce) {
     .chart-bar { transition: none; }
   }
+
+  /* ---- Most Clicked ---- */
+  .clicks-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px 20px;
+    backdrop-filter: blur(12px);
+    margin-top: 20px;
+  }
+
+  .clicks-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+  }
+
+  .clicks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .clicks-row {
+    display: grid;
+    grid-template-columns: 28px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 8px;
+    border-radius: 8px;
+  }
+
+  .clicks-row:nth-child(odd) {
+    background: rgba(255,255,255,0.02);
+  }
+
+  .clicks-rank {
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--fg-dim);
+    text-align: center;
+  }
+
+  .clicks-rank.top3 {
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .clicks-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--fg);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .clicks-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 140px;
+  }
+
+  .clicks-bar-track {
+    flex: 1;
+    height: 6px;
+    background: var(--bg-elevated);
+    border-radius: 3px;
+    overflow: hidden;
+    min-width: 60px;
+  }
+
+  .clicks-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), #10b981);
+    border-radius: 3px;
+  }
+
+  .clicks-count {
+    font-size: 13px;
+    font-family: var(--mono);
+    color: var(--fg-muted);
+    min-width: 24px;
+    text-align: right;
+  }
+
+  .clicks-toggle-btn {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: var(--font);
+    color: var(--fg);
+    cursor: pointer;
+    display: block;
+    margin: 16px auto 0;
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  .clicks-toggle-btn:hover {
+    border-color: var(--border-hover);
+    background: var(--card-hover);
+  }
+
+  .clicks-empty {
+    text-align: center;
+    padding: 40px 0;
+    color: var(--fg-dim);
+    font-size: 14px;
+  }
 </style>
 </head>
 <body>
@@ -288,12 +464,12 @@
       <div class="page-title">📊 VUS Hub Analytics</div>
       <div class="page-sub">Hourly tab-open counts, tracked forever, browsable by day.</div>
     </div>
-    <a class="back-link" href="https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/index.html">
+    <button type="button" class="back-link" id="backLink">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
       </svg>
-      VUS Hub code (temperary)
-    </a>
+      Back to VUS Hub
+    </button>
   </div>
 
   <div class="controls-bar">
@@ -310,23 +486,46 @@
 
   <div class="stat-row">
     <div class="stat-card">
-      <div class="stat-label">Total This Day</div>
+      <div class="stat-label">Total Tab-Opens This Day</div>
       <div class="stat-value accent" id="statTotal">—</div>
+      <div class="stat-desc">Every browser tab that had VUS Hub open for 1+ minute</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Peak Hour</div>
+      <div class="stat-label">Busiest Hour</div>
       <div class="stat-value" id="statPeak">—</div>
+      <div class="stat-desc" id="statPeakDesc">The 1-hour window with the most tab-opens</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Active Hours</div>
+      <div class="stat-label">Hours With Any Activity</div>
       <div class="stat-value" id="statActiveHours">—</div>
+      <div class="stat-desc">Out of 24 possible hours in the day</div>
     </div>
   </div>
 
   <div class="chart-card">
-    <div class="chart-wrap" id="chartWrap">
-      <div class="chart-loading">Loading analytics…</div>
+    <div class="chart-card-header">
+      <div class="chart-card-title">Tab-Opens by Hour of Day</div>
+      <div class="chart-card-sub">Each bar = number of tabs open during that hour (24-hour time, local timezone). A number appears in or above every bar with activity; empty hours show no bar.</div>
     </div>
+    <div class="chart-area">
+      <div class="chart-yaxis" id="chartYAxis"></div>
+      <div class="chart-wrap" id="chartWrap">
+        <div class="chart-loading">Loading analytics…</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="clicks-card">
+    <div class="clicks-card-header">
+      <div>
+        <div class="chart-card-title">Most Clicked Apps</div>
+        <div class="chart-card-sub">How many times each app was actually opened on the selected day. Bar length is relative to the top result.</div>
+      </div>
+    </div>
+    <div class="clicks-list" id="clicksList">
+      <div class="chart-loading">Loading…</div>
+    </div>
+    <button type="button" class="clicks-toggle-btn" id="clicksToggleBtn" style="display:none;">Show All</button>
   </div>
 
 </div>
@@ -344,10 +543,12 @@ const FIREBASE_JS_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs
 let VUSAnalyticsAPI = null;
 
 const chartWrap = document.getElementById("chartWrap");
+const chartYAxis = document.getElementById("chartYAxis");
 const dateSelect = document.getElementById("dateSelect");
 const refreshBtn = document.getElementById("refreshBtn");
 const statTotal = document.getElementById("statTotal");
 const statPeak = document.getElementById("statPeak");
+const statPeakDesc = document.getElementById("statPeakDesc");
 const statActiveHours = document.getElementById("statActiveHours");
 
 function formatDateLabel(dateKey, todayKey) {
@@ -358,9 +559,8 @@ function formatDateLabel(dateKey, todayKey) {
 }
 
 function formatHourLabel(hour) {
-  if (hour === 0) return "12a";
-  if (hour === 12) return "12p";
-  return hour < 12 ? `${hour}a` : `${hour - 12}p`;
+  // 24-hour format, zero-padded: "00", "01", ... "23"
+  return String(hour).padStart(2, "0");
 }
 
 function formatHourRange(hour) {
@@ -374,6 +574,18 @@ function formatHourRange(hour) {
 const MIN_HEIGHT_PX_FOR_INSIDE_LABEL = 22;
 const CHART_HEIGHT_PX = 340; // must match .chart-wrap's CSS height
 
+// Renders 5 evenly-spaced scale labels (0 up to the rounded max) aligned with
+// the gridlines in .chart-wrap's background, so bar heights are readable at
+// a glance in a screenshot without needing to hover over anything.
+function renderYAxis(max) {
+  const steps = 4;
+  const labels = [];
+  for (let i = steps; i >= 0; i--) {
+    labels.push(Math.round((max / steps) * i));
+  }
+  chartYAxis.innerHTML = labels.map(v => '<span class="chart-yaxis-label">' + v + '</span>').join("");
+}
+
 function renderChart(hours) {
   const total = hours.reduce((a, b) => a + b, 0);
   const max = Math.max(...hours, 1);
@@ -382,14 +594,19 @@ function renderChart(hours) {
 
   if (total === 0) {
     chartWrap.innerHTML = '<div class="chart-empty">No visitors recorded for this day.</div>';
+    chartYAxis.innerHTML = "";
     statPeak.textContent = "—";
+    statPeakDesc.textContent = "No activity recorded for this day";
     statActiveHours.textContent = "0 / 24";
     return;
   }
 
   const peakHour = hours.indexOf(max);
-  statPeak.textContent = formatHourRange(peakHour);
+  statPeak.textContent = formatHourRange(peakHour) + " (24h)";
+  statPeakDesc.textContent = max + " tab-open" + (max === 1 ? "" : "s") + " during this hour";
   statActiveHours.textContent = hours.filter(c => c > 0).length + " / 24";
+
+  renderYAxis(max);
 
   const bars = hours.map((count, hour) => {
     const heightPct = count === 0 ? 0 : Math.max((count / max) * 100, 3);
@@ -415,6 +632,74 @@ function renderChart(hours) {
   chartWrap.innerHTML = bars;
 }
 
+const clicksList = document.getElementById("clicksList");
+const clicksToggleBtn = document.getElementById("clicksToggleBtn");
+
+const CLICKS_COLLAPSED_LIMIT = 5;
+let clicksExpanded = false;
+let currentClicksData = [];
+
+function renderClicksList() {
+  if (currentClicksData.length === 0) {
+    clicksList.innerHTML = '<div class="clicks-empty">No app opens recorded for this day.</div>';
+    clicksToggleBtn.style.display = "none";
+    return;
+  }
+
+  const max = currentClicksData[0].count; // already sorted most-clicked first
+  const visible = clicksExpanded ? currentClicksData : currentClicksData.slice(0, CLICKS_COLLAPSED_LIMIT);
+
+  clicksList.innerHTML = visible.map(function(entry, i) {
+    const rank = i + 1;
+    const widthPct = Math.max((entry.count / max) * 100, 4);
+    const rankClass = rank <= 3 ? "clicks-rank top3" : "clicks-rank";
+    return '' +
+      '<div class="clicks-row">' +
+        '<span class="' + rankClass + '">#' + rank + '</span>' +
+        '<span class="clicks-name">' + escapeHtmlAnalytics(entry.name) + '</span>' +
+        '<div class="clicks-bar-wrap">' +
+          '<div class="clicks-bar-track"><div class="clicks-bar-fill" style="width:' + widthPct + '%"></div></div>' +
+          '<span class="clicks-count">' + entry.count + '</span>' +
+        '</div>' +
+      '</div>';
+  }).join("");
+
+  if (currentClicksData.length > CLICKS_COLLAPSED_LIMIT) {
+    clicksToggleBtn.style.display = "block";
+    clicksToggleBtn.textContent = clicksExpanded
+      ? "Show Top 5"
+      : "Show All (" + currentClicksData.length + ")";
+  } else {
+    clicksToggleBtn.style.display = "none";
+  }
+}
+
+function escapeHtmlAnalytics(str) {
+  return (str || "").replace(/[&<>"']/g, function(c) {
+    return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c];
+  });
+}
+
+clicksToggleBtn.addEventListener("click", function() {
+  clicksExpanded = !clicksExpanded;
+  renderClicksList();
+});
+
+async function loadAndRenderClicks(dateKey) {
+  clicksExpanded = false; // reset to collapsed view whenever the day changes
+  clicksList.innerHTML = '<div class="chart-loading">Loading…</div>';
+  if (!VUSAnalyticsAPI || !VUSAnalyticsAPI.getAppClicks) {
+    clicksList.innerHTML = '<div class="clicks-empty">Connecting to Firebase…</div>';
+    return;
+  }
+  try {
+    currentClicksData = await VUSAnalyticsAPI.getAppClicks(dateKey);
+    renderClicksList();
+  } catch (e) {
+    clicksList.innerHTML = '<div class="clicks-empty">Failed to load click data.</div>';
+  }
+}
+
 async function loadAndRenderDay(dateKey) {
   chartWrap.innerHTML = '<div class="chart-loading">Loading…</div>';
   if (!VUSAnalyticsAPI) {
@@ -427,6 +712,7 @@ async function loadAndRenderDay(dateKey) {
   } catch (e) {
     chartWrap.innerHTML = '<div class="chart-empty">Failed to load analytics data.</div>';
   }
+  loadAndRenderClicks(dateKey);
 }
 
 async function populateDatePicker(preserveSelection) {
@@ -478,6 +764,32 @@ refreshBtn.addEventListener("click", async function() {
   if (key) loadAndRenderDay(key);
 });
 
+// "Back to VUS Hub" — raw.githubusercontent.com serves everything as
+// text/plain, so a plain <a href> pointed at index.html's raw URL would just
+// show the page's source code instead of rendering it. Same fix as the
+// cloak-open button elsewhere in VUS Hub: fetch the HTML as text, then
+// document.write() it into a fresh tab so the browser actually renders it.
+const backLink = document.getElementById("backLink");
+const INDEX_HTML_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/index.html";
+
+backLink.addEventListener("click", function() {
+  fetch(INDEX_HTML_URL + "?v=" + Date.now())
+    .then(function(r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    })
+    .then(function(text) {
+      const win = window.open("about:blank", "_blank");
+      if (!win) return;
+      win.document.open();
+      win.document.write(text);
+      win.document.close();
+    })
+    .catch(function() {
+      // Silent failure is fine here — worst case the click just does nothing
+    });
+});
+
 async function init() {
   const key = await populateDatePicker(false);
   if (key) loadAndRenderDay(key);
@@ -497,6 +809,7 @@ fetch(FIREBASE_JS_URL + "?v=" + Date.now())
     VUSAnalyticsAPI = {
       getHourlyVisits: mod.getHourlyVisits,
       getAnalyticsDayKeys: mod.getAnalyticsDayKeys,
+      getAppClicks: mod.getAppClicks,
       getDayKey: mod.getDayKey
     };
     init();
