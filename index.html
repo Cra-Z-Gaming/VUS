@@ -445,6 +445,47 @@
     color: var(--accent);
   }
 
+  .card-favorite {
+    position: absolute;
+    top: 14px; right: 14px;
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--fg-dim);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s, background 0.2s, transform 0.15s;
+    z-index: 2;
+  }
+
+  .card-favorite:hover {
+    background: rgba(255,255,255,0.06);
+    color: #fbbf24;
+    transform: scale(1.1);
+  }
+
+  .card-favorite svg {
+    width: 16px; height: 16px;
+    transition: fill 0.15s, stroke 0.15s;
+  }
+
+  .card-favorite.active {
+    color: #fbbf24;
+  }
+
+  .card-favorite.active svg {
+    fill: #fbbf24;
+    stroke: #fbbf24;
+  }
+
+  /* Room for the star: keep the hover-arrow from overlapping it */
+  .hub-card .card-arrow {
+    right: 46px;
+  }
+
   /* ---- Empty state ---- */
   .hub-empty {
     grid-column: 1 / -1;
@@ -867,6 +908,76 @@
 
   .settings-btn-primary:active { transform: translateY(0); }
 
+  /* ---- Dev Info bar chart ---- */
+  .chart-wrap {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 200px;
+    padding: 12px 8px 0;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow-x: auto;
+  }
+
+  .chart-bar-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 1 0 20px;
+    min-width: 20px;
+    height: 100%;
+    gap: 4px;
+  }
+
+  .chart-bar {
+    width: 100%;
+    max-width: 22px;
+    background: linear-gradient(180deg, var(--accent), #10b981);
+    border-radius: 4px 4px 0 0;
+    min-height: 2px;
+    transition: height 0.3s ease;
+    position: relative;
+  }
+
+  .chart-bar-value {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--fg-muted);
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .chart-bar-label {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--fg-dim);
+    margin-top: 6px;
+    padding-bottom: 8px;
+    line-height: 1;
+  }
+
+  .chart-empty {
+    text-align: center;
+    padding: 40px 0;
+    color: var(--fg-dim);
+    font-size: 14px;
+    width: 100%;
+  }
+
+  .chart-total {
+    font-size: 13px;
+    color: var(--fg-muted);
+    margin-top: 12px;
+  }
+
+  .chart-total strong {
+    color: var(--fg);
+    font-family: var(--mono);
+  }
+
   .qa-row {
     display: flex;
     gap: 16px;
@@ -1008,11 +1119,35 @@
         </div>
       </div>
 
+      <div class="settings-section">
+        <button type="button" class="settings-btn-secondary" id="devInfoBtn" style="width:100%;">📊 Dev Info</button>
+      </div>
+
       <div class="settings-footer">
         <button type="button" class="settings-btn-secondary" id="settingsReset">Reset to Defaults</button>
         <button type="button" class="settings-btn-primary" id="settingsSave">Save Changes</button>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- Dev Info Modal -->
+<div class="qa-overlay" id="devInfoOverlay">
+  <div class="qa-modal" style="max-width: 760px;">
+    <div class="qa-header">
+      <h2>Dev Info</h2>
+      <button class="qa-close" id="devInfoClose" aria-label="Close Dev Info panel">&times;</button>
+    </div>
+    <div class="qa-body" id="devInfoBody">
+      <div class="settings-section">
+        <label class="settings-label" for="devInfoDatePicker">Date</label>
+        <div class="settings-sub">Hourly tab-open counts for the selected day (local time).</div>
+        <select class="settings-input" id="devInfoDatePicker"></select>
+      </div>
+      <div class="settings-section">
+        <div id="devInfoChartWrap"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -1311,8 +1446,15 @@ function renderCards(grid, items, fromHomeSearch) {
     card.setAttribute("role", "button");
     card.setAttribute("aria-label", "Open " + app.name);
 
+    const favorited = isFavorite(app);
+
     card.innerHTML = `
       <div class="card-icon ${app.color || 'green'}">${escapeHtml(app.icon || app.name.substring(0, 2).toUpperCase())}</div>
+      <button type="button" class="card-favorite${favorited ? ' active' : ''}" aria-label="${favorited ? 'Remove from favorites' : 'Add to favorites'}" aria-pressed="${favorited}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+        </svg>
+      </button>
       <div class="hub-card-title">${escapeHtml(app.name)}</div>
       <div class="hub-card-sub">${escapeHtml(app.desc)}</div>
       <svg class="card-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1329,10 +1471,60 @@ function renderCards(grid, items, fromHomeSearch) {
       openApp(app);
     };
 
+    const favBtn = card.querySelector(".card-favorite");
+    favBtn.onclick = (e) => {
+      e.stopPropagation();
+      const nowFavorited = toggleFavorite(app);
+      favBtn.classList.toggle("active", nowFavorited);
+      favBtn.setAttribute("aria-pressed", nowFavorited);
+      favBtn.setAttribute("aria-label", nowFavorited ? "Remove from favorites" : "Add to favorites");
+    };
+
     card.onclick = activate;
     card.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); } };
     grid.appendChild(card);
   });
+}
+
+// ===================== FAVORITES =====================
+// Shared with home.html (loaded in an iframe) via localStorage, same-origin.
+// Keyed by app name (stable identifier across tabs/categories).
+const FAVORITES_KEY = "vus_favorites";
+
+function getFavorites() {
+  try {
+    return JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]");
+  } catch (e) {
+    return [];
+  }
+}
+
+function isFavorite(app) {
+  if (!app || !app.name) return false;
+  return getFavorites().some(f => f.name === app.name);
+}
+
+function toggleFavorite(app) {
+  if (!app || !app.name) return false;
+  try {
+    let favs = getFavorites();
+    const exists = favs.some(f => f.name === app.name);
+    if (exists) {
+      favs = favs.filter(f => f.name !== app.name);
+    } else {
+      favs.push({
+        name: app.name,
+        url: app.url || "",
+        icon: app.icon || "",
+        color: app.color || ""
+      });
+    }
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify(favs));
+    return !exists; // returns new favorited state
+  } catch (e) {
+    showToast("Couldn't save favorite — storage full or unavailable", "err");
+    return exists;
+  }
 }
 
 // ===================== RECENTLY USED TRACKING =====================
@@ -1579,6 +1771,133 @@ document.getElementById("settingsReset").onclick = () => {
   buildDefaultTabOptions();
   updateBackgroundModeUI();
 };
+
+// ===================== DEV INFO (analytics dashboard) =====================
+const devInfoOverlay = document.getElementById("devInfoOverlay");
+const devInfoBtn = document.getElementById("devInfoBtn");
+const devInfoClose = document.getElementById("devInfoClose");
+const devInfoDatePicker = document.getElementById("devInfoDatePicker");
+const devInfoChartWrap = document.getElementById("devInfoChartWrap");
+
+function formatDateLabel(dateKey) {
+  // dateKey is "YYYY-MM-DD" in local time; parse manually to avoid UTC shift
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  const todayKey = window.VUSAnalytics ? window.VUSAnalytics.getDayKey(new Date()) : null;
+  const label = date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  return dateKey === todayKey ? `${label} (Today)` : label;
+}
+
+function formatHourLabel(hour) {
+  if (hour === 0) return "12a";
+  if (hour === 12) return "12p";
+  return hour < 12 ? `${hour}a` : `${hour - 12}p`;
+}
+
+function renderChart(hours) {
+  const total = hours.reduce((a, b) => a + b, 0);
+
+  if (total === 0) {
+    devInfoChartWrap.innerHTML = '<div class="chart-empty">No visitors recorded for this day.</div>';
+    return;
+  }
+
+  const max = Math.max(...hours, 1);
+
+  const bars = hours.map((count, hour) => {
+    const heightPct = count === 0 ? 0 : Math.max((count / max) * 100, 4);
+    return `
+      <div class="chart-bar-col">
+        <span class="chart-bar-value">${count > 0 ? count : ""}</span>
+        <div class="chart-bar" style="height:${heightPct}%"></div>
+        <span class="chart-bar-label">${formatHourLabel(hour)}</span>
+      </div>
+    `;
+  }).join("");
+
+  devInfoChartWrap.innerHTML = `
+    <div class="chart-wrap">${bars}</div>
+    <div class="chart-total">Total tab-opens this day: <strong>${total}</strong></div>
+  `;
+}
+
+async function loadAndRenderDay(dateKey) {
+  devInfoChartWrap.innerHTML = '<div class="chart-empty">Loading…</div>';
+  if (!window.VUSAnalytics) {
+    devInfoChartWrap.innerHTML = '<div class="chart-empty">Analytics module still loading — try again in a moment.</div>';
+    return;
+  }
+  try {
+    const hours = await window.VUSAnalytics.getHourlyVisits(dateKey);
+    renderChart(hours);
+  } catch (e) {
+    devInfoChartWrap.innerHTML = '<div class="chart-empty">Failed to load analytics data.</div>';
+  }
+}
+
+async function populateDatePicker() {
+  devInfoDatePicker.innerHTML = "";
+  const todayKey = window.VUSAnalytics ? window.VUSAnalytics.getDayKey(new Date()) : null;
+
+  let dayKeys = [];
+  if (window.VUSAnalytics) {
+    try {
+      dayKeys = await window.VUSAnalytics.getAnalyticsDayKeys();
+    } catch (e) {
+      dayKeys = [];
+    }
+  }
+
+  // Always include today, even if it has no data logged yet
+  if (todayKey && !dayKeys.includes(todayKey)) {
+    dayKeys.unshift(todayKey);
+  }
+  dayKeys.sort().reverse();
+
+  if (dayKeys.length === 0) {
+    const opt = document.createElement("option");
+    opt.textContent = "No data yet";
+    opt.disabled = true;
+    devInfoDatePicker.appendChild(opt);
+    return null;
+  }
+
+  dayKeys.forEach(key => {
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = formatDateLabel(key);
+    devInfoDatePicker.appendChild(opt);
+  });
+
+  return dayKeys[0];
+}
+
+devInfoDatePicker.addEventListener("change", (e) => {
+  loadAndRenderDay(e.target.value);
+});
+
+async function openDevInfo() {
+  devInfoOverlay.classList.add("open");
+  devInfoClose.focus();
+  const defaultKey = await populateDatePicker();
+  if (defaultKey) {
+    devInfoDatePicker.value = defaultKey;
+    loadAndRenderDay(defaultKey);
+  }
+}
+
+function closeDevInfo() {
+  devInfoOverlay.classList.remove("open");
+  devInfoBtn.focus();
+}
+
+devInfoBtn.onclick = () => {
+  closeSettings();
+  openDevInfo();
+};
+devInfoClose.onclick = closeDevInfo;
+
+// Click-outside-to-close intentionally disabled — only the X button closes this modal.
 
 // ===================== Q/A MODAL =====================
 const qaOverlay = document.getElementById("qaOverlay");
