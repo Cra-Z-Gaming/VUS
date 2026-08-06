@@ -114,23 +114,6 @@ function onOnlineCount(callback) {
   };
 }
 
-// Auto-start presence tracking only when this module is loaded in the top-level
-// document (index.html). home.html loads in an <iframe>, and although it also
-// imports this file to read the live count via onOnlineCount(), we don't want
-// that second module evaluation to register its own duplicate presence session.
-// window.top === window is true only for the outermost page.
-try {
-  if (window.top === window) {
-    console.log("[VUS Analytics] Top-level window detected, starting presence + analytics");
-    startPresence();
-    startAnalyticsTracking();
-  } else {
-    console.log("[VUS Analytics] Not top-level window (likely an iframe) — skipping presence/analytics start");
-  }
-} catch (e) {
-  console.error("[VUS Analytics] window.top check threw:", e);
-}
-
 // ===================== HOURLY VISIT ANALYTICS =====================
 // Realtime Database structure:
 //   /analytics/{YYYY-MM-DD}/{hour}  -> a running integer count
@@ -155,16 +138,12 @@ const ANALYTICS_QUALIFY_MS = 60 * 1000; // must be open 1+ minute to count
 function incrementHourlyVisit(date) {
   const key = dayKey(date);
   const hour = date.getHours(); // 0-23, local time
-  const path = `analytics/${key}/${hour}`;
-  const hourRef = ref(db, path);
-  console.log("[VUS Analytics] Attempting write to:", path);
-  runTransaction(hourRef, (current) => (current || 0) + 1)
-    .then((result) => {
-      console.log("[VUS Analytics] Write committed:", result.committed, "new value:", result.snapshot.val());
-    })
-    .catch((err) => {
-      console.error("[VUS Analytics] Write FAILED:", err);
-    });
+  const hourRef = ref(db, `analytics/${key}/${hour}`);
+  runTransaction(hourRef, (current) => (current || 0) + 1).catch((err) => {
+    // Non-critical to the live site, but still worth surfacing if it happens —
+    // a silently-swallowed error here previously hid a real bug for a while.
+    console.error("VUS Hub: analytics write failed:", err);
+  });
 }
 
 /**
@@ -175,13 +154,11 @@ function incrementHourlyVisit(date) {
  * same guard as startPresence().
  */
 function startAnalyticsTracking() {
-  console.log("[VUS Analytics] Tracking started, will qualify in", ANALYTICS_QUALIFY_MS / 1000, "seconds");
   const loggedHours = new Set(); // e.g. "2026-08-05:14" — avoids double-logging the same hour from this tab
 
   function logCurrentHourIfNeeded() {
     const now = new Date();
     const marker = `${dayKey(now)}:${now.getHours()}`;
-    console.log("[VUS Analytics] Checking hour marker:", marker, "already logged:", loggedHours.has(marker));
     if (loggedHours.has(marker)) return;
     loggedHours.add(marker);
     incrementHourlyVisit(now);
@@ -189,7 +166,6 @@ function startAnalyticsTracking() {
 
   // Qualify after 1 minute connected, then log immediately and start the recurring check
   setTimeout(() => {
-    console.log("[VUS Analytics] Qualify timer fired");
     logCurrentHourIfNeeded();
     setInterval(logCurrentHourIfNeeded, ANALYTICS_CHECK_INTERVAL_MS);
   }, ANALYTICS_QUALIFY_MS);
@@ -221,6 +197,38 @@ async function getAnalyticsDayKeys() {
   const snap = await get(ref(db, "analytics"));
   const val = snap.val() || {};
   return Object.keys(val).sort().reverse();
+}
+
+// Auto-start presence tracking and analytics only when this module is loaded
+// in the top-level document (index.html). home.html loads in an <iframe>,
+// and although it also imports this file to read the live count via
+// onOnlineCount(), we don't want that second module evaluation to register
+// its own duplicate presence session or analytics timer.
+// window.top === window is true only for the outermost page.
+//
+// Presence and analytics are started in separate try/catch blocks so a bug
+// in one can never be misreported as a failure in the other (this bit us
+// once already — keep them isolated).
+let isTopLevelWindow = false;
+try {
+  isTopLevelWindow = window.top === window;
+} catch (e) {
+  // Cross-origin access to window.top can throw in rare sandboxed setups;
+  // default to false (not top-level) to avoid duplicate sessions.
+  isTopLevelWindow = false;
+}
+
+if (isTopLevelWindow) {
+  try {
+    startPresence();
+  } catch (e) {
+    console.error("VUS Hub: failed to start presence tracking:", e);
+  }
+  try {
+    startAnalyticsTracking();
+  } catch (e) {
+    console.error("VUS Hub: failed to start analytics tracking:", e);
+  }
 }
 
 export { app, db, onOnlineCount, getHourlyVisits, getAnalyticsDayKeys, dayKey as getDayKey };
