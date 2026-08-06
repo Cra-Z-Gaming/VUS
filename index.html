@@ -908,76 +908,6 @@
 
   .settings-btn-primary:active { transform: translateY(0); }
 
-  /* ---- Dev Info bar chart ---- */
-  .chart-wrap {
-    display: flex;
-    align-items: flex-end;
-    gap: 4px;
-    height: 200px;
-    padding: 12px 8px 0;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    overflow-x: auto;
-  }
-
-  .chart-bar-col {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-end;
-    flex: 1 0 20px;
-    min-width: 20px;
-    height: 100%;
-    gap: 4px;
-  }
-
-  .chart-bar {
-    width: 100%;
-    max-width: 22px;
-    background: linear-gradient(180deg, var(--accent), #10b981);
-    border-radius: 4px 4px 0 0;
-    min-height: 2px;
-    transition: height 0.3s ease;
-    position: relative;
-  }
-
-  .chart-bar-value {
-    font-size: 10px;
-    font-family: var(--mono);
-    color: var(--fg-muted);
-    line-height: 1;
-    white-space: nowrap;
-  }
-
-  .chart-bar-label {
-    font-size: 10px;
-    font-family: var(--mono);
-    color: var(--fg-dim);
-    margin-top: 6px;
-    padding-bottom: 8px;
-    line-height: 1;
-  }
-
-  .chart-empty {
-    text-align: center;
-    padding: 40px 0;
-    color: var(--fg-dim);
-    font-size: 14px;
-    width: 100%;
-  }
-
-  .chart-total {
-    font-size: 13px;
-    color: var(--fg-muted);
-    margin-top: 12px;
-  }
-
-  .chart-total strong {
-    color: var(--fg);
-    font-family: var(--mono);
-  }
-
   .qa-row {
     display: flex;
     gap: 16px;
@@ -1035,7 +965,7 @@
     font-size: 15px;
   }
 
-  /* ---- Reduced motion ---- */
+  /* ---- Reduced motion (OS-level preference) ---- */
   @media (prefers-reduced-motion: reduce) {
     .bg-orb { animation: none; }
     .hub-card { animation: none; opacity: 1; transform: none; }
@@ -1044,6 +974,19 @@
     .qa-modal { transition: none; }
     .mouse-glow { display: none; }
   }
+
+  /* ---- Reduced motion (manual Settings toggle) ---- */
+  body.reduced-motion .bg-orb { animation: none; }
+  body.reduced-motion .hub-card { animation: none; opacity: 1; transform: none; }
+  body.reduced-motion .tab-indicator { transition: none; }
+  body.reduced-motion .toast { animation: none; opacity: 1; }
+  body.reduced-motion .qa-modal { transition: none; }
+  body.reduced-motion .mouse-glow { display: none; }
+  body.reduced-motion .hub-card:hover { transform: none; }
+  body.reduced-motion .card-arrow,
+  body.reduced-motion .card-favorite,
+  body.reduced-motion .qa-btn,
+  body.reduced-motion .settings-btn { transition: none; }
 </style>
 </head>
 <body>
@@ -1120,6 +1063,15 @@
       </div>
 
       <div class="settings-section">
+        <label class="settings-label">Animations</label>
+        <div class="settings-sub">Turn off background motion, hover effects, and the mouse-follow glow if things feel laggy.</div>
+        <div class="settings-option-grid" id="settingAnimations">
+          <button type="button" class="settings-option" data-anim-mode="on">On</button>
+          <button type="button" class="settings-option" data-anim-mode="off">Off</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
         <button type="button" class="settings-btn-secondary" id="devInfoBtn" style="width:100%;">📊 Dev Info</button>
       </div>
 
@@ -1128,26 +1080,6 @@
         <button type="button" class="settings-btn-primary" id="settingsSave">Save Changes</button>
       </div>
 
-    </div>
-  </div>
-</div>
-
-<!-- Dev Info Modal -->
-<div class="qa-overlay" id="devInfoOverlay">
-  <div class="qa-modal" style="max-width: 760px;">
-    <div class="qa-header">
-      <h2>Dev Info</h2>
-      <button class="qa-close" id="devInfoClose" aria-label="Close Dev Info panel">&times;</button>
-    </div>
-    <div class="qa-body" id="devInfoBody">
-      <div class="settings-section">
-        <label class="settings-label" for="devInfoDatePicker">Date</label>
-        <div class="settings-sub">Hourly tab-open counts for the selected day (local time).</div>
-        <select class="settings-input" id="devInfoDatePicker"></select>
-      </div>
-      <div class="settings-section">
-        <div id="devInfoChartWrap"></div>
-      </div>
     </div>
   </div>
 </div>
@@ -1225,6 +1157,7 @@ let qaEntries = [];
 // ===================== STATE =====================
 let currentTab = "home";
 let searchQuery = "";
+let animationsEnabled = true; // updated once Settings load, just below
 
 // ===================== UTILITIES =====================
 function escapeHtml(str) {
@@ -1246,6 +1179,7 @@ function showToast(msg, type) {
 // ===================== MOUSE GLOW =====================
 const mouseGlow = document.getElementById("mouseGlow");
 document.addEventListener("mousemove", (e) => {
+  if (!animationsEnabled) return;
   mouseGlow.style.left = e.clientX + "px";
   mouseGlow.style.top = e.clientY + "px";
 });
@@ -1594,7 +1528,8 @@ const DEFAULT_SETTINGS = {
   defaultTab: "home",
   backgroundMode: "default", // "default" | "block" | "image"
   backgroundColor: "#0a0e1a",
-  backgroundImage: "" // data URL
+  backgroundImage: "", // data URL
+  animationsEnabled: true
 };
 
 function loadSettings() {
@@ -1650,11 +1585,22 @@ function applyBackground(settings) {
   }
 }
 
+// Toggles the body.reduced-motion class, which mirrors the OS-level
+// prefers-reduced-motion rules already in the stylesheet. Also flips a global
+// flag the mouse-glow listener checks, since disabling that purely via CSS
+// (display:none) would still leave the mousemove handler doing work on every
+// pixel of cursor movement — the actual source of lag, not just the visual.
+function applyAnimations(settings) {
+  animationsEnabled = settings.animationsEnabled !== false;
+  document.body.classList.toggle("reduced-motion", !animationsEnabled);
+}
+
 // Apply currentTab from saved settings before buildTabs()/render() run.
 // This only takes effect on initial load; switching tabs afterward behaves normally.
 currentTab = currentSettings.defaultTab || DEFAULT_SETTINGS.defaultTab;
 applySiteName(currentSettings.siteName);
 applyBackground(currentSettings);
+applyAnimations(currentSettings);
 
 // ---- Settings modal wiring ----
 const settingsOverlay = document.getElementById("settingsOverlay");
@@ -1669,6 +1615,7 @@ const settingImageWrap = document.getElementById("settingImageWrap");
 const settingImageBtn = document.getElementById("settingImageBtn");
 const settingImageInput = document.getElementById("settingImageInput");
 const settingImageName = document.getElementById("settingImageName");
+const settingAnimationsWrap = document.getElementById("settingAnimations");
 
 // Draft state while the modal is open — only written to currentSettings/storage on Save
 let settingsDraft = { ...currentSettings };
@@ -1726,6 +1673,20 @@ settingImageInput.addEventListener("change", (e) => {
   reader.readAsDataURL(file);
 });
 
+function updateAnimationsUI() {
+  const isOn = settingsDraft.animationsEnabled !== false;
+  Array.from(settingAnimationsWrap.children).forEach(btn =>
+    btn.classList.toggle("active", (btn.dataset.animMode === "on") === isOn)
+  );
+}
+
+Array.from(settingAnimationsWrap.children).forEach(btn => {
+  btn.onclick = () => {
+    settingsDraft.animationsEnabled = btn.dataset.animMode === "on";
+    updateAnimationsUI();
+  };
+});
+
 function openSettings() {
   settingsDraft = { ...currentSettings };
   settingSiteNameInput.value = currentSettings.siteName || "";
@@ -1733,6 +1694,7 @@ function openSettings() {
   settingImageName.textContent = currentSettings.backgroundImage ? "Image saved" : "No file selected";
   buildDefaultTabOptions();
   updateBackgroundModeUI();
+  updateAnimationsUI();
   settingsOverlay.classList.add("open");
   settingsClose.focus();
 }
@@ -1759,6 +1721,7 @@ document.getElementById("settingsSave").onclick = () => {
   currentSettings = { ...settingsDraft };
   applySiteName(currentSettings.siteName);
   applyBackground(currentSettings);
+  applyAnimations(currentSettings);
   showToast("Settings saved", "ok");
   closeSettings();
 };
@@ -1770,134 +1733,36 @@ document.getElementById("settingsReset").onclick = () => {
   settingImageName.textContent = "No file selected";
   buildDefaultTabOptions();
   updateBackgroundModeUI();
+  updateAnimationsUI();
 };
 
-// ===================== DEV INFO (analytics dashboard) =====================
-const devInfoOverlay = document.getElementById("devInfoOverlay");
+// ===================== DEV INFO (opens analytics.html) =====================
 const devInfoBtn = document.getElementById("devInfoBtn");
-const devInfoClose = document.getElementById("devInfoClose");
-const devInfoDatePicker = document.getElementById("devInfoDatePicker");
-const devInfoChartWrap = document.getElementById("devInfoChartWrap");
-
-function formatDateLabel(dateKey) {
-  // dateKey is "YYYY-MM-DD" in local time; parse manually to avoid UTC shift
-  const [y, m, d] = dateKey.split("-").map(Number);
-  const date = new Date(y, m - 1, d);
-  const todayKey = window.VUSAnalytics ? window.VUSAnalytics.getDayKey(new Date()) : null;
-  const label = date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
-  return dateKey === todayKey ? `${label} (Today)` : label;
-}
-
-function formatHourLabel(hour) {
-  if (hour === 0) return "12a";
-  if (hour === 12) return "12p";
-  return hour < 12 ? `${hour}a` : `${hour - 12}p`;
-}
-
-function renderChart(hours) {
-  const total = hours.reduce((a, b) => a + b, 0);
-
-  if (total === 0) {
-    devInfoChartWrap.innerHTML = '<div class="chart-empty">No visitors recorded for this day.</div>';
-    return;
-  }
-
-  const max = Math.max(...hours, 1);
-
-  const bars = hours.map((count, hour) => {
-    const heightPct = count === 0 ? 0 : Math.max((count / max) * 100, 4);
-    return `
-      <div class="chart-bar-col">
-        <span class="chart-bar-value">${count > 0 ? count : ""}</span>
-        <div class="chart-bar" style="height:${heightPct}%"></div>
-        <span class="chart-bar-label">${formatHourLabel(hour)}</span>
-      </div>
-    `;
-  }).join("");
-
-  devInfoChartWrap.innerHTML = `
-    <div class="chart-wrap">${bars}</div>
-    <div class="chart-total">Total tab-opens this day: <strong>${total}</strong></div>
-  `;
-}
-
-async function loadAndRenderDay(dateKey) {
-  devInfoChartWrap.innerHTML = '<div class="chart-empty">Loading…</div>';
-  if (!window.VUSAnalytics) {
-    devInfoChartWrap.innerHTML = '<div class="chart-empty">Analytics module still loading — try again in a moment.</div>';
-    return;
-  }
-  try {
-    const hours = await window.VUSAnalytics.getHourlyVisits(dateKey);
-    renderChart(hours);
-  } catch (e) {
-    devInfoChartWrap.innerHTML = '<div class="chart-empty">Failed to load analytics data.</div>';
-  }
-}
-
-async function populateDatePicker() {
-  devInfoDatePicker.innerHTML = "";
-  const todayKey = window.VUSAnalytics ? window.VUSAnalytics.getDayKey(new Date()) : null;
-
-  let dayKeys = [];
-  if (window.VUSAnalytics) {
-    try {
-      dayKeys = await window.VUSAnalytics.getAnalyticsDayKeys();
-    } catch (e) {
-      dayKeys = [];
-    }
-  }
-
-  // Always include today, even if it has no data logged yet
-  if (todayKey && !dayKeys.includes(todayKey)) {
-    dayKeys.unshift(todayKey);
-  }
-  dayKeys.sort().reverse();
-
-  if (dayKeys.length === 0) {
-    const opt = document.createElement("option");
-    opt.textContent = "No data yet";
-    opt.disabled = true;
-    devInfoDatePicker.appendChild(opt);
-    return null;
-  }
-
-  dayKeys.forEach(key => {
-    const opt = document.createElement("option");
-    opt.value = key;
-    opt.textContent = formatDateLabel(key);
-    devInfoDatePicker.appendChild(opt);
-  });
-
-  return dayKeys[0];
-}
-
-devInfoDatePicker.addEventListener("change", (e) => {
-  loadAndRenderDay(e.target.value);
-});
-
-async function openDevInfo() {
-  devInfoOverlay.classList.add("open");
-  devInfoClose.focus();
-  const defaultKey = await populateDatePicker();
-  if (defaultKey) {
-    devInfoDatePicker.value = defaultKey;
-    loadAndRenderDay(defaultKey);
-  }
-}
-
-function closeDevInfo() {
-  devInfoOverlay.classList.remove("open");
-  devInfoBtn.focus();
-}
+const ANALYTICS_HTML_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/analytics.html";
 
 devInfoBtn.onclick = () => {
-  closeSettings();
-  openDevInfo();
-};
-devInfoClose.onclick = closeDevInfo;
+  showToast("Loading analytics...", "load");
 
-// Click-outside-to-close intentionally disabled — only the X button closes this modal.
+  fetch(ANALYTICS_HTML_URL + "?v=" + Date.now())
+    .then(r => {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    })
+    .then(text => {
+      const win = window.open("about:blank", "_blank");
+      if (!win) {
+        showToast("Popup blocked — allow popups for this site", "err");
+        return;
+      }
+      win.document.open();
+      win.document.write(text);
+      win.document.close();
+      showToast("Analytics opened successfully", "ok");
+    })
+    .catch(() => {
+      showToast("Failed to load analytics", "err");
+    });
+};
 
 // ===================== Q/A MODAL =====================
 const qaOverlay = document.getElementById("qaOverlay");
