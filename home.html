@@ -266,10 +266,10 @@
     <div class="widget-list" id="recentList"></div>
   </div>
 
-  <!-- Featured -->
+  <!-- Favorites -->
   <div class="widget-card">
-    <div class="widget-header"><span class="emoji">⭐</span> Featured</div>
-    <div class="widget-list" id="featuredList"></div>
+    <div class="widget-header"><span class="emoji">⭐</span> Favorites</div>
+    <div class="widget-list" id="favoritesList"></div>
   </div>
 
   <!-- Socials -->
@@ -329,9 +329,11 @@ fetch("https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/fireba
     console.warn("VUS Hub: failed to load firebase.js for online count.");
   });
 
-// ===================== FEATURED (hardcoded names, URLs pulled from apps.json) =====================
-const FEATURED_NAMES = ["VUS Launcher", "VUS AI Chat", "Chat Room"];
-
+// ===================== FAVORITES & RECENTLY USED (from localStorage) =====================
+// Both are written by index.html's card star button / openApp() and shared via
+// same-origin localStorage — no apps.json fetch needed here since the entries
+// already carry their own name/url/icon/color.
+const FAVORITES_KEY = "vus_favorites";
 const RECENT_APPS_KEY = "vus_recent_apps";
 
 function escapeHtml(str) {
@@ -392,30 +394,24 @@ function renderRecent() {
   renderRowButtons("recentList", recent.slice(0, 5), "Nothing opened yet — your recent apps will show up here.");
 }
 
-function renderFeatured(featuredApps) {
-  renderRowButtons("featuredList", featuredApps, "No featured apps set.");
+function renderFavorites() {
+  let favorites = [];
+  try {
+    favorites = JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]");
+  } catch (e) {
+    favorites = [];
+  }
+  renderRowButtons("favoritesList", favorites, "No favorites yet — tap the star on any app to add one.");
 }
 
-// Pull the real app entries (with URLs) from apps.json so Featured buttons open correctly.
-fetch("https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/apps.json?v=" + Date.now())
-  .then(r => r.json())
-  .then(data => {
-    const allApps = [].concat(data.apps || [], data.hubs || [], data.tools || [], data.links || []);
-    const featured = FEATURED_NAMES
-      .map(name => allApps.find(a => a.name === name))
-      .filter(Boolean);
-    renderFeatured(featured);
-  })
-  .catch(() => {
-    renderFeatured([]);
-  });
-
 renderRecent();
+renderFavorites();
 
-// Refresh "Recently Used" if the parent tab logs a new click while Home is open
-// (storage event fires across same-origin documents, e.g. this iframe + the parent)
+// Refresh widgets if the parent tab logs a new click or favorite while Home is
+// open (storage event fires across same-origin documents, e.g. this iframe + the parent)
 window.addEventListener("storage", (e) => {
   if (e.key === RECENT_APPS_KEY) renderRecent();
+  if (e.key === FAVORITES_KEY) renderFavorites();
 });
 </script>
 </body>
