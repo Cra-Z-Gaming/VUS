@@ -121,12 +121,14 @@ function onOnlineCount(callback) {
 // window.top === window is true only for the outermost page.
 try {
   if (window.top === window) {
+    console.log("[VUS Analytics] Top-level window detected, starting presence + analytics");
     startPresence();
     startAnalyticsTracking();
+  } else {
+    console.log("[VUS Analytics] Not top-level window (likely an iframe) — skipping presence/analytics start");
   }
 } catch (e) {
-  // Cross-origin access to window.top can throw in rare sandboxed setups;
-  // default to not starting presence in that case to avoid duplicate sessions.
+  console.error("[VUS Analytics] window.top check threw:", e);
 }
 
 // ===================== HOURLY VISIT ANALYTICS =====================
@@ -153,10 +155,16 @@ const ANALYTICS_QUALIFY_MS = 60 * 1000; // must be open 1+ minute to count
 function incrementHourlyVisit(date) {
   const key = dayKey(date);
   const hour = date.getHours(); // 0-23, local time
-  const hourRef = ref(db, `analytics/${key}/${hour}`);
-  runTransaction(hourRef, (current) => (current || 0) + 1).catch(() => {
-    // Non-critical: a missed analytics tick doesn't affect the live site
-  });
+  const path = `analytics/${key}/${hour}`;
+  const hourRef = ref(db, path);
+  console.log("[VUS Analytics] Attempting write to:", path);
+  runTransaction(hourRef, (current) => (current || 0) + 1)
+    .then((result) => {
+      console.log("[VUS Analytics] Write committed:", result.committed, "new value:", result.snapshot.val());
+    })
+    .catch((err) => {
+      console.error("[VUS Analytics] Write FAILED:", err);
+    });
 }
 
 /**
@@ -167,11 +175,13 @@ function incrementHourlyVisit(date) {
  * same guard as startPresence().
  */
 function startAnalyticsTracking() {
+  console.log("[VUS Analytics] Tracking started, will qualify in", ANALYTICS_QUALIFY_MS / 1000, "seconds");
   const loggedHours = new Set(); // e.g. "2026-08-05:14" — avoids double-logging the same hour from this tab
 
   function logCurrentHourIfNeeded() {
     const now = new Date();
     const marker = `${dayKey(now)}:${now.getHours()}`;
+    console.log("[VUS Analytics] Checking hour marker:", marker, "already logged:", loggedHours.has(marker));
     if (loggedHours.has(marker)) return;
     loggedHours.add(marker);
     incrementHourlyVisit(now);
@@ -179,6 +189,7 @@ function startAnalyticsTracking() {
 
   // Qualify after 1 minute connected, then log immediately and start the recurring check
   setTimeout(() => {
+    console.log("[VUS Analytics] Qualify timer fired");
     logCurrentHourIfNeeded();
     setInterval(logCurrentHourIfNeeded, ANALYTICS_CHECK_INTERVAL_MS);
   }, ANALYTICS_QUALIFY_MS);
