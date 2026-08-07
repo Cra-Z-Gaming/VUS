@@ -614,6 +614,143 @@
 
   .settings-btn svg { width: 18px; height: 18px; }
 
+  /* ---- Chat toggle button (floating, left edge, vertically centered) ---- */
+  .chat-toggle-btn {
+    position: fixed;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), #10b981);
+    color: #000;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    box-shadow: 0 4px 24px rgba(34,197,94,0.35);
+    transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+    z-index: 60;
+  }
+
+  .chat-toggle-btn:hover {
+    transform: translateY(-50%) scale(1.08);
+    box-shadow: 0 8px 32px rgba(34,197,94,0.45);
+  }
+
+  .chat-toggle-btn:active { transform: translateY(-50%) scale(0.96); }
+
+  .chat-toggle-btn.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-50%) scale(0.7);
+  }
+
+  body.reduced-motion .chat-toggle-btn {
+    transition: opacity 0.15s;
+  }
+  body.reduced-motion .chat-toggle-btn:hover,
+  body.reduced-motion .chat-toggle-btn:active {
+    transform: translateY(-50%);
+  }
+
+  /* ---- Chat sidebar ---- */
+  .chat-sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 90;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+
+  .chat-sidebar-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  body.reduced-motion .chat-sidebar-overlay { transition: none; }
+
+  .chat-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 400px;
+    max-width: 92vw;
+    background: var(--bg-elevated);
+    border-right: 1px solid var(--border);
+    box-shadow: 24px 0 64px rgba(0,0,0,0.5);
+    z-index: 91;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(-100%);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .chat-sidebar.open {
+    transform: translateX(0);
+  }
+
+  body.reduced-motion .chat-sidebar { transition: none; }
+
+  .chat-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .chat-sidebar-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--fg);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .chat-sidebar-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .chat-sidebar-btn {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--fg-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    transition: background 0.15s, color 0.15s;
+    font-family: var(--font);
+  }
+
+  .chat-sidebar-btn:hover { background: var(--card-hover); color: var(--fg); }
+
+  .chat-sidebar-frame {
+    flex: 1;
+    width: 100%;
+    border: none;
+    background: transparent;
+  }
+
+  @media (max-width: 480px) {
+    .chat-toggle-btn { left: 14px; width: 46px; height: 46px; font-size: 19px; }
+    .chat-sidebar { width: 100vw; max-width: 100vw; }
+  }
+
   /* ---- Toast ---- */
   .toast-container {
     position: fixed;
@@ -1157,6 +1294,22 @@
     </a>
   </footer>
 </div>
+
+<!-- Chat toggle button (floating, left edge, vertically centered) -->
+<button class="chat-toggle-btn" id="chatToggleBtn" aria-label="Open VUS Chat">💬</button>
+
+<!-- Chat sidebar -->
+<div class="chat-sidebar-overlay" id="chatSidebarOverlay"></div>
+<aside class="chat-sidebar" id="chatSidebar" aria-hidden="true">
+  <div class="chat-sidebar-header">
+    <div class="chat-sidebar-title">💬 VUS Chat</div>
+    <div class="chat-sidebar-actions">
+      <button class="chat-sidebar-btn" id="chatPopoutBtn" title="Open in its own window" aria-label="Pop out chat into its own window">⤢</button>
+      <button class="chat-sidebar-btn" id="chatCloseBtn" title="Close" aria-label="Close chat">&times;</button>
+    </div>
+  </div>
+  <iframe class="chat-sidebar-frame" id="chatSidebarFrame" title="VUS Chat"></iframe>
+</aside>
 
 <!-- Settings floating button -->
 <button class="settings-btn" id="settingsBtn" aria-label="Open Settings panel">
@@ -1769,6 +1922,112 @@ document.getElementById("settingsReset").onclick = () => {
   updateBackgroundModeUI();
   updateAnimationsUI();
 };
+
+// ===================== CHAT SIDEBAR =====================
+// VUS-Chat is a standalone app with its own separate Firebase project (not
+// the same one VUS Hub's presence/analytics use). raw.githubusercontent.com
+// serves it as text/plain, so — same as home.html — it's fetched as text and
+// injected via srcdoc rather than used as a direct iframe src, which would
+// otherwise just show raw source instead of rendering the page.
+const CHAT_HTML_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/VUS-Chat";
+
+const chatToggleBtn = document.getElementById("chatToggleBtn");
+const chatSidebar = document.getElementById("chatSidebar");
+const chatSidebarOverlay = document.getElementById("chatSidebarOverlay");
+const chatCloseBtn = document.getElementById("chatCloseBtn");
+const chatPopoutBtn = document.getElementById("chatPopoutBtn");
+const chatSidebarFrame = document.getElementById("chatSidebarFrame");
+
+let chatFrameLoaded = false;
+let chatFrameLoading = false;
+let chatHtmlCache = null; // reused for the "pop out" window too, avoids a second fetch
+
+function loadChatFrame() {
+  if (chatFrameLoaded || chatFrameLoading) return;
+  chatFrameLoading = true;
+
+  fetch(CHAT_HTML_URL + "?v=" + Date.now())
+    .then(r => {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    })
+    .then(html => {
+      chatHtmlCache = html;
+      chatSidebarFrame.srcdoc = html;
+      chatFrameLoaded = true;
+    })
+    .catch(() => {
+      showToast("Failed to load VUS Chat", "err");
+    })
+    .finally(() => {
+      chatFrameLoading = false;
+    });
+}
+
+function openChatSidebar() {
+  chatSidebar.classList.add("open");
+  chatSidebarOverlay.classList.add("open");
+  chatSidebar.setAttribute("aria-hidden", "false");
+  chatToggleBtn.classList.add("hidden");
+  loadChatFrame();
+  chatCloseBtn.focus();
+}
+
+function closeChatSidebar() {
+  chatSidebar.classList.remove("open");
+  chatSidebarOverlay.classList.remove("open");
+  chatSidebar.setAttribute("aria-hidden", "true");
+  chatToggleBtn.classList.remove("hidden");
+  chatToggleBtn.focus();
+}
+
+chatToggleBtn.onclick = openChatSidebar;
+chatCloseBtn.onclick = closeChatSidebar;
+chatSidebarOverlay.onclick = closeChatSidebar;
+
+// "Pop out" — opens the same chat in its own free-floating browser window/tab
+// instead of the docked sidebar. Reuses the already-fetched HTML if we have
+// it cached, otherwise fetches fresh (e.g. if popped out before ever opening
+// the sidebar first). No fixed size is imposed — it just opens as a normal
+// resizable window/tab, letting the browser and the person decide the size.
+function openChatPopout() {
+  if (chatHtmlCache) {
+    const win = window.open("about:blank", "_blank", "width=420,height=640,resizable=yes");
+    if (!win) {
+      showToast("Popup blocked — allow popups for this site", "err");
+      return;
+    }
+    win.document.open();
+    win.document.write(chatHtmlCache);
+    win.document.close();
+    return;
+  }
+
+  showToast("Loading VUS Chat...", "load");
+  fetch(CHAT_HTML_URL + "?v=" + Date.now())
+    .then(r => {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    })
+    .then(html => {
+      chatHtmlCache = html;
+      const win = window.open("about:blank", "_blank", "width=420,height=640,resizable=yes");
+      if (!win) {
+        showToast("Popup blocked — allow popups for this site", "err");
+        return;
+      }
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      showToast("VUS Chat opened in a new window", "ok");
+    })
+    .catch(() => {
+      showToast("Failed to load VUS Chat", "err");
+    });
+}
+
+chatPopoutBtn.onclick = openChatPopout;
+
 
 // ===================== DEV INFO (opens analytics.html) =====================
 const devInfoBtn = document.getElementById("devInfoBtn");
