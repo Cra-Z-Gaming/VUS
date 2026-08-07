@@ -336,6 +336,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     .chart-bar { transition: none; }
+    .clicks-bar-fill { transition: none; }
   }
 
   /* ---- Most Clicked ---- */
@@ -417,6 +418,7 @@
     height: 100%;
     background: linear-gradient(90deg, var(--accent), #10b981);
     border-radius: 3px;
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .clicks-count {
@@ -599,6 +601,53 @@ function renderYAxis(max) {
   chartYAxis.innerHTML = labels.map(v => '<span class="chart-yaxis-label">' + v + '</span>').join("");
 }
 
+// Persistent references to each hour's bar elements, keyed by hour (0-23).
+// Built once per "session" of viewing a given day; renderChart() then only
+// updates existing elements' style/text in place on subsequent live updates,
+// which is what allows the CSS height transition to actually animate rather
+// than snapping (rebuilding via innerHTML creates brand-new elements with no
+// prior height to transition from).
+let chartBarRefs = null;
+
+function buildChartSkeleton() {
+  chartYAxis.innerHTML = "";
+  chartWrap.innerHTML = "";
+  chartBarRefs = [];
+
+  for (let hour = 0; hour < 24; hour++) {
+    const col = document.createElement("div");
+    col.className = "chart-bar-col";
+
+    const track = document.createElement("div");
+    track.className = "bar-track";
+
+    const aboveLabel = document.createElement("span");
+    aboveLabel.className = "bar-value-above";
+    aboveLabel.style.display = "none";
+
+    const bar = document.createElement("div");
+    bar.className = "chart-bar";
+    bar.style.height = "0%";
+
+    const insideLabel = document.createElement("span");
+    insideLabel.className = "bar-value-inside";
+    insideLabel.style.display = "none";
+
+    const hourLabel = document.createElement("span");
+    hourLabel.className = "chart-bar-label";
+    hourLabel.textContent = formatHourLabel(hour);
+
+    bar.appendChild(insideLabel);
+    track.appendChild(aboveLabel);
+    track.appendChild(bar);
+    col.appendChild(track);
+    col.appendChild(hourLabel);
+    chartWrap.appendChild(col);
+
+    chartBarRefs.push({ bar, aboveLabel, insideLabel });
+  }
+}
+
 function renderChart(hours) {
   const total = hours.reduce((a, b) => a + b, 0);
   const max = Math.max(...hours, 1);
@@ -608,6 +657,7 @@ function renderChart(hours) {
   if (total === 0) {
     chartWrap.innerHTML = '<div class="chart-empty">No visitors recorded for this day.</div>';
     chartYAxis.innerHTML = "";
+    chartBarRefs = null; // force a fresh skeleton next time there IS data
     statPeak.textContent = "—";
     statPeakDesc.textContent = "No activity recorded for this day";
     statActiveHours.textContent = "0 / 24";
@@ -621,28 +671,33 @@ function renderChart(hours) {
 
   renderYAxis(max);
 
-  const bars = hours.map((count, hour) => {
+  if (!chartBarRefs) {
+    buildChartSkeleton();
+  }
+
+  hours.forEach((count, hour) => {
     const heightPct = count === 0 ? 0 : Math.max((count / max) * 100, 3);
     const heightPx = (heightPct / 100) * CHART_HEIGHT_PX;
     const showLabel = count > 0;
     const labelFitsInside = showLabel && heightPx >= MIN_HEIGHT_PX_FOR_INSIDE_LABEL;
+    const refs = chartBarRefs[hour];
 
-    const insideLabel = labelFitsInside ? '<span class="bar-value-inside">' + count + '</span>' : "";
-    const aboveLabel = (showLabel && !labelFitsInside) ? '<span class="bar-value-above">' + count + '</span>' : "";
+    refs.bar.style.height = heightPct + "%";
+    refs.bar.title = formatHourRange(hour) + ": " + count + " tab-open" + (count === 1 ? "" : "s");
 
-    return '' +
-      '<div class="chart-bar-col">' +
-        '<div class="bar-track">' +
-          aboveLabel +
-          '<div class="chart-bar" style="height:' + heightPct + '%" title="' + formatHourRange(hour) + ': ' + count + ' tab-open' + (count === 1 ? '' : 's') + '">' +
-            insideLabel +
-          '</div>' +
-        '</div>' +
-        '<span class="chart-bar-label">' + formatHourLabel(hour) + '</span>' +
-      '</div>';
-  }).join("");
-
-  chartWrap.innerHTML = bars;
+    if (labelFitsInside) {
+      refs.insideLabel.textContent = count;
+      refs.insideLabel.style.display = "";
+      refs.aboveLabel.style.display = "none";
+    } else if (showLabel) {
+      refs.aboveLabel.textContent = count;
+      refs.aboveLabel.style.display = "";
+      refs.insideLabel.style.display = "none";
+    } else {
+      refs.insideLabel.style.display = "none";
+      refs.aboveLabel.style.display = "none";
+    }
+  });
 }
 
 function escapeHtmlAnalytics(str) {
@@ -654,16 +709,62 @@ function escapeHtmlAnalytics(str) {
 const CLICKS_COLLAPSED_LIMIT = 5;
 
 // Creates an independent ranked-list controller (its own expand/collapse
-// state and data) for a given list element + toggle button pair. Used for
-// both the daily "Most Clicked" list and the all-time "Forever" list, so
-// expanding one never affects the other.
+// state, data, and DOM row references) for a given list element + toggle
+// button pair. Used for both the daily "Most Clicked" list and the all-time
+// "Forever" list, so expanding one never affects the other.
+//
+// Rows are built once and then updated in place on subsequent renders (text
+// content, bar width, rank) rather than being rebuilt via innerHTML — that's
+// what lets the bar-width CSS transition actually animate smoothly instead
+// of snapping, since a freshly-created element has no prior width to
+// transition from.
 function createRankedList(listEl, toggleBtnEl, emptyMessage) {
   let expanded = false;
   let data = [];
+  let rowRefs = []; // DOM refs for however many rows are currently built
+
+  function buildRows(count) {
+    listEl.innerHTML = "";
+    rowRefs = [];
+    for (let i = 0; i < count; i++) {
+      const row = document.createElement("div");
+      row.className = "clicks-row";
+
+      const rank = document.createElement("span");
+      rank.className = "clicks-rank";
+
+      const name = document.createElement("span");
+      name.className = "clicks-name";
+
+      const barWrap = document.createElement("div");
+      barWrap.className = "clicks-bar-wrap";
+
+      const barTrack = document.createElement("div");
+      barTrack.className = "clicks-bar-track";
+
+      const barFill = document.createElement("div");
+      barFill.className = "clicks-bar-fill";
+      barFill.style.width = "0%";
+
+      const countEl = document.createElement("span");
+      countEl.className = "clicks-count";
+
+      barTrack.appendChild(barFill);
+      barWrap.appendChild(barTrack);
+      barWrap.appendChild(countEl);
+      row.appendChild(rank);
+      row.appendChild(name);
+      row.appendChild(barWrap);
+      listEl.appendChild(row);
+
+      rowRefs.push({ row, rank, name, barFill, countEl });
+    }
+  }
 
   function render() {
     if (data.length === 0) {
       listEl.innerHTML = '<div class="clicks-empty">' + emptyMessage + '</div>';
+      rowRefs = [];
       toggleBtnEl.style.display = "none";
       return;
     }
@@ -671,20 +772,21 @@ function createRankedList(listEl, toggleBtnEl, emptyMessage) {
     const max = data[0].count; // already sorted most-clicked first
     const visible = expanded ? data : data.slice(0, CLICKS_COLLAPSED_LIMIT);
 
-    listEl.innerHTML = visible.map(function(entry, i) {
-      const rank = i + 1;
+    if (rowRefs.length !== visible.length) {
+      buildRows(visible.length);
+    }
+
+    visible.forEach(function(entry, i) {
+      const rankNum = i + 1;
       const widthPct = Math.max((entry.count / max) * 100, 4);
-      const rankClass = rank <= 3 ? "clicks-rank top3" : "clicks-rank";
-      return '' +
-        '<div class="clicks-row">' +
-          '<span class="' + rankClass + '">#' + rank + '</span>' +
-          '<span class="clicks-name">' + escapeHtmlAnalytics(entry.name) + '</span>' +
-          '<div class="clicks-bar-wrap">' +
-            '<div class="clicks-bar-track"><div class="clicks-bar-fill" style="width:' + widthPct + '%"></div></div>' +
-            '<span class="clicks-count">' + entry.count + '</span>' +
-          '</div>' +
-        '</div>';
-    }).join("");
+      const refs = rowRefs[i];
+
+      refs.rank.textContent = "#" + rankNum;
+      refs.rank.className = rankNum <= 3 ? "clicks-rank top3" : "clicks-rank";
+      refs.name.textContent = entry.name;
+      refs.barFill.style.width = widthPct + "%";
+      refs.countEl.textContent = entry.count;
+    });
 
     if (data.length > CLICKS_COLLAPSED_LIMIT) {
       toggleBtnEl.style.display = "block";
@@ -696,21 +798,34 @@ function createRankedList(listEl, toggleBtnEl, emptyMessage) {
 
   toggleBtnEl.addEventListener("click", function() {
     expanded = !expanded;
+    rowRefs = []; // row count is likely changing, force a rebuild
     render();
   });
 
   return {
     setLoading: function() {
       listEl.innerHTML = '<div class="chart-loading">Loading…</div>';
+      rowRefs = [];
       toggleBtnEl.style.display = "none";
     },
     setError: function(message) {
       listEl.innerHTML = '<div class="clicks-empty">' + message + '</div>';
+      rowRefs = [];
       toggleBtnEl.style.display = "none";
     },
+    // Live update: same context (same day), just fresh numbers — preserves
+    // whatever expand/collapse state the person currently has.
     setData: function(newData) {
       data = newData;
-      expanded = false; // reset to collapsed whenever fresh data comes in
+      render();
+    },
+    // Context change (e.g. switching to a different day): reset to
+    // collapsed and force a full rebuild, since animating between two
+    // unrelated days' rankings wouldn't make sense.
+    resetAndSetData: function(newData) {
+      data = newData;
+      expanded = false;
+      rowRefs = [];
       render();
     }
   };
@@ -728,49 +843,62 @@ const allTimeClicksList = createRankedList(
   "No app opens recorded yet."
 );
 
-async function loadAndRenderClicks(dateKey) {
-  dailyClicksList.setLoading();
-  if (!VUSAnalyticsAPI || !VUSAnalyticsAPI.getAppClicks) {
-    dailyClicksList.setError("Connecting to Firebase…");
-    return;
-  }
-  try {
-    const data = await VUSAnalyticsAPI.getAppClicks(dateKey);
-    dailyClicksList.setData(data);
-  } catch (e) {
-    dailyClicksList.setError("Failed to load click data.");
-  }
-}
 
-// The "Forever" leaderboard doesn't depend on the selected date — load it
-// once at startup rather than re-fetching every time the date picker changes.
-async function loadAllTimeClicks() {
+
+// The "Forever" leaderboard doesn't depend on the selected date — subscribe
+// once at startup and leave it running for the lifetime of the page, rather
+// than tearing it down/rebuilding when the date picker changes.
+function loadAllTimeClicks() {
   allTimeClicksList.setLoading();
-  if (!VUSAnalyticsAPI || !VUSAnalyticsAPI.getAllTimeClicks) {
+  if (!VUSAnalyticsAPI || !VUSAnalyticsAPI.watchAllTimeClicks) {
     allTimeClicksList.setError("Connecting to Firebase…");
     return;
   }
-  try {
-    const data = await VUSAnalyticsAPI.getAllTimeClicks();
-    allTimeClicksList.setData(data);
-  } catch (e) {
-    allTimeClicksList.setError("Failed to load all-time click data.");
-  }
+  VUSAnalyticsAPI.watchAllTimeClicks(function(clicks) {
+    allTimeClicksList.setData(clicks);
+  });
 }
 
-async function loadAndRenderDay(dateKey) {
+// Active live-subscription unsubscribe functions for whichever day is
+// currently selected. Torn down and replaced every time the date picker
+// changes, so we're never listening to more than one day's data at once.
+let unsubscribeHourly = null;
+let unsubscribeClicks = null;
+
+function teardownDaySubscriptions() {
+  if (unsubscribeHourly) { unsubscribeHourly(); unsubscribeHourly = null; }
+  if (unsubscribeClicks) { unsubscribeClicks(); unsubscribeClicks = null; }
+}
+
+function loadAndRenderDay(dateKey) {
+  teardownDaySubscriptions();
+  chartBarRefs = null; // force a fresh skeleton for the new day, no cross-day animation
   chartWrap.innerHTML = '<div class="chart-loading">Loading…</div>';
-  if (!VUSAnalyticsAPI) {
+  dailyClicksList.setLoading();
+
+  if (!VUSAnalyticsAPI || !VUSAnalyticsAPI.watchHourlyVisits) {
     chartWrap.innerHTML = '<div class="chart-loading">Connecting to Firebase…</div>';
+    dailyClicksList.setError("Connecting to Firebase…");
     return;
   }
-  try {
-    const hours = await VUSAnalyticsAPI.getHourlyVisits(dateKey);
+
+  let isFirstClicksUpdate = true;
+
+  // Both subscriptions push live updates the instant Firebase sees a write —
+  // no polling, no refresh interval. Bars animate smoothly via renderChart()
+  // updating existing DOM elements in place rather than rebuilding them.
+  unsubscribeHourly = VUSAnalyticsAPI.watchHourlyVisits(dateKey, function(hours) {
     renderChart(hours);
-  } catch (e) {
-    chartWrap.innerHTML = '<div class="chart-empty">Failed to load analytics data.</div>';
-  }
-  loadAndRenderClicks(dateKey);
+  });
+
+  unsubscribeClicks = VUSAnalyticsAPI.watchAppClicks(dateKey, function(clicks) {
+    if (isFirstClicksUpdate) {
+      isFirstClicksUpdate = false;
+      dailyClicksList.resetAndSetData(clicks); // fresh day: collapse to top 5
+    } else {
+      dailyClicksList.setData(clicks); // live tick: preserve expand state
+    }
+  });
 }
 
 async function populateDatePicker(preserveSelection) {
@@ -866,9 +994,12 @@ fetch(FIREBASE_JS_URL + "?v=" + Date.now())
   .then(function(mod) {
     VUSAnalyticsAPI = {
       getHourlyVisits: mod.getHourlyVisits,
+      watchHourlyVisits: mod.watchHourlyVisits,
       getAnalyticsDayKeys: mod.getAnalyticsDayKeys,
       getAppClicks: mod.getAppClicks,
+      watchAppClicks: mod.watchAppClicks,
       getAllTimeClicks: mod.getAllTimeClicks,
+      watchAllTimeClicks: mod.watchAllTimeClicks,
       getDayKey: mod.getDayKey
     };
     init();

@@ -189,6 +189,34 @@ async function getHourlyVisits(dateKey) {
 }
 
 /**
+ * Live version of getHourlyVisits(): subscribes to a given day's hourly data
+ * and calls back with a fresh 24-length array every time anything under that
+ * day changes — no polling, Firebase pushes updates over its existing
+ * connection the instant a write happens. Used by the analytics dashboard so
+ * bars update in real time as visitors open tabs.
+ *
+ * Note: /analytics/{date} also has a "clicks" child (see watchAppClicks
+ * below) living alongside the numeric hour keys (0-23) — only numeric keys
+ * are treated as hour counts here, so click data never leaks into the chart.
+ *
+ * @param {string} dateKey - "YYYY-MM-DD"
+ * @param {(hours: number[]) => void} callback
+ * @returns {() => void} unsubscribe function — call when switching away from this day
+ */
+function watchHourlyVisits(dateKey, callback) {
+  const dayRef = ref(db, `analytics/${dateKey}`);
+  const unsubscribe = onValue(dayRef, (snap) => {
+    const val = snap.val() || {};
+    const hours = new Array(24).fill(0);
+    for (let h = 0; h < 24; h++) {
+      hours[h] = typeof val[h] === "number" ? val[h] : 0;
+    }
+    callback(hours);
+  });
+  return unsubscribe;
+}
+
+/**
  * Lists all day keys ("YYYY-MM-DD") that have any recorded analytics data,
  * sorted newest first. Used to populate the admin dashboard's date picker.
  * @returns {Promise<string[]>}
@@ -264,6 +292,27 @@ async function getAppClicks(dateKey) {
 }
 
 /**
+ * Live version of getAppClicks(): subscribes to a given day's click counts
+ * and calls back with a freshly sorted leaderboard every time any app's
+ * count changes that day. Used by the analytics dashboard for real-time
+ * updates without polling.
+ * @param {string} dateKey - "YYYY-MM-DD"
+ * @param {(clicks: {name: string, count: number}[]) => void} callback
+ * @returns {() => void} unsubscribe function
+ */
+function watchAppClicks(dateKey, callback) {
+  const clicksRef = ref(db, `analytics/${dateKey}/clicks`);
+  const unsubscribe = onValue(clicksRef, (snap) => {
+    const val = snap.val() || {};
+    const clicks = Object.values(val)
+      .filter(entry => entry && entry.name)
+      .sort((a, b) => b.count - a.count);
+    callback(clicks);
+  });
+  return unsubscribe;
+}
+
+/**
  * Reads all-time app click totals (summed across every day since tracking
  * started), sorted most-clicked first. Backed by a running counter kept in
  * sync by trackAppClick(), so this is a single small read regardless of how
@@ -276,6 +325,26 @@ async function getAllTimeClicks() {
   return Object.values(val)
     .filter(entry => entry && entry.name)
     .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * Live version of getAllTimeClicks(): subscribes to the all-time click totals
+ * and calls back with a freshly sorted leaderboard whenever any app's
+ * all-time count changes, anywhere, ever. Used by the analytics dashboard's
+ * "Forever" leaderboard for real-time updates without polling.
+ * @param {(clicks: {name: string, count: number}[]) => void} callback
+ * @returns {() => void} unsubscribe function
+ */
+function watchAllTimeClicks(callback) {
+  const allTimeRef = ref(db, "allTimeClicks");
+  const unsubscribe = onValue(allTimeRef, (snap) => {
+    const val = snap.val() || {};
+    const clicks = Object.values(val)
+      .filter(entry => entry && entry.name)
+      .sort((a, b) => b.count - a.count);
+    callback(clicks);
+  });
+  return unsubscribe;
 }
 
 // Auto-start presence tracking and analytics only when this module is loaded
@@ -310,9 +379,24 @@ if (isTopLevelWindow) {
   }
 }
 
-export { app, db, onOnlineCount, getHourlyVisits, getAnalyticsDayKeys, getAppClicks, getAllTimeClicks, trackAppClick, dayKey as getDayKey };
+export {
+  app, db, onOnlineCount,
+  getHourlyVisits, watchHourlyVisits,
+  getAnalyticsDayKeys,
+  getAppClicks, watchAppClicks,
+  getAllTimeClicks, watchAllTimeClicks,
+  trackAppClick,
+  dayKey as getDayKey
+};
 
 // Also expose on window for any non-module inline script in index.html that
 // wants to read the live count without adding its own <script type="module">.
 window.VUSPresence = { onOnlineCount };
-window.VUSAnalytics = { getHourlyVisits, getAnalyticsDayKeys, getAppClicks, getAllTimeClicks, trackAppClick, getDayKey: dayKey };
+window.VUSAnalytics = {
+  getHourlyVisits, watchHourlyVisits,
+  getAnalyticsDayKeys,
+  getAppClicks, watchAppClicks,
+  getAllTimeClicks, watchAllTimeClicks,
+  trackAppClick,
+  getDayKey: dayKey
+};
