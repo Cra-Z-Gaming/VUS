@@ -27,13 +27,13 @@ import {
 // ---- Placeholder Firebase config ----
 // TODO: Replace with real values before deploying, or load from environment/build config.
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
-  projectId: "YOUR_PROJECT",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyAhpEABjoL5CBxoRL7J7aMQVbmMgcGP91I",
+  authDomain: "vus-hub.firebaseapp.com",
+  databaseURL: "https://vus-hub-default-rtdb.firebaseio.com",
+  projectId: "vus-hub",
+  storageBucket: "vus-hub.firebasestorage.app",
+  messagingSenderId: "360824166401",
+  appId: "1:360824166401:web:c4f4770f6ac43552e7c800"
 };
 
 const app = initializeApp(firebaseConfig);
