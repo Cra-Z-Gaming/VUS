@@ -528,6 +528,19 @@
     <button type="button" class="clicks-toggle-btn" id="clicksToggleBtn" style="display:none;">Show All</button>
   </div>
 
+  <div class="clicks-card">
+    <div class="clicks-card-header">
+      <div>
+        <div class="chart-card-title">🏆 Most Clicked Apps — Forever</div>
+        <div class="chart-card-sub">All-time totals, added up across every day since tracking started. Doesn't change when you pick a different date above.</div>
+      </div>
+    </div>
+    <div class="clicks-list" id="allTimeClicksList">
+      <div class="chart-loading">Loading…</div>
+    </div>
+    <button type="button" class="clicks-toggle-btn" id="allTimeClicksToggleBtn" style="display:none;">Show All</button>
+  </div>
+
 </div>
 
 <script>
@@ -632,71 +645,116 @@ function renderChart(hours) {
   chartWrap.innerHTML = bars;
 }
 
-const clicksList = document.getElementById("clicksList");
-const clicksToggleBtn = document.getElementById("clicksToggleBtn");
-
-const CLICKS_COLLAPSED_LIMIT = 5;
-let clicksExpanded = false;
-let currentClicksData = [];
-
-function renderClicksList() {
-  if (currentClicksData.length === 0) {
-    clicksList.innerHTML = '<div class="clicks-empty">No app opens recorded for this day.</div>';
-    clicksToggleBtn.style.display = "none";
-    return;
-  }
-
-  const max = currentClicksData[0].count; // already sorted most-clicked first
-  const visible = clicksExpanded ? currentClicksData : currentClicksData.slice(0, CLICKS_COLLAPSED_LIMIT);
-
-  clicksList.innerHTML = visible.map(function(entry, i) {
-    const rank = i + 1;
-    const widthPct = Math.max((entry.count / max) * 100, 4);
-    const rankClass = rank <= 3 ? "clicks-rank top3" : "clicks-rank";
-    return '' +
-      '<div class="clicks-row">' +
-        '<span class="' + rankClass + '">#' + rank + '</span>' +
-        '<span class="clicks-name">' + escapeHtmlAnalytics(entry.name) + '</span>' +
-        '<div class="clicks-bar-wrap">' +
-          '<div class="clicks-bar-track"><div class="clicks-bar-fill" style="width:' + widthPct + '%"></div></div>' +
-          '<span class="clicks-count">' + entry.count + '</span>' +
-        '</div>' +
-      '</div>';
-  }).join("");
-
-  if (currentClicksData.length > CLICKS_COLLAPSED_LIMIT) {
-    clicksToggleBtn.style.display = "block";
-    clicksToggleBtn.textContent = clicksExpanded
-      ? "Show Top 5"
-      : "Show All (" + currentClicksData.length + ")";
-  } else {
-    clicksToggleBtn.style.display = "none";
-  }
-}
-
 function escapeHtmlAnalytics(str) {
   return (str || "").replace(/[&<>"']/g, function(c) {
     return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c];
   });
 }
 
-clicksToggleBtn.addEventListener("click", function() {
-  clicksExpanded = !clicksExpanded;
-  renderClicksList();
-});
+const CLICKS_COLLAPSED_LIMIT = 5;
+
+// Creates an independent ranked-list controller (its own expand/collapse
+// state and data) for a given list element + toggle button pair. Used for
+// both the daily "Most Clicked" list and the all-time "Forever" list, so
+// expanding one never affects the other.
+function createRankedList(listEl, toggleBtnEl, emptyMessage) {
+  let expanded = false;
+  let data = [];
+
+  function render() {
+    if (data.length === 0) {
+      listEl.innerHTML = '<div class="clicks-empty">' + emptyMessage + '</div>';
+      toggleBtnEl.style.display = "none";
+      return;
+    }
+
+    const max = data[0].count; // already sorted most-clicked first
+    const visible = expanded ? data : data.slice(0, CLICKS_COLLAPSED_LIMIT);
+
+    listEl.innerHTML = visible.map(function(entry, i) {
+      const rank = i + 1;
+      const widthPct = Math.max((entry.count / max) * 100, 4);
+      const rankClass = rank <= 3 ? "clicks-rank top3" : "clicks-rank";
+      return '' +
+        '<div class="clicks-row">' +
+          '<span class="' + rankClass + '">#' + rank + '</span>' +
+          '<span class="clicks-name">' + escapeHtmlAnalytics(entry.name) + '</span>' +
+          '<div class="clicks-bar-wrap">' +
+            '<div class="clicks-bar-track"><div class="clicks-bar-fill" style="width:' + widthPct + '%"></div></div>' +
+            '<span class="clicks-count">' + entry.count + '</span>' +
+          '</div>' +
+        '</div>';
+    }).join("");
+
+    if (data.length > CLICKS_COLLAPSED_LIMIT) {
+      toggleBtnEl.style.display = "block";
+      toggleBtnEl.textContent = expanded ? "Show Top 5" : "Show All (" + data.length + ")";
+    } else {
+      toggleBtnEl.style.display = "none";
+    }
+  }
+
+  toggleBtnEl.addEventListener("click", function() {
+    expanded = !expanded;
+    render();
+  });
+
+  return {
+    setLoading: function() {
+      listEl.innerHTML = '<div class="chart-loading">Loading…</div>';
+      toggleBtnEl.style.display = "none";
+    },
+    setError: function(message) {
+      listEl.innerHTML = '<div class="clicks-empty">' + message + '</div>';
+      toggleBtnEl.style.display = "none";
+    },
+    setData: function(newData) {
+      data = newData;
+      expanded = false; // reset to collapsed whenever fresh data comes in
+      render();
+    }
+  };
+}
+
+const dailyClicksList = createRankedList(
+  document.getElementById("clicksList"),
+  document.getElementById("clicksToggleBtn"),
+  "No app opens recorded for this day."
+);
+
+const allTimeClicksList = createRankedList(
+  document.getElementById("allTimeClicksList"),
+  document.getElementById("allTimeClicksToggleBtn"),
+  "No app opens recorded yet."
+);
 
 async function loadAndRenderClicks(dateKey) {
-  clicksExpanded = false; // reset to collapsed view whenever the day changes
-  clicksList.innerHTML = '<div class="chart-loading">Loading…</div>';
+  dailyClicksList.setLoading();
   if (!VUSAnalyticsAPI || !VUSAnalyticsAPI.getAppClicks) {
-    clicksList.innerHTML = '<div class="clicks-empty">Connecting to Firebase…</div>';
+    dailyClicksList.setError("Connecting to Firebase…");
     return;
   }
   try {
-    currentClicksData = await VUSAnalyticsAPI.getAppClicks(dateKey);
-    renderClicksList();
+    const data = await VUSAnalyticsAPI.getAppClicks(dateKey);
+    dailyClicksList.setData(data);
   } catch (e) {
-    clicksList.innerHTML = '<div class="clicks-empty">Failed to load click data.</div>';
+    dailyClicksList.setError("Failed to load click data.");
+  }
+}
+
+// The "Forever" leaderboard doesn't depend on the selected date — load it
+// once at startup rather than re-fetching every time the date picker changes.
+async function loadAllTimeClicks() {
+  allTimeClicksList.setLoading();
+  if (!VUSAnalyticsAPI || !VUSAnalyticsAPI.getAllTimeClicks) {
+    allTimeClicksList.setError("Connecting to Firebase…");
+    return;
+  }
+  try {
+    const data = await VUSAnalyticsAPI.getAllTimeClicks();
+    allTimeClicksList.setData(data);
+  } catch (e) {
+    allTimeClicksList.setError("Failed to load all-time click data.");
   }
 }
 
@@ -810,9 +868,11 @@ fetch(FIREBASE_JS_URL + "?v=" + Date.now())
       getHourlyVisits: mod.getHourlyVisits,
       getAnalyticsDayKeys: mod.getAnalyticsDayKeys,
       getAppClicks: mod.getAppClicks,
+      getAllTimeClicks: mod.getAllTimeClicks,
       getDayKey: mod.getDayKey
     };
     init();
+    loadAllTimeClicks();
   })
   .catch(function() {
     chartWrap.innerHTML = '<div class="chart-empty">Failed to connect to Firebase. Try refreshing the page.</div>';

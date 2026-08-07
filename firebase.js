@@ -27,13 +27,13 @@ import {
 // ---- Placeholder Firebase config ----
 // TODO: Replace with real values before deploying, or load from environment/build config.
 const firebaseConfig = {
-  apiKey: "AIzaSyAhpEABjoL5CBxoRL7J7aMQVbmMgcGP91I",
-  authDomain: "vus-hub.firebaseapp.com",
-  databaseURL: "https://vus-hub-default-rtdb.firebaseio.com",
-  projectId: "vus-hub",
-  storageBucket: "vus-hub.firebasestorage.app",
-  messagingSenderId: "360824166401",
-  appId: "1:360824166401:web:c4f4770f6ac43552e7c800"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+  projectId: "YOUR_PROJECT",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -215,7 +215,8 @@ function sanitizeAppKey(name) {
 }
 
 /**
- * Increments today's click count for the given app name. Call this once per
+ * Increments today's click count for the given app name, AND the same app's
+ * all-time total (used by the "Forever" leaderboard). Call this once per
  * actual app open (from openApp()), not per tab-view. Runs from index.html
  * only — home.html's widget buttons call window.parent.openApp(), which
  * routes through the same index.html instance, so clicks from Home still
@@ -226,12 +227,24 @@ function trackAppClick(appName) {
   if (!appName) return;
   const key = dayKey(new Date());
   const safeName = sanitizeAppKey(appName);
+
   const clickRef = ref(db, `analytics/${key}/clicks/${safeName}`);
   runTransaction(clickRef, (current) => {
     const entry = current || { name: appName, count: 0 };
     return { name: appName, count: (entry.count || 0) + 1 };
   }).catch((err) => {
     console.error("VUS Hub: click tracking write failed:", err);
+  });
+
+  // Maintained as its own running total (rather than summed from every day's
+  // /clicks node on read) so the "Forever" leaderboard stays fast to load no
+  // matter how many days of history accumulate.
+  const allTimeRef = ref(db, `allTimeClicks/${safeName}`);
+  runTransaction(allTimeRef, (current) => {
+    const entry = current || { name: appName, count: 0 };
+    return { name: appName, count: (entry.count || 0) + 1 };
+  }).catch((err) => {
+    console.error("VUS Hub: all-time click tracking write failed:", err);
   });
 }
 
@@ -244,6 +257,21 @@ function trackAppClick(appName) {
 async function getAppClicks(dateKey) {
   const key = dateKey || dayKey(new Date());
   const snap = await get(ref(db, `analytics/${key}/clicks`));
+  const val = snap.val() || {};
+  return Object.values(val)
+    .filter(entry => entry && entry.name)
+    .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * Reads all-time app click totals (summed across every day since tracking
+ * started), sorted most-clicked first. Backed by a running counter kept in
+ * sync by trackAppClick(), so this is a single small read regardless of how
+ * many days of history exist.
+ * @returns {Promise<{name: string, count: number}[]>}
+ */
+async function getAllTimeClicks() {
+  const snap = await get(ref(db, "allTimeClicks"));
   const val = snap.val() || {};
   return Object.values(val)
     .filter(entry => entry && entry.name)
@@ -282,9 +310,9 @@ if (isTopLevelWindow) {
   }
 }
 
-export { app, db, onOnlineCount, getHourlyVisits, getAnalyticsDayKeys, getAppClicks, trackAppClick, dayKey as getDayKey };
+export { app, db, onOnlineCount, getHourlyVisits, getAnalyticsDayKeys, getAppClicks, getAllTimeClicks, trackAppClick, dayKey as getDayKey };
 
 // Also expose on window for any non-module inline script in index.html that
 // wants to read the live count without adding its own <script type="module">.
 window.VUSPresence = { onOnlineCount };
-window.VUSAnalytics = { getHourlyVisits, getAnalyticsDayKeys, getAppClicks, trackAppClick, getDayKey: dayKey };
+window.VUSAnalytics = { getHourlyVisits, getAnalyticsDayKeys, getAppClicks, getAllTimeClicks, trackAppClick, getDayKey: dayKey };

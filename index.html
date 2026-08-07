@@ -980,13 +980,40 @@
   body.reduced-motion .hub-card { animation: none; opacity: 1; transform: none; }
   body.reduced-motion .tab-indicator { transition: none; }
   body.reduced-motion .toast { animation: none; opacity: 1; }
+  body.reduced-motion .qa-overlay { transition: none; }
   body.reduced-motion .qa-modal { transition: none; }
   body.reduced-motion .mouse-glow { display: none; }
-  body.reduced-motion .hub-card:hover { transform: none; }
   body.reduced-motion .card-arrow,
   body.reduced-motion .card-favorite,
   body.reduced-motion .qa-btn,
   body.reduced-motion .settings-btn { transition: none; }
+
+  /* Cards: keep only the border-color outline on hover — no lift, no shadow
+     pop, no top gradient-bar animation, no active-state scale/press effect. */
+  body.reduced-motion .hub-card:hover {
+    transform: none;
+    box-shadow: none;
+    background: var(--card);
+  }
+  body.reduced-motion .hub-card::before { transition: none; }
+  body.reduced-motion .hub-card:hover::before { opacity: 0; }
+  body.reduced-motion .hub-card:active { transform: none; }
+  body.reduced-motion .card-arrow { transition: none; transform: none; }
+  body.reduced-motion .hub-card:hover .card-arrow { transform: none; }
+  body.reduced-motion .card-favorite { transition: none; }
+  body.reduced-motion .card-favorite:hover { transform: none; }
+  body.reduced-motion .qa-btn:hover,
+  body.reduced-motion .qa-btn:active,
+  body.reduced-motion .settings-btn:hover,
+  body.reduced-motion .settings-btn:active {
+    transform: none;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+  }
+  body.reduced-motion .settings-btn-primary:hover,
+  body.reduced-motion .settings-btn-primary:active {
+    transform: none;
+    box-shadow: none;
+  }
 </style>
 </head>
 <body>
