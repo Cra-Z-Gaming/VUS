@@ -204,6 +204,38 @@
     padding: 8px;
   }
 
+  /* ---- Update Log preview ---- */
+  .log-preview-row {
+    display: block;
+    width: 100%;
+    padding: 7px 8px;
+    border-radius: 8px;
+    background: transparent;
+    text-align: left;
+    font-size: 12.5px;
+    color: var(--fg-muted);
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .log-preview-btn {
+    display: block;
+    width: 100%;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+    font-family: var(--font);
+  }
+
+  .log-preview-btn:hover .log-preview-row {
+    background: rgba(255,255,255,0.04);
+    color: var(--fg);
+  }
+
   /* ---- Socials ---- */
   .social-row {
     display: flex;
@@ -295,6 +327,12 @@
         <span class="social-name">YouTube</span>
       </a>
     </div>
+  </div>
+
+  <!-- Update Log preview (5 latest, opens the full modal on click) -->
+  <div class="widget-card">
+    <div class="widget-header"><span class="emoji">📋</span> Update Log</div>
+    <div class="widget-list" id="updateLogPreview"></div>
   </div>
 
 </div>
@@ -406,6 +444,83 @@ function renderFavorites() {
 
 renderRecent();
 renderFavorites();
+
+// ===================== UPDATE LOG (preview only — full modal lives in index.html) =====================
+const LOGS_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Logs";
+const updateLogPreview = document.getElementById("updateLogPreview");
+
+// Parses the plain-text log file into { upcoming: [...], releases: [...] }.
+// Format (see Logs file): a header line "Upcoming-69101" starts that
+// section, a line of dashes ends it, then "Releases-69101" starts the next.
+// Within a section, each real entry is its own line starting with "/" —
+// blank lines and the header/divider lines are ignored.
+function parseLogText(text) {
+  const lines = text.split("\n").map(l => l.trim());
+  const result = { upcoming: [], releases: [] };
+  let section = null;
+
+  for (const line of lines) {
+    if (/^Upcoming-\d+/.test(line)) { section = "upcoming"; continue; }
+    if (/^Releases-\d+/.test(line)) { section = "releases"; continue; }
+    if (/^-{3,}/.test(line)) { continue; } // divider row between sections
+    if (!line) continue;
+    if (line.startsWith("/") && section) {
+      result[section].push(line.slice(1).trim());
+    }
+  }
+  return result;
+}
+
+function renderLogPreview(parsed) {
+  // "5 latest" = the 5 entries closest to the bottom of Upcoming (the most
+  // recently added-to section, matching how new items get appended in the
+  // source file), falling back to Releases if Upcoming is empty.
+  const source = parsed.upcoming.length > 0 ? parsed.upcoming : parsed.releases;
+  const latest = source.slice(-5).reverse();
+
+  if (latest.length === 0) {
+    updateLogPreview.innerHTML = '<div class="widget-empty">No updates logged yet.</div>';
+    return;
+  }
+
+  updateLogPreview.innerHTML = latest.map(entry => `
+    <button class="log-preview-btn" type="button">
+      <div class="log-preview-row">${escapeHtml(entry)}</div>
+    </button>
+  `).join("");
+
+  Array.from(updateLogPreview.children).forEach(btn => {
+    btn.addEventListener("click", openUpdateLogModal);
+  });
+}
+
+// Opens the full Update Log modal, which lives in the PARENT document
+// (index.html) rather than duplicated here — same pattern as openApp()
+// being called via window.parent for Recently Used/Favorites buttons.
+function openUpdateLogModal() {
+  try {
+    if (window.parent && window.parent !== window && typeof window.parent.openUpdateLog === "function") {
+      window.parent.openUpdateLog();
+      return;
+    }
+  } catch (e) {
+    // cross-origin or unavailable — no fallback needed, this widget only
+    // makes sense embedded in index.html's Home iframe anyway
+  }
+}
+
+fetch(LOGS_URL + "?v=" + Date.now())
+  .then(r => {
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.text();
+  })
+  .then(text => {
+    const parsed = parseLogText(text);
+    renderLogPreview(parsed);
+  })
+  .catch(() => {
+    updateLogPreview.innerHTML = '<div class="widget-empty">Couldn\u2019t load the update log.</div>';
+  });
 
 // Refresh widgets if the parent tab logs a new click or favorite while Home is
 // open (storage event fires across same-origin documents, e.g. this iframe + the parent)
