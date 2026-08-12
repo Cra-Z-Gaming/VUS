@@ -887,6 +887,48 @@
   .qa-body::-webkit-scrollbar-track { background: transparent; }
   .qa-body::-webkit-scrollbar-thumb { background: var(--fg-dim); border-radius: 3px; }
 
+  /* ---- Update Log ---- */
+  .log-tabs {
+    display: flex;
+    gap: 6px;
+    padding: 0 24px 12px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .log-tab {
+    background: transparent;
+    border: none;
+    color: var(--fg-muted);
+    font-family: var(--font);
+    font-size: 13.5px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 8px 8px 0 0;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .log-tab:hover { color: var(--fg); }
+
+  .log-tab.active {
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .log-entry {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    font-size: 14px;
+    color: var(--fg);
+    line-height: 1.5;
+  }
+
+  .log-entry:last-child { margin-bottom: 0; }
+
   /* ---- Settings form ---- */
   .settings-section {
     margin-bottom: 24px;
@@ -1028,6 +1070,12 @@
     background: var(--card);
     border: 1px solid var(--border);
     color: var(--fg-muted);
+  }
+
+  #clearDataBtn.confirm-pending {
+    background: rgba(239,68,68,.12);
+    border-color: #ef4444;
+    color: #fca5a5;
   }
 
   .settings-btn-secondary:hover { color: var(--fg); background: var(--card-hover); }
@@ -1179,6 +1227,21 @@
   </div>
 </div>
 
+<!-- Update Log Modal -->
+<div class="qa-overlay" id="updateLogOverlay">
+  <div class="qa-modal">
+    <div class="qa-header">
+      <h2>📋 Update Log</h2>
+      <button class="qa-close" id="updateLogClose" aria-label="Close Update Log panel">&times;</button>
+    </div>
+    <div class="log-tabs">
+      <button type="button" class="log-tab active" id="logTabUpcoming" data-log-tab="upcoming">Upcoming</button>
+      <button type="button" class="log-tab" id="logTabReleases" data-log-tab="releases">Releases</button>
+    </div>
+    <div class="qa-body" id="updateLogBody"></div>
+  </div>
+</div>
+
 <!-- Settings Modal -->
 <div class="qa-overlay" id="settingsOverlay">
   <div class="qa-modal">
@@ -1192,6 +1255,39 @@
         <label class="settings-label" for="settingSiteName">Site Name</label>
         <div class="settings-sub">Shown in the header next to the logo.</div>
         <input class="settings-input" id="settingSiteName" type="text" placeholder="VUS Hub" maxlength="40" autocomplete="off">
+      </div>
+
+      <div class="settings-section">
+        <label class="settings-label">Site Icon</label>
+        <div class="settings-sub">Replaces the logo shown in the header. Use a link, or upload an image (saved in this browser).</div>
+        <div class="settings-option-grid" id="settingIconMode">
+          <button type="button" class="settings-option" data-icon-mode="default">Default</button>
+          <button type="button" class="settings-option" data-icon-mode="link">Image Link</button>
+          <button type="button" class="settings-option" data-icon-mode="upload">Upload</button>
+        </div>
+
+        <div id="settingIconLinkWrap" style="display:none; margin-top:12px;">
+          <input class="settings-input" id="settingIconLink" type="text" placeholder="https://example.com/icon.png" autocomplete="off">
+        </div>
+
+        <div id="settingIconUploadWrap" style="display:none; margin-top:12px;">
+          <div class="settings-file-row">
+            <button type="button" class="settings-file-btn" id="settingIconUploadBtn">Choose Image</button>
+            <span class="settings-file-name" id="settingIconUploadName">No file selected</span>
+          </div>
+          <input type="file" id="settingIconUploadInput" accept="image/*" style="display:none;">
+          <div class="settings-warning">
+            Uploaded icons are stored in this browser's local storage, which has a limited size. Small images (under ~200KB) work best.
+          </div>
+        </div>
+
+        <div id="settingIconPreviewWrap" style="display:flex; align-items:center; gap:10px; margin-top:12px;">
+          <span style="font-size:12px; color:var(--fg-muted);">Preview:</span>
+          <div style="width:36px; height:36px; border-radius:9px; overflow:hidden; background:var(--bg-elevated); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+            <img id="settingIconPreviewImg" style="width:100%; height:100%; object-fit:cover; display:none;">
+            <span id="settingIconPreviewFallback" style="font-weight:700; color:var(--fg);">V</span>
+          </div>
+        </div>
       </div>
 
       <div class="settings-section">
@@ -1242,6 +1338,12 @@
       <div class="settings-footer">
         <button type="button" class="settings-btn-secondary" id="settingsReset">Reset to Defaults</button>
         <button type="button" class="settings-btn-primary" id="settingsSave">Save Changes</button>
+      </div>
+
+      <div class="settings-section" style="margin-top:4px;">
+        <label class="settings-label" style="color:#f87171;">Danger Zone</label>
+        <div class="settings-sub">Permanently erases Favorites, Recently Used, and all Settings (site name, background, default tab, animations) from this browser. This cannot be undone.</div>
+        <button type="button" class="settings-btn-secondary" id="clearDataBtn" style="width:100%; border-color:#7f1d1d; color:#f87171;">🗑️ Clear All Data</button>
       </div>
 
     </div>
@@ -1716,7 +1818,10 @@ const DEFAULT_SETTINGS = {
   backgroundMode: "default", // "default" | "block" | "image"
   backgroundColor: "#0a0e1a",
   backgroundImage: "", // data URL
-  animationsEnabled: true
+  animationsEnabled: true,
+  iconMode: "default", // "default" | "link" | "upload"
+  iconLink: "",
+  iconUpload: "" // data URL
 };
 
 function loadSettings() {
@@ -1772,6 +1877,28 @@ function applyBackground(settings) {
   }
 }
 
+// Apply the site icon (header logo image). "default" restores the original
+// VUS logo; "link" and "upload" both just point the same <img> at a
+// different source — the fallback "V" text is handled by the existing
+// onerror handler already on that element if a link ever fails to load.
+const DEFAULT_ICON_URL = "https://github.com/Cra-Z-Gaming/VUS/raw/refs/heads/main/logo";
+
+function applySiteIcon(settings) {
+  const img = document.querySelector(".logo-mark img");
+  if (!img) return;
+
+  let src = DEFAULT_ICON_URL;
+  if (settings.iconMode === "link" && settings.iconLink) {
+    src = settings.iconLink;
+  } else if (settings.iconMode === "upload" && settings.iconUpload) {
+    src = settings.iconUpload;
+  }
+
+  img.style.display = "";
+  img.src = src;
+}
+
+
 // Toggles the body.reduced-motion class, which mirrors the OS-level
 // prefers-reduced-motion rules already in the stylesheet. Also flips a global
 // flag the mouse-glow listener checks, since disabling that purely via CSS
@@ -1788,6 +1915,7 @@ currentTab = currentSettings.defaultTab || DEFAULT_SETTINGS.defaultTab;
 applySiteName(currentSettings.siteName);
 applyBackground(currentSettings);
 applyAnimations(currentSettings);
+applySiteIcon(currentSettings);
 
 // ---- Settings modal wiring ----
 const settingsOverlay = document.getElementById("settingsOverlay");
@@ -1803,6 +1931,15 @@ const settingImageBtn = document.getElementById("settingImageBtn");
 const settingImageInput = document.getElementById("settingImageInput");
 const settingImageName = document.getElementById("settingImageName");
 const settingAnimationsWrap = document.getElementById("settingAnimations");
+const settingIconModeWrap = document.getElementById("settingIconMode");
+const settingIconLinkWrap = document.getElementById("settingIconLinkWrap");
+const settingIconLinkInput = document.getElementById("settingIconLink");
+const settingIconUploadWrap = document.getElementById("settingIconUploadWrap");
+const settingIconUploadBtn = document.getElementById("settingIconUploadBtn");
+const settingIconUploadInput = document.getElementById("settingIconUploadInput");
+const settingIconUploadName = document.getElementById("settingIconUploadName");
+const settingIconPreviewImg = document.getElementById("settingIconPreviewImg");
+const settingIconPreviewFallback = document.getElementById("settingIconPreviewFallback");
 
 // Draft state while the modal is open — only written to currentSettings/storage on Save
 let settingsDraft = { ...currentSettings };
@@ -1860,6 +1997,66 @@ settingImageInput.addEventListener("change", (e) => {
   reader.readAsDataURL(file);
 });
 
+function updateIconPreview() {
+  let src = "";
+  if (settingsDraft.iconMode === "link" && settingsDraft.iconLink) {
+    src = settingsDraft.iconLink;
+  } else if (settingsDraft.iconMode === "upload" && settingsDraft.iconUpload) {
+    src = settingsDraft.iconUpload;
+  }
+
+  if (src) {
+    settingIconPreviewImg.src = src;
+    settingIconPreviewImg.style.display = "block";
+    settingIconPreviewFallback.style.display = "none";
+    settingIconPreviewImg.onerror = () => {
+      settingIconPreviewImg.style.display = "none";
+      settingIconPreviewFallback.style.display = "block";
+    };
+  } else {
+    settingIconPreviewImg.style.display = "none";
+    settingIconPreviewFallback.style.display = "block";
+  }
+}
+
+function updateIconModeUI() {
+  Array.from(settingIconModeWrap.children).forEach(btn =>
+    btn.classList.toggle("active", btn.dataset.iconMode === settingsDraft.iconMode)
+  );
+  settingIconLinkWrap.style.display = settingsDraft.iconMode === "link" ? "" : "none";
+  settingIconUploadWrap.style.display = settingsDraft.iconMode === "upload" ? "" : "none";
+  updateIconPreview();
+}
+
+Array.from(settingIconModeWrap.children).forEach(btn => {
+  btn.onclick = () => {
+    settingsDraft.iconMode = btn.dataset.iconMode;
+    updateIconModeUI();
+  };
+});
+
+settingIconLinkInput.addEventListener("input", (e) => {
+  settingsDraft.iconLink = e.target.value.trim();
+  updateIconPreview();
+});
+
+settingIconUploadBtn.onclick = () => settingIconUploadInput.click();
+
+settingIconUploadInput.addEventListener("change", (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  settingIconUploadName.textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = () => {
+    settingsDraft.iconUpload = reader.result;
+    updateIconPreview();
+  };
+  reader.onerror = () => {
+    showToast("Failed to read image file", "err");
+  };
+  reader.readAsDataURL(file);
+});
+
 function updateAnimationsUI() {
   const isOn = settingsDraft.animationsEnabled !== false;
   Array.from(settingAnimationsWrap.children).forEach(btn =>
@@ -1879,9 +2076,12 @@ function openSettings() {
   settingSiteNameInput.value = currentSettings.siteName || "";
   settingBlockColorInput.value = currentSettings.backgroundColor || DEFAULT_SETTINGS.backgroundColor;
   settingImageName.textContent = currentSettings.backgroundImage ? "Image saved" : "No file selected";
+  settingIconLinkInput.value = currentSettings.iconLink || "";
+  settingIconUploadName.textContent = currentSettings.iconUpload ? "Image saved" : "No file selected";
   buildDefaultTabOptions();
   updateBackgroundModeUI();
   updateAnimationsUI();
+  updateIconModeUI();
   settingsOverlay.classList.add("open");
   settingsClose.focus();
 }
@@ -1909,6 +2109,7 @@ document.getElementById("settingsSave").onclick = () => {
   applySiteName(currentSettings.siteName);
   applyBackground(currentSettings);
   applyAnimations(currentSettings);
+  applySiteIcon(currentSettings);
   showToast("Settings saved", "ok");
   closeSettings();
 };
@@ -1918,9 +2119,12 @@ document.getElementById("settingsReset").onclick = () => {
   settingSiteNameInput.value = settingsDraft.siteName;
   settingBlockColorInput.value = settingsDraft.backgroundColor;
   settingImageName.textContent = "No file selected";
+  settingIconLinkInput.value = "";
+  settingIconUploadName.textContent = "No file selected";
   buildDefaultTabOptions();
   updateBackgroundModeUI();
   updateAnimationsUI();
+  updateIconModeUI();
 };
 
 // ===================== CHAT SIDEBAR =====================
@@ -2057,6 +2261,62 @@ devInfoBtn.onclick = () => {
     });
 };
 
+// ===================== CLEAR ALL DATA (Settings, two-click confirm) =====================
+const clearDataBtn = document.getElementById("clearDataBtn");
+const CLEAR_DATA_CONFIRM_WINDOW_MS = 4000;
+let clearDataArmed = false;
+let clearDataResetTimer = null;
+
+function armClearDataButton() {
+  clearDataArmed = true;
+  clearDataBtn.classList.add("confirm-pending");
+  clearDataBtn.textContent = "⚠️ Click again to confirm";
+  clearTimeout(clearDataResetTimer);
+  clearDataResetTimer = setTimeout(disarmClearDataButton, CLEAR_DATA_CONFIRM_WINDOW_MS);
+}
+
+function disarmClearDataButton() {
+  clearDataArmed = false;
+  clearDataBtn.classList.remove("confirm-pending");
+  clearDataBtn.textContent = "🗑️ Clear All Data";
+  clearTimeout(clearDataResetTimer);
+}
+
+function performClearAllData() {
+  // Every localStorage key VUS Hub itself writes to, across index.html and
+  // home.html (same-origin, shared storage) — favorites, recently-used
+  // tracking, and all Settings (site name, background, default tab,
+  // animations toggle). This intentionally does NOT touch Firebase data
+  // (presence/analytics live server-side, not in this browser) since this
+  // button is scoped to "data this browser is storing," not the whole site.
+  const keysToClear = [FAVORITES_KEY, RECENT_APPS_KEY, SETTINGS_KEY];
+  try {
+    keysToClear.forEach(key => localStorage.removeItem(key));
+  } catch (e) {
+    showToast("Failed to clear data — storage unavailable", "err");
+    return;
+  }
+
+  showToast("All data cleared — reloading...", "ok");
+  setTimeout(() => {
+    window.location.reload();
+  }, 900);
+}
+
+clearDataBtn.onclick = () => {
+  if (!clearDataArmed) {
+    armClearDataButton();
+    return;
+  }
+  disarmClearDataButton();
+  performClearAllData();
+};
+
+// If the person navigates away from the confirm state (closes Settings,
+// switches tabs within it, etc.) without clicking again, silently disarm
+// so a stray click later doesn't accidentally wipe everything.
+settingsClose.addEventListener("click", disarmClearDataButton);
+
 // ===================== Q/A MODAL =====================
 const qaOverlay = document.getElementById("qaOverlay");
 const qaBody = document.getElementById("qaBody");
@@ -2093,6 +2353,97 @@ function closeQA() {
 
 document.getElementById("qaBtn").onclick = openQA;
 document.getElementById("qaClose").onclick = closeQA;
+
+// Click-outside-to-close intentionally disabled — only the X button closes this modal.
+
+// ===================== UPDATE LOG MODAL =====================
+const updateLogOverlay = document.getElementById("updateLogOverlay");
+const updateLogBody = document.getElementById("updateLogBody");
+const updateLogClose = document.getElementById("updateLogClose");
+const logTabUpcoming = document.getElementById("logTabUpcoming");
+const logTabReleases = document.getElementById("logTabReleases");
+const LOGS_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Logs";
+
+let parsedLogData = null;
+let activeLogTab = "upcoming"; // always defaults back to Upcoming each time the modal opens
+
+// Same parsing rules as home.html's preview: a header line "Upcoming-69101"
+// or "Releases-69101" starts that section, a row of dashes ends it, and
+// within a section every real entry is its own line starting with "/".
+function parseLogText(text) {
+  const lines = text.split("\n").map(l => l.trim());
+  const result = { upcoming: [], releases: [] };
+  let section = null;
+
+  for (const line of lines) {
+    if (/^Upcoming-\d+/.test(line)) { section = "upcoming"; continue; }
+    if (/^Releases-\d+/.test(line)) { section = "releases"; continue; }
+    if (/^-{3,}/.test(line)) { continue; }
+    if (!line) continue;
+    if (line.startsWith("/") && section) {
+      result[section].push(line.slice(1).trim());
+    }
+  }
+  return result;
+}
+
+function renderUpdateLogTab() {
+  logTabUpcoming.classList.toggle("active", activeLogTab === "upcoming");
+  logTabReleases.classList.toggle("active", activeLogTab === "releases");
+
+  if (!parsedLogData) {
+    updateLogBody.innerHTML = '<div class="qa-empty">Loading…</div>';
+    return;
+  }
+
+  const entries = (parsedLogData[activeLogTab] || []).slice().reverse(); // newest-added first
+
+  if (entries.length === 0) {
+    updateLogBody.innerHTML = '<div class="qa-empty">Nothing here yet.</div>';
+    return;
+  }
+
+  updateLogBody.innerHTML = entries.map(entry => `
+    <div class="log-entry">${escapeHtml(entry)}</div>
+  `).join("");
+}
+
+logTabUpcoming.onclick = () => { activeLogTab = "upcoming"; renderUpdateLogTab(); };
+logTabReleases.onclick = () => { activeLogTab = "releases"; renderUpdateLogTab(); };
+
+function loadUpdateLogData() {
+  updateLogBody.innerHTML = '<div class="qa-empty">Loading…</div>';
+  fetch(LOGS_URL + "?v=" + Date.now())
+    .then(r => {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    })
+    .then(text => {
+      parsedLogData = parseLogText(text);
+      renderUpdateLogTab();
+    })
+    .catch(() => {
+      updateLogBody.innerHTML = '<div class="qa-empty">Couldn\u2019t load the update log.</div>';
+    });
+}
+
+// Exposed globally so home.html's iframe (a separate document) can trigger
+// this modal via window.parent.openUpdateLog() — same pattern used for
+// openApp() being called from Home's Recently Used/Favorites widgets.
+function openUpdateLog() {
+  activeLogTab = "upcoming"; // always opens on Upcoming, per spec
+  loadUpdateLogData();
+  renderUpdateLogTab();
+  updateLogOverlay.classList.add("open");
+  updateLogClose.focus();
+}
+window.openUpdateLog = openUpdateLog;
+
+function closeUpdateLog() {
+  updateLogOverlay.classList.remove("open");
+}
+
+updateLogClose.onclick = closeUpdateLog;
 
 // Click-outside-to-close intentionally disabled — only the X button closes this modal.
 
