@@ -413,6 +413,13 @@
     background: rgba(0,0,0,.5);
     z-index: 140;
   }
+  /* ── FIX (sidebar close/default-closed): the sidebar now starts
+     translated fully off-screen (translateX(100%)) and only slides
+     into view when the JS-toggled ".open" class is present. Before,
+     there was no hidden state defined at all, so the panel was always
+     sitting on-screen regardless of what openRoomsSidebar() /
+     closeRoomsSidebar() did to the overlay or the class. No JS changes
+     needed — index.html already toggles ".open" correctly. ── */
   #roomsSidebar {
     position: fixed;
     top: 0; right: 0; bottom: 0;
@@ -424,6 +431,11 @@
     display: flex;
     flex-direction: column;
     box-shadow: -16px 0 48px rgba(0,0,0,.4);
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+  }
+  #roomsSidebar.open {
+    transform: translateX(0);
   }
   #roomsSidebarHeader {
     padding: 16px 18px;
@@ -839,7 +851,7 @@
     <span id="charCounter">500</span>
     <div style="flex:1"></div>
     <div style="position:relative">
-      <button id="pingYouBtn" class="toolbar-btn" title="Send a Discord ping to the site owner">🔔 Ping</button>
+      <button id="pingYouBtn" class="toolbar-btn" title="Send a Discord ping to the site owner">🔔 Ping Devs</button>
       <div id="pingYouPanel">
         <textarea id="pingYouNote" rows="2" maxlength="200" placeholder="Optional note (max 200 chars)…"></textarea>
         <button id="pingYouSend" class="toolbar-btn active" style="width:100%">Send Ping</button>
@@ -2512,7 +2524,7 @@ function updatePingYouButtonState() {
     setTimeout(updatePingYouButtonState, 500);
   } else {
     $pingYouBtn.disabled = false;
-    $pingYouBtn.textContent = "🔔 Ping";
+    $pingYouBtn.textContent = "🔔 Ping Devs";
   }
 }
 
