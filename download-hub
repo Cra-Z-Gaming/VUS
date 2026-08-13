@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { margin: 0; padding: 5px; }
+    #download-launcher {
+      padding: 12px 24px; 
+      font-size: 16px; 
+      font-family: system-ui, sans-serif;
+      font-weight: bold;
+      background: #1a73e8; 
+      color: white; 
+      border: none; 
+      border-radius: 4px; 
+      cursor: pointer;
+    }
+    #download-launcher:hover { background: #1557b0; }
+  </style>
+</head>
+<body>
+
+  <!-- Button on your Google Site -->
+  <button id="download-launcher">Download button</button>
+
+  <script>
+    // This is the exact code block that will be written inside the downloaded file
+    const payloadCode = `<!DOCTYPE html>
+<html>
+<head>
+  <title>-</title>
+  <style>
+    body { 
+      font-family: system-ui, sans-serif; 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+      height: 100vh; 
+      margin: 0; 
+      background: #000000; /* Changed background color to black */
+    }
+    #hub { 
+      padding: 15px 32px; 
+      font-size: 18px; 
+      font-weight: bold; 
+      background: #00cc66; 
+      color: white; 
+      border: none; 
+      border-radius: 6px; 
+      cursor: pointer; 
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+    }
+    #hub:hover { background: #00994d; }
+  </style>
+</head>
+<body>
+
+  <button id="hub">Open Latest Version</button>
+
+  <script>
+    document.getElementById("hub").onclick = async () => {
+      try {
+        const hubCode = await fetch(
+          "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/index.html?v=" + Date.now()
+        ).then(r => {
+          if(!r.ok) throw new Error("Network issue");
+          return r.text();
+        });
+        
+        const win = window.open("about:blank", "_blank");
+        if (win) {
+          win.document.open();
+          win.document.write(hubCode);
+          win.document.close();
+        } else {
+          alert("Popup blocked! Please allow popups for this offline file.");
+        }
+      } catch(e) {
+        alert("Failed to fetch updates. Check your internet connection.");
+      }
+    };
+  <\/script>
+</body>
+</html>`;
+
+    // Triggers the download of the file containing your tool
+    document.getElementById("download-launcher").onclick = () => {
+      const blob = new Blob([payloadCode], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = "button.html"; // The filename they get
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    };
+  </script>
+
+</body>
+</html>
