@@ -1342,7 +1342,7 @@
 
       <div class="settings-section" style="margin-top:4px;">
         <label class="settings-label" style="color:#f87171;">Danger Zone</label>
-        <div class="settings-sub">Permanently erases Favorites, Recently Used, and all Settings (site name, background, default tab, animations) from this browser. This cannot be undone.</div>
+        <div class="settings-sub">Permanently erases Favorites, Recently Used, all Settings, and any other data stored in this browser by VUS Hub or apps opened through it (game saves, Notes, YouTube info, cached data, etc). This cannot be undone.</div>
         <button type="button" class="settings-btn-secondary" id="clearDataBtn" style="width:100%; border-color:#7f1d1d; color:#f87171;">🗑️ Clear All Data</button>
       </div>
 
@@ -2283,24 +2283,50 @@ function disarmClearDataButton() {
 }
 
 function performClearAllData() {
-  // Every localStorage key VUS Hub itself writes to, across index.html and
-  // home.html (same-origin, shared storage) — favorites, recently-used
-  // tracking, and all Settings (site name, background, default tab,
-  // animations toggle). This intentionally does NOT touch Firebase data
-  // (presence/analytics live server-side, not in this browser) since this
-  // button is scoped to "data this browser is storing," not the whole site.
-  const keysToClear = [FAVORITES_KEY, RECENT_APPS_KEY, SETTINGS_KEY];
+  // Wipe EVERYTHING stored under this origin — not just the keys VUS Hub
+  // itself happens to know about. Any embedded app (games, Notes, YouTube
+  // key/playlist data, cached fetches, etc.) that ever wrote to localStorage,
+  // sessionStorage, IndexedDB, or the Cache API on this same origin gets
+  // cleared too, so nobody's stuck on stale data from before an update —
+  // regardless of which app on the hub actually wrote it.
+  const wipeTasks = [];
+
   try {
-    keysToClear.forEach(key => localStorage.removeItem(key));
+    localStorage.clear();
   } catch (e) {
     showToast("Failed to clear data — storage unavailable", "err");
     return;
   }
 
+  try {
+    sessionStorage.clear();
+  } catch (e) { /* non-critical — continue clearing the rest */ }
+
+  if (window.indexedDB && indexedDB.databases) {
+    wipeTasks.push(
+      indexedDB.databases()
+        .then(dbs => Promise.all(dbs.map(db => new Promise(resolve => {
+          const req = indexedDB.deleteDatabase(db.name);
+          req.onsuccess = req.onerror = req.onblocked = () => resolve();
+        }))))
+        .catch(() => {})
+    );
+  }
+
+  if (window.caches && caches.keys) {
+    wipeTasks.push(
+      caches.keys()
+        .then(names => Promise.all(names.map(name => caches.delete(name))))
+        .catch(() => {})
+    );
+  }
+
   showToast("All data cleared — reloading...", "ok");
-  setTimeout(() => {
-    window.location.reload();
-  }, 900);
+  Promise.all(wipeTasks).finally(() => {
+    setTimeout(() => {
+      window.location.reload();
+    }, 900);
+  });
 }
 
 clearDataBtn.onclick = () => {
