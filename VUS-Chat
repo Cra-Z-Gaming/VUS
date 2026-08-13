@@ -3201,6 +3201,15 @@ function onRoomMetaUpdate(meta) {
   if ($roomSettingsOverlay.style.display === "flex" && isOwner) {
     renderRoomMembersList(meta);
   }
+
+  // Keep the Public toggle button's label/state in sync with the real
+  // value in Firebase at all times, so repeated clicks can't desync it
+  // from what's actually stored (previously it only got set once, when
+  // the settings modal first opened).
+  if ($roomSettingsOverlay.style.display === "flex") {
+    $roomPublicToggleBtn.textContent = meta.isPublic ? "On" : "Off";
+    $roomPublicToggleBtn.classList.toggle("active", meta.isPublic);
+  }
 }
 
 function updateRoomCountdownUI(meta) {
