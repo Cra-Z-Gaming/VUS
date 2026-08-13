@@ -1333,7 +1333,7 @@ const RoomManager = {
       const val = snap.val() || {};
       const now = Date.now();
       const list = Object.entries(val)
-        .filter(([code, meta]) => meta && meta.isPublic && meta.expiresAt > now)
+        .filter(([code, meta]) => meta && meta.isPublic)
         .map(([code, meta]) => ({ code, ...meta }));
       callback(list);
     });
