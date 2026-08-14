@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movie Links</title>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #111;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+
+        #refreshBtn {
+            width: 100%;
+            padding: 14px;
+            margin-bottom: 20px;
+            border: none;
+            border-radius: 8px;
+            background: #333;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        #refreshBtn:hover {
+            background: #444;
+        }
+
+        #movies {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 10px;
+        }
+
+        .movie-btn {
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            background: #222;
+            color: white;
+            text-align: left;
+            font-size: 15px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .movie-btn:hover {
+            background: #333;
+        }
+
+        #status {
+            margin-bottom: 15px;
+            color: #aaa;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <button id="refreshBtn">↻ Refresh Movies</button>
+
+    <div id="status">Loading...</div>
+    <div id="movies"></div>
+
+    <script>
+        const MOVIE_URL =
+            "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Movie-Links";
+
+        const moviesContainer = document.getElementById("movies");
+        const status = document.getElementById("status");
+        const refreshBtn = document.getElementById("refreshBtn");
+
+        async function loadMovies() {
+            status.textContent = "Checking for movies...";
+            refreshBtn.disabled = true;
+
+            try {
+                // Cache-buster so the browser requests the newest version
+                const response = await fetch(
+                    MOVIE_URL + "?t=" + Date.now()
+                );
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const text = await response.text();
+
+                // Each line is:
+                // Movie Name — https://example.com
+                const lines = text
+                    .split(/\r?\n/)
+                    .map(line => line.trim())
+                    .filter(Boolean);
+
+                moviesContainer.innerHTML = "";
+
+                for (const line of lines) {
+                    // Split only on the first " — "
+                    const separator = line.indexOf(" — ");
+
+                    if (separator === -1) {
+                        continue;
+                    }
+
+                    const name = line.slice(0, separator).trim();
+                    const url = line.slice(separator + 3).trim();
+
+                    if (!name || !url) {
+                        continue;
+                    }
+
+                    const button = document.createElement("button");
+                    button.className = "movie-btn";
+                    button.textContent = name;
+
+                    button.addEventListener("click", () => {
+                        window.open(url, "_blank", "noopener,noreferrer");
+                    });
+
+                    moviesContainer.appendChild(button);
+                }
+
+                status.textContent =
+                    `${moviesContainer.children.length} movies loaded`;
+            } catch (error) {
+                console.error(error);
+
+                status.textContent =
+                    "Failed to load movies. Check the console.";
+            } finally {
+                refreshBtn.disabled = false;
+            }
+        }
+
+        refreshBtn.addEventListener("click", loadMovies);
+
+        // Initial load
+        loadMovies();
+    </script>
+
+</body>
+</html>
