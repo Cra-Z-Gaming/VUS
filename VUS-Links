@@ -128,15 +128,26 @@
 
                 linksContainer.innerHTML = "";
 
-                for (const url of lines) {
+                for (const originalUrl of lines) {
+                    let url = originalUrl;
+
+                    // Add HTTPS if the link doesn't have a protocol
+                    if (!/^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(url)) {
+                        url = "https://" + url;
+                    }
+
                     const button = document.createElement("button");
 
                     button.className = "link-btn";
-                    button.textContent = url;
-                    button.dataset.link = url.toLowerCase();
+                    button.textContent = originalUrl;
+                    button.dataset.link = originalUrl.toLowerCase();
 
                     button.addEventListener("click", () => {
-                        window.open(url, "_blank", "noopener,noreferrer");
+                        const newTab = window.open("about:blank", "_blank");
+
+                        if (newTab) {
+                            newTab.location.href = url;
+                        }
                     });
 
                     linksContainer.appendChild(button);
