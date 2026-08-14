@@ -1,3 +1,4 @@
+<blank>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -17,7 +18,7 @@
         #refreshBtn {
             width: 100%;
             padding: 14px;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
             border: none;
             border-radius: 8px;
             background: #333;
@@ -28,6 +29,27 @@
 
         #refreshBtn:hover {
             background: #444;
+        }
+
+        #search {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 14px;
+            margin-bottom: 15px;
+            border: none;
+            border-radius: 8px;
+            background: #222;
+            color: white;
+            font-size: 15px;
+            outline: none;
+        }
+
+        #search:focus {
+            background: #292929;
+        }
+
+        #search::placeholder {
+            color: #888;
         }
 
         #movies {
@@ -64,6 +86,13 @@
 
     <button id="refreshBtn">↻ Refresh Movies</button>
 
+    <input
+        type="text"
+        id="search"
+        placeholder="Search movies..."
+        autocomplete="off"
+    >
+
     <div id="status">Loading...</div>
     <div id="movies"></div>
 
@@ -74,13 +103,13 @@
         const moviesContainer = document.getElementById("movies");
         const status = document.getElementById("status");
         const refreshBtn = document.getElementById("refreshBtn");
+        const search = document.getElementById("search");
 
         async function loadMovies() {
             status.textContent = "Checking for movies...";
             refreshBtn.disabled = true;
 
             try {
-                // Cache-buster so the browser requests the newest version
                 const response = await fetch(
                     MOVIE_URL + "?t=" + Date.now()
                 );
@@ -91,8 +120,6 @@
 
                 const text = await response.text();
 
-                // Each line is:
-                // Movie Name — https://example.com
                 const lines = text
                     .split(/\r?\n/)
                     .map(line => line.trim())
@@ -101,7 +128,6 @@
                 moviesContainer.innerHTML = "";
 
                 for (const line of lines) {
-                    // Split only on the first " — "
                     const separator = line.indexOf(" — ");
 
                     if (separator === -1) {
@@ -118,6 +144,7 @@
                     const button = document.createElement("button");
                     button.className = "movie-btn";
                     button.textContent = name;
+                    button.dataset.name = name.toLowerCase();
 
                     button.addEventListener("click", () => {
                         window.open(url, "_blank", "noopener,noreferrer");
@@ -126,8 +153,8 @@
                     moviesContainer.appendChild(button);
                 }
 
-                status.textContent =
-                    `${moviesContainer.children.length} movies loaded`;
+                updateSearch();
+
             } catch (error) {
                 console.error(error);
 
@@ -138,9 +165,34 @@
             }
         }
 
+        function updateSearch() {
+            const query = search.value.toLowerCase().trim();
+            let visible = 0;
+
+            document.querySelectorAll(".movie-btn").forEach(button => {
+                const matches = button.dataset.name.includes(query);
+
+                button.style.display = matches ? "" : "none";
+
+                if (matches) {
+                    visible++;
+                }
+            });
+
+            const total = moviesContainer.children.length;
+
+            if (query) {
+                status.textContent =
+                    `${visible} of ${total} movies match "${search.value}"`;
+            } else {
+                status.textContent =
+                    `${total} movies loaded`;
+            }
+        }
+
+        search.addEventListener("input", updateSearch);
         refreshBtn.addEventListener("click", loadMovies);
 
-        // Initial load
         loadMovies();
     </script>
 
