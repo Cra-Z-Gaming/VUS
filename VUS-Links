@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Links</title>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #111;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+
+        #refreshBtn {
+            width: 100%;
+            padding: 14px;
+            margin-bottom: 10px;
+            border: none;
+            border-radius: 8px;
+            background: #333;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        #refreshBtn:hover {
+            background: #444;
+        }
+
+        #search {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 14px;
+            margin-bottom: 15px;
+            border: none;
+            border-radius: 8px;
+            background: #222;
+            color: white;
+            font-size: 15px;
+            outline: none;
+        }
+
+        #search:focus {
+            background: #292929;
+        }
+
+        #search::placeholder {
+            color: #888;
+        }
+
+        #links {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .link-btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            background: #222;
+            color: white;
+            text-align: left;
+            font-size: 15px;
+            cursor: pointer;
+            transition: background 0.15s;
+            word-break: break-all;
+        }
+
+        .link-btn:hover {
+            background: #333;
+        }
+
+        #status {
+            margin-bottom: 15px;
+            color: #aaa;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <button id="refreshBtn">↻ Refresh Links</button>
+
+    <input
+        type="text"
+        id="search"
+        placeholder="Search links..."
+        autocomplete="off"
+    >
+
+    <div id="status">Loading...</div>
+    <div id="links"></div>
+
+    <script>
+        const LINK_URL =
+            "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/LinkBin";
+
+        const linksContainer = document.getElementById("links");
+        const status = document.getElementById("status");
+        const refreshBtn = document.getElementById("refreshBtn");
+        const search = document.getElementById("search");
+
+        async function loadLinks() {
+            status.textContent = "Checking for links...";
+            refreshBtn.disabled = true;
+
+            try {
+                const response = await fetch(
+                    LINK_URL + "?t=" + Date.now()
+                );
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const text = await response.text();
+
+                const lines = text
+                    .split(/\r?\n/)
+                    .map(line => line.trim())
+                    .filter(Boolean);
+
+                linksContainer.innerHTML = "";
+
+                for (const url of lines) {
+                    const button = document.createElement("button");
+
+                    button.className = "link-btn";
+                    button.textContent = url;
+                    button.dataset.link = url.toLowerCase();
+
+                    button.addEventListener("click", () => {
+                        window.open(url, "_blank", "noopener,noreferrer");
+                    });
+
+                    linksContainer.appendChild(button);
+                }
+
+                updateSearch();
+
+            } catch (error) {
+                console.error(error);
+
+                status.textContent =
+                    "Failed to load links. Check the console.";
+            } finally {
+                refreshBtn.disabled = false;
+            }
+        }
+
+        function updateSearch() {
+            const query = search.value.toLowerCase().trim();
+            let visible = 0;
+
+            document.querySelectorAll(".link-btn").forEach(button => {
+                const matches = button.dataset.link.includes(query);
+
+                button.style.display = matches ? "" : "none";
+
+                if (matches) {
+                    visible++;
+                }
+            });
+
+            const total = linksContainer.children.length;
+
+            if (query) {
+                status.textContent =
+                    `${visible} of ${total} links match "${search.value}"`;
+            } else {
+                status.textContent =
+                    `${total} links loaded`;
+            }
+        }
+
+        search.addEventListener("input", updateSearch);
+        refreshBtn.addEventListener("click", loadLinks);
+
+        loadLinks();
+    </script>
+
+</body>
+</html>
