@@ -106,6 +106,17 @@
         const refreshBtn = document.getElementById("refreshBtn");
         const search = document.getElementById("search");
 
+        function normalizeUrl(originalUrl) {
+            let url = originalUrl.trim();
+
+            // If there is no protocol, use HTTPS
+            if (!/^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(url)) {
+                url = "https://" + url;
+            }
+
+            return url;
+        }
+
         async function loadLinks() {
             status.textContent = "Checking for links...";
             refreshBtn.disabled = true;
@@ -129,12 +140,7 @@
                 linksContainer.innerHTML = "";
 
                 for (const originalUrl of lines) {
-                    let url = originalUrl;
-
-                    // Add HTTPS if the link doesn't have a protocol
-                    if (!/^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(url)) {
-                        url = "https://" + url;
-                    }
+                    const url = normalizeUrl(originalUrl);
 
                     const button = document.createElement("button");
 
@@ -146,7 +152,11 @@
                         const newTab = window.open("about:blank", "_blank");
 
                         if (newTab) {
-                            newTab.location.href = url;
+                            try {
+                                newTab.location.replace(url);
+                            } catch (error) {
+                                newTab.location.href = url;
+                            }
                         }
                     });
 
