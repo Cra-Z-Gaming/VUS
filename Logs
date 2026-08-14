@@ -2,9 +2,9 @@ Upcoming-69101
 
 
 
-/collapsible room join/creation sidebar
-/fix room creation
 
+
+/fix public rooms
 
 -------------------------------------
 
@@ -12,6 +12,16 @@ Releases-69101
 
 
 
+
+
+
+
+
+
+
+/fix room creation
+
+/collapsible room join/creation sidebar
 
 /site icon (upload or link)
 /create rooms (public or private w/code)
