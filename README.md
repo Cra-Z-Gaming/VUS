@@ -8,6 +8,9 @@ EASY 2 Tap links:
 
 [Canva](https://vush.my.canva.site)
 
+
+[More Info / How To](https://sites.google.com/view/vusag)
+
 -------------------------------------------------
 
 I made this for myself and probably my whole school, but since my school likes to be a **BEAAACH** about games and websites, I'm not really supposed to share them anymore.
