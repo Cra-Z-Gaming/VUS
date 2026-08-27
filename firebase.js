@@ -43,9 +43,43 @@ const db = getDatabase(app);
 // Realtime Database structure:
 //   /presence/{connectionId} -> true while connected, auto-removed on disconnect
 // The online count is simply the number of children under /presence.
+//
+// Two things are handled here, both aimed at keeping the online count and the
+// Realtime Database connection count honest:
+//
+// 1. RECONNECT GUARD — Firebase's client fires .info/connected -> true every
+//    time the underlying websocket reconnects, not just once on page load.
+//    Reconnects happen constantly in normal use: a phone screen locking, a
+//    tab going to the background, a laptop sleeping/waking, a brief WiFi
+//    drop. Without a guard, every one of those events pushed a brand new
+//    presence node AND registered as a fresh Realtime Database connection —
+//    so a handful of people with normal mobile usage patterns could burn
+//    through the Spark tier's 100-connection cap in a single day without
+//    ever having 100 simultaneous real users. The fix: only ever create one
+//    presence node per "session" (see idle tracking below for what ends a
+//    session), tracked in myPresenceRef.
+//
+// 2. IDLE TRACKING — a tab can sit open and connected for hours with nobody
+//    actually using the site (a forgotten background tab, a phone left
+//    unlocked on the page, etc.), which would otherwise count as "online"
+//    the whole time and skew the live counter. After IDLE_TIMEOUT_MS with no
+//    user activity, this tab removes its own presence node early (before
+//    the tab actually closes). If activity resumes, a fresh node is created
+//    so the counter picks the tab back up.
 
 const presenceListRef = ref(db, "presence");
 const connectedRef = ref(db, ".info/connected");
+
+// How long a tab can sit with no activity before it's considered "not really
+// online" and removes itself from the live counter. Adjust as needed.
+const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+// Activity events that count as "still using the site." Kept broad
+// (click/keydown/touchstart/scroll/mousemove) rather than click-only, so a
+// person reading or scrolling isn't marked idle just because they haven't
+// clicked anything yet. Narrow this list to ["click", "touchstart"] if you
+// want strictly click-driven activity instead.
+const ACTIVITY_EVENTS = ["click", "keydown", "touchstart", "scroll", "mousemove"];
 
 let currentCount = 0;
 const countListeners = new Set();
@@ -58,27 +92,68 @@ function notifyCountListeners(count) {
 }
 
 /**
- * Starts this tab's presence session: registers a unique connection node under
- * /presence, and configures onDisconnect() so Firebase removes it automatically
- * if the tab closes, loses connection, or crashes (no manual cleanup needed).
+ * Starts this tab's presence session with a reconnect guard and idle
+ * tracking layered on top of the base presence mechanism:
+ *   - Registers a unique connection node under /presence, once per session.
+ *   - Configures onDisconnect() so Firebase removes it automatically if the
+ *     tab closes, loses connection for good, or crashes.
+ *   - Re-fires of .info/connected (from normal reconnects) are ignored as
+ *     long as this tab already has an active presence node.
+ *   - After IDLE_TIMEOUT_MS with no user activity, proactively removes the
+ *     presence node (ending the "session"). Activity afterward starts a new
+ *     session with a new node.
  * Safe to call once per page load. Runs from index.html only.
  */
 function startPresence() {
-  onValue(connectedRef, (snap) => {
-    if (snap.val() === false) return;
+  let myPresenceRef = null;
+  let idleTimer = null;
 
-    // Create a unique node for this browser tab/session
-    const myPresenceRef = push(presenceListRef);
-
-    // Remove this node automatically when the connection drops
+  function registerPresence() {
+    myPresenceRef = push(presenceListRef);
     onDisconnect(myPresenceRef).remove();
-
-    // Mark this session as online
     set(myPresenceRef, {
       online: true,
       since: serverTimestamp()
     });
+  }
+
+  function markIdle() {
+    if (myPresenceRef) {
+      // Detach the onDisconnect callback isn't strictly necessary here (the
+      // node is being removed directly), but cancel it defensively so it
+      // can't fire redundantly later against an already-removed node.
+      set(myPresenceRef, null);
+      myPresenceRef = null;
+    }
+  }
+
+  function resetIdleTimer() {
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(markIdle, IDLE_TIMEOUT_MS);
+
+    // If activity resumes after this tab had gone idle (and removed its
+    // node), start a fresh presence session.
+    if (!myPresenceRef) {
+      registerPresence();
+    }
+  }
+
+  onValue(connectedRef, (snap) => {
+    if (snap.val() === false) return;
+    // Reconnect guard: only register a new node if this tab doesn't already
+    // have one. Prevents every websocket reconnect (screen lock, background
+    // tab, sleep/wake, brief network drop) from creating a duplicate node
+    // and counting as a fresh connection.
+    if (myPresenceRef) return;
+    registerPresence();
   });
+
+  ACTIVITY_EVENTS.forEach(evt => {
+    document.addEventListener(evt, resetIdleTimer, { passive: true });
+  });
+
+  // Start the idle clock immediately on load.
+  resetIdleTimer();
 }
 
 let presenceListenerStarted = false;
