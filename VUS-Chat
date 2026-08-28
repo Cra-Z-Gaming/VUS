@@ -960,7 +960,7 @@ const PING_SOUND_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/
    session (see ChatBackend.claimPresence), so it never survives a
    disconnect, rename, or someone else later using the same name — a
    fresh code redemption is required every single join. */
-const CROWN_CODE_LIFESPAN_MS = 60 * 1000;
+const CROWN_CODE_LIFESPAN_MS = 3 * 60 * 1000; // 3 minutes — more room to check Discord and type it in
 const CROWN_REQUEST_COOLDOWN_MS = 30 * 1000;
 const CROWN_REQUEST_COOLDOWN_KEY = "vusChatLastCrownRequest";
 const CROWN_WEBHOOK_URL = "https://discord.com/api/webhooks/1542708447991037953/Ge705Wa_quPVC-2pFhttHYNuA4-FI5ZDRIn5VwjQ059SwT0ZRCrqmVLMofb8oJhsLFFJ";
@@ -1025,27 +1025,44 @@ const ChatBackend = {
     const code = this._randomCrownCode();
     const expiresAt = Date.now() + CROWN_CODE_LIFESPAN_MS;
     await this._crownMetaRef.set({ code, expiresAt });
+    let webhookOk = false;
     try {
-      await fetch(CROWN_WEBHOOK_URL, {
+      const res = await fetch(CROWN_WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: "👑 Crown code: **" + code + "** (expires in 60s)" })
+        body: JSON.stringify({ content: "👑 Crown code: **" + code + "** (expires in " + Math.round(CROWN_CODE_LIFESPAN_MS / 1000) + "s)" })
       });
+      webhookOk = res.ok; // catches bad/expired webhook URLs, rate limits, etc — not just network errors
     } catch (e) {
-      // Code is still live in Firebase even if the Discord post fails —
-      // caller can just check their server, or try requesting again after
-      // the cooldown if it never arrives.
+      webhookOk = false;
     }
-    return code;
+    // Code is still live in Firebase either way — caller decides what to
+    // show based on webhookOk, since a failed post means the code exists
+    // but nobody can actually see it to redeem it.
+    return { code, webhookOk };
   },
 
   // Atomic + single-use via transaction: only commits if the submitted
   // code still matches AND hasn't expired, and resets to "0000" in the
   // same write — so the same code can never be redeemed twice, and two
   // near-simultaneous submissions can't both succeed.
+  //
+  // Also does a plain (non-transactional) read FIRST, purely to produce a
+  // specific reason for the UI ("wrong" vs "expired" vs "none") — this read
+  // is diagnostic only and never used to decide the actual claim; the
+  // transaction below is still the sole source of truth for that.
   async redeemCrownCode(inputCode) {
     const clean = (inputCode || "").trim().toUpperCase();
-    if (!clean || clean === "0000") return { ok: false };
+    if (!clean || clean === "0000") return { ok: false, reason: "none" };
+
+    let diagnosticReason = "wrong";
+    try {
+      const snap = await this._crownMetaRef.get();
+      const current = snap.val();
+      if (current && current.code === clean) {
+        diagnosticReason = (!current.expiresAt || Date.now() > current.expiresAt) ? "expired" : "wrong-but-matched"; // shouldn't happen if not expired — transaction will clarify
+      }
+    } catch (e) { /* diagnostic only — fall through to the real transaction either way */ }
 
     const tx = await this._crownMetaRef.transaction(current => {
       if (!current || current.code !== clean) return; // abort — wrong/no code
@@ -1053,7 +1070,7 @@ const ChatBackend = {
       return { code: "0000", expiresAt: 0 };
     });
 
-    if (!tx.committed) return { ok: false };
+    if (!tx.committed) return { ok: false, reason: diagnosticReason };
 
     if (this._myCrownRef) {
       await this._myCrownRef.set(true);
@@ -2491,13 +2508,51 @@ async function renderModMenu() {
     updateCrownReqBtnState();
     crownReqBtn.textContent = "Sending…";
     try {
-      await ChatBackend.generateCrownCode();
-      crownReqBtn.textContent = "Sent to Discord ✓";
+      const result = await ChatBackend.generateCrownCode();
+      crownReqBtn.textContent = result.webhookOk ? "Sent to Discord ✓" : "Saved, but Discord post failed";
+      refreshCrownStatus();
     } catch (e) {
       crownReqBtn.textContent = "Failed — try again";
     }
   });
   $globalClearPanel.appendChild(crownReqBtn);
+
+  // Live readout of whatever code is CURRENTLY active in Firebase, right
+  // here in the panel — so you can visually confirm the exact code and
+  // exact time remaining instead of relying on matching it against Discord
+  // from memory. This is a one-time read + local countdown, not a
+  // persistent listener, refreshed each time the panel opens or a new
+  // code is requested.
+  const crownStatus = document.createElement("div");
+  crownStatus.style.cssText = "font-family:monospace;font-size:13px;color:#94a3b8;margin-bottom:8px;min-height:16px";
+  $globalClearPanel.appendChild(crownStatus);
+
+  let crownStatusTimer = null;
+  async function refreshCrownStatus() {
+    clearInterval(crownStatusTimer);
+    try {
+      const snap = await ChatBackend._crownMetaRef.get();
+      const current = snap.val();
+      if (!current || !current.code || current.code === "0000") {
+        crownStatus.textContent = "No active code right now.";
+        return;
+      }
+      const tick = () => {
+        const remaining = current.expiresAt - Date.now();
+        if (remaining <= 0) {
+          crownStatus.textContent = "Code " + current.code + " — expired.";
+          clearInterval(crownStatusTimer);
+          return;
+        }
+        crownStatus.textContent = "Active code: " + current.code + " — expires in " + Math.ceil(remaining / 1000) + "s";
+      };
+      tick();
+      crownStatusTimer = setInterval(tick, 1000);
+    } catch (e) {
+      crownStatus.textContent = "Couldn't check current code.";
+    }
+  }
+  refreshCrownStatus();
 
   const crownInput = document.createElement("input");
   crownInput.type = "text";
@@ -2526,8 +2581,14 @@ async function renderModMenu() {
         crownInput.value = "";
       } else {
         crownErr.style.color = "#ef4444";
-        crownErr.textContent = "Invalid or expired code.";
+        const reasonText = {
+          none: "Enter a code first.",
+          expired: "That code expired — request a new one.",
+          wrong: "That's not the current code — check the status line above for what's actually active."
+        };
+        crownErr.textContent = reasonText[result.reason] || "Invalid code.";
       }
+      refreshCrownStatus();
     } catch (e) {
       crownErr.style.color = "#ef4444";
       crownErr.textContent = "Couldn't check code — try again.";
