@@ -960,7 +960,7 @@ const PING_SOUND_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/
    session (see ChatBackend.claimPresence), so it never survives a
    disconnect, rename, or someone else later using the same name — a
    fresh code redemption is required every single join. */
-const CROWN_CODE_LIFESPAN_MS = 3 * 60 * 1000; // 3 minutes — more room to check Discord and type it in
+const CROWN_CODE_LIFESPAN_MS = 60 * 1000; // 1 minute
 const CROWN_REQUEST_COOLDOWN_MS = 30 * 1000;
 const CROWN_REQUEST_COOLDOWN_KEY = "vusChatLastCrownRequest";
 const CROWN_WEBHOOK_URL = "https://discord.com/api/webhooks/1542708447991037953/Ge705Wa_quPVC-2pFhttHYNuA4-FI5ZDRIn5VwjQ059SwT0ZRCrqmVLMofb8oJhsLFFJ";
@@ -1012,9 +1012,12 @@ const ChatBackend = {
   },
 
   _randomCrownCode() {
-    const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+    const chars = "0123456789";
     let out = "";
-    for (let i = 0; i < 4; i++) out += chars[Math.floor(Math.random() * chars.length)];
+    do {
+      out = "";
+      for (let i = 0; i < 4; i++) out += chars[Math.floor(Math.random() * chars.length)];
+    } while (out === "0000"); // never generate the inert default itself
     return out;
   },
 
@@ -2556,21 +2559,27 @@ async function renderModMenu() {
 
   const crownInput = document.createElement("input");
   crownInput.type = "text";
+  crownInput.inputMode = "numeric";
+  crownInput.pattern = "[0-9]*";
   crownInput.maxLength = 4;
   crownInput.placeholder = "Enter crown code…";
-  crownInput.style.cssText = "width:100%;padding:8px 10px;background:#0f172a;border:1.5px solid #334155;border-radius:8px;color:#f1f5f9;font-size:14px;outline:none;margin-bottom:6px;text-transform:uppercase";
+  crownInput.style.cssText = "width:100%;padding:8px 10px;background:#0f172a;border:1.5px solid #334155;border-radius:8px;color:#f1f5f9;font-size:14px;outline:none;margin-bottom:6px";
   $globalClearPanel.appendChild(crownInput);
 
   const crownErr = document.createElement("div");
   crownErr.style.cssText = "color:#ef4444;font-size:12.5px;min-height:16px;margin-bottom:4px";
   $globalClearPanel.appendChild(crownErr);
 
+  let crownSubmitInFlight = false; // guards against a fast double-tap firing two overlapping claims
+
   const crownSubmitBtn = document.createElement("button");
   crownSubmitBtn.textContent = "Claim Crown";
   crownSubmitBtn.className = "toolbar-btn";
   crownSubmitBtn.style.cssText = "width:100%";
   crownSubmitBtn.addEventListener("click", async () => {
+    if (crownSubmitInFlight) return;
     if (!myName) { crownErr.style.color = "#ef4444"; crownErr.textContent = "Join with a name first."; return; }
+    crownSubmitInFlight = true;
     crownSubmitBtn.disabled = true;
     crownErr.textContent = "";
     try {
@@ -2584,7 +2593,8 @@ async function renderModMenu() {
         const reasonText = {
           none: "Enter a code first.",
           expired: "That code expired — request a new one.",
-          wrong: "That's not the current code — check the status line above for what's actually active."
+          wrong: "That's not the current code — check the status line above for what's actually active.",
+          "wrong-but-matched": "That code matched but got claimed a split second before this attempt (likely a double-tap) — check the status line above; request a new code if it now shows none active."
         };
         crownErr.textContent = reasonText[result.reason] || "Invalid code.";
       }
