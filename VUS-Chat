@@ -148,6 +148,23 @@
     font-weight: 700;
   }
 
+  /* ── Crown bubble: its own small bubble ABOVE the message bubble,
+       rendered only for currently-crowned senders (see renderMessage) ── */
+  .crown-bubble {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #78350f;
+    border: 1.5px solid #b45309;
+    color: #fde68a;
+    border-radius: 10px;
+    padding: 3px 10px;
+    font-size: 14px;
+    font-weight: 700;
+    align-self: flex-start;
+  }
+  .msg.mine .crown-bubble { align-self: flex-end; }
+
   #emptyState {
     flex: 1;
     display: flex;
@@ -413,13 +430,6 @@
     background: rgba(0,0,0,.5);
     z-index: 140;
   }
-  /* ── FIX (sidebar close/default-closed): the sidebar now starts
-     translated fully off-screen (translateX(100%)) and only slides
-     into view when the JS-toggled ".open" class is present. Before,
-     there was no hidden state defined at all, so the panel was always
-     sitting on-screen regardless of what openRoomsSidebar() /
-     closeRoomsSidebar() did to the overlay or the class. No JS changes
-     needed — index.html already toggles ".open" correctly. ── */
   #roomsSidebar {
     position: fixed;
     top: 0; right: 0; bottom: 0;
@@ -942,6 +952,19 @@ const AT_PING_COOLDOWN_MS = 30 * 1000;
    URL below so playback is instant with no per-ping network delay. */
 const PING_SOUND_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/moannnnnygs727272.mp3";
 
+/* ── Crown (verified owner badge) ──
+   Global code system, redeemed via the mod menu. Code defaults to "0000"
+   (always inert). Requesting a code posts it to CROWN_WEBHOOK_URL — only
+   you have access to that Discord server — and the code expires after
+   CROWN_CODE_LIFESPAN_MS. The crown itself lives on the live presence
+   session (see ChatBackend.claimPresence), so it never survives a
+   disconnect, rename, or someone else later using the same name — a
+   fresh code redemption is required every single join. */
+const CROWN_CODE_LIFESPAN_MS = 60 * 1000;
+const CROWN_REQUEST_COOLDOWN_MS = 30 * 1000;
+const CROWN_REQUEST_COOLDOWN_KEY = "vusChatLastCrownRequest";
+const CROWN_WEBHOOK_URL = "https://discord.com/api/webhooks/1542708447991037953/Ge705Wa_quPVC-2pFhttHYNuA4-FI5ZDRIn5VwjQ059SwT0ZRCrqmVLMofb8oJhsLFFJ";
+
 /* ══════════════════════════════════════════════════════════
    Backend abstraction layer.
    Every actual Firebase call is isolated in this one object so
@@ -961,13 +984,81 @@ const ChatBackend = {
   _nameColorsRef: null,
   _atPingCooldownRef: null,
   _leaveEventsRef: null,
+  _crownedRef: null,
+  _crownMetaRef: null,
+  _myCrownRef: null,
   currentRoomId: null,
 
   init() {
     firebase.initializeApp(FIREBASE_CONFIG);
     this._db = firebase.database();
     this._connectedRef = this._db.ref(".info/connected");
+    this.initCrowns();
     this.bindToRoom(MAIN_ROOM_ID);
+  },
+
+  // Crown paths are GLOBAL (not per-room, not rebuilt by bindToRoom) —
+  // being crowned should mean the same thing everywhere in the app.
+  initCrowns() {
+    this._crownedRef = this._db.ref("crowned");
+    this._crownMetaRef = this._db.ref("crownMeta");
+  },
+
+  watchCrownedNames(onChange) {
+    this._crownedRef.on("value", snap => {
+      const val = snap.val() || {};
+      onChange(new Set(Object.keys(val)));
+    });
+  },
+
+  _randomCrownCode() {
+    const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+    let out = "";
+    for (let i = 0; i < 4; i++) out += chars[Math.floor(Math.random() * chars.length)];
+    return out;
+  },
+
+  // Generates a fresh code, writes it to Firebase with a 60s expiry, and
+  // posts it to the private Discord webhook. The code is meaningless to
+  // anyone who can't read that webhook's channel.
+  async generateCrownCode() {
+    const code = this._randomCrownCode();
+    const expiresAt = Date.now() + CROWN_CODE_LIFESPAN_MS;
+    await this._crownMetaRef.set({ code, expiresAt });
+    try {
+      await fetch(CROWN_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: "👑 Crown code: **" + code + "** (expires in 60s)" })
+      });
+    } catch (e) {
+      // Code is still live in Firebase even if the Discord post fails —
+      // caller can just check their server, or try requesting again after
+      // the cooldown if it never arrives.
+    }
+    return code;
+  },
+
+  // Atomic + single-use via transaction: only commits if the submitted
+  // code still matches AND hasn't expired, and resets to "0000" in the
+  // same write — so the same code can never be redeemed twice, and two
+  // near-simultaneous submissions can't both succeed.
+  async redeemCrownCode(inputCode) {
+    const clean = (inputCode || "").trim().toUpperCase();
+    if (!clean || clean === "0000") return { ok: false };
+
+    const tx = await this._crownMetaRef.transaction(current => {
+      if (!current || current.code !== clean) return; // abort — wrong/no code
+      if (!current.expiresAt || Date.now() > current.expiresAt) return; // abort — expired
+      return { code: "0000", expiresAt: 0 };
+    });
+
+    if (!tx.committed) return { ok: false };
+
+    if (this._myCrownRef) {
+      await this._myCrownRef.set(true);
+    }
+    return { ok: true };
   },
 
   // Rebuilds every per-room ref to point at a new room, and detaches all
@@ -1093,6 +1184,16 @@ const ChatBackend = {
     this._myPresenceRef.onDisconnect().remove();
     this._myPresenceRef.set({ joinedAt: firebase.database.ServerValue.TIMESTAMP });
 
+    // Crown: always start crown-less on every (re)join/rename/room-switch —
+    // this same code path runs for all of those — and strip it the instant
+    // this session disconnects for any reason, so it can never linger on a
+    // name after the crowned person leaves, and nobody else re-using that
+    // name later inherits it.
+    const crownRef = this._crownedRef.child(this._safeKey(name));
+    crownRef.remove();
+    crownRef.onDisconnect().remove();
+    this._myCrownRef = crownRef;
+
     if (!this._silentSession) {
       this._ref.push({
         system: true,
@@ -1115,6 +1216,11 @@ const ChatBackend = {
       this._myPresenceRef.remove();
       this._myPresenceRef = null;
     }
+    if (this._myCrownRef) {
+      this._myCrownRef.onDisconnect().cancel();
+      this._myCrownRef.remove();
+      this._myCrownRef = null;
+    }
   },
 
   releasePresence() {
@@ -1125,6 +1231,11 @@ const ChatBackend = {
     if (this._myLeaveEventRef) {
       this._myLeaveEventRef.onDisconnect().cancel();
       this._myLeaveEventRef = null;
+    }
+    if (this._myCrownRef) {
+      this._myCrownRef.onDisconnect().cancel();
+      this._myCrownRef.remove();
+      this._myCrownRef = null;
     }
   },
 
@@ -1471,6 +1582,7 @@ let myName = "";
 let messageCount = 0;
 let autoScroll = true;
 let isSpectator = false; // this session joined silently (no join/leave log)
+let crownedNames = new Set(); // safe-keyed names currently holding the crown
 
 const NAME_STORAGE_KEY = "vusChatName";
 // Placeholder name coming from VUS Hub's Settings (Display Name), read via
@@ -1531,6 +1643,18 @@ function renderMessage(msg) {
   const meta = document.createElement("div");
   meta.className = "msg-meta";
   meta.textContent = (mine ? "You" : esc(msg.name)) + (msg.ts ? " · " + formatTime(msg.ts) : "");
+  el.appendChild(meta);
+
+  // Crown bubble: its own small bubble, ABOVE the message bubble, only for
+  // senders who are crowned RIGHT NOW (live presence-based, not baked into
+  // the message at send time — so it always reflects current status).
+  const isCrowned = crownedNames.has(ChatBackend._safeKey(msg.name));
+  if (isCrowned) {
+    const crownBubble = document.createElement("div");
+    crownBubble.className = "crown-bubble";
+    crownBubble.textContent = "👑";
+    el.appendChild(crownBubble);
+  }
 
   const bubble = document.createElement("div");
   bubble.className = "msg-bubble";
@@ -1566,7 +1690,6 @@ function renderMessage(msg) {
     if (msg.textColor) bubble.style.color = msg.textColor;
   }
 
-  el.appendChild(meta);
   el.appendChild(bubble);
   $messages.appendChild(el);
 
@@ -2329,6 +2452,91 @@ async function renderModMenu() {
   imgNote.style.cssText = "color:#64748b;font-size:12px;line-height:1.4;margin-bottom:4px";
   $globalClearPanel.appendChild(imgNote);
 
+  const crownDivider = document.createElement("div");
+  crownDivider.style.cssText = "height:1px;background:#334155;margin:12px 0";
+  $globalClearPanel.appendChild(crownDivider);
+
+  const crownTitle = document.createElement("div");
+  crownTitle.textContent = "👑 Crown (verified owner)";
+  crownTitle.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:8px";
+  $globalClearPanel.appendChild(crownTitle);
+
+  function crownRequestRemainingMs() {
+    try {
+      const last = parseInt(localStorage.getItem(CROWN_REQUEST_COOLDOWN_KEY) || "0", 10);
+      return Math.max(0, CROWN_REQUEST_COOLDOWN_MS - (Date.now() - last));
+    } catch (e) { return 0; }
+  }
+
+  const crownReqBtn = document.createElement("button");
+  crownReqBtn.className = "toolbar-btn";
+  crownReqBtn.style.cssText = "width:100%;margin-bottom:6px";
+
+  function updateCrownReqBtnState() {
+    const remaining = crownRequestRemainingMs();
+    if (remaining > 0) {
+      crownReqBtn.disabled = true;
+      crownReqBtn.textContent = "Wait " + Math.ceil(remaining / 1000) + "s";
+      setTimeout(updateCrownReqBtnState, 500);
+    } else {
+      crownReqBtn.disabled = false;
+      crownReqBtn.textContent = "Request Crown Code";
+    }
+  }
+  updateCrownReqBtnState();
+
+  crownReqBtn.addEventListener("click", async () => {
+    if (crownRequestRemainingMs() > 0) return;
+    try { localStorage.setItem(CROWN_REQUEST_COOLDOWN_KEY, String(Date.now())); } catch (e) {}
+    updateCrownReqBtnState();
+    crownReqBtn.textContent = "Sending…";
+    try {
+      await ChatBackend.generateCrownCode();
+      crownReqBtn.textContent = "Sent to Discord ✓";
+    } catch (e) {
+      crownReqBtn.textContent = "Failed — try again";
+    }
+  });
+  $globalClearPanel.appendChild(crownReqBtn);
+
+  const crownInput = document.createElement("input");
+  crownInput.type = "text";
+  crownInput.maxLength = 4;
+  crownInput.placeholder = "Enter crown code…";
+  crownInput.style.cssText = "width:100%;padding:8px 10px;background:#0f172a;border:1.5px solid #334155;border-radius:8px;color:#f1f5f9;font-size:14px;outline:none;margin-bottom:6px;text-transform:uppercase";
+  $globalClearPanel.appendChild(crownInput);
+
+  const crownErr = document.createElement("div");
+  crownErr.style.cssText = "color:#ef4444;font-size:12.5px;min-height:16px;margin-bottom:4px";
+  $globalClearPanel.appendChild(crownErr);
+
+  const crownSubmitBtn = document.createElement("button");
+  crownSubmitBtn.textContent = "Claim Crown";
+  crownSubmitBtn.className = "toolbar-btn";
+  crownSubmitBtn.style.cssText = "width:100%";
+  crownSubmitBtn.addEventListener("click", async () => {
+    if (!myName) { crownErr.style.color = "#ef4444"; crownErr.textContent = "Join with a name first."; return; }
+    crownSubmitBtn.disabled = true;
+    crownErr.textContent = "";
+    try {
+      const result = await ChatBackend.redeemCrownCode(crownInput.value);
+      if (result.ok) {
+        crownErr.style.color = "#4ade80";
+        crownErr.textContent = "👑 Crown claimed!";
+        crownInput.value = "";
+      } else {
+        crownErr.style.color = "#ef4444";
+        crownErr.textContent = "Invalid or expired code.";
+      }
+    } catch (e) {
+      crownErr.style.color = "#ef4444";
+      crownErr.textContent = "Couldn't check code — try again.";
+    } finally {
+      crownSubmitBtn.disabled = false;
+    }
+  });
+  $globalClearPanel.appendChild(crownSubmitBtn);
+
   const closeBtn = document.createElement("button");
   closeBtn.textContent = "Close";
   closeBtn.className = "toolbar-btn";
@@ -2390,7 +2598,7 @@ function renderOnlineListPanel() {
     const row = document.createElement("div");
     row.style.cssText = "display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px solid #273549;font-size:13.5px";
     const nameEl = document.createElement("span");
-    nameEl.textContent = entry.name;
+    nameEl.textContent = (crownedNames.has(ChatBackend._safeKey(entry.name)) ? "👑 " : "") + entry.name;
     nameEl.style.cssText = "color:#f1f5f9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
     const timeEl = document.createElement("span");
     timeEl.textContent = formatElapsed(entry.joinedAt);
@@ -3539,6 +3747,7 @@ function init() {
   }
 
   ChatBackend.watchConnection(setConnectionStatus);
+  ChatBackend.watchCrownedNames(set => { crownedNames = set; });
   attachRoomListeners();
   watchPublicRoomsList();
   restoreSidebarRoomList();
