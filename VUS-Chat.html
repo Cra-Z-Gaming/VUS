@@ -1,0 +1,3775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VUS Chat</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: #0f172a;
+    color: #f1f5f9;
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  .chat-header {
+    padding: 18px 21px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 24px;
+    font-weight: 500;
+    border-bottom: 1.5px solid #1f2937;
+    flex-shrink: 0;
+  }
+  .chat-header .room-name { color: #94a3b8; font-size: 18px; font-weight: 400; }
+  .chat-online-dot {
+    display: inline-block;
+    width: 10.5px;
+    height: 10.5px;
+    border-radius: 50%;
+    background: #22c55e;
+    margin-right: 7.5px;
+  }
+  .chat-online-dot.offline { background: #ef4444; }
+
+  /* ── Join screen (asks for a name before entering) ── */
+  #joinScreen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  #joinCard {
+    width: 100%;
+    max-width: 280px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  #joinScreen h2 { font-size: 19px; font-weight: 500; margin-bottom: 2px; text-align: center; }
+  #joinScreen p { font-size: 13.5px; color: #94a3b8; text-align: center; margin-bottom: 4px; line-height: 1.4; }
+  #nameInput {
+    width: 100%;
+    padding: 10px 13px;
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 9px;
+    color: #f1f5f9;
+    font-size: 15px;
+    outline: none;
+  }
+  #nameInput:focus { border-color: #22c55e; }
+  #joinBtn {
+    width: 100%;
+    padding: 10px 13px;
+    background: #22c55e;
+    border: none;
+    border-radius: 9px;
+    color: #000;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  #joinBtn:hover { background: #4ade80; }
+  #joinBtn:disabled { opacity: .5; cursor: not-allowed; }
+  #joinError { font-size: 13px; color: #ef4444; min-height: 18px; }
+  .join-secondary-btn {
+    width: 100%;
+    padding: 9px 13px;
+    background: transparent;
+    border: 1.5px solid #334155;
+    border-radius: 9px;
+    color: #94a3b8;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .join-secondary-btn:hover { color: #f1f5f9; border-color: #475569; }
+  .join-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    color: #475569;
+    font-size: 12px;
+  }
+  .join-divider::before, .join-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: #334155;
+  }
+
+  /* ── Chat screen ── */
+  #chatScreen { display: none; flex: 1; flex-direction: column; min-height: 0; }
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 21px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  #messages::-webkit-scrollbar { width: 7.5px; }
+  #messages::-webkit-scrollbar-thumb { background: #334155; border-radius: 4.5px; }
+
+  .msg { max-width: 82%; display: flex; flex-direction: column; gap: 3px; }
+  .msg.mine { align-self: flex-end; align-items: flex-end; }
+  .msg-meta { font-size: 16.5px; color: #64748b; padding: 0 6px; }
+  .msg-bubble {
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 15px;
+    padding: 12px 16.5px;
+    font-size: 20.2px;
+    line-height: 1.4;
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+  .msg.mine .msg-bubble { background: #14532d; border-color: #166534; }
+  .msg.system { align-self: center; max-width: 100%; }
+  .msg.system .msg-bubble {
+    background: transparent;
+    border: none;
+    color: #64748b;
+    font-size: 17.2px;
+    font-style: italic;
+    padding: 3px;
+  }
+  .msg-bubble .mention-chip-inline {
+    color: #4ade80;
+    font-weight: 700;
+  }
+
+  /* ── Crown bubble: its own small bubble ABOVE the message bubble,
+       rendered only for currently-crowned senders (see renderMessage) ── */
+  .crown-bubble {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #78350f;
+    border: 1.5px solid #b45309;
+    color: #fde68a;
+    border-radius: 10px;
+    padding: 3px 10px;
+    font-size: 14px;
+    font-weight: 700;
+    align-self: flex-start;
+  }
+  .msg.mine .crown-bubble { align-self: flex-end; }
+
+  #emptyState {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #475569;
+    font-size: 19.5px;
+    text-align: center;
+    padding: 30px;
+  }
+
+  /* ── Toolbar (auto-scroll / clear chat) ── */
+  #toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 9px;
+    padding: 9px 21px;
+    border-top: 1.5px solid #1f2937;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .toolbar-btn {
+    background: transparent;
+    border: 1.5px solid #334155;
+    color: #94a3b8;
+    font-size: 15.8px;
+    padding: 6px 12px;
+    border-radius: 9px;
+    cursor: pointer;
+  }
+  .toolbar-btn:hover { color: #f1f5f9; border-color: #475569; }
+  .toolbar-btn.active {
+    background: rgba(34,197,94,.12);
+    border-color: #22c55e;
+    color: #4ade80;
+  }
+  #jumpToBottomBtn {
+    display: none;
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    color: #f1f5f9;
+    font-size: 15.8px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    align-self: center;
+    margin: 0 auto 6px auto;
+  }
+  #jumpToBottomBtn:hover { border-color: #475569; }
+
+  /* ── Ping-you button (toolbar) ── */
+  #pingYouBtn {
+    background: transparent;
+    border: 1.5px solid #f59e0b;
+    color: #f59e0b;
+  }
+  #pingYouBtn:hover { background: rgba(245,158,11,.12); }
+  #pingYouBtn:disabled { opacity: .5; cursor: not-allowed; border-color: #334155; color: #64748b; background: transparent; }
+
+  /* ── Ping-you popover ── */
+  #pingYouPanel {
+    display: none;
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    margin-bottom: 8px;
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 10px;
+    padding: 12px;
+    width: 260px;
+    z-index: 20;
+  }
+  #pingYouPanel textarea {
+    width: 100%;
+    padding: 8px 10px;
+    background: #0f172a;
+    border: 1.5px solid #334155;
+    border-radius: 8px;
+    color: #f1f5f9;
+    font-size: 14px;
+    font-family: inherit;
+    resize: none;
+    outline: none;
+    margin-bottom: 8px;
+    max-height: 80px;
+  }
+  #pingYouPanel textarea:focus { border-color: #22c55e; }
+
+  /* ── Composer ── */
+  #composer {
+    display: flex;
+    gap: 12px;
+    padding: 15px 18px;
+    border-top: 1.5px solid #1f2937;
+    flex-shrink: 0;
+    align-items: flex-end;
+    position: relative;
+  }
+  #composerInputWrap {
+    flex: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 12px;
+  }
+  #composerInputWrap:focus-within { border-color: #22c55e; }
+  #mentionChip {
+    display: none;
+    align-items: center;
+    gap: 4px;
+    background: rgba(34,197,94,.15);
+    border: 1.5px solid #22c55e;
+    color: #4ade80;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  #mentionChip:hover { background: rgba(34,197,94,.25); }
+  #msgInput {
+    padding: 7.5px 4px;
+    background: transparent;
+    border: none;
+    color: #f1f5f9;
+    font-size: 20.2px;
+    outline: none;
+    resize: none;
+    max-height: 135px;
+    font-family: inherit;
+    flex: 1;
+    min-width: 120px;
+  }
+  #charCounter {
+    font-size: 14.5px;
+    color: #64748b;
+  }
+  #charCounter.warn { color: #f59e0b; }
+  #charCounter.limit { color: #ef4444; }
+  #sendBtn {
+    padding: 0 24px;
+    height: 51px;
+    background: #22c55e;
+    border: none;
+    border-radius: 12px;
+    color: #000;
+    font-weight: 600;
+    font-size: 19.5px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  #sendBtn:hover { background: #4ade80; }
+  #sendBtn:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* ── @mention dropdown ── */
+  #mentionDropdown {
+    display: none;
+    position: absolute;
+    bottom: 100%;
+    left: 18px;
+    margin-bottom: 8px;
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 10px;
+    padding: 6px;
+    width: 220px;
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: 25;
+  }
+  .mention-option {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    color: #f1f5f9;
+    font-size: 15px;
+    padding: 8px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  .mention-option:hover { background: rgba(255,255,255,.06); }
+  .mention-empty {
+    color: #64748b;
+    font-size: 13.5px;
+    padding: 8px 10px;
+  }
+
+  #connError {
+    display: none;
+    padding: 12px 21px;
+    background: rgba(239,68,68,.1);
+    border-top: 1.5px solid rgba(239,68,68,.3);
+    color: #ef4444;
+    font-size: 17.2px;
+    flex-shrink: 0;
+  }
+  #composerNotice {
+    display: none;
+    padding: 8px 21px;
+    background: rgba(245,158,11,.1);
+    border-top: 1.5px solid rgba(245,158,11,.3);
+    color: #f59e0b;
+    font-size: 14.5px;
+    flex-shrink: 0;
+  }
+  #changeNameBtn:hover { color: #f1f5f9 !important; border-color: #475569 !important; }
+  #sendBtn.cooldown { background: #334155; color: #64748b; cursor: not-allowed; }
+
+  /* ── Ping toast (shown when you get @pinged) ── */
+  #pingToast {
+    display: none;
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e293b;
+    border: 1.5px solid #22c55e;
+    border-radius: 12px;
+    padding: 12px 18px;
+    max-width: 320px;
+    z-index: 200;
+    box-shadow: 0 8px 32px rgba(0,0,0,.4);
+  }
+  #pingToast .ping-toast-title { color: #4ade80; font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+  #pingToast .ping-toast-body { color: #f1f5f9; font-size: 14px; line-height: 1.4; }
+
+  /* ══════════════════ Rooms system ══════════════════ */
+  #roomsToggleBtn {
+    background: transparent;
+    border: 1.5px solid #334155;
+    color: #94a3b8;
+    font-size: 14.5px;
+    padding: 5px 11px;
+    border-radius: 9px;
+    cursor: pointer;
+    position: relative;
+  }
+  #roomsToggleBtn:hover { color: #f1f5f9; border-color: #475569; }
+  #roomsToggleBtn .rooms-badge-dot {
+    display: none;
+    position: absolute;
+    top: -3px; right: -3px;
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: #ef4444;
+    border: 1.5px solid #0f172a;
+  }
+
+  #roomsSidebarOverlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.5);
+    z-index: 140;
+  }
+  #roomsSidebar {
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    width: 300px;
+    max-width: 88vw;
+    background: #111827;
+    border-left: 1.5px solid #1f2937;
+    z-index: 141;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -16px 0 48px rgba(0,0,0,.4);
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+  }
+  #roomsSidebar.open {
+    transform: translateX(0);
+  }
+  #roomsSidebarHeader {
+    padding: 16px 18px;
+    border-bottom: 1.5px solid #1f2937;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  #roomsSidebarHeader h3 { font-size: 16.5px; font-weight: 600; }
+  #roomsSidebarClose {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 22px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px 8px;
+  }
+  #roomsSidebarClose:hover { color: #f1f5f9; }
+
+  #roomsSidebarBody {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 16px;
+  }
+  .rooms-section-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: #64748b;
+    font-weight: 700;
+    margin: 14px 0 8px 0;
+  }
+  .rooms-section-title:first-child { margin-top: 0; }
+
+  .room-card {
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 11px;
+    padding: 11px 13px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    position: relative;
+  }
+  .room-card:hover { border-color: #475569; }
+  .room-card.active { border-color: #22c55e; background: rgba(34,197,94,.08); }
+  .room-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .room-card-name {
+    font-size: 14.5px;
+    font-weight: 600;
+    color: #f1f5f9;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .room-card-code {
+    font-size: 11.5px;
+    color: #64748b;
+    font-family: monospace;
+    margin-top: 2px;
+  }
+  .room-card-timer {
+    font-size: 12px;
+    font-family: monospace;
+    color: #94a3b8;
+    flex-shrink: 0;
+  }
+  .room-card-timer.urgent { color: #f59e0b; font-weight: 700; }
+  .room-card-close {
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: transparent;
+    border: none;
+    color: #64748b;
+    font-size: 15px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+  .room-card-close:hover { background: rgba(255,255,255,.08); color: #f1f5f9; }
+  .room-card-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #ef4444;
+    margin-left: 4px;
+    flex-shrink: 0;
+  }
+  .room-card-pinned {
+    font-size: 10.5px;
+    color: #4ade80;
+    background: rgba(34,197,94,.12);
+    border-radius: 5px;
+    padding: 1px 6px;
+    margin-left: 6px;
+  }
+
+  .rooms-empty {
+    color: #64748b;
+    font-size: 13px;
+    padding: 6px 2px 14px 2px;
+    line-height: 1.5;
+  }
+
+  #roomsSidebarFooter {
+    padding: 14px 16px;
+    border-top: 1.5px solid #1f2937;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  #joinByCodeInput {
+    padding: 8px 11px;
+    background: #0f172a;
+    border: 1.5px solid #334155;
+    border-radius: 9px;
+    color: #f1f5f9;
+    font-size: 14px;
+    outline: none;
+    text-transform: uppercase;
+  }
+  #joinByCodeInput:focus { border-color: #22c55e; }
+  .rooms-footer-row { display: flex; gap: 8px; }
+  .rooms-footer-row button { flex: 1; }
+  #createRoomBtn, #joinByCodeBtn {
+    padding: 9px 12px;
+    background: #22c55e;
+    border: none;
+    border-radius: 9px;
+    color: #000;
+    font-weight: 600;
+    font-size: 13.5px;
+    cursor: pointer;
+  }
+  #createRoomBtn:hover, #joinByCodeBtn:hover { background: #4ade80; }
+  #createRoomBtn:disabled, #joinByCodeBtn:disabled { opacity: .5; cursor: not-allowed; }
+  #roomsFooterMsg { font-size: 12.5px; color: #94a3b8; min-height: 16px; }
+  #roomsFooterMsg.err { color: #ef4444; }
+
+  /* ── Room top bar (shown inside chatScreen while in a custom room) ── */
+  #roomTopBar {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 21px;
+    background: rgba(34,197,94,.06);
+    border-bottom: 1.5px solid #1f2937;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  #roomTopBarLeft { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  #roomTopBarName { font-size: 15px; font-weight: 600; color: #f1f5f9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #roomTopBarCode { font-size: 12.5px; color: #64748b; font-family: monospace; }
+  #roomTopBarTimer { font-size: 13.5px; font-family: monospace; color: #94a3b8; flex-shrink: 0; }
+  #roomTopBarTimer.urgent { color: #f59e0b; font-weight: 700; }
+  #roomTopBarActions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .room-top-btn {
+    background: transparent;
+    border: 1.5px solid #334155;
+    color: #94a3b8;
+    font-size: 13px;
+    padding: 5px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .room-top-btn:hover { color: #f1f5f9; border-color: #475569; }
+  .room-top-btn.leave { border-color: #7f1d1d; color: #f87171; }
+  .room-top-btn.leave:hover { background: rgba(239,68,68,.1); }
+
+  /* ── Generic small modal (used for: create room, room settings, kick
+       confirm, extend prompt, transfer offer) ── */
+  .chat-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.55);
+    z-index: 180;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .chat-modal {
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 14px;
+    padding: 20px;
+    width: 100%;
+    max-width: 320px;
+  }
+  .chat-modal h3 { font-size: 16.5px; font-weight: 700; margin-bottom: 10px; }
+  .chat-modal p { font-size: 14px; color: #94a3b8; line-height: 1.5; margin-bottom: 12px; }
+  .chat-modal input[type="text"] {
+    width: 100%;
+    padding: 8px 11px;
+    background: #0f172a;
+    border: 1.5px solid #334155;
+    border-radius: 9px;
+    color: #f1f5f9;
+    font-size: 14px;
+    outline: none;
+    margin-bottom: 10px;
+  }
+  .chat-modal input[type="text"]:focus { border-color: #22c55e; }
+  .chat-modal label { display: block; font-size: 12.5px; color: #94a3b8; margin-bottom: 4px; }
+  .chat-modal-row { display: flex; gap: 8px; margin-top: 6px; }
+  .chat-modal-row button { flex: 1; padding: 9px; border-radius: 9px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; }
+  .chat-modal-btn-primary { background: #22c55e; color: #000; }
+  .chat-modal-btn-primary:hover { background: #4ade80; }
+  .chat-modal-btn-secondary { background: #334155; color: #f1f5f9; }
+  .chat-modal-btn-secondary:hover { background: #475569; }
+  .chat-modal-btn-danger { background: #7f1d1d; color: #fca5a5; }
+  .chat-modal-btn-danger:hover { background: #991b1b; }
+  .chat-modal-err { color: #ef4444; font-size: 13px; min-height: 16px; margin-top: 4px; }
+  .chat-modal-toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .chat-modal-toggle-row label { margin-bottom: 0; color: #f1f5f9; font-size: 14px; }
+
+  /* ── Members list (inside room settings, for kick) ── */
+  .room-member-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 7px 2px;
+    border-bottom: 1px solid #273549;
+    font-size: 13.5px;
+  }
+  .room-member-row:last-child { border-bottom: none; }
+  .room-member-name { display: flex; align-items: center; gap: 5px; color: #f1f5f9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .room-member-actions { display: flex; gap: 5px; flex-shrink: 0; }
+  .room-member-actions button {
+    background: transparent;
+    border: 1.5px solid #334155;
+    color: #94a3b8;
+    font-size: 11.5px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .room-member-actions button:hover { color: #f1f5f9; border-color: #475569; }
+  .room-member-actions button.kick { border-color: #7f1d1d; color: #f87171; }
+  .room-member-actions button.kick:hover { background: rgba(239,68,68,.1); }
+</style>
+</head>
+<body>
+
+<div class="chat-header" style="position:relative;display:grid;grid-template-columns:1fr auto 1fr;align-items:center">
+  <div style="position:relative;justify-self:start;display:flex;align-items:center;gap:6px">
+    <span id="onlineDot" class="chat-online-dot offline" style="cursor:pointer;display:inline-block;padding:10px;margin:-10px;vertical-align:middle"></span>
+    <span id="onlineCount" style="font-size:14.5px;color:#64748b;margin-left:8px;cursor:pointer"></span>
+    <div id="globalClearPanel" style="display:none;position:absolute;top:28px;left:-10px;background:#1e293b;border:1.5px solid #334155;border-radius:10px;padding:12px;z-index:10;width:240px;font-size:15px;font-weight:400"></div>
+    <div id="onlineListPanel" style="display:none;position:absolute;top:28px;left:-10px;background:#1e293b;border:1.5px solid #334155;border-radius:10px;padding:12px;z-index:10;width:220px;font-size:14px;font-weight:400;max-height:280px;overflow-y:auto"></div>
+  </div>
+  <div style="justify-self:center">VUS Chat</div>
+  <div style="font-size:16.5px;color:#475569;display:flex;align-items:center;gap:10px;justify-self:end">
+    <button id="roomsToggleBtn">🚪 Rooms<span class="rooms-badge-dot" id="roomsBadgeDot"></span></button>
+    <span id="youAre"></span>
+    <button id="changeNameBtn" style="display:none;background:transparent;border:1.5px solid #334155;color:#64748b;font-size:15.8px;padding:4.5px 10.5px;border-radius:9px;cursor:pointer">Change name</button>
+  </div>
+</div>
+
+<div id="connError"></div>
+<div id="composerNotice"></div>
+
+<!-- Ping toast: shown briefly to the targeted person when someone @pings them -->
+<div id="pingToast">
+  <div class="ping-toast-title" id="pingToastTitle">You were pinged</div>
+  <div class="ping-toast-body" id="pingToastBody"></div>
+</div>
+
+<!-- Rooms sidebar -->
+<div id="roomsSidebarOverlay"></div>
+<div id="roomsSidebar">
+  <div id="roomsSidebarHeader">
+    <h3>Rooms</h3>
+    <button id="roomsSidebarClose" aria-label="Close">&times;</button>
+  </div>
+  <div id="roomsSidebarBody"></div>
+  <div id="roomsSidebarFooter">
+    <div id="roomsFooterMsg"></div>
+    <input id="joinByCodeInput" type="text" placeholder="Enter room code…" maxlength="20">
+    <div class="rooms-footer-row">
+      <button id="joinByCodeBtn">Join by Code</button>
+      <button id="createRoomBtn">+ New Room</button>
+    </div>
+  </div>
+</div>
+
+<!-- Room top bar: shown inside chatScreen only while in a custom (non-main) room -->
+<div id="roomTopBar">
+  <div id="roomTopBarLeft">
+    <span id="roomTopBarName"></span>
+    <span id="roomTopBarCode"></span>
+  </div>
+  <span id="roomTopBarTimer"></span>
+  <div id="roomTopBarActions">
+    <button class="room-top-btn" id="roomSettingsBtn" style="display:none">⚙ Settings</button>
+    <button class="room-top-btn leave" id="roomLeaveBtn">Leave</button>
+  </div>
+</div>
+
+<!-- Create Room modal -->
+<div class="chat-modal-overlay" id="createRoomOverlay">
+  <div class="chat-modal">
+    <h3>Create a Room</h3>
+    <label for="createRoomNameInput">Room name (optional)</label>
+    <input type="text" id="createRoomNameInput" maxlength="30" placeholder="e.g. Movie Night">
+    <div class="chat-modal-err" id="createRoomErr"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="createRoomCancelBtn">Cancel</button>
+      <button class="chat-modal-btn-primary" id="createRoomConfirmBtn">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Room Settings modal (owner only): rename, public/private, change code, members/kick, transfer -->
+<div class="chat-modal-overlay" id="roomSettingsOverlay">
+  <div class="chat-modal" style="max-width:340px">
+    <h3>Room Settings</h3>
+
+    <div class="chat-modal-toggle-row">
+      <label>Public room</label>
+      <button class="room-top-btn" id="roomPublicToggleBtn">Off</button>
+    </div>
+
+    <label for="roomCodeInput">Room code (max 20 chars)</label>
+    <input type="text" id="roomCodeInput" maxlength="20">
+    <div class="chat-modal-err" id="roomCodeErr"></div>
+    <div class="chat-modal-row" style="margin-bottom:14px">
+      <button class="chat-modal-btn-secondary" id="roomCodeSaveBtn" style="flex:none;padding:7px 14px;font-size:13px">Save Code</button>
+    </div>
+
+    <label>Members</label>
+    <div id="roomMembersList" style="margin-bottom:8px"></div>
+
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="roomSettingsCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Extend-room prompt: appears automatically with 1 minute left -->
+<div class="chat-modal-overlay" id="extendRoomOverlay">
+  <div class="chat-modal">
+    <h3>⏳ Room expiring soon</h3>
+    <p id="extendRoomText">This room closes in under a minute.</p>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="extendRoomDismissBtn">Dismiss</button>
+      <button class="chat-modal-btn-primary" id="extendRoomConfirmBtn">+10 minutes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Ownership transfer offer -->
+<div class="chat-modal-overlay" id="transferOfferOverlay">
+  <div class="chat-modal">
+    <h3>👑 Ownership offer</h3>
+    <p id="transferOfferText"></p>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="transferDeclineBtn">Decline</button>
+      <button class="chat-modal-btn-primary" id="transferAcceptBtn">Accept</button>
+    </div>
+  </div>
+</div>
+
+<!-- Kick confirmation -->
+<div class="chat-modal-overlay" id="kickConfirmOverlay">
+  <div class="chat-modal">
+    <h3>Kick member?</h3>
+    <p id="kickConfirmText"></p>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="kickCancelBtn">Cancel</button>
+      <button class="chat-modal-btn-danger" id="kickConfirmBtn">Kick</button>
+    </div>
+  </div>
+</div>
+
+<!-- Join screen: ask for a display name before entering the room.
+     Content is built dynamically in JS depending on whether a previous
+     name is saved (renderJoinReturning / renderJoinNameEntry). -->
+<div id="joinScreen">
+  <div id="joinCard"></div>
+</div>
+
+<!-- Chat screen: shown after joining -->
+<div id="chatScreen">
+  <div id="messages"></div>
+  <div id="emptyState" style="display:none">No messages yet — say hi!</div>
+  <button id="jumpToBottomBtn">↓ Jump to latest</button>
+  <div id="typingBar" style="display:none;padding:6px 21px;font-size:17.2px;color:#64748b;font-style:italic;flex-shrink:0"></div>
+  <div id="pendingImageBar" style="display:none;padding:10px 21px;border-top:1.5px solid #1f2937;align-items:center;gap:12px;flex-shrink:0">
+    <img id="pendingImagePreview" style="max-height:60px;max-width:90px;border-radius:8px;object-fit:cover;display:block">
+    <span style="flex:1;font-size:14.5px;color:#94a3b8">Image ready — click Send to post it</span>
+    <button id="cancelPendingImageBtn" class="toolbar-btn">Cancel</button>
+  </div>
+  <div id="toolbar">
+    <button id="uploadImageBtn" class="toolbar-btn" style="display:none">📎 Image</button>
+    <input id="imageFileInput" type="file" accept="image/*" style="display:none">
+    <span id="charCounter">500</span>
+    <div style="flex:1"></div>
+    <div style="position:relative">
+      <button id="pingYouBtn" class="toolbar-btn" title="Send a Discord ping to the site owner">🔔 Ping Devs</button>
+      <div id="pingYouPanel">
+        <textarea id="pingYouNote" rows="2" maxlength="200" placeholder="Optional note (max 200 chars)…"></textarea>
+        <button id="pingYouSend" class="toolbar-btn active" style="width:100%">Send Ping</button>
+      </div>
+    </div>
+    <button id="autoScrollBtn" class="toolbar-btn active">Auto Scroll: On</button>
+    <button id="clearChatBtn" class="toolbar-btn">Clear Chat</button>
+  </div>
+  <div id="composer">
+    <div id="mentionDropdown"></div>
+    <div id="composerInputWrap">
+      <button id="mentionChip" type="button"></button>
+      <textarea id="msgInput" rows="1" placeholder="Type a message… (@ to mention someone)" maxlength="500"></textarea>
+    </div>
+    <button id="sendBtn">Send</button>
+  </div>
+</div>
+
+<!-- Ping sound: preloaded so it plays instantly with no load delay when
+     someone is @pinged. Swap PING_SOUND_URL below to ping.mp3 once that's
+     uploaded — see the comment near the top of the script block. -->
+<audio id="pingSound" preload="auto"></audio>
+
+<!--
+  ═══════════════════════════════════════════════════════════
+  FIREBASE SETUP REQUIRED — read this before this chat will work
+  ═══════════════════════════════════════════════════════════
+  1. Go to https://console.firebase.google.com and create a free project.
+  2. In the project, go to "Build" → "Realtime Database" → "Create Database".
+     Start in TEST MODE for now (anyone can read/write — fine for a small
+     public chat room, but you can lock it down later with Firebase rules).
+  3. Go to Project Settings (gear icon) → General → "Your apps" → click the
+     "</>" web icon to register a web app. It'll give you a config object
+     that looks like the FIREBASE_CONFIG placeholder below.
+  4. Copy that object and paste it in place of FIREBASE_CONFIG below.
+  5. That's it — no server to run, this connects directly from the browser.
+
+  Room name: change ROOM_ID below if you want multiple separate chat rooms
+  (e.g. one for VUS Hub, one for VUSL) using the same Firebase project.
+  ═══════════════════════════════════════════════════════════
+-->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+/* ── Fill this in with your real Firebase project config ── */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDxMfGQ_xk-au8YgOvaFO2R9LxAe-pa9Rg",
+  authDomain: "vus-chat.firebaseapp.com",
+  databaseURL: "https://vus-chat-default-rtdb.firebaseio.com",
+  projectId: "vus-chat",
+  storageBucket: "vus-chat.firebasestorage.app",
+  messagingSenderId: "134456894391",
+  appId: "1:134456894391:web:bdf28487bf2b2eae593e32"
+};
+
+/* Change this to run multiple separate chat rooms off one Firebase project */
+const MAIN_ROOM_ID = "vus-hub-main";
+
+/* ── Custom room system ── */
+const ROOM_DURATION_MS = 15 * 60 * 1000;      // rooms live 15 minutes
+const ROOM_WARNING_MS = 60 * 1000;            // extend-prompt appears with 1 min left
+const ROOM_EXTEND_MS = 10 * 60 * 1000;        // "+10 minutes" button adds this much
+const ROOM_CREATE_COOLDOWN_MS = 60 * 1000;    // 1 minute between room creations, per person
+const ROOM_CODE_DEFAULT_LENGTH = 4;
+const ROOM_CODE_MAX_LENGTH = 20;
+const ROOM_NAME_MAX_LENGTH = 30;
+const ROOM_CREATE_COOLDOWN_KEY = "vusChatLastRoomCreate";
+
+/* Only keep the most recent N messages loaded/rendered, to keep things fast
+   even after thousands of messages accumulate over time. */
+const MAX_MESSAGES = 200;
+
+const MAX_CHARS = 500;
+
+/* ── Ping You (Discord webhook) ──
+   EASY TO EDIT: just change this URL if you need a different webhook. */
+const PING_YOU_WEBHOOK_URL = "https://discord.com/api/webhooks/1536853718564216842/VZYgEyf5yEzMs03g-hbWIZRS90oNKrVh_LBN1eHv3ZVplCOUlKeRDTWKIAyolYjIshHa";
+const PING_YOU_COOLDOWN_MS = 30 * 1000; // per-person (this browser), not global
+const PING_YOU_STORAGE_KEY = "vusChatLastPingYou";
+
+/* ── @Ping (in-chat, live sound + notification) ──
+   Cooldown is per-TARGET, global: once anyone pings a person, nobody can
+   ping that same person again until it expires — doesn't matter who tries. */
+const AT_PING_COOLDOWN_MS = 30 * 1000;
+
+/* Placeholder sound — swap to "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/ping.mp3"
+   once that real file exists on GitHub. Fetched once and cached as a Blob
+   URL below so playback is instant with no per-ping network delay. */
+const PING_SOUND_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/moannnnnygs727272.mp3";
+
+/* ── Crown (verified owner badge) ──
+   Global code system, redeemed via the mod menu. Code defaults to "0000"
+   (always inert). Requesting a code posts it to CROWN_WEBHOOK_URL — only
+   you have access to that Discord server — and the code expires after
+   CROWN_CODE_LIFESPAN_MS. The crown itself lives on the live presence
+   session (see ChatBackend.claimPresence), so it never survives a
+   disconnect, rename, or someone else later using the same name — a
+   fresh code redemption is required every single join. */
+const CROWN_CODE_LIFESPAN_MS = 60 * 1000;
+const CROWN_REQUEST_COOLDOWN_MS = 30 * 1000;
+const CROWN_REQUEST_COOLDOWN_KEY = "vusChatLastCrownRequest";
+const CROWN_WEBHOOK_URL = "https://discord.com/api/webhooks/1542708447991037953/Ge705Wa_quPVC-2pFhttHYNuA4-FI5ZDRIn5VwjQ059SwT0ZRCrqmVLMofb8oJhsLFFJ";
+
+/* ══════════════════════════════════════════════════════════
+   Backend abstraction layer.
+   Every actual Firebase call is isolated in this one object so
+   that swapping to a different backend later (Supabase, a custom
+   server, etc.) only means rewriting the functions below —
+   nothing in the UI code below needs to change.
+   ══════════════════════════════════════════════════════════ */
+const ChatBackend = {
+  _db: null,
+  _ref: null,
+  _typingRef: null,
+  _myTypingRef: null,
+  _connectedRef: null,
+  _presenceRef: null,
+  _myPresenceRef: null,
+  _myLeaveEventRef: null,
+  _nameColorsRef: null,
+  _atPingCooldownRef: null,
+  _leaveEventsRef: null,
+  _crownedRef: null,
+  _crownMetaRef: null,
+  _myCrownRef: null,
+  currentRoomId: null,
+
+  init() {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    this._db = firebase.database();
+    this._connectedRef = this._db.ref(".info/connected");
+    this.initCrowns();
+    this.bindToRoom(MAIN_ROOM_ID);
+  },
+
+  // Crown paths are GLOBAL (not per-room, not rebuilt by bindToRoom) —
+  // being crowned should mean the same thing everywhere in the app.
+  initCrowns() {
+    this._crownedRef = this._db.ref("crowned");
+    this._crownMetaRef = this._db.ref("crownMeta");
+  },
+
+  watchCrownedNames(onChange) {
+    this._crownedRef.on("value", snap => {
+      const val = snap.val() || {};
+      onChange(new Set(Object.keys(val)));
+    });
+  },
+
+  _randomCrownCode() {
+    const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+    let out = "";
+    for (let i = 0; i < 4; i++) out += chars[Math.floor(Math.random() * chars.length)];
+    return out;
+  },
+
+  // Generates a fresh code, writes it to Firebase with a 60s expiry, and
+  // posts it to the private Discord webhook. The code is meaningless to
+  // anyone who can't read that webhook's channel.
+  async generateCrownCode() {
+    const code = this._randomCrownCode();
+    const expiresAt = Date.now() + CROWN_CODE_LIFESPAN_MS;
+    await this._crownMetaRef.set({ code, expiresAt });
+    try {
+      await fetch(CROWN_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: "👑 Crown code: **" + code + "** (expires in 60s)" })
+      });
+    } catch (e) {
+      // Code is still live in Firebase even if the Discord post fails —
+      // caller can just check their server, or try requesting again after
+      // the cooldown if it never arrives.
+    }
+    return code;
+  },
+
+  // Atomic + single-use via transaction: only commits if the submitted
+  // code still matches AND hasn't expired, and resets to "0000" in the
+  // same write — so the same code can never be redeemed twice, and two
+  // near-simultaneous submissions can't both succeed.
+  async redeemCrownCode(inputCode) {
+    const clean = (inputCode || "").trim().toUpperCase();
+    if (!clean || clean === "0000") return { ok: false };
+
+    const tx = await this._crownMetaRef.transaction(current => {
+      if (!current || current.code !== clean) return; // abort — wrong/no code
+      if (!current.expiresAt || Date.now() > current.expiresAt) return; // abort — expired
+      return { code: "0000", expiresAt: 0 };
+    });
+
+    if (!tx.committed) return { ok: false };
+
+    if (this._myCrownRef) {
+      await this._myCrownRef.set(true);
+    }
+    return { ok: true };
+  },
+
+  // Rebuilds every per-room ref to point at a new room, and detaches all
+  // listeners from whichever room was previously bound (if any) so old-room
+  // updates can never leak into the new room's UI after switching. Presence/
+  // typing for the OLD room are also explicitly released here, since
+  // switching rooms should always mean fully leaving the previous one.
+  bindToRoom(roomId) {
+    if (this.currentRoomId === roomId) return;
+
+    if (this.currentRoomId) {
+      this.releasePresence();
+      this.clearTyping();
+      this.detachAllListeners();
+    }
+
+    this.currentRoomId = roomId;
+    this._ref = this._db.ref("rooms/" + roomId + "/messages");
+    this._typingRef = this._db.ref("rooms/" + roomId + "/typing");
+    this._presenceRef = this._db.ref("rooms/" + roomId + "/presence");
+    this._nameColorsRef = this._db.ref("rooms/" + roomId + "/nameColors");
+    this._atPingCooldownRef = this._db.ref("rooms/" + roomId + "/atPingCooldowns");
+    this._leaveEventsRef = this._db.ref("rooms/" + roomId + "/leaveEvents");
+  },
+
+  // Detaches every listener this object has ever attached to a per-room
+  // ref (messages, typing, presence, leave events). Does NOT touch
+  // .info/connected, which is global and stays attached across room
+  // switches. Safe to call even if some of these were never attached.
+  detachAllListeners() {
+    if (this._ref) this._ref.off();
+    if (this._typingRef) this._typingRef.off();
+    if (this._presenceRef) this._presenceRef.off();
+    if (this._leaveEventsRef) this._leaveEventsRef.off();
+  },
+
+  // Calls onStatus(true/false) whenever the connection state changes
+  watchConnection(onStatus) {
+    this._connectedRef.on("value", snap => onStatus(snap.val() === true));
+  },
+
+  // Calls onMessage(msgObject) for every existing + new message
+  watchMessages(onMessage) {
+    this._ref.limitToLast(MAX_MESSAGES).on("child_added", snap => {
+      onMessage({ id: snap.key, ...snap.val() });
+    });
+  },
+
+  // Sends an already-compressed base64 data URL as a message. No Firebase
+  // Storage involved — this stays on the free Spark plan, at the cost of
+  // bulkier message payloads than a real file host would give you. The
+  // image is compressed/resized client-side (see compressImageFile)
+  // before this is ever called, to keep that payload size reasonable.
+  async sendImage(name, dataUrl) {
+    const color = await this.getNameColor(name);
+    return this._ref.push({
+      name: name,
+      imageData: dataUrl,
+      ts: firebase.database.ServerValue.TIMESTAMP,
+      ...(color ? { bubble: color.bubble, textColor: color.text } : {})
+    });
+  },
+
+  // Sends one message. If this name has a locked-in color, it's baked
+  // into the message itself at send time — so changing your color later
+  // only affects messages sent after the change, never past ones.
+  // `mention` (optional): { name: "TargetName" } — when present, the
+  // message is rendered with a highlighted @mention chip and triggers a
+  // live ping (sound + notification) for the target, handled separately
+  // by sendAtPing() below — this just tags the message itself.
+  async send(name, text, mention) {
+    const color = await this.getNameColor(name);
+    return this._ref.push({
+      name: name,
+      text: text,
+      ts: firebase.database.ServerValue.TIMESTAMP,
+      ...(mention ? { mention: mention.name } : {}),
+      ...(color ? { bubble: color.bubble, textColor: color.text } : {})
+    });
+  },
+
+  // ── Per-name bubble color (write-once) ──
+  async getNameColor(name) {
+    const snap = await this._nameColorsRef.child(this._safeKey(name)).get();
+    return snap.exists() ? snap.val() : null;
+  },
+
+  async claimColor(name, bubble, text) {
+    const key = this._safeKey(name);
+    const ref = this._nameColorsRef.child(key);
+    const existing = await ref.get();
+    if (existing.exists()) {
+      return { ok: false, reason: "already-set" };
+    }
+    await ref.set({ bubble, text });
+    return { ok: true };
+  },
+
+  // ── Presence / name reservation ──
+  async isNameTaken(name) {
+    const snap = await this._presenceRef.get();
+    const val = snap.val() || {};
+    const key = this._safeKey(name);
+    return Object.prototype.hasOwnProperty.call(val, key);
+  },
+
+  // Posts join/leave messages to the room feed itself (not just updating
+  // presence data), so they show up inline in the chat like any other
+  // message — just rendered without a bubble via msg.system.
+  // `silent` (spectator mode) skips the join/leave feed messages entirely,
+  // while still claiming presence so the online count/list stays accurate.
+  claimPresence(name, silent) {
+    this.releasePresence();
+    this._myPresenceRef = this._presenceRef.child(this._safeKey(name));
+    this._silentSession = !!silent;
+
+    const leaveEventRef = this._leaveEventsRef.push();
+    if (!this._silentSession) {
+      leaveEventRef.onDisconnect().set({ name, ts: firebase.database.ServerValue.TIMESTAMP });
+    }
+    this._myLeaveEventRef = leaveEventRef;
+
+    this._myPresenceRef.onDisconnect().remove();
+    this._myPresenceRef.set({ joinedAt: firebase.database.ServerValue.TIMESTAMP });
+
+    // Crown: always start crown-less on every (re)join/rename/room-switch —
+    // this same code path runs for all of those — and strip it the instant
+    // this session disconnects for any reason, so it can never linger on a
+    // name after the crowned person leaves, and nobody else re-using that
+    // name later inherits it.
+    const crownRef = this._crownedRef.child(this._safeKey(name));
+    crownRef.remove();
+    crownRef.onDisconnect().remove();
+    this._myCrownRef = crownRef;
+
+    if (!this._silentSession) {
+      this._ref.push({
+        system: true,
+        text: name + " joined",
+        ts: firebase.database.ServerValue.TIMESTAMP
+      });
+    }
+  },
+
+  // Drops presence right now without ever posting a "left" message,
+  // regardless of whether this session was silent/spectator or normal.
+  // Used by the "Leave Silently" mod-menu action.
+  releasePresenceSilently() {
+    if (this._myLeaveEventRef) {
+      this._myLeaveEventRef.onDisconnect().cancel();
+      this._myLeaveEventRef = null;
+    }
+    if (this._myPresenceRef) {
+      this._myPresenceRef.onDisconnect().cancel();
+      this._myPresenceRef.remove();
+      this._myPresenceRef = null;
+    }
+    if (this._myCrownRef) {
+      this._myCrownRef.onDisconnect().cancel();
+      this._myCrownRef.remove();
+      this._myCrownRef = null;
+    }
+  },
+
+  releasePresence() {
+    if (this._myPresenceRef) {
+      this._myPresenceRef.remove();
+      this._myPresenceRef = null;
+    }
+    if (this._myLeaveEventRef) {
+      this._myLeaveEventRef.onDisconnect().cancel();
+      this._myLeaveEventRef = null;
+    }
+    if (this._myCrownRef) {
+      this._myCrownRef.onDisconnect().cancel();
+      this._myCrownRef.remove();
+      this._myCrownRef = null;
+    }
+  },
+
+  watchLeaveEvents() {
+    this._leaveEventsRef.on("child_added", snap => {
+      const val = snap.val();
+      if (!val) return;
+      this._ref.push({
+        system: true,
+        text: val.name + " left",
+        ts: firebase.database.ServerValue.TIMESTAMP
+      });
+      snap.ref.remove();
+    });
+  },
+
+  watchPresenceCount(onCount) {
+    this._presenceRef.on("value", snap => {
+      const val = snap.val() || {};
+      onCount(Object.keys(val).length);
+    });
+  },
+
+  // Calls onList(array of {name, joinedAt}) any time presence changes.
+  // Reuses the same presence/ node as everything else here, so this is
+  // exactly the set of currently-connected names, each with the server
+  // timestamp of when they claimed presence (may be null very briefly
+  // right after joining, before the server timestamp round-trips back).
+  watchPresenceList(onList) {
+    this._presenceRef.on("value", snap => {
+      const val = snap.val() || {};
+      const list = Object.entries(val).map(([key, v]) => ({
+        name: key,
+        joinedAt: (v && typeof v === "object") ? (v.joinedAt || null) : null
+      }));
+      onList(list);
+    });
+  },
+
+  // ── Typing presence ──
+  setTyping(name) {
+    if (!this._myTypingRef) {
+      this._myTypingRef = this._typingRef.child(this._safeKey(name));
+      this._myTypingRef.onDisconnect().remove();
+    }
+    this._myTypingRef.set({ name: name, ts: firebase.database.ServerValue.TIMESTAMP });
+  },
+
+  clearTyping() {
+    if (this._myTypingRef) this._myTypingRef.remove();
+    this._myTypingRef = null;
+  },
+
+  watchTyping(onChange, excludeNameFn) {
+    this._typingRef.on("value", snap => {
+      const val = snap.val() || {};
+      const currentExclude = excludeNameFn();
+      const entries = Object.values(val)
+        .filter(e => e && e.name !== currentExclude)
+        .sort((a, b) => (a.ts || 0) - (b.ts || 0))
+        .map(e => e.name);
+      onChange(entries);
+    });
+  },
+
+  // ── @Ping cooldown (per-target, global — see AT_PING_COOLDOWN_MS above) ──
+  // Uses a Firebase transaction so two people pinging the same target in
+  // the same instant can't both "win" — only one write succeeds as the
+  // real cooldown-setter, the loser sees committed:false and treats it as
+  // already-on-cooldown.
+  async tryStartAtPingCooldown(targetName) {
+    const key = this._safeKey(targetName);
+    const ref = this._atPingCooldownRef.child(key);
+    const now = Date.now();
+    let resultRemainingMs = 0;
+    const txResult = await ref.transaction(current => {
+      if (current && typeof current === "number" && (now - current) < AT_PING_COOLDOWN_MS) {
+        return; // abort — still on cooldown, don't overwrite the existing timestamp
+      }
+      return now;
+    });
+    if (!txResult.committed) {
+      const snap = await ref.get();
+      const existing = snap.val();
+      const elapsed = existing ? (now - existing) : AT_PING_COOLDOWN_MS;
+      resultRemainingMs = Math.max(0, AT_PING_COOLDOWN_MS - elapsed);
+      return { ok: false, remainingMs: resultRemainingMs };
+    }
+    return { ok: true };
+  },
+
+  _safeKey(name) {
+    return name.replace(/[.#$\[\]/]/g, "_");
+  }
+};
+
+/* ══════════════════════════════════════════════════════════
+   Room Manager — custom room lifecycle: creation, metadata,
+   expiry/extension, public/private visibility, ownership,
+   kicking, and ownership-transfer offers.
+
+   Stored under /roomsMeta/{code} in the SAME Firebase database
+   ChatBackend uses, but as its own top-level path — deliberately
+   separate from /rooms/{code}/... (the actual chat data:
+   messages/presence/typing/etc, which ChatBackend already
+   manages generically for whatever room it's bound to).
+
+   /roomsMeta/{code} shape:
+     {
+       name: "Movie Night" | null,      // optional display name
+       ownerName: "Alice",              // current owner's display name
+       isPublic: false,
+       createdAt: <server ts>,
+       expiresAt: <server ts + duration>,
+       kicked: { "Bob": true, ... }     // names currently kicked from THIS room
+     }
+
+   Transfer offers live at /roomsMeta/{code}/transferOffer:
+     { toName: "Bob", fromName: "Alice" } | null
+   ══════════════════════════════════════════════════════════ */
+const RoomManager = {
+  _db: null,
+  _metaRootRef: null,
+  _publicListRef: null,
+
+  init(db) {
+    this._db = db;
+    this._metaRootRef = db.ref("roomsMeta");
+  },
+
+  _safeCode(code) {
+    return String(code).replace(/[.#$\[\]/]/g, "_");
+  },
+
+  // Generates a random room code of the given length using an
+  // unambiguous character set (no 0/O/1/I confusion).
+  _randomCode(length) {
+    const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+    let out = "";
+    for (let i = 0; i < length; i++) {
+      out += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return out;
+  },
+
+  async _isCodeTaken(code) {
+    const snap = await this._metaRootRef.child(this._safeCode(code)).get();
+    return snap.exists();
+  },
+
+  // Finds an unused default-length code, retrying on the rare collision.
+  async _generateUniqueCode() {
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const candidate = this._randomCode(ROOM_CODE_DEFAULT_LENGTH);
+      if (!(await this._isCodeTaken(candidate))) return candidate;
+    }
+    // Extremely unlikely fallback: widen the code by a couple chars.
+    return this._randomCode(ROOM_CODE_DEFAULT_LENGTH + 2);
+  },
+
+  /**
+   * Creates a new room and returns its metadata (including the generated
+   * code). Does NOT check the 1-minute creation cooldown — that's tracked
+   * client-side in localStorage and checked by the caller before this runs.
+   * @param {string} ownerName
+   * @param {string} [roomName] - optional display name, max ROOM_NAME_MAX_LENGTH
+   * @returns {Promise<{code: string}>}
+   */
+  async createRoom(ownerName, roomName) {
+    const code = await this._generateUniqueCode();
+    const now = Date.now();
+    const meta = {
+      name: (roomName || "").trim().slice(0, ROOM_NAME_MAX_LENGTH) || null,
+      ownerName: ownerName,
+      isPublic: false,
+      createdAt: firebase.database.ServerValue.TIMESTAMP,
+      expiresAt: now + ROOM_DURATION_MS, // client-estimated; fine for a countdown display
+      kicked: {}
+    };
+    await this._metaRootRef.child(this._safeCode(code)).set(meta);
+    return { code };
+  },
+
+  async getRoomMeta(code) {
+    const snap = await this._metaRootRef.child(this._safeCode(code)).get();
+    return snap.exists() ? { code, ...snap.val() } : null;
+  },
+
+  // Live subscription to one room's metadata (owner, expiry, public/private,
+  // transfer offers, kick list) — used while actively inside that room.
+  watchRoomMeta(code, callback) {
+    const ref = this._metaRootRef.child(this._safeCode(code));
+    const unsubscribe = ref.on("value", snap => {
+      callback(snap.exists() ? { code, ...snap.val() } : null);
+    });
+    return () => ref.off("value", unsubscribe);
+  },
+
+  // Live subscription to every PUBLIC room's metadata, for the sidebar's
+  // "Chat Rooms" list. Expired rooms are filtered out client-side (the
+  // actual deletion/cleanup is handled by whoever's timer fires first —
+  // see checkAndHandleExpiry below — this filter just avoids a flash of a
+  // stale room between expiry and cleanup completing).
+  watchPublicRooms(callback) {
+    const unsubscribe = this._metaRootRef.on("value", snap => {
+      const val = snap.val() || {};
+      const now = Date.now();
+      const list = Object.entries(val)
+        .filter(([code, meta]) => meta && meta.isPublic)
+        .map(([code, meta]) => ({ code, ...meta }));
+      callback(list);
+    });
+    return () => this._metaRootRef.off("value", unsubscribe);
+  },
+
+  async setPublic(code, isPublic) {
+    await this._metaRootRef.child(this._safeCode(code)).child("isPublic").set(!!isPublic);
+  },
+
+  async extendRoom(code) {
+    const ref = this._metaRootRef.child(this._safeCode(code)).child("expiresAt");
+    await ref.transaction(current => (current || Date.now()) + ROOM_EXTEND_MS);
+  },
+
+  // Changes a room's join code. The room's chat data itself
+  // (messages/presence/etc, under /rooms/{oldCode}/...) is NOT migrated —
+  // changing the code effectively starts a fresh room history under the
+  // new code, which also means anyone still using the old code can no
+  // longer find it. This matches "owner can change room code" being the
+  // deliberate mechanism for invalidating old access without a formal ban.
+  async changeCode(oldCode, newCode, ownerName) {
+    const safeNew = this._safeCode(newCode.trim().slice(0, ROOM_CODE_MAX_LENGTH));
+    if (!safeNew) return { ok: false, reason: "empty" };
+    if (safeNew === this._safeCode(oldCode)) return { ok: false, reason: "same" };
+
+    const taken = await this._isCodeTaken(safeNew);
+    if (taken) return { ok: false, reason: "taken" };
+
+    const oldRef = this._metaRootRef.child(this._safeCode(oldCode));
+    const snap = await oldRef.get();
+    if (!snap.exists()) return { ok: false, reason: "gone" };
+    const meta = snap.val();
+    if (meta.ownerName !== ownerName) return { ok: false, reason: "not-owner" };
+
+    await this._metaRootRef.child(safeNew).set(meta);
+    await oldRef.remove();
+    return { ok: true, newCode: safeNew };
+  },
+
+  // Marks a name as kicked from this specific room. Kicking is NOT a ban —
+  // it just removes them right now and (for private rooms) drops it off
+  // their personal sidebar list client-side; they can rejoin immediately
+  // if they still have valid access (the code, or it's public).
+  async kickFromRoom(code, targetName) {
+    await this._metaRootRef.child(this._safeCode(code)).child("kicked").child(this._safeKeyName(targetName)).set(true);
+  },
+
+  _safeKeyName(name) {
+    return name.replace(/[.#$\[\]/]/g, "_");
+  },
+
+  // ── Ownership transfer (requires accept/decline from the target) ──
+  async offerTransfer(code, fromName, toName) {
+    await this._metaRootRef.child(this._safeCode(code)).child("transferOffer").set({ fromName, toName });
+  },
+
+  async cancelTransferOffer(code) {
+    await this._metaRootRef.child(this._safeCode(code)).child("transferOffer").remove();
+  },
+
+  async acceptTransfer(code, newOwnerName) {
+    await this._metaRootRef.child(this._safeCode(code)).update({
+      ownerName: newOwnerName,
+      transferOffer: null
+    });
+  },
+
+  async declineTransfer(code) {
+    await this._metaRootRef.child(this._safeCode(code)).child("transferOffer").remove();
+  },
+
+  // Force-transfers ownership with no accept/decline step — used only when
+  // the current owner disconnects/leaves and exactly one other person
+  // remains in the room (see the presence-list watcher in the UI layer).
+  async forceTransferOwnership(code, newOwnerName) {
+    await this._metaRootRef.child(this._safeCode(code)).update({
+      ownerName: newOwnerName,
+      transferOffer: null
+    });
+  },
+
+  // Deletes a room's metadata AND its chat data (messages/presence/typing/
+  // etc under /rooms/{code}/...). Called once, by whichever client's
+  // countdown timer reaches 0 first for that room — see the expiry-check
+  // logic in the UI layer. Firebase writes are idempotent here (deleting
+  // an already-deleted path is a harmless no-op), so it's fine if more
+  // than one client's timer fires at nearly the same moment.
+  async deleteRoom(code) {
+    const safe = this._safeCode(code);
+    await this._metaRootRef.child(safe).remove();
+    await this._db.ref("rooms/" + safe).remove();
+  }
+};
+
+/* ── DOM refs ── */
+const $joinScreen  = document.getElementById("joinScreen");
+const $joinCard    = document.getElementById("joinCard");
+const $chatScreen  = document.getElementById("chatScreen");
+const $messages    = document.getElementById("messages");
+const $emptyState  = document.getElementById("emptyState");
+const $msgInput    = document.getElementById("msgInput");
+const $sendBtn     = document.getElementById("sendBtn");
+const $onlineDot   = document.getElementById("onlineDot");
+const $onlineCount = document.getElementById("onlineCount");
+const $connError   = document.getElementById("connError");
+const $composerNotice = document.getElementById("composerNotice");
+const $youAre      = document.getElementById("youAre");
+const $changeNameBtn = document.getElementById("changeNameBtn");
+const $typingBar     = document.getElementById("typingBar");
+const $autoScrollBtn = document.getElementById("autoScrollBtn");
+const $clearChatBtn  = document.getElementById("clearChatBtn");
+const $uploadImageBtn = document.getElementById("uploadImageBtn");
+const $imageFileInput = document.getElementById("imageFileInput");
+const $jumpToBottomBtn = document.getElementById("jumpToBottomBtn");
+const $charCounter    = document.getElementById("charCounter");
+const $globalClearPanel = document.getElementById("globalClearPanel");
+const $onlineListPanel = document.getElementById("onlineListPanel");
+const $pendingImageBar = document.getElementById("pendingImageBar");
+const $pendingImagePreview = document.getElementById("pendingImagePreview");
+const $cancelPendingImageBtn = document.getElementById("cancelPendingImageBtn");
+const $pingYouBtn = document.getElementById("pingYouBtn");
+const $pingYouPanel = document.getElementById("pingYouPanel");
+const $pingYouNote = document.getElementById("pingYouNote");
+const $pingYouSend = document.getElementById("pingYouSend");
+const $mentionChip = document.getElementById("mentionChip");
+const $mentionDropdown = document.getElementById("mentionDropdown");
+const $composerInputWrap = document.getElementById("composerInputWrap");
+const $pingToast = document.getElementById("pingToast");
+const $pingToastTitle = document.getElementById("pingToastTitle");
+const $pingToastBody = document.getElementById("pingToastBody");
+const $pingSound = document.getElementById("pingSound");
+
+let myName = "";
+let messageCount = 0;
+let autoScroll = true;
+let isSpectator = false; // this session joined silently (no join/leave log)
+let crownedNames = new Set(); // safe-keyed names currently holding the crown
+
+const NAME_STORAGE_KEY = "vusChatName";
+// Placeholder name coming from VUS Hub's Settings (Display Name), read via
+// localStorage since Hub and Chat are same-origin when Chat loads inside
+// Hub's sidebar iframe or is opened via the same site. This is ONLY ever
+// used as a text-field placeholder — never auto-fills or auto-joins, per
+// the "must still choose guest/spectator deliberately" requirement.
+const HUB_DISPLAY_NAME_KEY = "vus_hub_display_name";
+
+const SEND_COOLDOWN_MS = 3000;
+let lastSentAt = 0;
+let cooldownTimer = null;
+
+let isCurrentlyTyping = false;
+let typingStopTimer = null;
+
+function esc(s = "") {
+  return String(s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function formatTime(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function isNearBottom() {
+  return $messages.scrollHeight - $messages.scrollTop - $messages.clientHeight < 120;
+}
+
+function scrollToBottom() {
+  requestAnimationFrame(() => { $messages.scrollTop = $messages.scrollHeight; });
+  $jumpToBottomBtn.style.display = "none";
+}
+
+function renderMessage(msg) {
+  $emptyState.style.display = "none";
+
+  if (msg.system) {
+    const sysEl = document.createElement("div");
+    sysEl.className = "msg system";
+    const sysBubble = document.createElement("div");
+    sysBubble.className = "msg-bubble";
+    sysBubble.textContent = msg.text;
+    sysEl.appendChild(sysBubble);
+    $messages.appendChild(sysEl);
+    messageCount++;
+    if (autoScroll) scrollToBottom();
+    return;
+  }
+
+  const mine = msg.name === myName;
+  const el = document.createElement("div");
+  el.className = "msg" + (mine ? " mine" : "");
+
+  const meta = document.createElement("div");
+  meta.className = "msg-meta";
+  meta.textContent = (mine ? "You" : esc(msg.name)) + (msg.ts ? " · " + formatTime(msg.ts) : "");
+  el.appendChild(meta);
+
+  // Crown bubble: its own small bubble, ABOVE the message bubble, only for
+  // senders who are crowned RIGHT NOW (live presence-based, not baked into
+  // the message at send time — so it always reflects current status).
+  const isCrowned = crownedNames.has(ChatBackend._safeKey(msg.name));
+  if (isCrowned) {
+    const crownBubble = document.createElement("div");
+    crownBubble.className = "crown-bubble";
+    crownBubble.textContent = "👑";
+    el.appendChild(crownBubble);
+  }
+
+  const bubble = document.createElement("div");
+  bubble.className = "msg-bubble";
+
+  if (msg.imageData) {
+    const link = document.createElement("a");
+    link.href = msg.imageData;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    const img = document.createElement("img");
+    img.src = msg.imageData;
+    img.alt = "Shared image";
+    img.style.cssText = "max-width:100%;max-height:280px;border-radius:10px;display:block";
+    link.appendChild(img);
+    bubble.appendChild(link);
+    bubble.style.padding = "6px";
+  } else if (msg.mention) {
+    // Render the @mention as a highlighted inline chip, followed by the
+    // rest of the message text (if any).
+    const chip = document.createElement("span");
+    chip.className = "mention-chip-inline";
+    chip.textContent = "@" + msg.mention;
+    bubble.appendChild(chip);
+    if (msg.text) {
+      bubble.appendChild(document.createTextNode(" " + msg.text));
+    }
+  } else {
+    bubble.textContent = msg.text;
+  }
+
+  if (!msg.imageData) {
+    if (msg.bubble) bubble.style.background = msg.bubble;
+    if (msg.textColor) bubble.style.color = msg.textColor;
+  }
+
+  el.appendChild(bubble);
+  $messages.appendChild(el);
+
+  messageCount++;
+  while (messageCount > MAX_MESSAGES) {
+    const first = $messages.querySelector(".msg");
+    if (!first) break;
+    first.remove();
+    messageCount--;
+  }
+
+  if (autoScroll && (isNearBottom() || mine)) {
+    scrollToBottom();
+  } else if (!isNearBottom()) {
+    $jumpToBottomBtn.style.display = "block";
+  }
+
+  // If this message @mentions the person currently using this tab, and it
+  // wasn't sent by them (no self-pinging), trigger the live ping: sound +
+  // in-page toast + browser notification (if permitted).
+  if (msg.mention && msg.mention === myName && msg.name !== myName) {
+    triggerIncomingPing(msg.name, msg.text);
+  }
+}
+
+function setConnectionStatus(isOnline) {
+  $onlineDot.className = "chat-online-dot" + (isOnline ? "" : " offline");
+  if (isOnline) {
+    $connError.style.display = "none";
+  } else {
+    $connError.textContent = "Disconnected — trying to reconnect…";
+    $connError.style.display = "block";
+  }
+}
+
+function randomGuestName() {
+  const n = Math.floor(Math.random() * 999) + 1;
+  return "Guest " + n;
+}
+
+function randomSpectatorName() {
+  const n = Math.floor(Math.random() * 999) + 1;
+  return "Spectator #" + n;
+}
+
+// True if a name contains "spectator" anywhere, case-insensitive — used to
+// mute chat for auto-assigned spectators AND anyone who manually renames
+// into something containing that word.
+function isSpectatorName(name) {
+  return /spectator/i.test(name || "");
+}
+
+async function attemptJoin(rawName, isRename, errEl, submitBtn, joinSilently) {
+  const name = rawName.trim().replace(/ {2,}/g, " ");
+  if (!name) {
+    errEl.textContent = "Enter a name to continue.";
+    return;
+  }
+  if (name.length > 24) {
+    errEl.textContent = "Name is too long (max 24 characters).";
+    return;
+  }
+
+  if (isRename && name === myName) {
+    $chatScreen.style.display = "flex";
+    $joinScreen.style.display = "none";
+    return;
+  }
+
+  if (submitBtn) submitBtn.disabled = true;
+  errEl.textContent = "";
+  try {
+    const taken = await ChatBackend.isNameTaken(name);
+    if (taken) {
+      errEl.textContent = "That name is already used.";
+      if (submitBtn) submitBtn.disabled = false;
+      return;
+    }
+  } catch (e) {
+    errEl.textContent = "Couldn't check name availability — try again.";
+    if (submitBtn) submitBtn.disabled = false;
+    return;
+  }
+  if (submitBtn) submitBtn.disabled = false;
+
+  if (isRename && isCurrentlyTyping) {
+    ChatBackend.clearTyping();
+    isCurrentlyTyping = false;
+  }
+  ChatBackend._myTypingRef = null;
+
+  myName = name;
+  isSpectator = !!joinSilently;
+  localStorage.setItem(NAME_STORAGE_KEY, name);
+  ChatBackend.claimPresence(myName, isSpectator);
+  requestNotificationPermissionIfNeeded();
+  $youAre.textContent = "You: " + name + (isSpectator ? " (spectating)" : "");
+  $changeNameBtn.style.display = "inline-block";
+  $joinScreen.style.display = "none";
+  $chatScreen.style.display = "flex";
+  updateComposerLockState();
+  if (!isSpectatorName(myName)) $msgInput.focus();
+  scrollToBottom();
+}
+
+// Reads the Hub-set display name (if any) to use as a join-screen
+// placeholder. Never auto-fills the field's value and never auto-joins —
+// this is purely a hint the person can see and choose to type/click.
+function getHubDisplayNamePlaceholder() {
+  try {
+    const name = localStorage.getItem(HUB_DISPLAY_NAME_KEY);
+    return (name && name.trim()) ? name.trim() : "";
+  } catch (e) {
+    return "";
+  }
+}
+
+function renderJoinReturning(savedName) {
+  $joinCard.innerHTML = "";
+
+  const h2 = document.createElement("h2");
+  h2.textContent = "Welcome back";
+  const p = document.createElement("p");
+  p.textContent = "Continue as \u201c" + savedName + "\u201d?";
+
+  const errEl = document.createElement("div");
+  errEl.id = "joinError";
+
+  const yesBtn = document.createElement("button");
+  yesBtn.id = "joinBtn";
+  yesBtn.textContent = "Continue as " + savedName;
+  yesBtn.addEventListener("click", () => attemptJoin(savedName, false, errEl, yesBtn));
+
+  const noBtn = document.createElement("button");
+  noBtn.className = "join-secondary-btn";
+  noBtn.textContent = "No, use a different name";
+  noBtn.addEventListener("click", () => renderJoinNameEntry());
+
+  $joinCard.appendChild(h2);
+  $joinCard.appendChild(p);
+  $joinCard.appendChild(yesBtn);
+  $joinCard.appendChild(noBtn);
+  $joinCard.appendChild(errEl);
+}
+
+function renderJoinNameEntry(isRename) {
+  $joinCard.innerHTML = "";
+
+  const h2 = document.createElement("h2");
+  h2.textContent = isRename ? "Change your name" : "Join the chat";
+  const p = document.createElement("p");
+  p.textContent = "Pick a display name. Anyone here can see your messages in real time.";
+
+  const input = document.createElement("input");
+  input.id = "nameInput";
+  input.type = "text";
+  // Hub-set display name (if any) shows as a placeholder only — never
+  // auto-filled as a value, so joining still requires a deliberate choice
+  // (including choosing Guest/Spectator instead).
+  input.placeholder = getHubDisplayNamePlaceholder() || "Your name…";
+  input.maxLength = 24;
+  input.autocomplete = "off";
+  if (isRename) input.value = myName;
+
+  const errEl = document.createElement("div");
+  errEl.id = "joinError";
+
+  const joinBtn = document.createElement("button");
+  joinBtn.id = "joinBtn";
+  joinBtn.textContent = isRename ? "Save" : "Join Chat";
+
+  const submit = () => attemptJoin(input.value, !!isRename, errEl, joinBtn);
+  joinBtn.addEventListener("click", submit);
+  input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
+
+  $joinCard.appendChild(h2);
+  $joinCard.appendChild(p);
+  $joinCard.appendChild(input);
+  $joinCard.appendChild(errEl);
+  $joinCard.appendChild(joinBtn);
+
+  if (!isRename) {
+    const divider = document.createElement("div");
+    divider.className = "join-divider";
+    divider.textContent = "or";
+
+    const guestBtn = document.createElement("button");
+    guestBtn.className = "join-secondary-btn";
+    guestBtn.textContent = "Join as Guest";
+    guestBtn.addEventListener("click", () => {
+      const guestName = randomGuestName();
+      input.value = guestName;
+      submit();
+    });
+
+    $joinCard.appendChild(divider);
+    $joinCard.appendChild(guestBtn);
+  }
+
+  input.focus();
+  if (isRename) input.select();
+}
+
+function openChangeName() {
+  $chatScreen.style.display = "none";
+  $joinScreen.style.display = "flex";
+  renderJoinNameEntry(true);
+}
+
+function updateSendButtonState() {
+  const elapsed = Date.now() - lastSentAt;
+  const remaining = SEND_COOLDOWN_MS - elapsed;
+  if (remaining > 0) {
+    $sendBtn.disabled = true;
+    $sendBtn.classList.add("cooldown");
+    $sendBtn.textContent = Math.ceil(remaining / 1000) + "s";
+    clearTimeout(cooldownTimer);
+    cooldownTimer = setTimeout(updateSendButtonState, 250);
+  } else {
+    $sendBtn.disabled = false;
+    $sendBtn.classList.remove("cooldown");
+    $sendBtn.textContent = "Send";
+  }
+}
+
+// Locks the composer whenever the current name contains "spectator"
+// (case-insensitive) — covers auto-assigned spectators AND anyone who
+// manually renames into something with that word in it. Swaps the
+// placeholder/button to prompt a rename instead of silently no-opping.
+function updateComposerLockState() {
+  if (isSpectatorName(myName)) {
+    $msgInput.disabled = true;
+    $msgInput.placeholder = "Rename to chat — you're spectating";
+    $sendBtn.disabled = false; // stays clickable so it can open rename
+    $sendBtn.classList.remove("cooldown");
+    $sendBtn.textContent = "Rename to chat";
+  } else {
+    $msgInput.disabled = false;
+    $msgInput.placeholder = "Type a message… (@ to mention someone)";
+    updateSendButtonState();
+  }
+}
+
+function sendMessage() {
+  if (isSpectatorName(myName)) {
+    openChangeName();
+    return;
+  }
+  if (Date.now() - lastSentAt < SEND_COOLDOWN_MS) return;
+
+  const text = $msgInput.value.trim();
+  const mentionTarget = currentMentionTarget; // captured before we clear it below
+
+  // A staged image takes priority: send it now. If there's also caption
+  // text typed in, send that as a separate follow-up message right after,
+  // so neither gets silently dropped.
+  if (pendingImageDataUrl) {
+    const imageToSend = pendingImageDataUrl;
+    clearPendingImage();
+
+    lastSentAt = Date.now();
+    updateSendButtonState();
+    stopTyping();
+
+    ChatBackend.sendImage(myName, imageToSend)
+      .then(() => {
+        if (text) {
+          return ChatBackend.send(myName, text);
+        }
+      })
+      .then(() => {
+        $msgInput.value = "";
+        autosizeInput();
+        updateCharCounter();
+        autoScroll = true;
+        setAutoScrollUI();
+      })
+      .catch(() => {
+        $connError.textContent = "Image failed to send — check your connection.";
+        $connError.style.display = "block";
+      })
+      .finally(() => { $msgInput.focus(); });
+    return;
+  }
+
+  if (!text && !mentionTarget) return;
+
+  // If there's a mention chip active, this send attempt needs to pass the
+  // per-target @Ping cooldown check first (Firebase transaction — see
+  // tryStartAtPingCooldown). A normal message with no mention skips this
+  // entirely and sends immediately like before.
+  if (mentionTarget) {
+    $sendBtn.disabled = true;
+    ChatBackend.tryStartAtPingCooldown(mentionTarget).then(result => {
+      $sendBtn.disabled = false;
+      if (!result.ok) {
+        const secs = Math.ceil(result.remainingMs / 1000);
+        showComposerNotice(mentionTarget + " was just pinged — wait " + secs + "s before pinging them again.");
+        return;
+      }
+      finalizeSend(text, { name: mentionTarget });
+    }).catch(() => {
+      $sendBtn.disabled = false;
+      showComposerNotice("Couldn't check ping cooldown — try again.");
+    });
+    return;
+  }
+
+  finalizeSend(text, null);
+}
+
+function finalizeSend(text, mention) {
+  lastSentAt = Date.now();
+  updateSendButtonState();
+  stopTyping();
+
+  ChatBackend.send(myName, text, mention)
+    .then(() => {
+      $msgInput.value = "";
+      clearMention();
+      autosizeInput();
+      updateCharCounter();
+      autoScroll = true;
+      setAutoScrollUI();
+    })
+    .catch(() => {
+      $connError.textContent = "Message failed to send — check your connection.";
+      $connError.style.display = "block";
+    })
+    .finally(() => { $msgInput.focus(); });
+}
+
+// Small transient notice shown near the composer (e.g. cooldown messages)
+// without derailing into the persistent #connError bar, which is reserved
+// for actual connection problems and gets its display toggled independently
+// by setConnectionStatus() — sharing that element caused cooldown notices
+// to get wiped out early by unrelated connection-status ticks.
+let composerNoticeTimer = null;
+function showComposerNotice(text) {
+  $composerNotice.textContent = text;
+  $composerNotice.style.display = "block";
+  clearTimeout(composerNoticeTimer);
+  composerNoticeTimer = setTimeout(() => {
+    $composerNotice.style.display = "none";
+  }, 4000);
+}
+
+function autosizeInput() {
+  $msgInput.style.height = "auto";
+  $msgInput.style.height = Math.min($msgInput.scrollHeight, 135) + "px";
+}
+
+const MAX_IMAGE_SOURCE_BYTES = 15 * 1024 * 1024;
+const IMAGE_MAX_DIMENSION = 1000;
+const IMAGE_JPEG_QUALITY = 0.7;
+
+function compressImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Couldn't read file"));
+    reader.onload = () => {
+      img.onerror = () => reject(new Error("Couldn't decode image"));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > IMAGE_MAX_DIMENSION || height > IMAGE_MAX_DIMENSION) {
+          const scale = IMAGE_MAX_DIMENSION / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", IMAGE_JPEG_QUALITY));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+let pendingImageDataUrl = null; // compressed, staged image waiting for the user to hit Send
+
+function clearPendingImage() {
+  pendingImageDataUrl = null;
+  $pendingImageBar.style.display = "none";
+  $pendingImagePreview.src = "";
+}
+
+function stageImageFile(file) {
+  if (!modMenuUnlocked || !imagesEnabledForMe) return;
+
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    $connError.textContent = "That file isn't an image.";
+    $connError.style.display = "block";
+    return;
+  }
+  if (file.size > MAX_IMAGE_SOURCE_BYTES) {
+    $connError.textContent = "Image is too large.";
+    $connError.style.display = "block";
+    return;
+  }
+
+  $uploadImageBtn.disabled = true;
+  $uploadImageBtn.textContent = "Processing…";
+
+  compressImageFile(file)
+    .then(dataUrl => {
+      pendingImageDataUrl = dataUrl;
+      $pendingImagePreview.src = dataUrl;
+      $pendingImageBar.style.display = "flex";
+    })
+    .catch(() => {
+      $connError.textContent = "Couldn't process that image — try another.";
+      $connError.style.display = "block";
+    })
+    .finally(() => {
+      $uploadImageBtn.disabled = false;
+      $uploadImageBtn.textContent = "📎 Image";
+      $imageFileInput.value = "";
+    });
+}
+
+$cancelPendingImageBtn.addEventListener("click", clearPendingImage);
+
+$uploadImageBtn.addEventListener("click", () => {
+  if (!modMenuUnlocked) return;
+  $imageFileInput.click();
+});
+$imageFileInput.addEventListener("change", () => {
+  const file = $imageFileInput.files[0];
+  stageImageFile(file);
+});
+
+function updateCharCounter() {
+  const remaining = MAX_CHARS - $msgInput.value.length;
+  $charCounter.textContent = remaining;
+  $charCounter.classList.toggle("warn", remaining <= 50 && remaining > 10);
+  $charCounter.classList.toggle("limit", remaining <= 10);
+}
+
+function setAutoScrollUI() {
+  $autoScrollBtn.textContent = "Auto Scroll: " + (autoScroll ? "On" : "Off");
+  $autoScrollBtn.classList.toggle("active", autoScroll);
+  if (autoScroll) scrollToBottom();
+}
+
+$autoScrollBtn.addEventListener("click", () => {
+  autoScroll = !autoScroll;
+  setAutoScrollUI();
+});
+
+$messages.addEventListener("scroll", () => {
+  if (isNearBottom()) {
+    $jumpToBottomBtn.style.display = "none";
+  }
+});
+
+$jumpToBottomBtn.addEventListener("click", () => {
+  scrollToBottom();
+});
+
+$clearChatBtn.addEventListener("click", () => {
+  $messages.innerHTML = "";
+  messageCount = 0;
+  $emptyState.style.display = "flex";
+  $jumpToBottomBtn.style.display = "none";
+});
+
+/* ── Mod Menu (hidden behind the status dot) ────────────────────────── */
+const MOD_MENU_CODE = "2212";
+let modMenuUnlocked = false;
+let imagesEnabledForMe = false;
+
+function updateUploadButtonVisibility() {
+  const visible = modMenuUnlocked && imagesEnabledForMe;
+  $uploadImageBtn.style.display = visible ? "inline-block" : "none";
+}
+
+// Leaves the room right now with zero trace in the chat feed — no "X left"
+// message gets posted, regardless of whether this session joined normally
+// or as a spectator. Then drops back to the join screen so a new
+// name/spectator choice can be made without reloading the page.
+function leaveSilently() {
+  ChatBackend.releasePresenceSilently();
+  stopTyping();
+  clearPendingImage();
+  myName = "";
+  isSpectator = false;
+  $changeNameBtn.style.display = "none";
+  $youAre.textContent = "";
+  closeClearPanel();
+  $chatScreen.style.display = "none";
+  $joinScreen.style.display = "flex";
+  const savedName = localStorage.getItem(NAME_STORAGE_KEY);
+  if (savedName) {
+    renderJoinReturning(savedName);
+  } else {
+    renderJoinNameEntry(false);
+  }
+}
+
+// Pre-code-entry actions shown above "Enter code:" — available to anyone,
+// no password needed. "Join as Spectator" only makes sense before you've
+// joined; "Leave Silently" only makes sense once you have joined. We show
+// whichever applies.
+function renderPreCodeActions(container) {
+  if (!myName) {
+    const specBtn = document.createElement("button");
+    specBtn.textContent = "Join as Spectator";
+    specBtn.className = "toolbar-btn";
+    specBtn.style.cssText = "width:100%;margin-bottom:8px";
+    specBtn.addEventListener("click", () => {
+      closeClearPanel();
+      joinAsSpectatorAuto();
+    });
+    container.appendChild(specBtn);
+  } else {
+    const leaveBtn = document.createElement("button");
+    leaveBtn.textContent = "Leave Silently";
+    leaveBtn.className = "toolbar-btn";
+    leaveBtn.style.cssText = "width:100%;margin-bottom:8px";
+    leaveBtn.addEventListener("click", leaveSilently);
+    container.appendChild(leaveBtn);
+  }
+
+  const divider = document.createElement("div");
+  divider.style.cssText = "height:1px;background:#334155;margin:2px 0 10px 0";
+  container.appendChild(divider);
+}
+
+// "Join as Spectator" — no name screen at all. Auto-assigns "Spectator #N",
+// retrying on the rare collision, then joins silently (no join/leave log).
+// Does NOT touch localStorage's saved name, so leaving spectator mode
+// later (rename/leave) still returns to the person's real saved identity.
+async function joinAsSpectatorAuto() {
+  const dummyErr = { textContent: "" };
+  let name = randomSpectatorName();
+  for (let attempt = 0; attempt < 8; attempt++) {
+    try {
+      const taken = await ChatBackend.isNameTaken(name);
+      if (!taken) break;
+    } catch (e) { break; } // if the check fails, just proceed with what we have
+    name = randomSpectatorName();
+  }
+
+  myName = name;
+  isSpectator = true;
+  ChatBackend.claimPresence(myName, true);
+  requestNotificationPermissionIfNeeded();
+  $youAre.textContent = "You: " + name;
+  $changeNameBtn.style.display = "inline-block";
+  $joinScreen.style.display = "none";
+  $chatScreen.style.display = "flex";
+  updateComposerLockState();
+  scrollToBottom();
+}
+
+function renderModMenuLogin() {
+  $globalClearPanel.innerHTML = "";
+
+  renderPreCodeActions($globalClearPanel);
+
+  const label = document.createElement("div");
+  label.textContent = "Enter code:";
+  label.style.marginBottom = "6px";
+  label.style.color = "#94a3b8";
+
+  const input = document.createElement("input");
+  input.type = "password";
+  input.inputMode = "numeric";
+  input.style.cssText = "width:100%;padding:8px 10px;background:#0f172a;border:1.5px solid #334155;border-radius:8px;color:#f1f5f9;font-size:15px;outline:none;margin-bottom:8px";
+
+  const err = document.createElement("div");
+  err.style.cssText = "color:#ef4444;font-size:13.5px;min-height:18px;margin-bottom:4px";
+
+  const row = document.createElement("div");
+  row.style.cssText = "display:flex;gap:6px";
+
+  const submitBtn = document.createElement("button");
+  submitBtn.textContent = "Submit";
+  submitBtn.className = "toolbar-btn";
+  submitBtn.style.flex = "1";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.className = "toolbar-btn";
+  cancelBtn.style.flex = "1";
+
+  const trySubmit = () => {
+    if (input.value === MOD_MENU_CODE) {
+      modMenuUnlocked = true;
+      updateUploadButtonVisibility();
+      renderModMenu();
+    } else {
+      err.textContent = "Incorrect code.";
+      input.value = "";
+      input.focus();
+    }
+  };
+
+  submitBtn.addEventListener("click", trySubmit);
+  input.addEventListener("keydown", e => { if (e.key === "Enter") trySubmit(); });
+  cancelBtn.addEventListener("click", closeClearPanel);
+
+  row.appendChild(submitBtn);
+  row.appendChild(cancelBtn);
+  $globalClearPanel.appendChild(label);
+  $globalClearPanel.appendChild(input);
+  $globalClearPanel.appendChild(err);
+  $globalClearPanel.appendChild(row);
+  input.focus();
+}
+
+async function renderModMenu() {
+  $globalClearPanel.innerHTML = "";
+  $globalClearPanel.style.width = "260px";
+
+  renderPreCodeActions($globalClearPanel);
+
+  const title = document.createElement("div");
+  title.textContent = "Customize your bubble";
+  title.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:10px";
+  $globalClearPanel.appendChild(title);
+
+  const loading = document.createElement("div");
+  loading.textContent = "Loading…";
+  loading.style.cssText = "color:#64748b;font-size:14px";
+  $globalClearPanel.appendChild(loading);
+
+  let existing = null;
+  try {
+    existing = myName ? await ChatBackend.getNameColor(myName) : null;
+  } catch (e) { /* treat as no existing color if the check fails */ }
+
+  loading.remove();
+
+  const alreadyLocked = !!existing;
+
+  if (alreadyLocked) {
+    const lockedNote = document.createElement("div");
+    lockedNote.textContent = "This name has already locked in a color — it can't be changed again.";
+    lockedNote.style.cssText = "color:#f59e0b;font-size:13px;margin-bottom:10px;line-height:1.4";
+    $globalClearPanel.appendChild(lockedNote);
+  }
+
+  let pendingBubble = (existing && existing.bubble) || "#14532d";
+  let pendingText = (existing && existing.text) || "#f1f5f9";
+
+  const previewWrap = document.createElement("div");
+  previewWrap.style.cssText = "margin-bottom:10px";
+  const previewLabel = document.createElement("div");
+  previewLabel.textContent = "Preview";
+  previewLabel.style.cssText = "color:#94a3b8;font-size:13px;margin-bottom:4px";
+  const previewBubble = document.createElement("div");
+  previewBubble.className = "msg-bubble";
+  previewBubble.textContent = "Example message text";
+  previewBubble.style.cssText = `background:${pendingBubble};color:${pendingText};font-size:16px;padding:10px 14px;display:inline-block;max-width:100%;`;
+  previewWrap.appendChild(previewLabel);
+  previewWrap.appendChild(previewBubble);
+  $globalClearPanel.appendChild(previewWrap);
+
+  const makeColorRow = (labelText, currentValue, onChange, disabled) => {
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "display:flex;align-items:center;justify-content:space-between;margin-bottom:8px";
+    const lbl = document.createElement("label");
+    lbl.textContent = labelText;
+    lbl.style.color = "#94a3b8";
+    const colorInput = document.createElement("input");
+    colorInput.type = "color";
+    colorInput.value = currentValue;
+    colorInput.disabled = !!disabled;
+    colorInput.style.cssText = "width:36px;height:28px;border:none;background:none;cursor:pointer;padding:0" + (disabled ? ";opacity:.5;cursor:not-allowed" : "");
+    colorInput.addEventListener("input", () => onChange(colorInput.value));
+    wrap.appendChild(lbl);
+    wrap.appendChild(colorInput);
+    return wrap;
+  };
+
+  $globalClearPanel.appendChild(
+    makeColorRow("Bubble color", pendingBubble, (val) => {
+      pendingBubble = val;
+      previewBubble.style.background = val;
+    }, alreadyLocked)
+  );
+  $globalClearPanel.appendChild(
+    makeColorRow("Text color", pendingText, (val) => {
+      pendingText = val;
+      previewBubble.style.color = val;
+    }, alreadyLocked)
+  );
+
+  const note = document.createElement("div");
+  note.textContent = "Note: a color can only be set once per name — choose carefully.";
+  note.style.cssText = "color:#64748b;font-size:12.5px;margin-bottom:10px;line-height:1.4";
+  $globalClearPanel.appendChild(note);
+
+  const confirmErr = document.createElement("div");
+  confirmErr.style.cssText = "color:#ef4444;font-size:13px;min-height:16px;margin-bottom:4px";
+  $globalClearPanel.appendChild(confirmErr);
+
+  const confirmBtn = document.createElement("button");
+  confirmBtn.textContent = alreadyLocked ? "Already locked in" : "Confirm";
+  confirmBtn.className = "toolbar-btn";
+  confirmBtn.style.cssText = "width:100%;margin-top:4px";
+  confirmBtn.disabled = alreadyLocked;
+  confirmBtn.addEventListener("click", async () => {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "Saving…";
+    try {
+      const result = await ChatBackend.claimColor(myName, pendingBubble, pendingText);
+      if (result.ok) {
+        renderModMenu();
+      } else {
+        confirmErr.textContent = "This name already has a color set.";
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = "Already locked in";
+      }
+    } catch (e) {
+      confirmErr.textContent = "Couldn't save — try again.";
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "Confirm";
+    }
+  });
+  $globalClearPanel.appendChild(confirmBtn);
+
+  const divider = document.createElement("div");
+  divider.style.cssText = "height:1px;background:#334155;margin:12px 0";
+  $globalClearPanel.appendChild(divider);
+
+  const imgTitle = document.createElement("div");
+  imgTitle.textContent = "Images (this session, just you)";
+  imgTitle.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:8px";
+  $globalClearPanel.appendChild(imgTitle);
+
+  const imgRow = document.createElement("div");
+  imgRow.style.cssText = "display:flex;align-items:center;justify-content:space-between;margin-bottom:6px";
+  const imgLabel = document.createElement("label");
+  imgLabel.textContent = "Allow images (me)";
+  imgLabel.style.color = "#94a3b8";
+  const imgToggle = document.createElement("button");
+  imgToggle.className = "toolbar-btn" + (imagesEnabledForMe ? " active" : "");
+  imgToggle.textContent = imagesEnabledForMe ? "On" : "Off";
+  imgToggle.style.cssText = "padding:4px 14px";
+  imgToggle.addEventListener("click", () => {
+    imagesEnabledForMe = !imagesEnabledForMe;
+    imgToggle.className = "toolbar-btn" + (imagesEnabledForMe ? " active" : "");
+    imgToggle.textContent = imagesEnabledForMe ? "On" : "Off";
+    updateUploadButtonVisibility();
+  });
+  imgRow.appendChild(imgLabel);
+  imgRow.appendChild(imgToggle);
+  $globalClearPanel.appendChild(imgRow);
+
+  const imgNote = document.createElement("div");
+  imgNote.textContent = "Only affects you, only this session. No one else ever gets an image button, and this resets to Off next time you open the chat.";
+  imgNote.style.cssText = "color:#64748b;font-size:12px;line-height:1.4;margin-bottom:4px";
+  $globalClearPanel.appendChild(imgNote);
+
+  const crownDivider = document.createElement("div");
+  crownDivider.style.cssText = "height:1px;background:#334155;margin:12px 0";
+  $globalClearPanel.appendChild(crownDivider);
+
+  const crownTitle = document.createElement("div");
+  crownTitle.textContent = "👑 Crown (verified owner)";
+  crownTitle.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:8px";
+  $globalClearPanel.appendChild(crownTitle);
+
+  function crownRequestRemainingMs() {
+    try {
+      const last = parseInt(localStorage.getItem(CROWN_REQUEST_COOLDOWN_KEY) || "0", 10);
+      return Math.max(0, CROWN_REQUEST_COOLDOWN_MS - (Date.now() - last));
+    } catch (e) { return 0; }
+  }
+
+  const crownReqBtn = document.createElement("button");
+  crownReqBtn.className = "toolbar-btn";
+  crownReqBtn.style.cssText = "width:100%;margin-bottom:6px";
+
+  function updateCrownReqBtnState() {
+    const remaining = crownRequestRemainingMs();
+    if (remaining > 0) {
+      crownReqBtn.disabled = true;
+      crownReqBtn.textContent = "Wait " + Math.ceil(remaining / 1000) + "s";
+      setTimeout(updateCrownReqBtnState, 500);
+    } else {
+      crownReqBtn.disabled = false;
+      crownReqBtn.textContent = "Request Crown Code";
+    }
+  }
+  updateCrownReqBtnState();
+
+  crownReqBtn.addEventListener("click", async () => {
+    if (crownRequestRemainingMs() > 0) return;
+    try { localStorage.setItem(CROWN_REQUEST_COOLDOWN_KEY, String(Date.now())); } catch (e) {}
+    updateCrownReqBtnState();
+    crownReqBtn.textContent = "Sending…";
+    try {
+      await ChatBackend.generateCrownCode();
+      crownReqBtn.textContent = "Sent to Discord ✓";
+    } catch (e) {
+      crownReqBtn.textContent = "Failed — try again";
+    }
+  });
+  $globalClearPanel.appendChild(crownReqBtn);
+
+  const crownInput = document.createElement("input");
+  crownInput.type = "text";
+  crownInput.maxLength = 4;
+  crownInput.placeholder = "Enter crown code…";
+  crownInput.style.cssText = "width:100%;padding:8px 10px;background:#0f172a;border:1.5px solid #334155;border-radius:8px;color:#f1f5f9;font-size:14px;outline:none;margin-bottom:6px;text-transform:uppercase";
+  $globalClearPanel.appendChild(crownInput);
+
+  const crownErr = document.createElement("div");
+  crownErr.style.cssText = "color:#ef4444;font-size:12.5px;min-height:16px;margin-bottom:4px";
+  $globalClearPanel.appendChild(crownErr);
+
+  const crownSubmitBtn = document.createElement("button");
+  crownSubmitBtn.textContent = "Claim Crown";
+  crownSubmitBtn.className = "toolbar-btn";
+  crownSubmitBtn.style.cssText = "width:100%";
+  crownSubmitBtn.addEventListener("click", async () => {
+    if (!myName) { crownErr.style.color = "#ef4444"; crownErr.textContent = "Join with a name first."; return; }
+    crownSubmitBtn.disabled = true;
+    crownErr.textContent = "";
+    try {
+      const result = await ChatBackend.redeemCrownCode(crownInput.value);
+      if (result.ok) {
+        crownErr.style.color = "#4ade80";
+        crownErr.textContent = "👑 Crown claimed!";
+        crownInput.value = "";
+      } else {
+        crownErr.style.color = "#ef4444";
+        crownErr.textContent = "Invalid or expired code.";
+      }
+    } catch (e) {
+      crownErr.style.color = "#ef4444";
+      crownErr.textContent = "Couldn't check code — try again.";
+    } finally {
+      crownSubmitBtn.disabled = false;
+    }
+  });
+  $globalClearPanel.appendChild(crownSubmitBtn);
+
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "Close";
+  closeBtn.className = "toolbar-btn";
+  closeBtn.style.cssText = "width:100%;margin-top:6px";
+  closeBtn.addEventListener("click", closeClearPanel);
+  $globalClearPanel.appendChild(closeBtn);
+}
+
+function closeClearPanel() {
+  $globalClearPanel.style.display = "none";
+  if (!modMenuUnlocked) $globalClearPanel.innerHTML = "";
+}
+
+function openModMenu() {
+  closeOnlineListPanel();
+  $globalClearPanel.style.display = "block";
+  if (modMenuUnlocked) {
+    renderModMenu();
+  } else {
+    renderModMenuLogin();
+  }
+}
+
+/* ── Online list panel (click "N online" text) ── */
+let latestPresenceList = [];
+let onlineListRefreshTimer = null;
+
+function formatElapsed(joinedAt) {
+  if (!joinedAt) return "just now";
+  const secs = Math.max(0, Math.floor((Date.now() - joinedAt) / 1000));
+  if (secs < 60) return "just now";
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return mins + "m";
+  const hrs = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return hrs + "h" + (remMins ? " " + remMins + "m" : "");
+}
+
+function renderOnlineListPanel() {
+  $onlineListPanel.innerHTML = "";
+
+  const title = document.createElement("div");
+  title.textContent = "Online now";
+  title.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:8px";
+  $onlineListPanel.appendChild(title);
+
+  if (latestPresenceList.length === 0) {
+    const empty = document.createElement("div");
+    empty.textContent = "No one online.";
+    empty.style.cssText = "color:#64748b;font-size:13.5px";
+    $onlineListPanel.appendChild(empty);
+    return;
+  }
+
+  // Longest-present first, so regulars float to the top.
+  const sorted = [...latestPresenceList].sort((a, b) => (a.joinedAt || Date.now()) - (b.joinedAt || Date.now()));
+
+  sorted.forEach(entry => {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px solid #273549;font-size:13.5px";
+    const nameEl = document.createElement("span");
+    nameEl.textContent = (crownedNames.has(ChatBackend._safeKey(entry.name)) ? "👑 " : "") + entry.name;
+    nameEl.style.cssText = "color:#f1f5f9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+    const timeEl = document.createElement("span");
+    timeEl.textContent = formatElapsed(entry.joinedAt);
+    timeEl.style.cssText = "color:#64748b;flex-shrink:0";
+    row.appendChild(nameEl);
+    row.appendChild(timeEl);
+    $onlineListPanel.appendChild(row);
+  });
+}
+
+function closeOnlineListPanel() {
+  $onlineListPanel.style.display = "none";
+  clearInterval(onlineListRefreshTimer);
+}
+
+function openOnlineListPanel() {
+  closeClearPanel(); // don't show both panels at once
+  $onlineListPanel.style.display = "block";
+  renderOnlineListPanel();
+  clearInterval(onlineListRefreshTimer);
+  onlineListRefreshTimer = setInterval(renderOnlineListPanel, 30000);
+}
+
+$onlineCount.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const isOpen = $onlineListPanel.style.display === "block";
+  if (isOpen) {
+    closeOnlineListPanel();
+  } else {
+    openOnlineListPanel();
+  }
+});
+
+document.addEventListener("click", (e) => {
+  if ($onlineListPanel.style.display === "block" && !$onlineListPanel.contains(e.target) && e.target !== $onlineCount) {
+    closeOnlineListPanel();
+  }
+});
+
+$onlineDot.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const isOpen = $globalClearPanel.style.display === "block";
+  if (isOpen) {
+    closeClearPanel();
+  } else {
+    openModMenu();
+  }
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key !== ".") return;
+  if (!modMenuUnlocked) return;
+  const active = document.activeElement;
+  const isTypingSomewhere = active && (active.tagName === "TEXTAREA" || active.tagName === "INPUT");
+  if (isTypingSomewhere) return;
+  const isOpen = $globalClearPanel.style.display === "block";
+  if (isOpen) {
+    closeClearPanel();
+  } else {
+    openModMenu();
+  }
+});
+
+document.addEventListener("click", (e) => {
+  if (!modMenuUnlocked && $globalClearPanel.style.display === "block" && !$globalClearPanel.contains(e.target)) {
+    closeClearPanel();
+  }
+});
+
+/* ── Typing indicator ── */
+function handleTypingActivity() {
+  const hasText = $msgInput.value.trim().length > 0;
+  clearTimeout(typingStopTimer);
+
+  if (hasText) {
+    if (!isCurrentlyTyping) {
+      isCurrentlyTyping = true;
+      ChatBackend.setTyping(myName);
+    } else {
+      ChatBackend.setTyping(myName);
+    }
+    typingStopTimer = setTimeout(stopTyping, 2000);
+  } else {
+    stopTyping();
+  }
+}
+
+function stopTyping() {
+  clearTimeout(typingStopTimer);
+  if (isCurrentlyTyping) {
+    isCurrentlyTyping = false;
+    ChatBackend.clearTyping();
+  }
+}
+
+function renderTyping(names) {
+  if (names.length === 0) {
+    $typingBar.style.display = "none";
+    return;
+  }
+  const shown = names.slice(0, 3);
+  const extra = names.length - shown.length;
+  let text = shown.map(esc).join(", ");
+  if (extra > 0) text += `, +${extra} more`;
+  text += (names.length === 1 ? " is typing…" : " are typing…");
+  $typingBar.textContent = text;
+  $typingBar.style.display = "block";
+}
+
+/* ══════════════════════════════════════════════════════════
+   PING YOU (Discord webhook) — toolbar button, opens a small
+   popover with an optional note, cooldown is per-person (this
+   browser) via localStorage, not global.
+   ══════════════════════════════════════════════════════════ */
+
+function getPingYouRemainingMs() {
+  try {
+    const last = parseInt(localStorage.getItem(PING_YOU_STORAGE_KEY) || "0", 10);
+    const elapsed = Date.now() - last;
+    return Math.max(0, PING_YOU_COOLDOWN_MS - elapsed);
+  } catch (e) {
+    return 0;
+  }
+}
+
+function updatePingYouButtonState() {
+  const remaining = getPingYouRemainingMs();
+  if (remaining > 0) {
+    $pingYouBtn.disabled = true;
+    $pingYouBtn.textContent = "🔔 " + Math.ceil(remaining / 1000) + "s";
+    setTimeout(updatePingYouButtonState, 500);
+  } else {
+    $pingYouBtn.disabled = false;
+    $pingYouBtn.textContent = "🔔 Ping Devs";
+  }
+}
+
+function closePingYouPanel() {
+  $pingYouPanel.style.display = "none";
+}
+
+$pingYouBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if ($pingYouBtn.disabled) return;
+  const isOpen = $pingYouPanel.style.display === "block";
+  if (isOpen) {
+    closePingYouPanel();
+  } else {
+    closeClearPanel();
+    closeOnlineListPanel();
+    $pingYouPanel.style.display = "block";
+    $pingYouNote.value = "";
+    $pingYouNote.focus();
+  }
+});
+
+document.addEventListener("click", (e) => {
+  if ($pingYouPanel.style.display === "block" && !$pingYouPanel.contains(e.target) && e.target !== $pingYouBtn) {
+    closePingYouPanel();
+  }
+});
+
+$pingYouSend.addEventListener("click", () => {
+  if (getPingYouRemainingMs() > 0) return;
+
+  const note = $pingYouNote.value.trim().slice(0, 200);
+
+  $pingYouSend.disabled = true;
+  $pingYouSend.textContent = "Sending…";
+
+  const content = buildPingYouWebhookContent(note);
+
+  fetch(PING_YOU_WEBHOOK_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content })
+  })
+    .then(() => {
+      try { localStorage.setItem(PING_YOU_STORAGE_KEY, String(Date.now())); } catch (e) {}
+      closePingYouPanel();
+      updatePingYouButtonState();
+    })
+    .catch(() => {
+      showComposerNotice("Ping failed to send — check your connection.");
+    })
+    .finally(() => {
+      $pingYouSend.disabled = false;
+      $pingYouSend.textContent = "Send Ping";
+    });
+});
+
+/* ══════════════════════════════════════════════════════════
+   @PING (in-chat mention) — typing "@" opens a live dropdown of
+   currently-online people, positioned above the "@". Picking one
+   turns it into a clickable chip in the composer; clicking the
+   chip re-opens the dropdown to swap targets. Sending checks the
+   per-target global cooldown (see ChatBackend.tryStartAtPingCooldown)
+   before the message goes out.
+   ══════════════════════════════════════════════════════════ */
+
+let currentMentionTarget = null; // the name currently selected as @mention, or null
+let mentionDropdownOpen = false;
+let mentionTriggerCharIndex = -1; // where the "@" that opened the dropdown sits in the text
+
+function clearMention() {
+  currentMentionTarget = null;
+  $mentionChip.style.display = "none";
+  $mentionChip.textContent = "";
+}
+
+function setMention(name) {
+  currentMentionTarget = name;
+  $mentionChip.textContent = "@" + name;
+  $mentionChip.style.display = "inline-flex";
+}
+
+function closeMentionDropdown() {
+  mentionDropdownOpen = false;
+  $mentionDropdown.style.display = "none";
+  $mentionDropdown.innerHTML = "";
+}
+
+function renderMentionDropdown() {
+  $mentionDropdown.innerHTML = "";
+
+  // Everyone currently online except yourself and spectators (pinging a
+  // spectator/yourself doesn't make sense here).
+  const candidates = latestPresenceList
+    .map(e => e.name)
+    .filter(name => name !== myName && !isSpectatorName(name))
+    .sort((a, b) => a.localeCompare(b));
+
+  if (candidates.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "mention-empty";
+    empty.textContent = "No one else online to mention.";
+    $mentionDropdown.appendChild(empty);
+    return;
+  }
+
+  candidates.forEach(name => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "mention-option";
+    btn.textContent = name;
+    btn.addEventListener("click", () => {
+      setMention(name);
+      // Remove the triggering "@" (and anything typed right after it up to
+      // the cursor) from the text box, since the chip now represents it.
+      if (mentionTriggerCharIndex >= 0) {
+        const before = $msgInput.value.slice(0, mentionTriggerCharIndex);
+        const after = $msgInput.value.slice($msgInput.selectionStart);
+        $msgInput.value = before + after;
+        $msgInput.selectionStart = $msgInput.selectionEnd = before.length;
+      }
+      closeMentionDropdown();
+      $msgInput.focus();
+      updateCharCounter();
+    });
+    $mentionDropdown.appendChild(btn);
+  });
+}
+
+function openMentionDropdown(triggerIndex) {
+  mentionTriggerCharIndex = triggerIndex;
+  mentionDropdownOpen = true;
+  $mentionDropdown.style.display = "block";
+  renderMentionDropdown();
+}
+
+// Live-refresh the dropdown's contents while it's open, since presence can
+// change at any moment (someone joins/leaves) and the list should reflect
+// that without needing to close and reopen.
+function refreshMentionDropdownIfOpen() {
+  if (mentionDropdownOpen) renderMentionDropdown();
+}
+
+$mentionChip.addEventListener("click", (e) => {
+  e.stopPropagation();
+  // Re-opens the dropdown to swap the target; the previous mention stays
+  // active until a new one is actually picked.
+  openMentionDropdown(-1); // -1: no "@" in the textbox to remove this time
+});
+
+document.addEventListener("click", (e) => {
+  if (mentionDropdownOpen && !$mentionDropdown.contains(e.target) && e.target !== $mentionChip) {
+    closeMentionDropdown();
+  }
+});
+
+// Detects a freshly-typed "@" immediately before the cursor and opens the
+// mention dropdown. This runs alongside the existing input handler rather
+// than replacing it.
+function handleMentionTrigger() {
+  const cursor = $msgInput.selectionStart;
+  const charBeforeCursor = $msgInput.value.slice(cursor - 1, cursor);
+  if (charBeforeCursor === "@") {
+    openMentionDropdown(cursor - 1);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   Incoming @Ping handling — sound (preloaded/cached as a Blob so
+   it plays instantly) + in-page toast + browser notification.
+   ══════════════════════════════════════════════════════════ */
+
+let pingSoundReady = false;
+
+function preloadPingSound() {
+  fetch(PING_SOUND_URL)
+    .then(r => {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.blob();
+    })
+    .then(blob => {
+      const blobUrl = URL.createObjectURL(blob);
+      $pingSound.src = blobUrl;
+      pingSoundReady = true;
+    })
+    .catch(() => {
+      // Non-critical — if this fails, incoming pings just won't have sound
+      // this session; the toast/notification still work.
+    });
+}
+
+function requestNotificationPermissionIfNeeded() {
+  if (!("Notification" in window)) return;
+  if (Notification.permission === "default") {
+    // Ask once, quietly, the first time the person actually joins the
+    // chat (not on page load) — see attemptJoin/joinAsSpectatorAuto.
+    Notification.requestPermission().catch(() => {});
+  }
+}
+
+function showPingToast(fromName, note) {
+  $pingToastBody.textContent = fromName + (note ? ": " + note : " pinged you.");
+  $pingToast.style.display = "block";
+  clearTimeout(showPingToast._timer);
+  showPingToast._timer = setTimeout(() => {
+    $pingToast.style.display = "none";
+  }, 5000);
+}
+
+function triggerIncomingPing(fromName, note) {
+  // Sound
+  if (pingSoundReady) {
+    try {
+      $pingSound.currentTime = 0;
+      $pingSound.play().catch(() => {});
+    } catch (e) { /* ignore playback errors, e.g. autoplay restrictions */ }
+  }
+
+  // In-page toast
+  showPingToast(fromName, note);
+
+  // Browser notification (only if permission already granted — we never
+  // prompt from inside this function, only at join time)
+  if ("Notification" in window && Notification.permission === "granted") {
+    try {
+      new Notification(fromName + " pinged you in VUS Chat", {
+        body: note || "Tap to open the chat.",
+        tag: "vus-chat-ping"
+      });
+    } catch (e) { /* ignore notification errors */ }
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   ROOMS — sidebar, creation, join/leave, lifecycle, ownership
+   ══════════════════════════════════════════════════════════ */
+
+/* ── DOM refs ── */
+const $roomsToggleBtn = document.getElementById("roomsToggleBtn");
+const $roomsBadgeDot = document.getElementById("roomsBadgeDot");
+const $roomsSidebarOverlay = document.getElementById("roomsSidebarOverlay");
+const $roomsSidebar = document.getElementById("roomsSidebar");
+const $roomsSidebarClose = document.getElementById("roomsSidebarClose");
+const $roomsSidebarBody = document.getElementById("roomsSidebarBody");
+const $roomsFooterMsg = document.getElementById("roomsFooterMsg");
+const $joinByCodeInput = document.getElementById("joinByCodeInput");
+const $joinByCodeBtn = document.getElementById("joinByCodeBtn");
+const $createRoomBtn = document.getElementById("createRoomBtn");
+
+const $roomTopBar = document.getElementById("roomTopBar");
+const $roomTopBarName = document.getElementById("roomTopBarName");
+const $roomTopBarCode = document.getElementById("roomTopBarCode");
+const $roomTopBarTimer = document.getElementById("roomTopBarTimer");
+const $roomSettingsBtn = document.getElementById("roomSettingsBtn");
+const $roomLeaveBtn = document.getElementById("roomLeaveBtn");
+
+const $createRoomOverlay = document.getElementById("createRoomOverlay");
+const $createRoomNameInput = document.getElementById("createRoomNameInput");
+const $createRoomErr = document.getElementById("createRoomErr");
+const $createRoomCancelBtn = document.getElementById("createRoomCancelBtn");
+const $createRoomConfirmBtn = document.getElementById("createRoomConfirmBtn");
+
+const $roomSettingsOverlay = document.getElementById("roomSettingsOverlay");
+const $roomPublicToggleBtn = document.getElementById("roomPublicToggleBtn");
+const $roomCodeInput = document.getElementById("roomCodeInput");
+const $roomCodeErr = document.getElementById("roomCodeErr");
+const $roomCodeSaveBtn = document.getElementById("roomCodeSaveBtn");
+const $roomMembersList = document.getElementById("roomMembersList");
+const $roomSettingsCloseBtn = document.getElementById("roomSettingsCloseBtn");
+
+const $extendRoomOverlay = document.getElementById("extendRoomOverlay");
+const $extendRoomText = document.getElementById("extendRoomText");
+const $extendRoomDismissBtn = document.getElementById("extendRoomDismissBtn");
+const $extendRoomConfirmBtn = document.getElementById("extendRoomConfirmBtn");
+
+const $transferOfferOverlay = document.getElementById("transferOfferOverlay");
+const $transferOfferText = document.getElementById("transferOfferText");
+const $transferDeclineBtn = document.getElementById("transferDeclineBtn");
+const $transferAcceptBtn = document.getElementById("transferAcceptBtn");
+
+const $kickConfirmOverlay = document.getElementById("kickConfirmOverlay");
+const $kickConfirmText = document.getElementById("kickConfirmText");
+const $kickCancelBtn = document.getElementById("kickCancelBtn");
+const $kickConfirmBtn = document.getElementById("kickConfirmBtn");
+
+/* ── State ── */
+const JOINED_ROOMS_STORAGE_KEY = "vusChatJoinedRooms"; // private rooms this browser has joined, until X'd out
+const ROOM_PING_BADGE_KEY = "vusChatRoomPingBadges";   // codes with an unread @ping, per this browser
+
+let currentRoomCode = null;    // null while in the main room
+let currentRoomMeta = null;    // live metadata of whatever room we're in (main room has none)
+let unsubscribeRoomMeta = null;
+let publicRoomsList = [];
+let joinedPrivateRoomCodes = new Set(); // loaded from localStorage
+let roomPingBadges = new Set();          // loaded from localStorage
+let extendPromptShownForCode = null;     // avoid re-showing the same room's prompt repeatedly
+let pendingKickTarget = null;
+let sidebarCountdownTimer = null;
+let topBarCountdownTimer = null;
+
+function loadJoinedRoomsFromStorage() {
+  try {
+    const raw = localStorage.getItem(JOINED_ROOMS_STORAGE_KEY);
+    joinedPrivateRoomCodes = new Set(raw ? JSON.parse(raw) : []);
+  } catch (e) {
+    joinedPrivateRoomCodes = new Set();
+  }
+}
+
+function saveJoinedRoomsToStorage() {
+  try {
+    localStorage.setItem(JOINED_ROOMS_STORAGE_KEY, JSON.stringify([...joinedPrivateRoomCodes]));
+  } catch (e) { /* ignore quota errors — non-critical */ }
+}
+
+function loadPingBadgesFromStorage() {
+  try {
+    const raw = localStorage.getItem(ROOM_PING_BADGE_KEY);
+    roomPingBadges = new Set(raw ? JSON.parse(raw) : []);
+  } catch (e) {
+    roomPingBadges = new Set();
+  }
+}
+
+function savePingBadgesToStorage() {
+  try {
+    localStorage.setItem(ROOM_PING_BADGE_KEY, JSON.stringify([...roomPingBadges]));
+  } catch (e) { /* ignore */ }
+}
+
+function updateRoomsHeaderBadge() {
+  $roomsBadgeDot.style.display = roomPingBadges.size > 0 ? "block" : "none";
+}
+
+function restoreSidebarRoomList() {
+  loadJoinedRoomsFromStorage();
+  loadPingBadgesFromStorage();
+  updateRoomsHeaderBadge();
+}
+
+function watchPublicRoomsList() {
+  RoomManager.watchPublicRooms(list => {
+    publicRoomsList = list;
+    if ($roomsSidebar.classList.contains("open")) renderRoomsSidebar();
+  });
+}
+
+function formatCountdown(msRemaining) {
+  const totalSecs = Math.max(0, Math.ceil(msRemaining / 1000));
+  const mins = Math.floor(totalSecs / 60);
+  const secs = totalSecs % 60;
+  return mins + ":" + String(secs).padStart(2, "0");
+}
+
+/* ── Sidebar open/close ── */
+function openRoomsSidebar() {
+  $roomsSidebarOverlay.style.display = "block";
+  $roomsSidebar.classList.add("open");
+  $roomsSidebarOverlay.style.display = "block";
+  renderRoomsSidebar();
+  clearInterval(sidebarCountdownTimer);
+  sidebarCountdownTimer = setInterval(renderRoomsSidebar, 1000);
+}
+
+function closeRoomsSidebar() {
+  $roomsSidebarOverlay.style.display = "none";
+  $roomsSidebar.classList.remove("open");
+  clearInterval(sidebarCountdownTimer);
+  $roomsFooterMsg.textContent = "";
+  $roomsFooterMsg.classList.remove("err");
+}
+
+$roomsToggleBtn.addEventListener("click", () => {
+  const isOpen = $roomsSidebar.classList.contains("open");
+  if (isOpen) closeRoomsSidebar(); else openRoomsSidebar();
+});
+$roomsSidebarClose.addEventListener("click", closeRoomsSidebar);
+$roomsSidebarOverlay.addEventListener("click", closeRoomsSidebar);
+
+/* ── Sidebar rendering ── */
+async function renderRoomsSidebar() {
+  $roomsSidebarBody.innerHTML = "";
+
+  // Main room — always first, always pinned, never closable.
+  const mainTitle = document.createElement("div");
+  mainTitle.className = "rooms-section-title";
+  mainTitle.textContent = "Pinned";
+  $roomsSidebarBody.appendChild(mainTitle);
+  $roomsSidebarBody.appendChild(buildMainRoomCard());
+
+  // Rooms this browser has joined privately (not shown in the public list),
+  // fetched fresh each render so expiry/name/timer stay current.
+  const joinedTitle = document.createElement("div");
+  joinedTitle.className = "rooms-section-title";
+  joinedTitle.textContent = "Joined Rooms";
+  $roomsSidebarBody.appendChild(joinedTitle);
+
+  const joinedCodes = [...joinedPrivateRoomCodes];
+  if (joinedCodes.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "rooms-empty";
+    empty.textContent = "Rooms you join by code stay here until you remove them.";
+    $roomsSidebarBody.appendChild(empty);
+  } else {
+    for (const code of joinedCodes) {
+      const meta = await RoomManager.getRoomMeta(code);
+      if (!meta) {
+        // Expired/deleted since we last saw it — drop it silently from storage.
+        joinedPrivateRoomCodes.delete(code);
+        saveJoinedRoomsToStorage();
+        continue;
+      }
+      if (meta.isPublic) continue; // shown in the public section instead, avoid duplicates
+      $roomsSidebarBody.appendChild(buildRoomCard(meta, true));
+    }
+  }
+
+  // Public rooms — visible to everyone, not tied to localStorage at all.
+  const publicTitle = document.createElement("div");
+  publicTitle.className = "rooms-section-title";
+  publicTitle.textContent = "Chat Rooms";
+  $roomsSidebarBody.appendChild(publicTitle);
+
+  if (publicRoomsList.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "rooms-empty";
+    empty.textContent = "No public rooms right now.";
+    $roomsSidebarBody.appendChild(empty);
+  } else {
+    publicRoomsList
+      .slice()
+      .sort((a, b) => (a.expiresAt || 0) - (b.expiresAt || 0))
+      .forEach(meta => {
+        $roomsSidebarBody.appendChild(buildRoomCard(meta, false));
+      });
+  }
+}
+
+function buildMainRoomCard() {
+  const card = document.createElement("div");
+  card.className = "room-card" + (currentRoomCode === null ? " active" : "");
+  card.innerHTML = `
+    <div class="room-card-top">
+      <span class="room-card-name">VUS Chat <span class="room-card-pinned">Main</span></span>
+    </div>
+  `;
+  card.addEventListener("click", () => {
+    closeRoomsSidebar();
+    switchToMainRoom();
+  });
+  return card;
+}
+
+function buildRoomCard(meta, closable) {
+  const card = document.createElement("div");
+  card.className = "room-card" + (currentRoomCode === meta.code ? " active" : "");
+
+  const hasPing = roomPingBadges.has(meta.code);
+  const remaining = (meta.expiresAt || 0) - Date.now();
+  const urgent = remaining < ROOM_WARNING_MS;
+
+  const displayName = meta.name || ("Room " + meta.code);
+
+  card.innerHTML = `
+    <div class="room-card-top">
+      <span class="room-card-name">${esc(displayName)}${hasPing ? '<span class="room-card-dot"></span>' : ""}</span>
+      <span class="room-card-timer${urgent ? " urgent" : ""}">${formatCountdown(remaining)}</span>
+    </div>
+    <div class="room-card-code">Code: ${esc(meta.code)}${meta.isPublic ? " · Public" : ""}</div>
+  `;
+
+  card.addEventListener("click", () => {
+    closeRoomsSidebar();
+    joinRoomByCode(meta.code);
+  });
+
+  if (closable) {
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "room-card-close";
+    closeBtn.textContent = "×";
+    closeBtn.title = "Remove from your list";
+    closeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      joinedPrivateRoomCodes.delete(meta.code);
+      saveJoinedRoomsToStorage();
+      roomPingBadges.delete(meta.code);
+      savePingBadgesToStorage();
+      updateRoomsHeaderBadge();
+      renderRoomsSidebar();
+    });
+    card.appendChild(closeBtn);
+  }
+
+  return card;
+}
+
+/* ── Room creation ── */
+function getRoomCreateCooldownRemainingMs() {
+  try {
+    const last = parseInt(localStorage.getItem(ROOM_CREATE_COOLDOWN_KEY) || "0", 10);
+    return Math.max(0, ROOM_CREATE_COOLDOWN_MS - (Date.now() - last));
+  } catch (e) {
+    return 0;
+  }
+}
+
+$createRoomBtn.addEventListener("click", () => {
+  if (!myName || isSpectatorName(myName)) {
+    $roomsFooterMsg.textContent = "Join the chat with a real name first.";
+    $roomsFooterMsg.classList.add("err");
+    return;
+  }
+  const remaining = getRoomCreateCooldownRemainingMs();
+  if (remaining > 0) {
+    $roomsFooterMsg.textContent = "Wait " + Math.ceil(remaining / 1000) + "s before creating another room.";
+    $roomsFooterMsg.classList.add("err");
+    return;
+  }
+  $createRoomNameInput.value = "";
+  $createRoomErr.textContent = "";
+  $createRoomOverlay.style.display = "flex";
+  $createRoomNameInput.focus();
+});
+
+$createRoomCancelBtn.addEventListener("click", () => {
+  $createRoomOverlay.style.display = "none";
+});
+
+$createRoomConfirmBtn.addEventListener("click", async () => {
+  $createRoomConfirmBtn.disabled = true;
+  $createRoomErr.textContent = "";
+  try {
+    const { code } = await RoomManager.createRoom(myName, $createRoomNameInput.value);
+    try { localStorage.setItem(ROOM_CREATE_COOLDOWN_KEY, String(Date.now())); } catch (e) {}
+    joinedPrivateRoomCodes.add(code);
+    saveJoinedRoomsToStorage();
+    $createRoomOverlay.style.display = "none";
+    closeRoomsSidebar();
+    await joinRoomByCode(code);
+  } catch (e) {
+    $createRoomErr.textContent = "Couldn't create room — try again.";
+  } finally {
+    $createRoomConfirmBtn.disabled = false;
+  }
+});
+
+/* ── Join by code ── */
+$joinByCodeBtn.addEventListener("click", async () => {
+  const code = $joinByCodeInput.value.trim().toUpperCase();
+  if (!code) return;
+  $roomsFooterMsg.textContent = "";
+  $roomsFooterMsg.classList.remove("err");
+
+  const meta = await RoomManager.getRoomMeta(code);
+  if (!meta) {
+    $roomsFooterMsg.textContent = "No room found with that code.";
+    $roomsFooterMsg.classList.add("err");
+    return;
+  }
+  if (meta.kicked && meta.kicked[ChatBackend._safeKey ? ChatBackend._safeKey(myName) : myName]) {
+    // Kicking isn't a ban — this just confirms the check exists; rejoining
+    // is allowed, so we intentionally do NOT block here. (Left explicit
+    // rather than silently absent, in case that policy changes later.)
+  }
+
+  joinedPrivateRoomCodes.add(code);
+  saveJoinedRoomsToStorage();
+  $joinByCodeInput.value = "";
+  closeRoomsSidebar();
+  await joinRoomByCode(code);
+});
+
+$joinByCodeInput.addEventListener("keydown", e => {
+  if (e.key === "Enter") $joinByCodeBtn.click();
+});
+
+/* ── Switching rooms ── */
+async function joinRoomByCode(code) {
+  if (!myName) return; // must already be in the main room with a name chosen
+  if (currentRoomCode === code) return;
+
+  const meta = await RoomManager.getRoomMeta(code);
+  if (!meta) {
+    showComposerNotice("That room no longer exists.");
+    return;
+  }
+
+  // Clear this room's unread-ping badge the moment we actually enter it.
+  if (roomPingBadges.has(code)) {
+    roomPingBadges.delete(code);
+    savePingBadgesToStorage();
+    updateRoomsHeaderBadge();
+  }
+
+  teardownCurrentRoomMetaWatch();
+  currentRoomCode = code;
+  ChatBackend.bindToRoom(code);
+  ChatBackend.claimPresence(myName, isSpectator);
+  attachRoomListeners();
+
+  $messages.innerHTML = "";
+  messageCount = 0;
+  $emptyState.style.display = "flex";
+
+  $roomTopBar.style.display = "flex";
+  unsubscribeRoomMeta = RoomManager.watchRoomMeta(code, onRoomMetaUpdate);
+}
+
+function switchToMainRoom() {
+  if (currentRoomCode === null) return;
+
+  teardownCurrentRoomMetaWatch();
+  currentRoomCode = null;
+  currentRoomMeta = null;
+  ChatBackend.bindToRoom(MAIN_ROOM_ID);
+  if (myName) ChatBackend.claimPresence(myName, isSpectator);
+  attachRoomListeners();
+
+  $messages.innerHTML = "";
+  messageCount = 0;
+  $emptyState.style.display = "flex";
+
+  $roomTopBar.style.display = "none";
+  clearInterval(topBarCountdownTimer);
+  extendPromptShownForCode = null;
+}
+
+function teardownCurrentRoomMetaWatch() {
+  if (unsubscribeRoomMeta) { unsubscribeRoomMeta(); unsubscribeRoomMeta = null; }
+  clearInterval(topBarCountdownTimer);
+}
+
+$roomLeaveBtn.addEventListener("click", () => {
+  switchToMainRoom();
+});
+
+/* ── Live room metadata handling: countdown, expiry, ownership crown,
+     transfer offers, kick detection ── */
+function onRoomMetaUpdate(meta) {
+  if (!meta) {
+    // Room was deleted (expired, or otherwise removed) while we were in it.
+    showComposerNotice("This room has closed.");
+    switchToMainRoom();
+    return;
+  }
+
+  currentRoomMeta = meta;
+
+  // Was I kicked? If my name is in the kicked map, boot myself back to main.
+  const myKey = ChatBackend._safeKey(myName);
+  if (meta.kicked && meta.kicked[myKey]) {
+    showComposerNotice("You were removed from this room.");
+    switchToMainRoom();
+    return;
+  }
+
+  const isOwner = meta.ownerName === myName;
+  const displayName = meta.name || ("Room " + meta.code);
+  $roomTopBarName.innerHTML = (isOwner ? "👑 " : "") + esc(displayName);
+  $roomTopBarCode.textContent = "Code: " + meta.code + (meta.isPublic ? " · Public" : " · Private");
+  $roomSettingsBtn.style.display = isOwner ? "inline-block" : "none";
+
+  clearInterval(topBarCountdownTimer);
+  topBarCountdownTimer = setInterval(() => updateRoomCountdownUI(meta), 1000);
+  updateRoomCountdownUI(meta);
+
+  // Ownership transfer offer directed at me
+  if (meta.transferOffer && meta.transferOffer.toName === myName) {
+    showTransferOfferModal(meta);
+  } else if ($transferOfferOverlay.style.display === "flex") {
+    $transferOfferOverlay.style.display = "none";
+  }
+
+  if ($roomSettingsOverlay.style.display === "flex" && isOwner) {
+    renderRoomMembersList(meta);
+  }
+
+  // Keep the Public toggle button's label/state in sync with the real
+  // value in Firebase at all times, so repeated clicks can't desync it
+  // from what's actually stored (previously it only got set once, when
+  // the settings modal first opened).
+  if ($roomSettingsOverlay.style.display === "flex") {
+    $roomPublicToggleBtn.textContent = meta.isPublic ? "On" : "Off";
+    $roomPublicToggleBtn.classList.toggle("active", meta.isPublic);
+  }
+}
+
+function updateRoomCountdownUI(meta) {
+  const remaining = (meta.expiresAt || 0) - Date.now();
+
+  if (remaining <= 0) {
+    // Whichever client notices first deletes the room; Firebase deletes are
+    // idempotent, so it's harmless if more than one client races here.
+    RoomManager.deleteRoom(meta.code).catch(() => {});
+    return;
+  }
+
+  const urgent = remaining < ROOM_WARNING_MS;
+  $roomTopBarTimer.textContent = formatCountdown(remaining);
+  $roomTopBarTimer.classList.toggle("urgent", urgent);
+
+  if (urgent && extendPromptShownForCode !== meta.code) {
+    extendPromptShownForCode = meta.code;
+    showExtendPrompt(meta);
+  }
+}
+
+function showExtendPrompt(meta) {
+  const displayName = meta.name || ("Room " + meta.code);
+  $extendRoomText.textContent = "\u201c" + displayName + "\u201d closes in under a minute. Add 10 more minutes?";
+  $extendRoomOverlay.style.display = "flex";
+}
+
+$extendRoomDismissBtn.addEventListener("click", () => {
+  $extendRoomOverlay.style.display = "none";
+});
+
+$extendRoomConfirmBtn.addEventListener("click", async () => {
+  if (!currentRoomCode) return;
+  $extendRoomConfirmBtn.disabled = true;
+  try {
+    await RoomManager.extendRoom(currentRoomCode);
+    extendPromptShownForCode = null; // allow the prompt again if it gets low a second time
+  } catch (e) {
+    showComposerNotice("Couldn't extend the room — try again.");
+  } finally {
+    $extendRoomConfirmBtn.disabled = false;
+    $extendRoomOverlay.style.display = "none";
+  }
+});
+
+/* ── Room Settings modal (owner only) ── */
+$roomSettingsBtn.addEventListener("click", () => {
+  if (!currentRoomMeta) return;
+  $roomPublicToggleBtn.textContent = currentRoomMeta.isPublic ? "On" : "Off";
+  $roomPublicToggleBtn.classList.toggle("active", currentRoomMeta.isPublic);
+  $roomCodeInput.value = currentRoomMeta.code;
+  $roomCodeErr.textContent = "";
+  renderRoomMembersList(currentRoomMeta);
+  $roomSettingsOverlay.style.display = "flex";
+});
+
+$roomSettingsCloseBtn.addEventListener("click", () => {
+  $roomSettingsOverlay.style.display = "none";
+});
+
+$roomPublicToggleBtn.addEventListener("click", async () => {
+  if (!currentRoomCode || !currentRoomMeta) return;
+  const newState = !currentRoomMeta.isPublic;
+  $roomPublicToggleBtn.disabled = true;
+  try {
+    await RoomManager.setPublic(currentRoomCode, newState);
+  } finally {
+    $roomPublicToggleBtn.disabled = false;
+  }
+});
+
+$roomCodeSaveBtn.addEventListener("click", async () => {
+  if (!currentRoomCode) return;
+  const newCode = $roomCodeInput.value.trim().toUpperCase();
+  $roomCodeErr.textContent = "";
+  $roomCodeSaveBtn.disabled = true;
+  try {
+    const result = await RoomManager.changeCode(currentRoomCode, newCode, myName);
+    if (!result.ok) {
+      const messages = {
+        empty: "Enter a code.",
+        same: "That's already the current code.",
+        taken: "That code is already in use.",
+        gone: "This room no longer exists.",
+        "not-owner": "Only the room owner can change the code."
+      };
+      $roomCodeErr.textContent = messages[result.reason] || "Couldn't change the code.";
+      return;
+    }
+    // Follow the room to its new code seamlessly.
+    joinedPrivateRoomCodes.delete(currentRoomCode);
+    joinedPrivateRoomCodes.add(result.newCode);
+    saveJoinedRoomsToStorage();
+    const targetCode = result.newCode;
+    $roomSettingsOverlay.style.display = "none";
+    currentRoomCode = null; // force joinRoomByCode to treat this as a real switch
+    await joinRoomByCode(targetCode);
+  } catch (e) {
+    $roomCodeErr.textContent = "Couldn't change the code — try again.";
+  } finally {
+    $roomCodeSaveBtn.disabled = false;
+  }
+});
+
+function renderRoomMembersList(meta) {
+  $roomMembersList.innerHTML = "";
+  const names = latestPresenceList.map(e => e.name).sort((a, b) => a.localeCompare(b));
+
+  if (names.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "rooms-empty";
+    empty.textContent = "No one else here yet.";
+    $roomMembersList.appendChild(empty);
+    return;
+  }
+
+  names.forEach(name => {
+    const row = document.createElement("div");
+    row.className = "room-member-row";
+
+    const isOwnerRow = name === meta.ownerName;
+    const nameEl = document.createElement("span");
+    nameEl.className = "room-member-name";
+    nameEl.textContent = (isOwnerRow ? "👑 " : "") + name + (name === myName ? " (you)" : "");
+    row.appendChild(nameEl);
+
+    if (name !== myName) {
+      const actions = document.createElement("div");
+      actions.className = "room-member-actions";
+
+      const transferBtn = document.createElement("button");
+      transferBtn.textContent = "Make owner";
+      transferBtn.addEventListener("click", () => {
+        RoomManager.offerTransfer(currentRoomCode, myName, name).catch(() => {
+          showComposerNotice("Couldn't send transfer offer — try again.");
+        });
+      });
+      actions.appendChild(transferBtn);
+
+      const kickBtn = document.createElement("button");
+      kickBtn.className = "kick";
+      kickBtn.textContent = "Kick";
+      kickBtn.addEventListener("click", () => {
+        pendingKickTarget = name;
+        $kickConfirmText.textContent = "Remove " + name + " from this room? They can rejoin if they still have access.";
+        $kickConfirmOverlay.style.display = "flex";
+      });
+      actions.appendChild(kickBtn);
+
+      row.appendChild(actions);
+    }
+
+    $roomMembersList.appendChild(row);
+  });
+}
+
+$kickCancelBtn.addEventListener("click", () => {
+  pendingKickTarget = null;
+  $kickConfirmOverlay.style.display = "none";
+});
+
+$kickConfirmBtn.addEventListener("click", async () => {
+  if (!pendingKickTarget || !currentRoomCode) return;
+  $kickConfirmBtn.disabled = true;
+  try {
+    await RoomManager.kickFromRoom(currentRoomCode, pendingKickTarget);
+  } catch (e) {
+    showComposerNotice("Couldn't kick — try again.");
+  } finally {
+    $kickConfirmBtn.disabled = false;
+    $kickConfirmOverlay.style.display = "none";
+    pendingKickTarget = null;
+  }
+});
+
+/* ── Ownership transfer: offer / accept / decline ── */
+function showTransferOfferModal(meta) {
+  $transferOfferText.textContent = meta.transferOffer.fromName + " wants to make you the owner of \u201c" + (meta.name || ("Room " + meta.code)) + "\u201d.";
+  $transferOfferOverlay.style.display = "flex";
+}
+
+$transferAcceptBtn.addEventListener("click", async () => {
+  if (!currentRoomCode) return;
+  $transferAcceptBtn.disabled = true;
+  try {
+    await RoomManager.acceptTransfer(currentRoomCode, myName);
+  } finally {
+    $transferAcceptBtn.disabled = false;
+    $transferOfferOverlay.style.display = "none";
+  }
+});
+
+$transferDeclineBtn.addEventListener("click", async () => {
+  if (!currentRoomCode) return;
+  $transferDeclineBtn.disabled = true;
+  try {
+    await RoomManager.declineTransfer(currentRoomCode);
+  } finally {
+    $transferDeclineBtn.disabled = false;
+    $transferOfferOverlay.style.display = "none";
+  }
+});
+
+// Forced auto-promotion: if the room's owner is no longer present and
+// exactly one person remains, that person becomes owner immediately, no
+// accept/decline step (per the "if the owner leaves, force give it to
+// them" requirement — distinct from the voluntary offer/accept flow above).
+function checkSoleSurvivorAutoOwnership(presenceList) {
+  if (!currentRoomCode || !currentRoomMeta) return;
+  const namesPresent = presenceList.map(e => e.name);
+  const ownerStillPresent = namesPresent.includes(currentRoomMeta.ownerName);
+  if (ownerStillPresent) return;
+  if (namesPresent.length !== 1) return; // only auto-promote when exactly one person remains
+  const soleSurvivor = namesPresent[0];
+  if (soleSurvivor !== myName) return; // only the survivor's own client performs the promotion
+  RoomManager.forceTransferOwnership(currentRoomCode, myName).catch(() => {});
+}
+
+/* ── Room-scoped Ping You (Discord): same button/flow as the main room,
+     but the webhook message includes the room code so you know which
+     room to check. See $pingYouSend's click handler for the shared logic
+     — this just changes the message content when inside a custom room. ── */
+function buildPingYouWebhookContent(note) {
+  const senderName = myName || "Someone";
+  if (currentRoomCode && currentRoomMeta) {
+    const roomLabel = (currentRoomMeta.name || "Room") + " (" + currentRoomCode + ")";
+    return "🔔 **" + senderName + "** pinged from **" + roomLabel + "**" + (note ? ": " + note : " (no note)");
+  }
+  return "🔔 **" + senderName + "** pinged" + (note ? ": " + note : " (no note)");
+}
+
+
+/* ── Wire up events ── */
+$changeNameBtn.addEventListener("click", openChangeName);
+
+$sendBtn.addEventListener("click", sendMessage);
+$msgInput.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+$msgInput.addEventListener("input", () => {
+  autosizeInput();
+  handleTypingActivity();
+  updateCharCounter();
+  handleMentionTrigger();
+});
+
+// Paste-an-image support: only active when image uploads are unlocked via
+// the mod menu (same gate as the 📎 button — modMenuUnlocked AND
+// imagesEnabledForMe). If the clipboard paste contains an image, it's sent
+// through the same compress+send pipeline as a picked file, immediately,
+// matching the upload button's behavior. If the clipboard has no image
+// (just text), this does nothing and lets the paste proceed normally.
+$msgInput.addEventListener("paste", (e) => {
+  if (!modMenuUnlocked || !imagesEnabledForMe) return; // let normal text paste happen
+
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+
+  let imageFile = null;
+  for (const item of items) {
+    if (item.type && item.type.startsWith("image/")) {
+      imageFile = item.getAsFile();
+      break;
+    }
+  }
+  if (!imageFile) return; // no image in clipboard — fall through to normal text paste
+
+  // There IS an image — stop it from being pasted as garbage text/inline
+  // data and stage it for sending (waits for the user to click Send,
+  // same as the file picker).
+  e.preventDefault();
+  stageImageFile(imageFile);
+});
+
+/* ── Boot ── */
+// Attaches all the per-room live listeners (messages, presence, typing,
+// leave events) to whatever room ChatBackend is currently bound to. Called
+// once at boot for the main room, and again every time switchToRoom() binds
+// to a different room — ChatBackend.bindToRoom() already detaches the old
+// room's listeners before this runs, so there's never a double-subscription.
+function attachRoomListeners() {
+  ChatBackend.watchPresenceCount(count => {
+    $onlineCount.textContent = count + " online";
+  });
+  ChatBackend.watchPresenceList(list => {
+    latestPresenceList = list;
+    if ($onlineListPanel.style.display === "block") renderOnlineListPanel();
+    refreshMentionDropdownIfOpen();
+    checkSoleSurvivorAutoOwnership(list);
+  });
+  ChatBackend.watchMessages(renderMessage);
+  ChatBackend.watchLeaveEvents();
+  ChatBackend.watchTyping(renderTyping, () => myName);
+}
+
+function init() {
+  const usingPlaceholderConfig = FIREBASE_CONFIG.apiKey === "PASTE_YOUR_API_KEY_HERE";
+  if (usingPlaceholderConfig) {
+    $joinCard.innerHTML = `
+      <h2>Chat not set up yet</h2>
+      <p>
+        This chat needs a free Firebase project connected before it'll work.
+        Open this file's code and fill in FIREBASE_CONFIG near the bottom —
+        instructions are in the comment right above it.
+      </p>
+    `;
+    return;
+  }
+
+  try {
+    ChatBackend.init();
+    RoomManager.init(ChatBackend._db);
+  } catch (e) {
+    $joinCard.innerHTML = `<h2>Couldn't connect</h2><p>${esc(e.message || "Unknown error")}</p>`;
+    return;
+  }
+
+  const savedName = localStorage.getItem(NAME_STORAGE_KEY);
+  if (savedName) {
+    renderJoinReturning(savedName);
+  } else {
+    renderJoinNameEntry(false);
+  }
+
+  ChatBackend.watchConnection(setConnectionStatus);
+  ChatBackend.watchCrownedNames(set => { crownedNames = set; });
+  attachRoomListeners();
+  watchPublicRoomsList();
+  restoreSidebarRoomList();
+
+  updateUploadButtonVisibility();
+  updatePingYouButtonState();
+  preloadPingSound();
+
+  $emptyState.style.display = "flex";
+  updateCharCounter();
+
+  window.addEventListener("beforeunload", () => {
+    stopTyping();
+    if (isSpectator) {
+      ChatBackend.releasePresence();
+    } else {
+      ChatBackend.releasePresence();
+    }
+  });
+}
+
+init();
+</script>
+</body>
+</html>
