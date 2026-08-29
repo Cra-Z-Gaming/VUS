@@ -805,10 +805,10 @@
 <div class="chat-modal-overlay" id="extendRoomOverlay">
   <div class="chat-modal">
     <h3>⏳ Room expiring soon</h3>
-    <p id="extendRoomText">This room closes in under 6 minutes.</p>
+    <p id="extendRoomText">This room closes in under a minute.</p>
     <div class="chat-modal-row">
       <button class="chat-modal-btn-secondary" id="extendRoomDismissBtn">Dismiss</button>
-      <button class="chat-modal-btn-primary" id="extendRoomConfirmBtn">+20 minutes</button>
+      <button class="chat-modal-btn-primary" id="extendRoomConfirmBtn">+10 minutes</button>
     </div>
   </div>
 </div>
@@ -921,9 +921,9 @@ const FIREBASE_CONFIG = {
 const MAIN_ROOM_ID = "vus-hub-main";
 
 /* ── Custom room system ── */
-const ROOM_DURATION_MS = 60 * 60 * 1000;      // rooms live 1 hour
-const ROOM_WARNING_MS = 6 * 60 * 1000;        // extend-prompt appears with 6 min left
-const ROOM_EXTEND_MS = 20 * 60 * 1000;        // "+20 minutes" button adds this much
+const ROOM_DURATION_MS = 15 * 60 * 1000;      // rooms live 15 minutes
+const ROOM_WARNING_MS = 60 * 1000;            // extend-prompt appears with 1 min left
+const ROOM_EXTEND_MS = 10 * 60 * 1000;        // "+10 minutes" button adds this much
 const ROOM_CREATE_COOLDOWN_MS = 60 * 1000;    // 1 minute between room creations, per person
 const ROOM_CODE_DEFAULT_LENGTH = 4;
 const ROOM_CODE_MAX_LENGTH = 20;
@@ -955,12 +955,18 @@ const PING_SOUND_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/
 /* ── Crown (verified owner badge) ──
    Global code system, redeemed via the mod menu. Code defaults to "0000"
    (always inert). Requesting a code posts it to CROWN_WEBHOOK_URL — only
-   you have access to that Discord server — and the code expires after
-   CROWN_CODE_LIFESPAN_MS. The crown itself lives on the live presence
-   session (see ChatBackend.claimPresence), so it never survives a
-   disconnect, rename, or someone else later using the same name — a
-   fresh code redemption is required every single join. */
-const CROWN_CODE_LIFESPAN_MS = 60 * 1000; // 1 minute
+   you have access to that Discord server — and the code stays valid for
+   CROWN_CODE_LIFESPAN_MS. Redemption is MULTI-USE within that window by
+   design: anyone who has the code can redeem it while it's still valid,
+   not just whoever submits first — meant for handing it to a few trusted
+   people at once on a private server. The crown PERSISTS across renames
+   and room switches (both just re-run ChatBackend.claimPresence, which
+   now carries the crown forward via _crownHeld) but is cleared by
+   clearCrown(), which runs on silent leave (releasePresenceSilently),
+   normal leave (beforeunload), and real disconnect (the onDisconnect hook
+   registered in claimPresence) — so it never survives actually leaving,
+   and nobody else later using the same name inherits it. */
+const CROWN_CODE_LIFESPAN_MS = 30 * 1000; // 30 seconds
 const CROWN_REQUEST_COOLDOWN_MS = 30 * 1000;
 const CROWN_REQUEST_COOLDOWN_KEY = "vusChatLastCrownRequest";
 const CROWN_WEBHOOK_URL = "https://discord.com/api/webhooks/1542708447991037953/Ge705Wa_quPVC-2pFhttHYNuA4-FI5ZDRIn5VwjQ059SwT0ZRCrqmVLMofb8oJhsLFFJ";
@@ -987,6 +993,7 @@ const ChatBackend = {
   _crownedRef: null,
   _crownMetaRef: null,
   _myCrownRef: null,
+  _crownHeld: false, // survives rename/room-switch; cleared only by clearCrown()
   currentRoomId: null,
 
   init() {
@@ -1002,6 +1009,28 @@ const ChatBackend = {
   initCrowns() {
     this._crownedRef = this._db.ref("crowned");
     this._crownMetaRef = this._db.ref("crownMeta");
+  },
+
+  // Server-corrected clock helpers — a device with a wrong system clock
+  // (bad timezone, no network time sync, VM drift, etc) would otherwise
+  // silently produce a garbage crown-code expiry with no way to detect it
+  // later. Used anywhere a crown-code expiry is set or checked.
+  // NOTE: .info/serverTimeOffset is a synthetic, connection-local value
+  // (not real stored data), so it must be read with .once("value") —
+  // .get() tries to force a server round-trip and doesn't reliably
+  // resolve it. Wrapped in try/catch so any read failure just falls back
+  // to treating the local clock as authoritative (the old behavior)
+  // instead of breaking crown-code generation/redemption entirely.
+  async _serverOffset() {
+    try {
+      const snap = await this._db.ref(".info/serverTimeOffset").once("value");
+      return snap.val() || 0;
+    } catch (e) {
+      return 0;
+    }
+  },
+  async _serverNow() {
+    return Date.now() + (await this._serverOffset());
   },
 
   watchCrownedNames(onChange) {
@@ -1021,17 +1050,13 @@ const ChatBackend = {
     return out;
   },
 
-  // Generates a fresh code, writes it to Firebase with a 60s expiry, and
-  // posts it to the private Discord webhook. The code is meaningless to
-  // anyone who can't read that webhook's channel.
+  // Generates a fresh code, writes it to Firebase with a 60s expiry
+  // anchored to SERVER time (see _serverNow), and posts it to the private
+  // Discord webhook. The code is meaningless to anyone who can't read
+  // that webhook's channel.
   async generateCrownCode() {
     const code = this._randomCrownCode();
-    // Use the server's clock, not this device's — a wrong local clock
-    // (bad timezone, no network time sync, etc) would otherwise silently
-    // produce a nonsense expiry with no way to detect it later.
-    const serverNowSnap = await this._db.ref(".info/serverTimeOffset").get();
-    const offset = serverNowSnap.val() || 0;
-    const serverNow = Date.now() + offset;
+    const serverNow = await this._serverNow();
     const expiresAt = serverNow + CROWN_CODE_LIFESPAN_MS;
     await this._crownMetaRef.set({ code, expiresAt });
     let webhookOk = false;
@@ -1056,36 +1081,47 @@ const ChatBackend = {
   // same write — so the same code can never be redeemed twice, and two
   // near-simultaneous submissions can't both succeed.
   //
-  // Also does a plain (non-transactional) read FIRST, purely to produce a
-  // specific reason for the UI ("wrong" vs "expired" vs "none") — this read
-  // is diagnostic only and never used to decide the actual claim; the
-  // transaction below is still the sole source of truth for that.
+  // If the transaction doesn't commit, we diagnose why with a FRESH read
+  // taken right AFTER the failure — deliberately after, not before, so the
+  // reported reason matches what's actually true at that moment. A code
+  // that's still valid when you first glance at it can easily expire by
+  // the time you finish typing and submit; diagnosing from a stale
+  // pre-check used to mislabel that as "claimed a split second before
+  // this attempt" when it had really just expired.
+  // Multi-use within the window, by design: rather than being consumed by
+  // whoever redeems first, a code stays valid for CROWN_CODE_LIFESPAN_MS
+  // after being requested, and ANYONE who has it can redeem it during that
+  // window — each redeemer gets their own crown. This is a deliberate
+  // choice, not an oversight: crowned/{name} was already a set (multiple
+  // people can hold the crown at once), the code itself is the actual
+  // gate (posted only to a private Discord channel), and letting it be
+  // shared with trusted people within a short window doesn't weaken that.
+  // No transaction needed anymore either, since nothing is being consumed
+  // — just "is this code currently valid", a plain read.
   async redeemCrownCode(inputCode) {
     const clean = (inputCode || "").trim().toUpperCase();
     if (!clean || clean === "0000") return { ok: false, reason: "none" };
 
-    const offsetSnap = await this._db.ref(".info/serverTimeOffset").get();
-    const serverNow = Date.now() + (offsetSnap.val() || 0);
-
-    let diagnosticReason = "wrong";
+    let current;
     try {
       const snap = await this._crownMetaRef.get();
-      const current = snap.val();
-      if (current && current.code === clean) {
-        diagnosticReason = (!current.expiresAt || serverNow > current.expiresAt) ? "expired" : "wrong-but-matched"; // shouldn't happen if not expired — transaction will clarify
-      }
-    } catch (e) { /* diagnostic only — fall through to the real transaction either way */ }
+      current = snap.val();
+    } catch (e) {
+      return { ok: false, reason: "wrong" };
+    }
 
-    const tx = await this._crownMetaRef.transaction(current => {
-      if (!current || current.code !== clean) return; // abort — wrong/no code
-      if (!current.expiresAt || serverNow > current.expiresAt) return; // abort — expired
-      return { code: "0000", expiresAt: 0 };
-    });
+    if (!current || !current.code || current.code === "0000" || current.code !== clean) {
+      return { ok: false, reason: "wrong" };
+    }
 
-    if (!tx.committed) return { ok: false, reason: diagnosticReason };
+    const serverNow = await this._serverNow();
+    if (!current.expiresAt || serverNow > current.expiresAt) {
+      return { ok: false, reason: "expired" };
+    }
 
     if (this._myCrownRef) {
       await this._myCrownRef.set(true);
+      this._crownHeld = true;
     }
     return { ok: true };
   },
@@ -1213,15 +1249,33 @@ const ChatBackend = {
     this._myPresenceRef.onDisconnect().remove();
     this._myPresenceRef.set({ joinedAt: firebase.database.ServerValue.TIMESTAMP });
 
-    // Crown: always start crown-less on every (re)join/rename/room-switch —
-    // this same code path runs for all of those — and strip it the instant
-    // this session disconnects for any reason, so it can never linger on a
-    // name after the crowned person leaves, and nobody else re-using that
-    // name later inherits it.
-    const crownRef = this._crownedRef.child(this._safeKey(name));
-    crownRef.remove();
-    crownRef.onDisconnect().remove();
-    this._myCrownRef = crownRef;
+    // Crown: carries forward across rename/room-switch (this same code path
+    // runs for both) via _crownHeld, which is only ever set true by a
+    // successful redeemCrownCode() and only ever cleared by clearCrown() —
+    // see releasePresenceSilently() and the beforeunload handler, the two
+    // places that actually leave. A genuinely fresh join always starts
+    // crown-less, since _crownHeld defaults false.
+    const crownKey = this._safeKey(name);
+    const crownRef = this._crownedRef.child(crownKey);
+    const sameCrownTarget = this._myCrownRef && this._myCrownRef.key === crownKey;
+
+    if (!sameCrownTarget) {
+      // Name actually changed (rename) — detach the OLD name's crown first
+      // so it can never linger there after the switch.
+      if (this._myCrownRef) {
+        this._myCrownRef.onDisconnect().cancel();
+        this._myCrownRef.remove();
+      }
+      this._myCrownRef = crownRef;
+      if (this._crownHeld) {
+        crownRef.set(true);
+      } else {
+        crownRef.remove(); // defensive: clear any stale value left on this name
+      }
+      crownRef.onDisconnect().remove();
+    }
+    // else: same name (room switch) — crown ref/value/onDisconnect hook are
+    // already correct, nothing to touch.
 
     if (!this._silentSession) {
       this._ref.push({
@@ -1245,13 +1299,17 @@ const ChatBackend = {
       this._myPresenceRef.remove();
       this._myPresenceRef = null;
     }
-    if (this._myCrownRef) {
-      this._myCrownRef.onDisconnect().cancel();
-      this._myCrownRef.remove();
-      this._myCrownRef = null;
-    }
+    this.clearCrown();
   },
 
+  // Drops presence + leave-event tracking only — crown is deliberately left
+  // untouched here. This function does double duty: bindToRoom() calls it
+  // internally to clean up before binding to a new room, and the
+  // beforeunload handler calls it for a real leave. Room-switching must
+  // preserve the crown, so crown-clearing can't live here; the real-leave
+  // call site clears it explicitly via clearCrown() right alongside this
+  // call instead. See releasePresenceSilently() above for the silent-leave
+  // equivalent, which does the same pairing.
   releasePresence() {
     if (this._myPresenceRef) {
       this._myPresenceRef.remove();
@@ -1261,11 +1319,19 @@ const ChatBackend = {
       this._myLeaveEventRef.onDisconnect().cancel();
       this._myLeaveEventRef = null;
     }
+  },
+
+  // Explicitly clears the crown: removes it from Firebase, cancels its
+  // onDisconnect hook (since we're clearing it directly instead), and
+  // resets _crownHeld so a subsequent claimPresence() (e.g. this same tab
+  // rejoining later) starts crown-less instead of resurrecting it.
+  clearCrown() {
     if (this._myCrownRef) {
       this._myCrownRef.onDisconnect().cancel();
       this._myCrownRef.remove();
       this._myCrownRef = null;
     }
+    this._crownHeld = false;
   },
 
   watchLeaveEvents() {
@@ -1435,17 +1501,13 @@ const RoomManager = {
    */
   async createRoom(ownerName, roomName) {
     const code = await this._generateUniqueCode();
-    // Server-corrected time, not raw Date.now() — a device with a wrong
-    // system clock would otherwise silently produce a garbage expiry with
-    // no way to detect it (see the crown-code fix for the same issue).
-    const offsetSnap = await this._db.ref(".info/serverTimeOffset").get();
-    const serverNow = Date.now() + (offsetSnap.val() || 0);
+    const now = Date.now();
     const meta = {
       name: (roomName || "").trim().slice(0, ROOM_NAME_MAX_LENGTH) || null,
       ownerName: ownerName,
       isPublic: false,
       createdAt: firebase.database.ServerValue.TIMESTAMP,
-      expiresAt: serverNow + ROOM_DURATION_MS,
+      expiresAt: now + ROOM_DURATION_MS, // client-estimated; fine for a countdown display
       kicked: {}
     };
     await this._metaRootRef.child(this._safeCode(code)).set(meta);
@@ -2533,12 +2595,14 @@ async function renderModMenu() {
   });
   $globalClearPanel.appendChild(crownReqBtn);
 
-  // Live readout of whatever code is CURRENTLY active in Firebase, right
-  // here in the panel — so you can visually confirm the exact code and
-  // exact time remaining instead of relying on matching it against Discord
-  // from memory. This is a one-time read + local countdown, not a
-  // persistent listener, refreshed each time the panel opens or a new
-  // code is requested.
+  // Timing-only status readout — deliberately never shows the code itself,
+  // since the whole point of posting it to a private Discord webhook is
+  // that it's NOT visible here. This just confirms whether a code is
+  // currently outstanding and how long it has left, so you can tell your
+  // request went through without leaking the digits to anyone who knows
+  // the mod-menu code but not the Discord one. One-time read + local
+  // countdown, not a persistent listener — refreshed on panel open or
+  // after requesting a new code.
   const crownStatus = document.createElement("div");
   crownStatus.style.cssText = "font-family:monospace;font-size:13px;color:#94a3b8;margin-bottom:8px;min-height:16px";
   $globalClearPanel.appendChild(crownStatus);
@@ -2553,21 +2617,20 @@ async function renderModMenu() {
         crownStatus.textContent = "No active code right now.";
         return;
       }
-      const offsetSnap = await ChatBackend._db.ref(".info/serverTimeOffset").get();
-      const offset = offsetSnap.val() || 0;
+      const offset = await ChatBackend._serverOffset();
       const tick = () => {
         const remaining = current.expiresAt - (Date.now() + offset);
         if (remaining <= 0) {
-          crownStatus.textContent = "Code " + current.code + " — expired.";
+          crownStatus.textContent = "The last code has expired.";
           clearInterval(crownStatusTimer);
           return;
         }
-        crownStatus.textContent = "Active code: " + current.code + " — expires in " + Math.ceil(remaining / 1000) + "s";
+        crownStatus.textContent = "A code is active on Discord — expires in " + Math.ceil(remaining / 1000) + "s";
       };
       tick();
       crownStatusTimer = setInterval(tick, 1000);
     } catch (e) {
-      crownStatus.textContent = "Couldn't check current code.";
+      crownStatus.textContent = "Couldn't check code status.";
     }
   }
   refreshCrownStatus();
@@ -2607,9 +2670,8 @@ async function renderModMenu() {
         crownErr.style.color = "#ef4444";
         const reasonText = {
           none: "Enter a code first.",
-          expired: "That code expired — request a new one.",
-          wrong: "That's not the current code — check the status line above for what's actually active.",
-          "wrong-but-matched": "That code matched but got claimed a split second before this attempt (likely a double-tap) — check the status line above; request a new code if it now shows none active."
+          wrong: "That's not the current code — check Discord for the latest one.",
+          expired: "That code expired — request a new one."
         };
         crownErr.textContent = reasonText[result.reason] || "Invalid code.";
       }
@@ -2619,6 +2681,7 @@ async function renderModMenu() {
       crownErr.textContent = "Couldn't check code — try again.";
     } finally {
       crownSubmitBtn.disabled = false;
+      crownSubmitInFlight = false;
     }
   });
   $globalClearPanel.appendChild(crownSubmitBtn);
@@ -3528,7 +3591,7 @@ function updateRoomCountdownUI(meta) {
 
 function showExtendPrompt(meta) {
   const displayName = meta.name || ("Room " + meta.code);
-  $extendRoomText.textContent = "\u201c" + displayName + "\u201d closes in under 6 minutes. Add 20 more minutes?";
+  $extendRoomText.textContent = "\u201c" + displayName + "\u201d closes in under a minute. Add 10 more minutes?";
   $extendRoomOverlay.style.display = "flex";
 }
 
@@ -3847,11 +3910,8 @@ function init() {
 
   window.addEventListener("beforeunload", () => {
     stopTyping();
-    if (isSpectator) {
-      ChatBackend.releasePresence();
-    } else {
-      ChatBackend.releasePresence();
-    }
+    ChatBackend.releasePresence();
+    ChatBackend.clearCrown();
   });
 }
 
