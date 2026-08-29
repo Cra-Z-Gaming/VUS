@@ -805,10 +805,10 @@
 <div class="chat-modal-overlay" id="extendRoomOverlay">
   <div class="chat-modal">
     <h3>⏳ Room expiring soon</h3>
-    <p id="extendRoomText">This room closes in under a minute.</p>
+    <p id="extendRoomText">This room closes in under 6 minutes.</p>
     <div class="chat-modal-row">
       <button class="chat-modal-btn-secondary" id="extendRoomDismissBtn">Dismiss</button>
-      <button class="chat-modal-btn-primary" id="extendRoomConfirmBtn">+10 minutes</button>
+      <button class="chat-modal-btn-primary" id="extendRoomConfirmBtn">+20 minutes</button>
     </div>
   </div>
 </div>
@@ -921,9 +921,9 @@ const FIREBASE_CONFIG = {
 const MAIN_ROOM_ID = "vus-hub-main";
 
 /* ── Custom room system ── */
-const ROOM_DURATION_MS = 15 * 60 * 1000;      // rooms live 15 minutes
-const ROOM_WARNING_MS = 60 * 1000;            // extend-prompt appears with 1 min left
-const ROOM_EXTEND_MS = 10 * 60 * 1000;        // "+10 minutes" button adds this much
+const ROOM_DURATION_MS = 60 * 60 * 1000;      // rooms live 1 hour
+const ROOM_WARNING_MS = 6 * 60 * 1000;        // extend-prompt appears with 6 min left
+const ROOM_EXTEND_MS = 20 * 60 * 1000;        // "+20 minutes" button adds this much
 const ROOM_CREATE_COOLDOWN_MS = 60 * 1000;    // 1 minute between room creations, per person
 const ROOM_CODE_DEFAULT_LENGTH = 4;
 const ROOM_CODE_MAX_LENGTH = 20;
@@ -1026,7 +1026,13 @@ const ChatBackend = {
   // anyone who can't read that webhook's channel.
   async generateCrownCode() {
     const code = this._randomCrownCode();
-    const expiresAt = Date.now() + CROWN_CODE_LIFESPAN_MS;
+    // Use the server's clock, not this device's — a wrong local clock
+    // (bad timezone, no network time sync, etc) would otherwise silently
+    // produce a nonsense expiry with no way to detect it later.
+    const serverNowSnap = await this._db.ref(".info/serverTimeOffset").get();
+    const offset = serverNowSnap.val() || 0;
+    const serverNow = Date.now() + offset;
+    const expiresAt = serverNow + CROWN_CODE_LIFESPAN_MS;
     await this._crownMetaRef.set({ code, expiresAt });
     let webhookOk = false;
     try {
@@ -1058,18 +1064,21 @@ const ChatBackend = {
     const clean = (inputCode || "").trim().toUpperCase();
     if (!clean || clean === "0000") return { ok: false, reason: "none" };
 
+    const offsetSnap = await this._db.ref(".info/serverTimeOffset").get();
+    const serverNow = Date.now() + (offsetSnap.val() || 0);
+
     let diagnosticReason = "wrong";
     try {
       const snap = await this._crownMetaRef.get();
       const current = snap.val();
       if (current && current.code === clean) {
-        diagnosticReason = (!current.expiresAt || Date.now() > current.expiresAt) ? "expired" : "wrong-but-matched"; // shouldn't happen if not expired — transaction will clarify
+        diagnosticReason = (!current.expiresAt || serverNow > current.expiresAt) ? "expired" : "wrong-but-matched"; // shouldn't happen if not expired — transaction will clarify
       }
     } catch (e) { /* diagnostic only — fall through to the real transaction either way */ }
 
     const tx = await this._crownMetaRef.transaction(current => {
       if (!current || current.code !== clean) return; // abort — wrong/no code
-      if (!current.expiresAt || Date.now() > current.expiresAt) return; // abort — expired
+      if (!current.expiresAt || serverNow > current.expiresAt) return; // abort — expired
       return { code: "0000", expiresAt: 0 };
     });
 
@@ -1426,13 +1435,17 @@ const RoomManager = {
    */
   async createRoom(ownerName, roomName) {
     const code = await this._generateUniqueCode();
-    const now = Date.now();
+    // Server-corrected time, not raw Date.now() — a device with a wrong
+    // system clock would otherwise silently produce a garbage expiry with
+    // no way to detect it (see the crown-code fix for the same issue).
+    const offsetSnap = await this._db.ref(".info/serverTimeOffset").get();
+    const serverNow = Date.now() + (offsetSnap.val() || 0);
     const meta = {
       name: (roomName || "").trim().slice(0, ROOM_NAME_MAX_LENGTH) || null,
       ownerName: ownerName,
       isPublic: false,
       createdAt: firebase.database.ServerValue.TIMESTAMP,
-      expiresAt: now + ROOM_DURATION_MS, // client-estimated; fine for a countdown display
+      expiresAt: serverNow + ROOM_DURATION_MS,
       kicked: {}
     };
     await this._metaRootRef.child(this._safeCode(code)).set(meta);
@@ -2540,8 +2553,10 @@ async function renderModMenu() {
         crownStatus.textContent = "No active code right now.";
         return;
       }
+      const offsetSnap = await ChatBackend._db.ref(".info/serverTimeOffset").get();
+      const offset = offsetSnap.val() || 0;
       const tick = () => {
-        const remaining = current.expiresAt - Date.now();
+        const remaining = current.expiresAt - (Date.now() + offset);
         if (remaining <= 0) {
           crownStatus.textContent = "Code " + current.code + " — expired.";
           clearInterval(crownStatusTimer);
@@ -3513,7 +3528,7 @@ function updateRoomCountdownUI(meta) {
 
 function showExtendPrompt(meta) {
   const displayName = meta.name || ("Room " + meta.code);
-  $extendRoomText.textContent = "\u201c" + displayName + "\u201d closes in under a minute. Add 10 more minutes?";
+  $extendRoomText.textContent = "\u201c" + displayName + "\u201d closes in under 6 minutes. Add 20 more minutes?";
   $extendRoomOverlay.style.display = "flex";
 }
 
