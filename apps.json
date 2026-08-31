@@ -10,7 +10,7 @@
 {"name":"Chat Room","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/VUS-Chat","desc":"Talk to people who also use VUS Hub","icon":"Chat","color":"blue"},
 {"name":"VUS Movies","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/VUS-Movies","desc":"a bunch of google drive movies and shows put into a large list","icon":"MVIES","color":"yellow"},
 {"name":"VUS Links","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/VUS-Links","desc":"Growing list of links, many may be blocked, but i wont remove them","icon":"Links","color":"blue"},
-{"name":"","url":"","desc":"","icon":"","color":""},
+{"name":"VUS Zoom","url":"us05web.zoom.us/j/2711738491?pwd=pb0mpLVhlFOv5kpE0hm0DCqe2HuvFl.1","desc":"zoom meeting that should stay alive 24/7 with a timeout of 30 minutes per sesh","icon":"Zoom","color":"blue"},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
