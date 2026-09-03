@@ -4,6 +4,7 @@
 {"name":"","url":"","desc":"","icon":"","color":""}
 ],
 "apps":[
+{"name":"VUS-OS","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS-OS/refs/heads/main/index.html","desc":"Desktop version of VUS Hub","icon":"OS","color":"white"},
 {"name":"VUS Launcher","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL","desc":"Main game hub — V17.4","icon":"🎮","color":"green"},
 {"name":"YouTube V20","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/YouTube-V20","desc":"Playlists, Settings, Private + Public Keys","icon":"YT","color":"rose"},
 {"name":"VUS AI Chat","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Core-VUS-AI","desc":"VUS AI - Groq, blocked in many schools","icon":"AI","color":"violet"},
