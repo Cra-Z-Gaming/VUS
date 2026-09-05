@@ -3630,17 +3630,18 @@ function handleMentionTrigger() {
 let pingSoundReady = false;
 
 function preloadPingSound() {
-  fetch(PING_SOUND_URL)
-    .then(r => {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.blob();
-    })
-    .then(blob => {
-      const blobUrl = URL.createObjectURL(blob);
-      $pingSound.src = blobUrl;
-      pingSoundReady = true;
-    })
-    .catch(() => {});
+  $pingSound.src = PING_SOUND_URL;
+
+  $pingSound.addEventListener("canplaythrough", () => {
+    pingSoundReady = true;
+    console.log("Ping sound loaded!");
+  }, { once: true });
+
+  $pingSound.addEventListener("error", () => {
+    console.error("Ping sound failed to load:", $pingSound.error);
+  }, { once: true });
+
+  $pingSound.load();
 }
 
 function requestNotificationPermissionIfNeeded() {
