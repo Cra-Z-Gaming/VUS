@@ -848,6 +848,50 @@
   </div>
 </div>
 
+<!-- Owner Menu: crown-holders only (and only once the mod-menu code has
+     been entered this session). Lists everyone online, refreshed every 5s
+     while open, with Timeout / Grant Mod actions per person. -->
+<div class="chat-modal-overlay" id="ownerMenuOverlay">
+  <div class="chat-modal" style="max-width:340px">
+    <h3>👑 Owner Menu</h3>
+    <p style="margin-bottom:8px">Online now — refreshes every 5s while this is open.</p>
+    <div id="ownerMenuList" style="margin-bottom:8px"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="ownerMenuCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Timeout duration modal: minutes + seconds, capped at 3:00 total. -->
+<div class="chat-modal-overlay" id="timeoutSetOverlay">
+  <div class="chat-modal">
+    <h3 id="timeoutSetTitle">Timeout</h3>
+    <label>Duration (max 3:00)</label>
+    <div style="display:flex;gap:8px;margin-bottom:6px">
+      <input type="text" id="timeoutMinutesInput" inputmode="numeric" pattern="[0-9]*" maxlength="1" placeholder="Min" style="width:100%;padding:8px 11px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none;text-align:center">
+      <input type="text" id="timeoutSecondsInput" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="Sec" style="width:100%;padding:8px 11px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none;text-align:center">
+    </div>
+    <div class="chat-modal-err" id="timeoutSetErr"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="timeoutSetCancelBtn">Cancel</button>
+      <button class="chat-modal-btn-danger" id="timeoutSetConfirmBtn">Timeout</button>
+    </div>
+  </div>
+</div>
+
+<!-- Grant-mod double-confirm: a plain click-through, no typing required,
+     but a second explicit step so a misclick can't hand out the tag. -->
+<div class="chat-modal-overlay" id="grantModConfirmOverlay">
+  <div class="chat-modal">
+    <h3 id="grantModConfirmTitle">🧩 Grant Mod?</h3>
+    <p id="grantModConfirmText"></p>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="grantModCancelBtn">Cancel</button>
+      <button class="chat-modal-btn-primary" id="grantModConfirmBtn">Yes, grant Mod</button>
+    </div>
+  </div>
+</div>
+
 <div id="joinScreen">
   <div id="joinCard"></div>
 </div>
@@ -990,6 +1034,7 @@ const ChatBackend = {
   _myRoleRefs: {},
   _rolesHeld: {},
   _recentLeaveNames: {},
+  _timeoutsRef: null,
   currentRoomId: null,
 
   init() {
@@ -1114,6 +1159,7 @@ const ChatBackend = {
     this._nameColorsRef = this._db.ref("rooms/" + roomId + "/nameColors");
     this._atPingCooldownRef = this._db.ref("rooms/" + roomId + "/atPingCooldowns");
     this._leaveEventsRef = this._db.ref("rooms/" + roomId + "/leaveEvents");
+    this._timeoutsRef = this._db.ref("rooms/" + roomId + "/timeouts");
   },
 
   detachAllListeners() {
@@ -1187,7 +1233,12 @@ const ChatBackend = {
     return Object.prototype.hasOwnProperty.call(val, key);
   },
 
-  claimPresence(name, silent) {
+  // NOTE: this is now async (it wasn't before) — see the role-sync section
+  // below for why. All existing call sites already just call it without
+  // awaiting the result, which is fine: everything it does is fire off
+  // Firebase writes that resolve on their own, nothing here needs the
+  // caller to wait.
+  async claimPresence(name, silent) {
     this.releasePresence();
     this._myPresenceRef = this._presenceRef.child(this._safeKey(name));
     this._silentSession = !!silent;
@@ -1202,7 +1253,7 @@ const ChatBackend = {
     this._myPresenceRef.set({ joinedAt: firebase.database.ServerValue.TIMESTAMP });
 
     const roleKey = this._safeKey(name);
-    Object.values(ROLES).forEach(role => {
+    for (const role of Object.values(ROLES)) {
       const roleRef = this._roleRefs[role.id].child(roleKey);
       const sameRoleTarget = this._myRoleRefs[role.id] && this._myRoleRefs[role.id].key === roleKey;
 
@@ -1213,14 +1264,32 @@ const ChatBackend = {
           oldRef.remove();
         }
         this._myRoleRefs[role.id] = roleRef;
-        if (this._rolesHeld[role.id]) {
+
+        // A role can now be granted directly by an owner (Owner Menu →
+        // Grant Mod) without this client ever redeeming a code, so
+        // _rolesHeld alone is no longer the full picture of what this name
+        // actually holds — it only tracks roles *this tab* obtained via
+        // redeemRoleCode(). Check the server's current value too, and treat
+        // either source as "held," so a directly-granted role survives the
+        // holder's own reconnects/renames/room-switches instead of being
+        // wiped by the unconditional roleRef.remove() this used to do.
+        let heldOnServer = false;
+        try {
+          const snap = await roleRef.get();
+          heldOnServer = snap.val() === true;
+        } catch (e) {
+          heldOnServer = false; // fail safe to "not held" — never invent a role from a failed read
+        }
+
+        if (this._rolesHeld[role.id] || heldOnServer) {
+          this._rolesHeld[role.id] = true; // sync local flag so future claimPresence calls on this tab don't need to re-check the server
           roleRef.set(true);
         } else {
           roleRef.remove();
         }
         roleRef.onDisconnect().remove();
       }
-    });
+    }
 
     if (!this._silentSession) {
       this._ref.push({
@@ -1359,6 +1428,54 @@ const ChatBackend = {
       return { ok: false, remainingMs: resultRemainingMs };
     }
     return { ok: true };
+  },
+
+  // ── Timeouts (Owner Menu) ──
+  // Stored per-room at rooms/{roomId}/timeouts/{safeName} = { expiresAt,
+  // by }. expiresAt is anchored to SERVER time (see _serverNow) so a
+  // timed-out person can't dodge it by winding back their local clock, and
+  // an owner's timeout of someone in one room has no effect in another
+  // room (matches how presence/roles-in-room are already scoped — only
+  // ROLES like crown/mod are global, timeouts are not).
+  async setTimeout_(targetName, durationMs) {
+    const serverNow = await this._serverNow();
+    await this._timeoutsRef.child(this._safeKey(targetName)).set({
+      expiresAt: serverNow + durationMs
+    });
+  },
+
+  async clearTimeout_(targetName) {
+    await this._timeoutsRef.child(this._safeKey(targetName)).remove();
+  },
+
+  // Returns remaining ms if targetName is currently timed out in this
+  // room, or 0 if not (including if the record is stale/expired — a
+  // stale record is left for the next read/write to clean up rather than
+  // deleted here, to keep this a plain read with no side effects).
+  async getTimeoutRemainingMs(targetName) {
+    try {
+      const snap = await this._timeoutsRef.child(this._safeKey(targetName)).get();
+      const val = snap.val();
+      if (!val || !val.expiresAt) return 0;
+      const serverNow = await this._serverNow();
+      return Math.max(0, val.expiresAt - serverNow);
+    } catch (e) {
+      return 0;
+    }
+  },
+
+  // Live subscription: onChange(remainingMs) fires whenever targetName's
+  // timeout record changes. Used to keep the composer lock in sync without
+  // polling, for whoever is currently timed out.
+  watchTimeout(targetName, onChange) {
+    const ref = this._timeoutsRef.child(this._safeKey(targetName));
+    ref.on("value", async snap => {
+      const val = snap.val();
+      if (!val || !val.expiresAt) { onChange(0); return; }
+      const serverNow = await this._serverNow();
+      onChange(Math.max(0, val.expiresAt - serverNow));
+    });
+    return () => ref.off("value");
   },
 
   _safeKey(name) {
@@ -1561,6 +1678,9 @@ let myName = "";
 let messageCount = 0;
 let autoScroll = true;
 let isSpectator = false;
+let myTimeoutRemainingMs = 0; // live, kept in sync by watchMyTimeout()
+let unwatchMyTimeout = null;
+let myTimeoutCountdownTimer = null;
 let roleHolders = {};
 
 const NAME_STORAGE_KEY = "vusChatName";
@@ -1832,6 +1952,7 @@ async function attemptJoin(rawName, isRename, errEl, submitBtn, joinSilently) {
   isSpectator = !!joinSilently;
   localStorage.setItem(NAME_STORAGE_KEY, name);
   ChatBackend.claimPresence(myName, isSpectator);
+  watchMyTimeout();
   requestNotificationPermissionIfNeeded();
   $youAre.textContent = "You: " + name + (isSpectator ? " (spectating)" : "");
   $changeNameBtn.style.display = "inline-block";
@@ -1963,6 +2084,12 @@ function updateComposerLockState() {
     $sendBtn.disabled = false;
     $sendBtn.classList.remove("cooldown");
     $sendBtn.textContent = "Rename to chat";
+  } else if (myTimeoutRemainingMs > 0) {
+    $msgInput.disabled = true;
+    $msgInput.placeholder = "Timed out — try again in " + formatCountdown(myTimeoutRemainingMs);
+    $sendBtn.disabled = true;
+    $sendBtn.classList.add("cooldown");
+    $sendBtn.textContent = formatCountdown(myTimeoutRemainingMs);
   } else {
     $msgInput.disabled = false;
     $msgInput.placeholder = "Type a message… (@ to mention someone)";
@@ -1970,9 +2097,38 @@ function updateComposerLockState() {
   }
 }
 
+// Live-watches this browser's OWN timeout status in the current room so the
+// composer locks/unlocks the moment an owner issues or a timeout expires,
+// without the person needing to send a message to find out. Re-subscribes
+// whenever we (re)claim presence under a name or switch rooms — see the
+// call sites in attemptJoin / joinAsSpectatorAuto / joinRoomByCode /
+// switchToMainRoom.
+function watchMyTimeout() {
+  if (unwatchMyTimeout) { unwatchMyTimeout(); unwatchMyTimeout = null; }
+  clearInterval(myTimeoutCountdownTimer);
+  if (!myName || isSpectatorName(myName)) { myTimeoutRemainingMs = 0; return; }
+
+  unwatchMyTimeout = ChatBackend.watchTimeout(myName, (remainingMs) => {
+    myTimeoutRemainingMs = remainingMs;
+    updateComposerLockState();
+    clearInterval(myTimeoutCountdownTimer);
+    if (remainingMs > 0) {
+      myTimeoutCountdownTimer = setInterval(() => {
+        myTimeoutRemainingMs = Math.max(0, myTimeoutRemainingMs - 1000);
+        updateComposerLockState();
+        if (myTimeoutRemainingMs <= 0) clearInterval(myTimeoutCountdownTimer);
+      }, 1000);
+    }
+  });
+}
+
 function sendMessage() {
   if (isSpectatorName(myName)) {
     openChangeName();
+    return;
+  }
+  if (myTimeoutRemainingMs > 0) {
+    showComposerNotice("You're timed out for " + formatCountdown(myTimeoutRemainingMs) + " more.");
     return;
   }
   if (Date.now() - lastSentAt < SEND_COOLDOWN_MS) return;
@@ -2253,6 +2409,7 @@ async function joinAsSpectatorAuto() {
   myName = name;
   isSpectator = true;
   ChatBackend.claimPresence(myName, true);
+  watchMyTimeout();
   requestNotificationPermissionIfNeeded();
   $youAre.textContent = "You: " + name;
   $changeNameBtn.style.display = "inline-block";
@@ -2471,6 +2628,23 @@ async function renderModMenu() {
   });
   $globalClearPanel.appendChild(rolesBtn);
 
+  // Owner Menu button: only shown when this browser both has the mod-menu
+  // code unlocked AND the current name currently holds the crown, live —
+  // checked fresh here (not cached) so it disappears the moment the crown
+  // is lost (e.g. cleared on disconnect) without needing the panel reopened.
+  const iAmCrowned = modMenuUnlocked && myName && (roleHolders.crown || new Set()).has(ChatBackend._safeKey(myName));
+  if (iAmCrowned) {
+    const ownerBtn = document.createElement("button");
+    ownerBtn.textContent = "👑 Owner Menu";
+    ownerBtn.className = "toolbar-btn";
+    ownerBtn.style.cssText = "width:100%;margin-bottom:6px";
+    ownerBtn.addEventListener("click", () => {
+      closeClearPanel();
+      openOwnerMenu();
+    });
+    $globalClearPanel.appendChild(ownerBtn);
+  }
+
   const closeBtn = document.createElement("button");
   closeBtn.textContent = "Close";
   closeBtn.className = "toolbar-btn";
@@ -2677,6 +2851,269 @@ $roleClaimOverlay.addEventListener("click", (e) => {
   if (e.target === $roleClaimOverlay) {
     $roleClaimOverlay.style.display = "none";
     clearInterval(roleClaimStatusTimer);
+  }
+});
+
+/* ══════════════════════════════════════════════════════════
+   OWNER MENU — crown-holders only (and mod-menu code unlocked; see the
+   gate in renderModMenu above). Lists everyone currently online in this
+   room, refreshed every 5s while the menu is open, with two per-person
+   actions: Timeout (minutes+seconds, capped at 3:00) and Grant Mod
+   (double-confirm, since handing out the mod tag isn't reversible by the
+   person who received it and mistakes should cost a second click to make).
+   Reuses latestPresenceList (already kept live by attachRoomListeners)
+   rather than opening a second presence subscription — the 5s timer here
+   just re-renders from whatever that list currently holds, plus a fresh
+   per-person timeout-remaining read so stale timeouts don't linger in the
+   list display.
+   ══════════════════════════════════════════════════════════ */
+const $ownerMenuOverlay = document.getElementById("ownerMenuOverlay");
+const $ownerMenuList = document.getElementById("ownerMenuList");
+const $ownerMenuCloseBtn = document.getElementById("ownerMenuCloseBtn");
+
+const $timeoutSetOverlay = document.getElementById("timeoutSetOverlay");
+const $timeoutSetTitle = document.getElementById("timeoutSetTitle");
+const $timeoutMinutesInput = document.getElementById("timeoutMinutesInput");
+const $timeoutSecondsInput = document.getElementById("timeoutSecondsInput");
+const $timeoutSetErr = document.getElementById("timeoutSetErr");
+const $timeoutSetCancelBtn = document.getElementById("timeoutSetCancelBtn");
+const $timeoutSetConfirmBtn = document.getElementById("timeoutSetConfirmBtn");
+
+const $grantModConfirmOverlay = document.getElementById("grantModConfirmOverlay");
+const $grantModConfirmText = document.getElementById("grantModConfirmText");
+const $grantModConfirmTitle = document.getElementById("grantModConfirmTitle");
+const $grantModCancelBtn = document.getElementById("grantModCancelBtn");
+const $grantModConfirmBtn = document.getElementById("grantModConfirmBtn");
+
+const TIMEOUT_MAX_MS = 3 * 60 * 1000; // 3:00 cap, enforced both client- and effectively server-side (see setTimeout_)
+let ownerMenuRefreshTimer = null;
+let pendingTimeoutTarget = null;
+let pendingGrantModTarget = null;
+
+function isCrownHolder(name) {
+  return !!(name && (roleHolders.crown || new Set()).has(ChatBackend._safeKey(name)));
+}
+function isModHolder(name) {
+  return !!(name && (roleHolders.mod || new Set()).has(ChatBackend._safeKey(name)));
+}
+
+function openOwnerMenu() {
+  closeClearPanel();
+  renderOwnerMenuList();
+  $ownerMenuOverlay.style.display = "flex";
+  clearInterval(ownerMenuRefreshTimer);
+  ownerMenuRefreshTimer = setInterval(renderOwnerMenuList, 5000);
+}
+
+function closeOwnerMenu() {
+  $ownerMenuOverlay.style.display = "none";
+  clearInterval(ownerMenuRefreshTimer);
+}
+
+$ownerMenuCloseBtn.addEventListener("click", closeOwnerMenu);
+$ownerMenuOverlay.addEventListener("click", (e) => {
+  if (e.target === $ownerMenuOverlay) closeOwnerMenu();
+});
+
+async function renderOwnerMenuList() {
+  // Re-check the gate every refresh too — if the crown is lost while this
+  // is open (timeout, disconnect, another owner revokes it, etc.) the menu
+  // should close itself rather than keep offering owner actions.
+  if (!modMenuUnlocked || !isCrownHolder(myName)) {
+    closeOwnerMenu();
+    return;
+  }
+
+  $ownerMenuList.innerHTML = "";
+
+  const others = latestPresenceList
+    .map(e => e.name)
+    .filter(name => name !== myName)
+    .sort((a, b) => a.localeCompare(b));
+
+  if (others.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "rooms-empty";
+    empty.textContent = "No one else online right now.";
+    $ownerMenuList.appendChild(empty);
+    return;
+  }
+
+  for (const name of others) {
+    const row = document.createElement("div");
+    row.className = "room-member-row";
+
+    const nameEl = document.createElement("span");
+    nameEl.className = "room-member-name";
+    const badges = (isCrownHolder(name) ? "👑 " : "") + (isModHolder(name) ? "🧩 " : "");
+    nameEl.textContent = badges + name;
+    row.appendChild(nameEl);
+
+    const actions = document.createElement("div");
+    actions.className = "room-member-actions";
+
+    const modToggleBtn = document.createElement("button");
+    if (isModHolder(name)) {
+      modToggleBtn.className = "kick";
+      modToggleBtn.textContent = "Remove Mod";
+      modToggleBtn.addEventListener("click", () => openRemoveModConfirm(name));
+    } else {
+      modToggleBtn.textContent = "Grant Mod";
+      modToggleBtn.addEventListener("click", () => openGrantModConfirm(name));
+    }
+    actions.appendChild(modToggleBtn);
+
+    const timeoutBtn = document.createElement("button");
+    timeoutBtn.className = "kick";
+    let remainingMs = 0;
+    try { remainingMs = await ChatBackend.getTimeoutRemainingMs(name); } catch (e) {}
+    if (remainingMs > 0) {
+      timeoutBtn.textContent = "Timed out (" + formatCountdown(remainingMs) + ")";
+      timeoutBtn.addEventListener("click", () => {
+        ChatBackend.clearTimeout_(name).then(renderOwnerMenuList).catch(() => {
+          showComposerNotice("Couldn't clear timeout — try again.");
+        });
+      });
+      timeoutBtn.title = "Click to clear this timeout early";
+    } else {
+      timeoutBtn.textContent = "Timeout";
+      timeoutBtn.addEventListener("click", () => openTimeoutSetModal(name));
+    }
+    actions.appendChild(timeoutBtn);
+
+    row.appendChild(actions);
+    $ownerMenuList.appendChild(row);
+  }
+}
+
+/* ── Timeout duration modal ── */
+function openTimeoutSetModal(targetName) {
+  pendingTimeoutTarget = targetName;
+  $timeoutSetTitle.textContent = "Timeout " + targetName;
+  $timeoutMinutesInput.value = "";
+  $timeoutSecondsInput.value = "";
+  $timeoutSetErr.textContent = "";
+  $timeoutSetOverlay.style.display = "flex";
+  $timeoutMinutesInput.focus();
+}
+
+$timeoutSetCancelBtn.addEventListener("click", () => {
+  pendingTimeoutTarget = null;
+  $timeoutSetOverlay.style.display = "none";
+});
+$timeoutSetOverlay.addEventListener("click", (e) => {
+  if (e.target === $timeoutSetOverlay) {
+    pendingTimeoutTarget = null;
+    $timeoutSetOverlay.style.display = "none";
+  }
+});
+
+// Digit-only guards on the two duration fields — minutes capped to a
+// single digit (0-3) and seconds to two digits (0-59) at the input level,
+// with the real 3:00 ceiling enforced on submit below regardless of what
+// slips through here.
+$timeoutMinutesInput.addEventListener("input", () => {
+  $timeoutMinutesInput.value = $timeoutMinutesInput.value.replace(/[^0-9]/g, "").slice(0, 1);
+});
+$timeoutSecondsInput.addEventListener("input", () => {
+  $timeoutSecondsInput.value = $timeoutSecondsInput.value.replace(/[^0-9]/g, "").slice(0, 2);
+});
+
+$timeoutSetConfirmBtn.addEventListener("click", async () => {
+  if (!pendingTimeoutTarget) return;
+  const mins = parseInt($timeoutMinutesInput.value || "0", 10) || 0;
+  const secs = parseInt($timeoutSecondsInput.value || "0", 10) || 0;
+  const totalMs = (mins * 60 + secs) * 1000;
+
+  if (totalMs <= 0) {
+    $timeoutSetErr.textContent = "Enter a duration greater than 0.";
+    return;
+  }
+  if (totalMs > TIMEOUT_MAX_MS) {
+    $timeoutSetErr.textContent = "Max timeout is 3:00.";
+    return;
+  }
+
+  $timeoutSetConfirmBtn.disabled = true;
+  $timeoutSetErr.textContent = "";
+  try {
+    await ChatBackend.setTimeout_(pendingTimeoutTarget, totalMs);
+    $timeoutSetOverlay.style.display = "none";
+    pendingTimeoutTarget = null;
+    renderOwnerMenuList();
+  } catch (e) {
+    $timeoutSetErr.textContent = "Couldn't set timeout — try again.";
+  } finally {
+    $timeoutSetConfirmBtn.disabled = false;
+  }
+});
+
+/* ── Grant/Remove-mod double confirm — shares one overlay, `pendingModConfirmAction`
+   tracks whether this open is a grant or a remove so the confirm button
+   applies the right change. Kept as one modal since the two flows are
+   otherwise identical (name a target, ask for a second explicit click). ── */
+let pendingModConfirmAction = null; // "grant" | "remove"
+
+function openGrantModConfirm(targetName) {
+  pendingGrantModTarget = targetName;
+  pendingModConfirmAction = "grant";
+  $grantModConfirmTitle.textContent = "🧩 Grant Mod?";
+  $grantModConfirmText.textContent = "Give " + targetName + " the 🧩 Mod tag? This is a second confirmation step so a misclick can't hand it out by accident.";
+  $grantModConfirmBtn.textContent = "Yes, grant Mod";
+  $grantModConfirmOverlay.style.display = "flex";
+}
+
+function openRemoveModConfirm(targetName) {
+  pendingGrantModTarget = targetName;
+  pendingModConfirmAction = "remove";
+  $grantModConfirmTitle.textContent = "🧩 Remove Mod?";
+  $grantModConfirmText.textContent = "Remove the 🧩 Mod tag from " + targetName + "? This is a second confirmation step so a misclick can't take it away by accident.";
+  $grantModConfirmBtn.textContent = "Yes, remove Mod";
+  $grantModConfirmOverlay.style.display = "flex";
+}
+
+$grantModCancelBtn.addEventListener("click", () => {
+  pendingGrantModTarget = null;
+  pendingModConfirmAction = null;
+  $grantModConfirmOverlay.style.display = "none";
+});
+$grantModConfirmOverlay.addEventListener("click", (e) => {
+  if (e.target === $grantModConfirmOverlay) {
+    pendingGrantModTarget = null;
+    pendingModConfirmAction = null;
+    $grantModConfirmOverlay.style.display = "none";
+  }
+});
+
+$grantModConfirmBtn.addEventListener("click", async () => {
+  if (!pendingGrantModTarget || !pendingModConfirmAction) return;
+  $grantModConfirmBtn.disabled = true;
+  try {
+    const modRef = ChatBackend._roleRefs.mod.child(ChatBackend._safeKey(pendingGrantModTarget));
+    if (pendingModConfirmAction === "grant") {
+      // Grants mod directly via the same DB path redeemRoleCode() writes
+      // to, rather than going through a code — the owner is already an
+      // authenticated actor here (crown-gated), so no code-in-the-middle
+      // is needed for an owner explicitly choosing a specific person.
+      await modRef.set(true);
+    } else {
+      // Removes it the same direct way. Note this only clears the LIVE
+      // flag at modded/{name} — it doesn't reach into that person's own
+      // browser to flip their local _rolesHeld.mod, so if they were the
+      // one who originally redeemed a code for it, redeeming that same
+      // (still-live) code again would restore it. That mirrors how kicks
+      // work elsewhere in this app (removal is immediate, not a ban) and
+      // is fine here since codes already expire quickly.
+      await modRef.remove();
+    }
+    $grantModConfirmOverlay.style.display = "none";
+    pendingGrantModTarget = null;
+    pendingModConfirmAction = null;
+    renderOwnerMenuList();
+  } catch (e) {
+    showComposerNotice("Couldn't update Mod status — try again.");
+  } finally {
+    $grantModConfirmBtn.disabled = false;
   }
 });
 
@@ -3387,6 +3824,7 @@ async function joinRoomByCode(code) {
   currentRoomCode = code;
   ChatBackend.bindToRoom(code);
   ChatBackend.claimPresence(myName, isSpectator);
+  watchMyTimeout();
   attachRoomListeners();
 
   $messages.innerHTML = "";
@@ -3405,6 +3843,7 @@ function switchToMainRoom() {
   currentRoomMeta = null;
   ChatBackend.bindToRoom(MAIN_ROOM_ID);
   if (myName) ChatBackend.claimPresence(myName, isSpectator);
+  watchMyTimeout();
   attachRoomListeners();
 
   $messages.innerHTML = "";
