@@ -458,6 +458,18 @@
   }
   .chat-list-row:hover { background: #1e293b; }
   .chat-list-row.selected { background: rgba(34,197,94,.12); }
+
+  /* ── Avatar + presence badge ──
+     Discord-style: the badge sits anchored to the bottom-right corner of
+     the avatar circle, with a "cutout" ring in the surrounding background
+     color so it visually notches into the avatar. Always rendered (grey
+     or green) — no mount/unmount, so there's no layout shift and no
+     moving parts, only a color swap via .is-online. */
+  .avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+    line-height: 0;
+  }
   .chat-list-avatar {
     width: 40px;
     height: 40px;
@@ -470,6 +482,25 @@
     font-size: 15px;
     color: #f1f5f9;
     flex-shrink: 0;
+  }
+  .presence-badge {
+    position: absolute;
+    bottom: -1px;
+    right: -1px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #64748b; /* offline: grey */
+    border: 2.5px solid #111827; /* cutout ring — matches sidebar bg */
+    box-sizing: content-box;
+  }
+  .presence-badge.is-online {
+    background: #22c55e; /* online: green */
+  }
+  /* Thread header avatar sits over the chat pane background instead of
+     the sidebar's, so its cutout ring uses the chat pane color. */
+  #chatThreadHeader .presence-badge {
+    border-color: #0f172a;
   }
   .chat-list-info {
     flex: 1;
@@ -491,12 +522,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .chat-list-online-dot {
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: #22c55e;
-    flex-shrink: 0;
   }
   .chat-list-preview {
     font-size: 12.5px;
@@ -538,6 +563,9 @@
   }
   #chatThreadHeader .chat-list-avatar {
     width: 34px; height: 34px; font-size: 13px;
+  }
+  #chatThreadHeader .presence-badge {
+    width: 10px; height: 10px;
   }
   #chatThreadHeaderName { font-size: 15px; font-weight: 600; }
   #chatThreadHeaderStatus { font-size: 12px; color: #64748b; }
@@ -702,7 +730,10 @@
     <div id="chatEmptyState">Select a friend to start chatting.</div>
     <div id="chatThread">
       <div id="chatThreadHeader">
-        <div class="chat-list-avatar" id="chatThreadAvatar"></div>
+        <div class="avatar-wrap">
+          <div class="chat-list-avatar" id="chatThreadAvatar"></div>
+          <div class="presence-badge" id="chatThreadPresenceBadge"></div>
+        </div>
         <div>
           <div id="chatThreadHeaderName"></div>
           <div id="chatThreadHeaderStatus"></div>
@@ -1332,6 +1363,7 @@ const $viewBlocked = document.getElementById("viewBlocked");
 const $chatEmptyState = document.getElementById("chatEmptyState");
 const $chatThread = document.getElementById("chatThread");
 const $chatThreadAvatar = document.getElementById("chatThreadAvatar");
+const $chatThreadPresenceBadge = document.getElementById("chatThreadPresenceBadge");
 const $chatThreadHeaderName = document.getElementById("chatThreadHeaderName");
 const $chatThreadHeaderStatus = document.getElementById("chatThreadHeaderStatus");
 const $chatMessages = document.getElementById("chatMessages");
@@ -1432,8 +1464,8 @@ function renderOnlineList(list) {
     });
   }
 
-  // Friends list shows an online dot per row — re-render it whenever
-  // presence changes so those dots stay live without needing a fresh
+  // Friends list shows an online badge per row — re-render it whenever
+  // presence changes so those badges stay live without needing a fresh
   // account-data event.
   if (currentUserData) renderFriendsList(currentUserData);
   if (openChatAccountKey) updateChatThreadHeaderStatus();
@@ -1630,10 +1662,28 @@ function renderOutgoingRequests(userData) {
   });
 }
 
-let latestPresenceAccountKeys = new Set(); // kept in sync by watchPresenceList's onList callback, used to show online dots in the chat list
+let latestPresenceAccountKeys = new Set(); // kept in sync by watchPresenceList's onList callback, used to show online badges in the chat list
 
 function initialsFor(username) {
   return (username || "?").trim().slice(0, 1).toUpperCase();
+}
+
+// Builds the avatar + always-present presence badge (grey/green) as one
+// unit. Used for both the friends-list rows and the thread header.
+function buildAvatarWithPresence(username, accountKey) {
+  const wrap = document.createElement("div");
+  wrap.className = "avatar-wrap";
+
+  const avatar = document.createElement("div");
+  avatar.className = "chat-list-avatar";
+  avatar.textContent = initialsFor(username);
+  wrap.appendChild(avatar);
+
+  const badge = document.createElement("div");
+  badge.className = "presence-badge" + (latestPresenceAccountKeys.has(accountKey) ? " is-online" : "");
+  wrap.appendChild(badge);
+
+  return wrap;
 }
 
 function renderFriendsList(userData) {
@@ -1650,10 +1700,7 @@ function renderFriendsList(userData) {
     row.className = "chat-list-row" + (openChatAccountKey === friendAccountKey ? " selected" : "");
     row.addEventListener("click", () => openChatWith(friendAccountKey, friendData.username));
 
-    const avatar = document.createElement("div");
-    avatar.className = "chat-list-avatar";
-    avatar.textContent = initialsFor(friendData.username);
-    row.appendChild(avatar);
+    row.appendChild(buildAvatarWithPresence(friendData.username, friendAccountKey));
 
     const info = document.createElement("div");
     info.className = "chat-list-info";
@@ -1663,11 +1710,6 @@ function renderFriendsList(userData) {
     nameEl.className = "chat-list-name";
     nameEl.textContent = friendData.username;
     nameRow.appendChild(nameEl);
-    if (latestPresenceAccountKeys.has(friendAccountKey)) {
-      const dot = document.createElement("span");
-      dot.className = "chat-list-online-dot";
-      nameRow.appendChild(dot);
-    }
     info.appendChild(nameRow);
 
     const preview = document.createElement("div");
@@ -1904,6 +1946,7 @@ function updateChatThreadHeaderStatus() {
   if (!openChatAccountKey) return;
   const isOnline = latestPresenceAccountKeys.has(openChatAccountKey);
   $chatThreadHeaderStatus.textContent = isOnline ? "Online" : "Offline";
+  $chatThreadPresenceBadge.classList.toggle("is-online", isOnline);
 }
 
 function renderChatMessage(msg) {
