@@ -639,6 +639,188 @@
   }
   #chatSendBtn:hover { background: #4ade80; }
   #chatSendBtn:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* ══════════════════════════════════════════════════════════
+     GROUP CHATS — chats-list section header + "new group" flow,
+     member picker, and in-thread group management (invite/kick/
+     transfer/leave), all styled to match the rest of the app.
+     ══════════════════════════════════════════════════════════ */
+  .chats-section-label {
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: #64748b;
+    padding: 10px 8px 4px;
+  }
+  .new-group-btn {
+    width: 100%;
+    padding: 9px;
+    background: transparent;
+    border: 1.5px dashed #334155;
+    border-radius: 10px;
+    color: #94a3b8;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 4px;
+  }
+  .new-group-btn:hover { color: #f1f5f9; border-color: #475569; }
+
+  .group-avatar-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #1e3a5f;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  #modalOverlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.55);
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+  }
+  #modalOverlay.show { display: flex; }
+  .modal-box {
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 12px;
+    padding: 18px;
+    width: 100%;
+    max-width: 340px;
+    max-height: 80vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .modal-box h3 { font-size: 16px; }
+  .modal-box input[type="text"] {
+    width: 100%;
+    padding: 9px 12px;
+    background: #0f172a;
+    border: 1.5px solid #334155;
+    border-radius: 8px;
+    color: #f1f5f9;
+    font-size: 14px;
+    outline: none;
+  }
+  .modal-box input[type="text"]:focus { border-color: #22c55e; }
+  .modal-member-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    font-size: 13.5px;
+  }
+  .modal-member-row input[type="checkbox"] { accent-color: #22c55e; }
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .modal-actions button {
+    flex: 1;
+    padding: 9px;
+    border-radius: 8px;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1.5px solid #334155;
+    background: transparent;
+    color: #94a3b8;
+  }
+  .modal-actions button.primary {
+    background: #22c55e;
+    border-color: #22c55e;
+    color: #000;
+  }
+  .modal-actions button.primary:hover { background: #4ade80; }
+  .modal-actions button:hover { color: #f1f5f9; border-color: #475569; }
+  .modal-error { font-size: 12.5px; color: #ef4444; min-height: 16px; }
+  .modal-note { font-size: 11.5px; color: #64748b; line-height: 1.4; }
+
+  #groupInfoBtn {
+    background: transparent;
+    border: 1.5px solid #334155;
+    color: #94a3b8;
+    font-size: 12.5px;
+    padding: 5px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+    margin-left: auto;
+  }
+  #groupInfoBtn:hover { color: #f1f5f9; border-color: #475569; }
+
+  /* ══════════════════════════════════════════════════════════
+     IMAGE MESSAGES — composer image button, pending-image preview
+     bar shown before sending, and rendered images inside message
+     bubbles. Images are stored as compressed JPEG data URLs
+     directly in Realtime Database (no Firebase Storage), matching
+     VUS Chat's existing image system.
+     ══════════════════════════════════════════════════════════ */
+  #uploadImageBtn {
+    padding: 0 16px;
+    background: transparent;
+    border: 1.5px solid #334155;
+    border-radius: 12px;
+    color: #94a3b8;
+    font-size: 15px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  #uploadImageBtn:hover { color: #f1f5f9; border-color: #475569; }
+  #uploadImageBtn:disabled { opacity: .5; cursor: not-allowed; }
+
+  #pendingImageBar {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 18px;
+    border-top: 1.5px solid #1f2937;
+    flex-shrink: 0;
+  }
+  #pendingImagePreview {
+    width: 46px;
+    height: 46px;
+    border-radius: 8px;
+    object-fit: cover;
+    border: 1.5px solid #334155;
+    flex-shrink: 0;
+  }
+  #pendingImageBar .pending-image-label {
+    flex: 1;
+    font-size: 13px;
+    color: #94a3b8;
+  }
+  #cancelPendingImageBtn {
+    background: transparent;
+    border: 1.5px solid #7f1d1d;
+    color: #f87171;
+    font-size: 12.5px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  #cancelPendingImageBtn:hover { background: rgba(239,68,68,.1); }
+
+  .chat-msg-image {
+    max-width: 260px;
+    max-height: 260px;
+    border-radius: 12px;
+    border: 1.5px solid #334155;
+    display: block;
+    cursor: pointer;
+  }
 </style>
 </head>
 <body>
@@ -664,6 +846,13 @@
     <div id="sidebarBody">
 
       <div class="sidebar-view active" id="viewChats">
+        <button class="new-group-btn" id="newGroupBtn">+ New Group</button>
+
+        <div class="chats-section-label">Groups</div>
+        <div id="groupsList"></div>
+        <div id="groupsEmpty" class="section-empty">No groups yet.</div>
+
+        <div class="chats-section-label">Friends</div>
         <div id="friendsList"></div>
         <div id="friendsEmpty" class="section-empty">No friends yet — use Find to add someone.</div>
       </div>
@@ -738,9 +927,17 @@
           <div id="chatThreadHeaderName"></div>
           <div id="chatThreadHeaderStatus"></div>
         </div>
+        <button id="groupInfoBtn" style="display:none">Manage</button>
       </div>
       <div id="chatMessages"></div>
+      <div id="pendingImageBar">
+        <img id="pendingImagePreview" alt="Pending image">
+        <span class="pending-image-label">Image ready — click Send to post it</span>
+        <button id="cancelPendingImageBtn">Cancel</button>
+      </div>
       <div id="chatComposer">
+        <input id="imageFileInput" type="file" accept="image/*" style="display:none">
+        <button id="uploadImageBtn" title="Send an image">📎</button>
         <textarea id="chatMsgInput" rows="1" placeholder="Type a message…" maxlength="2000"></textarea>
         <button id="chatSendBtn">Send</button>
       </div>
@@ -805,6 +1002,10 @@
 
 </div>
 
+<div id="modalOverlay">
+  <div class="modal-box" id="modalBox"></div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script>
@@ -865,6 +1066,8 @@ let idIndexRef = null;       // 6-digit id -> internal account key (uniqueness +
 let presenceRef = null;      // global online-presence node: presence/{accountKey} = { username }
 let connectedRef = null;     // Firebase's special .info/connected node
 let myPresenceRef = null;    // this tab's own presence entry, set once logged in
+let groupChatsRef = null;    // set in initFirebase alongside the other refs
+const GC_MAX_MEMBERS = 20;   // includes the owner
 
 function initFirebase() {
   firebase.initializeApp(FIREBASE_CONFIG);
@@ -875,6 +1078,7 @@ function initFirebase() {
   presenceRef = db.ref("presence");
   connectedRef = db.ref(".info/connected");
   dmsRef = db.ref("dms");
+  groupChatsRef = db.ref("groupChats");
 }
 
 function normalizeUsernameKey(username) {
@@ -1308,16 +1512,17 @@ function threadIdFor(accountKeyA, accountKeyB) {
   return [accountKeyA, accountKeyB].sort().join("_");
 }
 
-async function sendDirectMessage(otherAccountKey, text) {
+async function sendDirectMessage(otherAccountKey, text, imageData) {
   if (!currentSession) return { ok: false, error: "Not logged in." };
-  const clean = text.trim();
-  if (!clean) return { ok: false, error: "Message is empty." };
+  const clean = (text || "").trim();
+  if (!clean && !imageData) return { ok: false, error: "Message is empty." };
 
   const threadId = threadIdFor(currentSession.accountKey, otherAccountKey);
   try {
     await dmsRef.child(threadId).child("messages").push({
       fromAccountKey: currentSession.accountKey,
-      text: clean,
+      ...(clean ? { text: clean } : {}),
+      ...(imageData ? { imageData: imageData } : {}),
       ts: firebase.database.ServerValue.TIMESTAMP
     });
     return { ok: true };
@@ -1345,6 +1550,274 @@ function stopWatchingOpenChat() {
 }
 
 /* ══════════════════════════════════════════════════════════
+   GROUP CHATS
+   /groupChats/{gcId}: { name, ownerAccountKey, createdAt,
+     members: { accountKey: { username, joinedAt } } }
+   /groupChats/{gcId}/messages/{pushId}: { fromAccountKey, text, ts }
+   Only the owner may invite (from their own friends list) or kick.
+   Any member may leave; if the owner leaves without transferring
+   first, ownership randomly falls to a remaining member. Leaving
+   as the last member deletes the group.
+   ══════════════════════════════════════════════════════════ */
+
+async function createGroupChat(name) {
+  if (!currentSession) return { ok: false, error: "Not logged in." };
+  const clean = name.trim();
+  if (!clean) return { ok: false, error: "Group name can't be empty." };
+  if (clean.length > 40) return { ok: false, error: "Group name is too long." };
+
+  const gcRef = groupChatsRef.push();
+  const gcData = {
+    name: clean,
+    ownerAccountKey: currentSession.accountKey,
+    createdAt: firebase.database.ServerValue.TIMESTAMP,
+    members: {
+      [currentSession.accountKey]: {
+        username: currentSession.username,
+        joinedAt: firebase.database.ServerValue.TIMESTAMP
+      }
+    }
+  };
+
+  try {
+    await gcRef.set(gcData);
+    return { ok: true, gcId: gcRef.key };
+  } catch (e) {
+    return { ok: false, error: "Couldn't create the group — try again." };
+  }
+}
+
+async function inviteToGroupChat(gcId, friendAccountKey, friendUsername) {
+  if (!currentSession) return { ok: false, error: "Not logged in." };
+
+  let gcSnap;
+  try {
+    gcSnap = await groupChatsRef.child(gcId).get();
+  } catch (e) {
+    return { ok: false, error: "Couldn't reach the server — try again." };
+  }
+  const gc = gcSnap.val();
+  if (!gc) return { ok: false, error: "Group no longer exists." };
+  if (gc.ownerAccountKey !== currentSession.accountKey) return { ok: false, error: "Only the group owner can invite." };
+
+  const members = gc.members || {};
+  if (members[friendAccountKey]) return { ok: false, error: "Already in the group." };
+  if (Object.keys(members).length >= GC_MAX_MEMBERS) return { ok: false, error: "Group is full (" + GC_MAX_MEMBERS + " max)." };
+
+  try {
+    await groupChatsRef.child(gcId).child("members").child(friendAccountKey).set({
+      username: friendUsername,
+      joinedAt: firebase.database.ServerValue.TIMESTAMP
+    });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: "Couldn't invite — try again." };
+  }
+}
+
+async function kickFromGroupChat(gcId, targetAccountKey) {
+  if (!currentSession) return { ok: false, error: "Not logged in." };
+
+  let gcSnap;
+  try {
+    gcSnap = await groupChatsRef.child(gcId).get();
+  } catch (e) {
+    return { ok: false, error: "Couldn't reach the server — try again." };
+  }
+  const gc = gcSnap.val();
+  if (!gc) return { ok: false, error: "Group no longer exists." };
+  if (gc.ownerAccountKey !== currentSession.accountKey) return { ok: false, error: "Only the group owner can remove members." };
+  if (targetAccountKey === currentSession.accountKey) return { ok: false, error: "Use transfer/leave instead of kicking yourself." };
+
+  try {
+    await groupChatsRef.child(gcId).child("members").child(targetAccountKey).remove();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: "Couldn't remove member — try again." };
+  }
+}
+
+async function transferGroupOwnership(gcId, newOwnerAccountKey) {
+  if (!currentSession) return { ok: false, error: "Not logged in." };
+
+  let gcSnap;
+  try {
+    gcSnap = await groupChatsRef.child(gcId).get();
+  } catch (e) {
+    return { ok: false, error: "Couldn't reach the server — try again." };
+  }
+  const gc = gcSnap.val();
+  if (!gc) return { ok: false, error: "Group no longer exists." };
+  if (gc.ownerAccountKey !== currentSession.accountKey) return { ok: false, error: "Only the current owner can transfer ownership." };
+  const members = gc.members || {};
+  if (!members[newOwnerAccountKey]) return { ok: false, error: "That person isn't in the group." };
+
+  try {
+    await groupChatsRef.child(gcId).child("ownerAccountKey").set(newOwnerAccountKey);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: "Couldn't transfer ownership — try again." };
+  }
+}
+
+// Leaving: non-owners just remove themselves. If the owner leaves without
+// transferring first, ownership randomly falls to a remaining member (or
+// the group is deleted if they were the last one in it).
+async function leaveGroupChat(gcId) {
+  if (!currentSession) return { ok: false, error: "Not logged in." };
+
+  let gcSnap;
+  try {
+    gcSnap = await groupChatsRef.child(gcId).get();
+  } catch (e) {
+    return { ok: false, error: "Couldn't reach the server — try again." };
+  }
+  const gc = gcSnap.val();
+  if (!gc) return { ok: true }; // already gone
+
+  const members = gc.members || {};
+  const isOwner = gc.ownerAccountKey === currentSession.accountKey;
+  const remainingKeys = Object.keys(members).filter(k => k !== currentSession.accountKey);
+
+  try {
+    if (remainingKeys.length === 0) {
+      // Last member leaving — delete the whole group.
+      await groupChatsRef.child(gcId).remove();
+      return { ok: true };
+    }
+
+    const updates = {};
+    updates["members/" + currentSession.accountKey] = null;
+    if (isOwner) {
+      const randomNewOwner = remainingKeys[Math.floor(Math.random() * remainingKeys.length)];
+      updates["ownerAccountKey"] = randomNewOwner;
+    }
+    await groupChatsRef.child(gcId).update(updates);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: "Couldn't leave the group — try again." };
+  }
+}
+
+async function sendGroupMessage(gcId, text, imageData) {
+  if (!currentSession) return { ok: false, error: "Not logged in." };
+  const clean = (text || "").trim();
+  if (!clean && !imageData) return { ok: false, error: "Message is empty." };
+
+  try {
+    await groupChatsRef.child(gcId).child("messages").push({
+      fromAccountKey: currentSession.accountKey,
+      fromUsername: currentSession.username,
+      ...(clean ? { text: clean } : {}),
+      ...(imageData ? { imageData: imageData } : {}),
+      ts: firebase.database.ServerValue.TIMESTAMP
+    });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: "Message failed to send — try again." };
+  }
+}
+
+let currentGroupMessagesRef = null; // watched group-message child ref, mirrors currentThreadMessagesRef for DMs
+
+function watchGroupMessages(gcId, onMessage) {
+  stopWatchingOpenChat();
+  currentGroupMessagesRef = groupChatsRef.child(gcId).child("messages");
+  currentGroupMessagesRef.limitToLast(200).on("child_added", snap => {
+    onMessage({ id: snap.key, ...snap.val() });
+  });
+}
+
+// Live view of a single group chat's record (membership, owner, name) —
+// watched while its thread or its manage-modal is open.
+let currentGroupInfoRef = null;
+let currentGroupInfo = null;
+function watchGroupInfo(gcId, onChange) {
+  unwatchGroupInfo();
+  currentGroupInfoRef = groupChatsRef.child(gcId);
+  currentGroupInfoRef.on("value", snap => {
+    currentGroupInfo = snap.val();
+    onChange(currentGroupInfo);
+  });
+}
+function unwatchGroupInfo() {
+  if (currentGroupInfoRef) currentGroupInfoRef.off("value");
+  currentGroupInfoRef = null;
+  currentGroupInfo = null;
+}
+
+// Live list of all group chats the logged-in user belongs to. Realtime
+// Database can't query "where members contains me" server-side without an
+// extra denormalized index, so this watches the whole groupChats node and
+// filters client-side — acceptable at this app's scale (same tradeoff
+// already made for search/presence elsewhere in the file).
+function watchMyGroupChats(onList) {
+  groupChatsRef.on("value", snap => {
+    const val = snap.val() || {};
+    const mine = Object.entries(val)
+      .filter(([, gc]) => gc.members && currentSession && gc.members[currentSession.accountKey])
+      .map(([gcId, gc]) => ({ gcId, ...gc }));
+    onList(mine);
+  });
+}
+function unwatchMyGroupChats() {
+  groupChatsRef.off("value");
+}
+
+/* ══════════════════════════════════════════════════════════
+   IMAGE MESSAGES
+   Images are compressed client-side to a JPEG data URL and stored
+   directly in Realtime Database as an `imageData` field on the
+   message record — no Firebase Storage involved, matching VUS
+   Chat's existing image system. Client-side limits only; see the
+   security-rules note near FIREBASE_CONFIG for what these do and
+   don't protect against.
+   ══════════════════════════════════════════════════════════ */
+const MAX_IMAGE_SOURCE_BYTES = 15 * 1024 * 1024; // 15 MB original file cap
+const IMAGE_MAX_DIMENSION = 1000;                // longest side after resize, px
+const IMAGE_JPEG_QUALITY = 0.7;
+
+function compressImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const img = new Image();
+
+      img.onload = () => {
+        try {
+          const scale = Math.min(1, IMAGE_MAX_DIMENSION / Math.max(img.width, img.height));
+          const width = Math.max(1, Math.round(img.width * scale));
+          const height = Math.max(1, Math.round(img.height * scale));
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            reject(new Error("Couldn't process the image on this device."));
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const dataUrl = canvas.toDataURL("image/jpeg", IMAGE_JPEG_QUALITY);
+          resolve(dataUrl);
+        } catch (e) {
+          reject(new Error("Couldn't process that image."));
+        }
+      };
+
+      img.onerror = () => reject(new Error("That file doesn't look like a valid image."));
+      img.src = reader.result;
+    };
+
+    reader.onerror = () => reject(new Error("Couldn't read that file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ══════════════════════════════════════════════════════════
    UI WIRING
    ══════════════════════════════════════════════════════════ */
 const $authFlow = document.getElementById("authFlow");
@@ -1369,6 +1842,11 @@ const $chatThreadHeaderStatus = document.getElementById("chatThreadHeaderStatus"
 const $chatMessages = document.getElementById("chatMessages");
 const $chatMsgInput = document.getElementById("chatMsgInput");
 const $chatSendBtn = document.getElementById("chatSendBtn");
+const $uploadImageBtn = document.getElementById("uploadImageBtn");
+const $imageFileInput = document.getElementById("imageFileInput");
+const $pendingImageBar = document.getElementById("pendingImageBar");
+const $pendingImagePreview = document.getElementById("pendingImagePreview");
+const $cancelPendingImageBtn = document.getElementById("cancelPendingImageBtn");
 
 const $tabLogin = document.getElementById("tabLogin");
 const $tabSignup = document.getElementById("tabSignup");
@@ -1410,6 +1888,13 @@ const $friendsList = document.getElementById("friendsList");
 const $friendsEmpty = document.getElementById("friendsEmpty");
 const $blockedList = document.getElementById("blockedList");
 const $blockedEmpty = document.getElementById("blockedEmpty");
+
+const $newGroupBtn = document.getElementById("newGroupBtn");
+const $groupsList = document.getElementById("groupsList");
+const $groupsEmpty = document.getElementById("groupsEmpty");
+const $groupInfoBtn = document.getElementById("groupInfoBtn");
+const $modalOverlay = document.getElementById("modalOverlay");
+const $modalBox = document.getElementById("modalBox");
 
 let mode = "login"; // "login" | "signup"
 
@@ -1686,6 +2171,54 @@ function buildAvatarWithPresence(username, accountKey) {
   return wrap;
 }
 
+let myGroupChats = []; // kept in sync by watchMyGroupChats, re-rendered on every change
+
+function renderGroupsList(groups) {
+  myGroupChats = groups;
+  $groupsList.innerHTML = "";
+  $groupsEmpty.style.display = groups.length === 0 ? "block" : "none";
+
+  groups.forEach(gc => {
+    const row = document.createElement("div");
+    row.className = "chat-list-row" + (openChatGcId === gc.gcId ? " selected" : "");
+    row.addEventListener("click", () => openGroupChat(gc.gcId));
+
+    const avatar = document.createElement("div");
+    avatar.className = "group-avatar-icon";
+    avatar.textContent = "👥";
+    row.appendChild(avatar);
+
+    const info = document.createElement("div");
+    info.className = "chat-list-info";
+    const nameRow = document.createElement("div");
+    nameRow.className = "chat-list-name-row";
+    const nameEl = document.createElement("span");
+    nameEl.className = "chat-list-name";
+    nameEl.textContent = gc.name;
+    nameRow.appendChild(nameEl);
+    info.appendChild(nameRow);
+
+    const preview = document.createElement("div");
+    preview.className = "chat-list-preview";
+    const count = Object.keys(gc.members || {}).length;
+    preview.textContent = count + " member" + (count === 1 ? "" : "s");
+    info.appendChild(preview);
+
+    row.appendChild(info);
+    $groupsList.appendChild(row);
+
+    // If this group is currently open, keep openChatGcId's live info fresh
+    // for the manage modal without a separate watcher per row.
+    if (openChatGcId === gc.gcId) currentGroupInfo = gc;
+  });
+
+  // If the group we're chatting in disappeared (e.g. we left, or the
+  // owner deleted it by leaving as last member), fall back to empty state.
+  if (openChatGcId && !groups.some(g => g.gcId === openChatGcId)) {
+    closeOpenChat();
+  }
+}
+
 function renderFriendsList(userData) {
   const friends = (userData && userData.friends) || {};
   const entries = Object.entries(friends);
@@ -1818,6 +2351,227 @@ function renderAllRelationshipUI(userData) {
   if (lastSearchResults.length > 0) renderSearchResults(lastSearchResults);
 }
 
+/* ══════════════════════════════════════════════════════════
+   MODALS — new group, invite-from-friends picker, manage group
+   (kick / transfer / leave). One shared overlay, content swapped
+   per use.
+   ══════════════════════════════════════════════════════════ */
+function closeModal() {
+  $modalOverlay.classList.remove("show");
+  $modalBox.innerHTML = "";
+}
+$modalOverlay.addEventListener("click", (e) => {
+  if (e.target === $modalOverlay) closeModal();
+});
+
+function openNewGroupModal() {
+  $modalBox.innerHTML = "";
+
+  const h3 = document.createElement("h3");
+  h3.textContent = "New group";
+  $modalBox.appendChild(h3);
+
+  const note = document.createElement("div");
+  note.className = "modal-note";
+  note.textContent = "You can invite friends after creating it. Max " + GC_MAX_MEMBERS + " members.";
+  $modalBox.appendChild(note);
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = "Group name";
+  input.maxLength = 40;
+  $modalBox.appendChild(input);
+
+  const errorEl = document.createElement("div");
+  errorEl.className = "modal-error";
+  $modalBox.appendChild(errorEl);
+
+  const actions = document.createElement("div");
+  actions.className = "modal-actions";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.addEventListener("click", closeModal);
+
+  const createBtn = document.createElement("button");
+  createBtn.className = "primary";
+  createBtn.textContent = "Create";
+  createBtn.addEventListener("click", async () => {
+    createBtn.disabled = true;
+    const result = await createGroupChat(input.value);
+    if (!result.ok) {
+      errorEl.textContent = result.error;
+      createBtn.disabled = false;
+      return;
+    }
+    closeModal();
+    openGroupChat(result.gcId);
+  });
+
+  actions.appendChild(cancelBtn);
+  actions.appendChild(createBtn);
+  $modalBox.appendChild(actions);
+  $modalOverlay.classList.add("show");
+  input.focus();
+}
+$newGroupBtn.addEventListener("click", openNewGroupModal);
+
+function openInviteModal(gcId) {
+  $modalBox.innerHTML = "";
+
+  const h3 = document.createElement("h3");
+  h3.textContent = "Invite friends";
+  $modalBox.appendChild(h3);
+
+  const errorEl = document.createElement("div");
+  errorEl.className = "modal-error";
+
+  const friends = (currentUserData && currentUserData.friends) || {};
+  const gc = myGroupChats.find(g => g.gcId === gcId);
+  const existingMembers = (gc && gc.members) || {};
+  const invitable = Object.entries(friends).filter(([key]) => !existingMembers[key]);
+
+  if (invitable.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "section-empty";
+    empty.textContent = "All your friends are already in this group.";
+    $modalBox.appendChild(empty);
+  } else {
+    invitable.forEach(([friendKey, friendData]) => {
+      const row = document.createElement("div");
+      row.className = "modal-member-row";
+      const btn = document.createElement("button");
+      btn.textContent = "Invite " + friendData.username;
+      btn.style.cssText = "flex:1;padding:8px;border-radius:8px;border:1.5px solid #334155;background:transparent;color:#94a3b8;cursor:pointer;font-size:13.5px;text-align:left";
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        btn.textContent = "Inviting…";
+        const result = await inviteToGroupChat(gcId, friendKey, friendData.username);
+        if (!result.ok) {
+          errorEl.textContent = result.error;
+          btn.disabled = false;
+          btn.textContent = "Invite " + friendData.username;
+        } else {
+          row.remove();
+        }
+      });
+      row.appendChild(btn);
+      $modalBox.appendChild(row);
+    });
+  }
+
+  $modalBox.appendChild(errorEl);
+
+  const actions = document.createElement("div");
+  actions.className = "modal-actions";
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "Done";
+  closeBtn.addEventListener("click", closeModal);
+  actions.appendChild(closeBtn);
+  $modalBox.appendChild(actions);
+
+  $modalOverlay.classList.add("show");
+}
+
+function openManageGroupModal(gcId) {
+  const gc = myGroupChats.find(g => g.gcId === gcId) || currentGroupInfo;
+  if (!gc) return;
+
+  $modalBox.innerHTML = "";
+  const isOwner = currentSession && gc.ownerAccountKey === currentSession.accountKey;
+
+  const h3 = document.createElement("h3");
+  h3.textContent = gc.name;
+  $modalBox.appendChild(h3);
+
+  const errorEl = document.createElement("div");
+  errorEl.className = "modal-error";
+
+  if (isOwner) {
+    const inviteBtn = document.createElement("button");
+    inviteBtn.textContent = "+ Invite friends";
+    inviteBtn.style.cssText = "width:100%;padding:9px;border-radius:8px;border:1.5px dashed #334155;background:transparent;color:#94a3b8;cursor:pointer;font-size:13.5px";
+    inviteBtn.addEventListener("click", () => openInviteModal(gcId));
+    $modalBox.appendChild(inviteBtn);
+  }
+
+  const membersLabel = document.createElement("div");
+  membersLabel.className = "modal-note";
+  membersLabel.textContent = "Members (" + Object.keys(gc.members || {}).length + "/" + GC_MAX_MEMBERS + ")";
+  $modalBox.appendChild(membersLabel);
+
+  Object.entries(gc.members || {}).forEach(([memberKey, memberData]) => {
+    const row = document.createElement("div");
+    row.className = "person-row";
+
+    const nameWrap = document.createElement("div");
+    nameWrap.className = "person-row-name";
+    const ownerTag = memberKey === gc.ownerAccountKey ? " 👑" : "";
+    nameWrap.innerHTML = `<span class="pname">${esc(memberData.username)}${ownerTag}</span>`;
+    row.appendChild(nameWrap);
+
+    const actions = document.createElement("div");
+    actions.className = "person-row-actions";
+    const isMe = currentSession && memberKey === currentSession.accountKey;
+
+    if (isOwner && !isMe) {
+      const transferBtn = document.createElement("button");
+      transferBtn.textContent = "Make owner";
+      transferBtn.addEventListener("click", async () => {
+        transferBtn.disabled = true;
+        const result = await transferGroupOwnership(gcId, memberKey);
+        if (!result.ok) { errorEl.textContent = result.error; transferBtn.disabled = false; }
+        else { closeModal(); openManageGroupModal(gcId); }
+      });
+      actions.appendChild(transferBtn);
+
+      const kickBtn = document.createElement("button");
+      kickBtn.className = "danger";
+      kickBtn.textContent = "Kick";
+      kickBtn.addEventListener("click", async () => {
+        kickBtn.disabled = true;
+        const result = await kickFromGroupChat(gcId, memberKey);
+        if (!result.ok) { errorEl.textContent = result.error; kickBtn.disabled = false; }
+      });
+      actions.appendChild(kickBtn);
+    }
+
+    row.appendChild(actions);
+    $modalBox.appendChild(row);
+  });
+
+  $modalBox.appendChild(errorEl);
+
+  const actions = document.createElement("div");
+  actions.className = "modal-actions";
+
+  const leaveBtn = document.createElement("button");
+  leaveBtn.className = "danger";
+  leaveBtn.textContent = isOwner ? "Transfer & leave" : "Leave group";
+  leaveBtn.addEventListener("click", async () => {
+    if (isOwner && Object.keys(gc.members || {}).length > 1) {
+      errorEl.textContent = "Tip: use \"Make owner\" above first if you want to choose who takes over — otherwise it'll be random.";
+    }
+    leaveBtn.disabled = true;
+    const result = await leaveGroupChat(gcId);
+    if (!result.ok) { errorEl.textContent = result.error; leaveBtn.disabled = false; }
+    else closeModal();
+  });
+
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "Close";
+  closeBtn.addEventListener("click", closeModal);
+
+  actions.appendChild(closeBtn);
+  actions.appendChild(leaveBtn);
+  $modalBox.appendChild(actions);
+
+  $modalOverlay.classList.add("show");
+}
+$groupInfoBtn.addEventListener("click", () => {
+  if (openChatGcId) openManageGroupModal(openChatGcId);
+});
+
 $searchBtn.addEventListener("click", async () => {
   const query = $searchInput.value;
   $searchBtn.disabled = true;
@@ -1859,7 +2613,11 @@ function showAuthFlow() {
 $sidebarLogoutBtn.addEventListener("click", () => {
   releasePresence();
   unwatchOwnAccount(currentSession && currentSession.accountKey);
-  stopWatchingOpenChat();
+  unwatchMyGroupChats();
+  unwatchGroupInfo();
+  clearPendingImage();
+  closeOpenChat();
+  closeModal();
   currentSession = null;
   clearSession();
   showAuthFlow();
@@ -1895,6 +2653,7 @@ $authForm.addEventListener("submit", async (e) => {
       currentSession = result;
       claimPresence(result.accountKey, result.username);
       watchOwnAccount(result.accountKey, renderAllRelationshipUI);
+      watchMyGroupChats(renderGroupsList);
       showLoggedInState(result);
     } else {
       const username = $signupUsername.value;
@@ -1938,11 +2697,17 @@ $authForm.addEventListener("submit", async (e) => {
    CHAT THREAD UI — opening a friend's thread, rendering messages,
    sending from the composer.
    ══════════════════════════════════════════════════════════ */
-let openChatAccountKey = null;
+let openChatAccountKey = null; // set when a DM thread is open, null when a group is open
 let openChatUsername = null;
+let openChatGcId = null;       // set when a group thread is open, null when a DM is open
 let chatMessageCount = 0;
 
 function updateChatThreadHeaderStatus() {
+  if (openChatGcId) {
+    const count = currentGroupInfo ? Object.keys(currentGroupInfo.members || {}).length : 0;
+    $chatThreadHeaderStatus.textContent = count + " member" + (count === 1 ? "" : "s");
+    return;
+  }
   if (!openChatAccountKey) return;
   const isOnline = latestPresenceAccountKeys.has(openChatAccountKey);
   $chatThreadHeaderStatus.textContent = isOnline ? "Online" : "Offline";
@@ -1954,9 +2719,34 @@ function renderChatMessage(msg) {
   const mine = msg.fromAccountKey === currentSession.accountKey;
   el.className = "chat-msg " + (mine ? "mine" : "theirs");
 
+  // Group threads show who sent each message (other than your own);
+  // DM threads don't need this since it's always exactly one other person.
+  if (openChatGcId && !mine && msg.fromUsername) {
+    const senderLabel = document.createElement("div");
+    senderLabel.className = "chat-msg-meta";
+    senderLabel.textContent = msg.fromUsername;
+    el.appendChild(senderLabel);
+  }
+
   const bubble = document.createElement("div");
   bubble.className = "chat-msg-bubble";
-  bubble.textContent = msg.text;
+
+  if (msg.imageData) {
+    const img = document.createElement("img");
+    img.className = "chat-msg-image";
+    img.src = msg.imageData; // safe: assigned as a property, never parsed as HTML
+    img.alt = "Image";
+    bubble.appendChild(img);
+    if (msg.text) {
+      const textEl = document.createElement("div");
+      textEl.style.marginTop = "6px";
+      textEl.style.whiteSpace = "pre-wrap";
+      textEl.textContent = msg.text;
+      bubble.appendChild(textEl);
+    }
+  } else {
+    bubble.textContent = msg.text || "";
+  }
   el.appendChild(bubble);
 
   const meta = document.createElement("div");
@@ -1970,14 +2760,19 @@ function renderChatMessage(msg) {
 }
 
 function openChatWith(accountKey, username) {
+  unwatchGroupInfo();
+  clearPendingImage();
   openChatAccountKey = accountKey;
   openChatUsername = username;
+  openChatGcId = null;
   chatMessageCount = 0;
 
   $chatEmptyState.style.display = "none";
   $chatThread.style.display = "flex";
+  $chatThreadAvatar.style.display = "flex";
   $chatThreadAvatar.textContent = initialsFor(username);
   $chatThreadHeaderName.textContent = username;
+  $groupInfoBtn.style.display = "none";
   updateChatThreadHeaderStatus();
 
   $chatMessages.innerHTML = "";
@@ -1985,31 +2780,166 @@ function openChatWith(accountKey, username) {
 
   // Re-render the friend list so the "selected" highlight moves to this row.
   if (currentUserData) renderFriendsList(currentUserData);
+  if (myGroupChats.length) renderGroupsList(myGroupChats);
 
   if (!isSpectatorLikeInput()) $chatMsgInput.focus();
+}
+
+function openGroupChat(gcId) {
+  clearPendingImage();
+  openChatAccountKey = null;
+  openChatUsername = null;
+  openChatGcId = gcId;
+  chatMessageCount = 0;
+
+  const gc = myGroupChats.find(g => g.gcId === gcId);
+
+  $chatEmptyState.style.display = "none";
+  $chatThread.style.display = "flex";
+  $chatThreadAvatar.textContent = "👥";
+  $chatThreadHeaderName.textContent = gc ? gc.name : "Group";
+  $groupInfoBtn.style.display = "inline-block";
+  watchGroupInfo(gcId, () => updateChatThreadHeaderStatus());
+  updateChatThreadHeaderStatus();
+
+  $chatMessages.innerHTML = "";
+  watchGroupMessages(gcId, renderChatMessage);
+
+  if (currentUserData) renderFriendsList(currentUserData);
+  renderGroupsList(myGroupChats);
+
+  if (!isSpectatorLikeInput()) $chatMsgInput.focus();
+}
+
+function closeOpenChat() {
+  unwatchGroupInfo();
+  stopWatchingOpenChat();
+  openChatAccountKey = null;
+  openChatUsername = null;
+  openChatGcId = null;
+  $chatThread.style.display = "none";
+  $chatEmptyState.style.display = "flex";
+  $groupInfoBtn.style.display = "none";
 }
 
 function isSpectatorLikeInput() {
   return false; // placeholder hook in case a read-only/spectator mode is added later
 }
 
+// Compressed JPEG data URL waiting to be sent with the next message, or
+// null if no image is staged. Set by stageImageFile, cleared on cancel or
+// once actually sent.
+let pendingImageDataUrl = null;
+
+async function stageImageFile(file) {
+  if (!file) return;
+  // No chat is open yet — nothing to attach the image to.
+  if (!openChatAccountKey && !openChatGcId) return;
+
+  if (!file.type.startsWith("image/")) {
+    showComposerNotice("That file isn't an image.");
+    $imageFileInput.value = "";
+    return;
+  }
+  if (file.size > MAX_IMAGE_SOURCE_BYTES) {
+    showComposerNotice("Image is too large (max 15 MB).");
+    $imageFileInput.value = "";
+    return;
+  }
+
+  $uploadImageBtn.disabled = true;
+  try {
+    const dataUrl = await compressImageFile(file);
+    pendingImageDataUrl = dataUrl;
+    $pendingImagePreview.src = dataUrl;
+    $pendingImageBar.style.display = "flex";
+  } catch (e) {
+    showComposerNotice(e.message || "Couldn't process that image.");
+  } finally {
+    $uploadImageBtn.disabled = false;
+    $imageFileInput.value = ""; // allow picking the same file again later
+  }
+}
+
+function clearPendingImage() {
+  pendingImageDataUrl = null;
+  $pendingImagePreview.src = "";
+  $pendingImageBar.style.display = "none";
+  $imageFileInput.value = "";
+}
+
+$uploadImageBtn.addEventListener("click", () => $imageFileInput.click());
+$imageFileInput.addEventListener("change", () => {
+  const file = $imageFileInput.files[0];
+  stageImageFile(file);
+});
+$cancelPendingImageBtn.addEventListener("click", clearPendingImage);
+
+// Universal outgoing-message delay. Applies to both DMs and group chats.
+// A staged image sends immediately (see sendChatMessage) — the delay is a
+// text-spam throttle, not meant to hold up image sends. If text is also
+// attached, it follows as its own delayed message right after.
+const SEND_DELAY_MS = 2000;
+
 function sendChatMessage() {
-  if (!openChatAccountKey) return;
+  if (!openChatAccountKey && !openChatGcId) return;
   const text = $chatMsgInput.value;
-  if (!text.trim()) return;
+  const imageToSend = pendingImageDataUrl;
+
+  if (!text.trim() && !imageToSend) return;
 
   $chatSendBtn.disabled = true;
-  sendDirectMessage(openChatAccountKey, text).then(result => {
-    if (!result.ok) {
-      showComposerNotice(result.error);
-    } else {
-      $chatMsgInput.value = "";
-      autosizeChatInput();
-    }
-  }).finally(() => {
+  $uploadImageBtn.disabled = true;
+
+  const sendOne = (msgText, withImage) => {
+    return openChatGcId
+      ? sendGroupMessage(openChatGcId, msgText, withImage)
+      : sendDirectMessage(openChatAccountKey, msgText, withImage);
+  };
+
+  const finish = () => {
     $chatSendBtn.disabled = false;
+    $uploadImageBtn.disabled = false;
     $chatMsgInput.focus();
-  });
+  };
+
+  if (imageToSend) {
+    // Image sends go out immediately, skipping the text send-delay — the
+    // delay is a text-spam throttle, not meant to hold up image sends.
+    clearPendingImage();
+    sendOne(null, imageToSend).then(result => {
+      if (!result.ok) {
+        showComposerNotice(result.error);
+        finish();
+        return;
+      }
+      if (text.trim()) {
+        // Image already sent; the accompanying text follows as its own
+        // message after the normal delay, same as a text-only send.
+        setTimeout(() => {
+          sendOne(text, null).then(textResult => {
+            if (!textResult.ok) showComposerNotice(textResult.error);
+            else { $chatMsgInput.value = ""; autosizeChatInput(); }
+            finish();
+          });
+        }, SEND_DELAY_MS);
+      } else {
+        finish();
+      }
+    });
+  } else {
+    setTimeout(() => {
+      sendOne(text, null).then(result => {
+        if (!result.ok) {
+          showComposerNotice(result.error);
+        } else {
+          $chatMsgInput.value = "";
+          autosizeChatInput();
+        }
+        finish();
+      });
+    }, SEND_DELAY_MS);
+  }
 }
 
 function autosizeChatInput() {
@@ -2077,6 +3007,7 @@ function init() {
     currentSession = session;
     claimPresence(session.accountKey, session.username);
     watchOwnAccount(session.accountKey, renderAllRelationshipUI);
+    watchMyGroupChats(renderGroupsList);
     showLoggedInState(session);
   } else {
     showAuthFlow();
