@@ -853,8 +853,8 @@
      while open, with Timeout / Grant Mod actions per person. -->
 <div class="chat-modal-overlay" id="ownerMenuOverlay">
   <div class="chat-modal" style="max-width:340px">
-    <h3>👑 Owner Menu</h3>
-    <p style="margin-bottom:8px">Online now — refreshes every 5s while this is open.</p>
+    <h3 id="ownerMenuTitle">👑 Owner Menu</h3>
+    <p id="ownerMenuSubtitle" style="margin-bottom:8px">Online now — refreshes every 5s while this is open.</p>
     <div id="ownerMenuList" style="margin-bottom:8px"></div>
     <div class="chat-modal-row">
       <button class="chat-modal-btn-secondary" id="ownerMenuCloseBtn">Close</button>
@@ -862,15 +862,17 @@
   </div>
 </div>
 
-<!-- Timeout duration modal: minutes + seconds, capped at 3:00 total. -->
+<!-- Timeout duration modal: minutes + seconds. Cap/note text set dynamically
+     (3:00 for owners, 0:40 for mods) by openTimeoutSetModal. -->
 <div class="chat-modal-overlay" id="timeoutSetOverlay">
   <div class="chat-modal">
     <h3 id="timeoutSetTitle">Timeout</h3>
-    <label>Duration (max 3:00)</label>
+    <label>Duration</label>
     <div style="display:flex;gap:8px;margin-bottom:6px">
       <input type="text" id="timeoutMinutesInput" inputmode="numeric" pattern="[0-9]*" maxlength="1" placeholder="Min" style="width:100%;padding:8px 11px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none;text-align:center">
       <input type="text" id="timeoutSecondsInput" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="Sec" style="width:100%;padding:8px 11px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none;text-align:center">
     </div>
+    <div id="timeoutSetNote" style="color:#64748b;font-size:12.5px;margin-bottom:8px">Max 3:00.</div>
     <div class="chat-modal-err" id="timeoutSetErr"></div>
     <div class="chat-modal-row">
       <button class="chat-modal-btn-secondary" id="timeoutSetCancelBtn">Cancel</button>
@@ -1017,6 +1019,12 @@ const COLOR_CHANGE_COOLDOWN_MS = 10 * 1000;
    churn on a flaky connection). */
 const LEAVE_DEDUPE_WINDOW_MS = 5 * 1000;
 
+/* ── Timeouts (Owner Menu / Mod Menu) ── */
+const TIMEOUT_MAX_MS = 3 * 60 * 1000; // 3:00 cap for owners
+const MOD_TIMEOUT_MAX_MS = 40 * 1000; // 0:40 cap for mods — a deliberately smaller power than owners get
+const MOD_TIMEOUT_DEFAULT_MS = 10 * 1000; // prefilled duration when a mod opens the timeout modal
+const MOD_RETIMEOUT_COOLDOWN_MS = 7 * 1000; // a mod must wait this long after setting OR clearing a timeout before re-timing-out the SAME target
+
 const ChatBackend = {
   _db: null,
   _ref: null,
@@ -1035,6 +1043,7 @@ const ChatBackend = {
   _rolesHeld: {},
   _recentLeaveNames: {},
   _timeoutsRef: null,
+  _modRetimeoutRef: null,
   currentRoomId: null,
 
   init() {
@@ -1160,6 +1169,7 @@ const ChatBackend = {
     this._atPingCooldownRef = this._db.ref("rooms/" + roomId + "/atPingCooldowns");
     this._leaveEventsRef = this._db.ref("rooms/" + roomId + "/leaveEvents");
     this._timeoutsRef = this._db.ref("rooms/" + roomId + "/timeouts");
+    this._modRetimeoutRef = this._db.ref("rooms/" + roomId + "/modRetimeoutCooldowns");
   },
 
   detachAllListeners() {
@@ -1430,22 +1440,42 @@ const ChatBackend = {
     return { ok: true };
   },
 
-  // ── Timeouts (Owner Menu) ──
-  // Stored per-room at rooms/{roomId}/timeouts/{safeName} = { expiresAt,
-  // by }. expiresAt is anchored to SERVER time (see _serverNow) so a
-  // timed-out person can't dodge it by winding back their local clock, and
-  // an owner's timeout of someone in one room has no effect in another
+  // ── Timeouts (Owner Menu / Mod Menu) ──
+  // Stored per-room at rooms/{roomId}/timeouts/{safeName} = { expiresAt, by }.
+  // expiresAt is anchored to SERVER time (see _serverNow) so a timed-out
+  // person can't dodge it by winding back their local clock, and an
+  // owner's/mod's timeout of someone in one room has no effect in another
   // room (matches how presence/roles-in-room are already scoped — only
-  // ROLES like crown/mod are global, timeouts are not).
-  async setTimeout_(targetName, durationMs) {
+  // ROLES like crown/mod are global, timeouts are not). `by` records who
+  // set it (safe-keyed), so clearTimeout_ can enforce "only the mod who
+  // set it can clear it early" for mod-issued timeouts — see
+  // canClearTimeout below.
+  async setTimeout_(targetName, durationMs, byName) {
     const serverNow = await this._serverNow();
     await this._timeoutsRef.child(this._safeKey(targetName)).set({
-      expiresAt: serverNow + durationMs
+      expiresAt: serverNow + durationMs,
+      by: byName ? this._safeKey(byName) : null
     });
   },
 
+  // Unconditional clear — used by the Owner Menu (crown can always clear
+  // any timeout) and internally once ownership of a clear request has
+  // already been checked (see canClearTimeout).
   async clearTimeout_(targetName) {
     await this._timeoutsRef.child(this._safeKey(targetName)).remove();
+  },
+
+  // Returns { by } for the current timeout on targetName, or null if none
+  // is active. Used to decide whether the requesting mod is the one who
+  // set it, per "only the mod who set it can clear it early."
+  async getTimeoutSetBy(targetName) {
+    try {
+      const snap = await this._timeoutsRef.child(this._safeKey(targetName)).get();
+      const val = snap.val();
+      return (val && val.by) ? val.by : null;
+    } catch (e) {
+      return null;
+    }
   },
 
   // Returns remaining ms if targetName is currently timed out in this
@@ -1476,6 +1506,33 @@ const ChatBackend = {
       onChange(Math.max(0, val.expiresAt - serverNow));
     });
     return () => ref.off("value");
+  },
+
+  // ── Mod re-timeout cooldown ──
+  // A mod who just set OR cleared a timeout on a given target must wait
+  // MOD_RETIMEOUT_COOLDOWN_MS before they can time that same target out
+  // again. Stored server-side (per room, per mod, per target) so it can't
+  // be dodged by clearing localStorage the way the code-request cooldowns
+  // are — this one's meant to actually hold. Anchored to server time like
+  // everything else here.
+  async startModRetimeoutCooldown(modName, targetName) {
+    const key = this._safeKey(modName) + "__" + this._safeKey(targetName);
+    const serverNow = await this._serverNow();
+    await this._modRetimeoutRef.child(key).set(serverNow);
+  },
+
+  async getModRetimeoutRemainingMs(modName, targetName) {
+    try {
+      const key = this._safeKey(modName) + "__" + this._safeKey(targetName);
+      const snap = await this._modRetimeoutRef.child(key).get();
+      const startedAt = snap.val();
+      if (!startedAt) return 0;
+      const serverNow = await this._serverNow();
+      const elapsed = serverNow - startedAt;
+      return Math.max(0, MOD_RETIMEOUT_COOLDOWN_MS - elapsed);
+    } catch (e) {
+      return 0;
+    }
   },
 
   _safeKey(name) {
@@ -2645,6 +2702,22 @@ async function renderModMenu() {
     $globalClearPanel.appendChild(ownerBtn);
   }
 
+  // Mod Menu button: shown when mod-menu code is unlocked AND the current
+  // name holds the mod role, live. A crown-holder who is ALSO modded would
+  // see both buttons — that's fine, each opens its own scoped menu.
+  const iAmModded = modMenuUnlocked && myName && (roleHolders.mod || new Set()).has(ChatBackend._safeKey(myName));
+  if (iAmModded) {
+    const modMenuBtn = document.createElement("button");
+    modMenuBtn.textContent = "🧩 Mod Menu";
+    modMenuBtn.className = "toolbar-btn";
+    modMenuBtn.style.cssText = "width:100%;margin-bottom:6px";
+    modMenuBtn.addEventListener("click", () => {
+      closeClearPanel();
+      openModMenuStaff();
+    });
+    $globalClearPanel.appendChild(modMenuBtn);
+  }
+
   const closeBtn = document.createElement("button");
   closeBtn.textContent = "Close";
   closeBtn.className = "toolbar-btn";
@@ -2855,12 +2928,14 @@ $roleClaimOverlay.addEventListener("click", (e) => {
 });
 
 /* ══════════════════════════════════════════════════════════
-   OWNER MENU — crown-holders only (and mod-menu code unlocked; see the
-   gate in renderModMenu above). Lists everyone currently online in this
-   room, refreshed every 5s while the menu is open, with two per-person
-   actions: Timeout (minutes+seconds, capped at 3:00) and Grant Mod
-   (double-confirm, since handing out the mod tag isn't reversible by the
-   person who received it and mistakes should cost a second click to make).
+   STAFF MENU — one shared modal backing both the crown-only Owner Menu
+   (full power: any duration up to 3:00, Grant/Remove Mod, clear anyone's
+   timeout) and the mod-only Mod Menu (limited: timeout only, capped at
+   0:40, defaults to 0:10, can only clear a timeout THEY set, and must
+   wait MOD_RETIMEOUT_COOLDOWN_MS after setting/clearing before re-timing
+   the same target out). `staffMenuMode` tracks which one is currently
+   open so the shared rendering/submit logic can branch on it without
+   duplicating the list/refresh machinery twice.
    Reuses latestPresenceList (already kept live by attachRoomListeners)
    rather than opening a second presence subscription — the 5s timer here
    just re-renders from whatever that list currently holds, plus a fresh
@@ -2868,11 +2943,14 @@ $roleClaimOverlay.addEventListener("click", (e) => {
    list display.
    ══════════════════════════════════════════════════════════ */
 const $ownerMenuOverlay = document.getElementById("ownerMenuOverlay");
+const $ownerMenuTitle = document.getElementById("ownerMenuTitle");
+const $ownerMenuSubtitle = document.getElementById("ownerMenuSubtitle");
 const $ownerMenuList = document.getElementById("ownerMenuList");
 const $ownerMenuCloseBtn = document.getElementById("ownerMenuCloseBtn");
 
 const $timeoutSetOverlay = document.getElementById("timeoutSetOverlay");
 const $timeoutSetTitle = document.getElementById("timeoutSetTitle");
+const $timeoutSetNote = document.getElementById("timeoutSetNote");
 const $timeoutMinutesInput = document.getElementById("timeoutMinutesInput");
 const $timeoutSecondsInput = document.getElementById("timeoutSecondsInput");
 const $timeoutSetErr = document.getElementById("timeoutSetErr");
@@ -2885,7 +2963,7 @@ const $grantModConfirmTitle = document.getElementById("grantModConfirmTitle");
 const $grantModCancelBtn = document.getElementById("grantModCancelBtn");
 const $grantModConfirmBtn = document.getElementById("grantModConfirmBtn");
 
-const TIMEOUT_MAX_MS = 3 * 60 * 1000; // 3:00 cap, enforced both client- and effectively server-side (see setTimeout_)
+let staffMenuMode = "owner"; // "owner" | "mod" — which gate/limits currently apply
 let ownerMenuRefreshTimer = null;
 let pendingTimeoutTarget = null;
 let pendingGrantModTarget = null;
@@ -2898,7 +2976,25 @@ function isModHolder(name) {
 }
 
 function openOwnerMenu() {
+  staffMenuMode = "owner";
   closeClearPanel();
+  $ownerMenuTitle.textContent = "👑 Owner Menu";
+  $ownerMenuSubtitle.textContent = "Online now — refreshes every 5s while this is open.";
+  renderOwnerMenuList();
+  $ownerMenuOverlay.style.display = "flex";
+  clearInterval(ownerMenuRefreshTimer);
+  ownerMenuRefreshTimer = setInterval(renderOwnerMenuList, 5000);
+}
+
+// Mod Menu: same modal, same list/refresh machinery, far fewer buttons per
+// row (see renderOwnerMenuList's staffMenuMode branch below) — mods only
+// ever see a Timeout button, capped smaller, with their own re-timeout
+// cooldown and "only I can clear my own" restriction enforced there.
+function openModMenuStaff() {
+  staffMenuMode = "mod";
+  closeClearPanel();
+  $ownerMenuTitle.textContent = "🧩 Mod Menu";
+  $ownerMenuSubtitle.textContent = "Online now — refreshes every 5s while this is open. Timeouts only, up to 0:40.";
   renderOwnerMenuList();
   $ownerMenuOverlay.style.display = "flex";
   clearInterval(ownerMenuRefreshTimer);
@@ -2916,10 +3012,14 @@ $ownerMenuOverlay.addEventListener("click", (e) => {
 });
 
 async function renderOwnerMenuList() {
-  // Re-check the gate every refresh too — if the crown is lost while this
-  // is open (timeout, disconnect, another owner revokes it, etc.) the menu
-  // should close itself rather than keep offering owner actions.
-  if (!modMenuUnlocked || !isCrownHolder(myName)) {
+  // Re-check the relevant gate every refresh too — if the role backing
+  // whichever menu is open gets lost while it's open (timeout, disconnect,
+  // another owner revokes it, etc.) the menu should close itself rather
+  // than keep offering actions the person no longer has.
+  const stillEligible = staffMenuMode === "owner"
+    ? (modMenuUnlocked && isCrownHolder(myName))
+    : (modMenuUnlocked && isModHolder(myName));
+  if (!stillEligible) {
     closeOwnerMenu();
     return;
   }
@@ -2952,32 +3052,71 @@ async function renderOwnerMenuList() {
     const actions = document.createElement("div");
     actions.className = "room-member-actions";
 
-    const modToggleBtn = document.createElement("button");
-    if (isModHolder(name)) {
-      modToggleBtn.className = "kick";
-      modToggleBtn.textContent = "Remove Mod";
-      modToggleBtn.addEventListener("click", () => openRemoveModConfirm(name));
-    } else {
-      modToggleBtn.textContent = "Grant Mod";
-      modToggleBtn.addEventListener("click", () => openGrantModConfirm(name));
+    // Grant/Remove Mod: owner-only power, never shown in the mod menu.
+    if (staffMenuMode === "owner") {
+      const modToggleBtn = document.createElement("button");
+      if (isModHolder(name)) {
+        modToggleBtn.className = "kick";
+        modToggleBtn.textContent = "Remove Mod";
+        modToggleBtn.addEventListener("click", () => openRemoveModConfirm(name));
+      } else {
+        modToggleBtn.textContent = "Grant Mod";
+        modToggleBtn.addEventListener("click", () => openGrantModConfirm(name));
+      }
+      actions.appendChild(modToggleBtn);
     }
-    actions.appendChild(modToggleBtn);
 
     const timeoutBtn = document.createElement("button");
     timeoutBtn.className = "kick";
     let remainingMs = 0;
-    try { remainingMs = await ChatBackend.getTimeoutRemainingMs(name); } catch (e) {}
+    let setBy = null;
+    try {
+      remainingMs = await ChatBackend.getTimeoutRemainingMs(name);
+      if (remainingMs > 0) setBy = await ChatBackend.getTimeoutSetBy(name);
+    } catch (e) {}
+
     if (remainingMs > 0) {
       timeoutBtn.textContent = "Timed out (" + formatCountdown(remainingMs) + ")";
-      timeoutBtn.addEventListener("click", () => {
-        ChatBackend.clearTimeout_(name).then(renderOwnerMenuList).catch(() => {
-          showComposerNotice("Couldn't clear timeout — try again.");
+      // Owners can always clear any timeout. Mods can only clear a timeout
+      // THEY personally set — per "only the mod who set it can clear it
+      // early." A mod looking at a timeout someone else (owner or another
+      // mod) set just sees the countdown with no click action.
+      const canClear = staffMenuMode === "owner" || (staffMenuMode === "mod" && setBy === ChatBackend._safeKey(myName));
+      if (canClear) {
+        timeoutBtn.addEventListener("click", () => {
+          ChatBackend.clearTimeout_(name).then(async () => {
+            if (staffMenuMode === "mod") {
+              // Belt-and-suspenders: watchModIssuedTimeoutExpiry (started
+              // when this timeout was set) already starts the cooldown the
+              // moment this remove() fires. This second call is a no-op
+              // duplicate write in the normal case, and only matters if
+              // that watcher somehow isn't still attached (e.g. a page
+              // reload happened between setting and clearing).
+              await ChatBackend.startModRetimeoutCooldown(myName, name).catch(() => {});
+            }
+            renderOwnerMenuList();
+          }).catch(() => {
+            showComposerNotice("Couldn't clear timeout — try again.");
+          });
         });
-      });
-      timeoutBtn.title = "Click to clear this timeout early";
+        timeoutBtn.title = "Click to clear this timeout early";
+      } else {
+        timeoutBtn.disabled = true;
+        timeoutBtn.title = "Only the mod who set this can clear it early";
+      }
     } else {
-      timeoutBtn.textContent = "Timeout";
-      timeoutBtn.addEventListener("click", () => openTimeoutSetModal(name));
+      let cooldownMs = 0;
+      if (staffMenuMode === "mod") {
+        try { cooldownMs = await ChatBackend.getModRetimeoutRemainingMs(myName, name); } catch (e) {}
+      }
+      if (cooldownMs > 0) {
+        timeoutBtn.textContent = "Wait " + Math.ceil(cooldownMs / 1000) + "s";
+        timeoutBtn.disabled = true;
+        timeoutBtn.title = "Re-timeout cooldown for this person";
+      } else {
+        timeoutBtn.textContent = "Timeout";
+        timeoutBtn.addEventListener("click", () => openTimeoutSetModal(name));
+      }
     }
     actions.appendChild(timeoutBtn);
 
@@ -2986,12 +3125,23 @@ async function renderOwnerMenuList() {
   }
 }
 
-/* ── Timeout duration modal ── */
+/* ── Timeout duration modal — shared by both menus, limits/defaults set
+   by openTimeoutSetModal based on staffMenuMode. ── */
 function openTimeoutSetModal(targetName) {
   pendingTimeoutTarget = targetName;
   $timeoutSetTitle.textContent = "Timeout " + targetName;
-  $timeoutMinutesInput.value = "";
-  $timeoutSecondsInput.value = "";
+
+  if (staffMenuMode === "mod") {
+    const defaultSecs = MOD_TIMEOUT_DEFAULT_MS / 1000;
+    $timeoutMinutesInput.value = String(Math.floor(defaultSecs / 60));
+    $timeoutSecondsInput.value = String(defaultSecs % 60);
+    $timeoutSetNote.textContent = "Max " + Math.round(MOD_TIMEOUT_MAX_MS / 1000) + " seconds.";
+  } else {
+    $timeoutMinutesInput.value = "";
+    $timeoutSecondsInput.value = "";
+    $timeoutSetNote.textContent = "Max 3:00.";
+  }
+
   $timeoutSetErr.textContent = "";
   $timeoutSetOverlay.style.display = "flex";
   $timeoutMinutesInput.focus();
@@ -3024,20 +3174,30 @@ $timeoutSetConfirmBtn.addEventListener("click", async () => {
   const mins = parseInt($timeoutMinutesInput.value || "0", 10) || 0;
   const secs = parseInt($timeoutSecondsInput.value || "0", 10) || 0;
   const totalMs = (mins * 60 + secs) * 1000;
+  const cap = staffMenuMode === "mod" ? MOD_TIMEOUT_MAX_MS : TIMEOUT_MAX_MS;
+  const capLabel = staffMenuMode === "mod" ? "40 seconds" : "3:00";
 
   if (totalMs <= 0) {
     $timeoutSetErr.textContent = "Enter a duration greater than 0.";
     return;
   }
-  if (totalMs > TIMEOUT_MAX_MS) {
-    $timeoutSetErr.textContent = "Max timeout is 3:00.";
+  if (totalMs > cap) {
+    $timeoutSetErr.textContent = "Max timeout is " + capLabel + ".";
     return;
   }
 
   $timeoutSetConfirmBtn.disabled = true;
   $timeoutSetErr.textContent = "";
   try {
-    await ChatBackend.setTimeout_(pendingTimeoutTarget, totalMs);
+    await ChatBackend.setTimeout_(pendingTimeoutTarget, totalMs, myName);
+    // NOTE: the re-timeout cooldown is deliberately NOT started here. It
+    // should apply AFTER the timeout ends (naturally or via early clear),
+    // not from the moment it's set — starting it here would let most of
+    // the 7s tick away underneath a long timeout instead of coming after
+    // it. See watchModIssuedTimeoutExpiry for where it actually starts.
+    if (staffMenuMode === "mod") {
+      watchModIssuedTimeoutExpiry(myName, pendingTimeoutTarget);
+    }
     $timeoutSetOverlay.style.display = "none";
     pendingTimeoutTarget = null;
     renderOwnerMenuList();
@@ -3047,6 +3207,44 @@ $timeoutSetConfirmBtn.addEventListener("click", async () => {
     $timeoutSetConfirmBtn.disabled = false;
   }
 });
+
+// Watches a mod-issued timeout on targetName and starts that mod's
+// re-timeout cooldown against targetName the moment it actually ends —
+// either by running out naturally, or by being cleared early (which also
+// calls startModRetimeoutCooldown directly in the "clear" click handler in
+// renderOwnerMenuList; that early-clear path additionally removes the
+// Firebase record, which this watcher treats the same as natural expiry).
+// Firebase's "value" listener only fires on writes, not on the passage of
+// time, so a plain listener would never notice a record that simply goes
+// stale — this pairs the listener with a timer set for exactly when
+// expiresAt is reached, and re-arms that timer if the record changes
+// (e.g. an owner extends/replaces it) before then.
+function watchModIssuedTimeoutExpiry(modName, targetName) {
+  const key = ChatBackend._safeKey(targetName);
+  const ref = ChatBackend._timeoutsRef.child(key);
+  let expiryTimer = null;
+  let done = false;
+
+  const finish = async () => {
+    if (done) return;
+    done = true;
+    clearTimeout(expiryTimer);
+    ref.off("value", handler);
+    await ChatBackend.startModRetimeoutCooldown(modName, targetName).catch(() => {});
+    if ($ownerMenuOverlay.style.display === "flex") renderOwnerMenuList();
+  };
+
+  const handler = ref.on("value", async snap => {
+    if (done) return;
+    const val = snap.val();
+    clearTimeout(expiryTimer);
+    if (!val || !val.expiresAt) { finish(); return; }
+    const serverNow = await ChatBackend._serverNow();
+    const remaining = val.expiresAt - serverNow;
+    if (remaining <= 0) { finish(); return; }
+    expiryTimer = setTimeout(finish, remaining);
+  });
+}
 
 /* ── Grant/Remove-mod double confirm — shares one overlay, `pendingModConfirmAction`
    tracks whether this open is a grant or a remove so the confirm button
