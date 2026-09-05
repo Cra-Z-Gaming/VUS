@@ -14,8 +14,6 @@
     display: flex;
     flex-direction: column;
   }
-
-  /* ── Header ── */
   .chat-header {
     padding: 18px 21px;
     display: flex;
@@ -36,8 +34,6 @@
     margin-right: 7.5px;
   }
   .chat-online-dot.offline { background: #ef4444; }
-
-  /* ── Join screen (asks for a name before entering) ── */
   #joinScreen {
     flex: 1;
     display: flex;
@@ -106,8 +102,6 @@
     height: 1px;
     background: #334155;
   }
-
-  /* ── Chat screen ── */
   #chatScreen { display: none; flex: 1; flex-direction: column; min-height: 0; }
   #messages {
     flex: 1;
@@ -119,7 +113,6 @@
   }
   #messages::-webkit-scrollbar { width: 7.5px; }
   #messages::-webkit-scrollbar-thumb { background: #334155; border-radius: 4.5px; }
-
   .msg { max-width: 82%; display: flex; flex-direction: column; gap: 3px; }
   .msg.mine { align-self: flex-end; align-items: flex-end; }
   .msg-meta { font-size: 16.5px; color: #64748b; padding: 0 6px; }
@@ -147,9 +140,6 @@
     color: #4ade80;
     font-weight: 700;
   }
-
-  /* ── Crown bubble: its own small bubble ABOVE the message bubble,
-       rendered only for currently-crowned senders (see renderMessage) ── */
   .crown-bubble {
     display: inline-flex;
     align-items: center;
@@ -164,7 +154,22 @@
     align-self: flex-start;
   }
   .msg.mine .crown-bubble { align-self: flex-end; }
-
+  .mod-bubble {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #1e3a5f;
+    border: 1.5px solid #2563eb;
+    color: #93c5fd;
+    border-radius: 10px;
+    padding: 3px 10px;
+    font-size: 14px;
+    font-weight: 700;
+    align-self: flex-start;
+  }
+  .msg.mine .mod-bubble { align-self: flex-end; }
+  .role-bubble-row { display: flex; gap: 4px; flex-wrap: wrap; }
+  .msg.mine .role-bubble-row { justify-content: flex-end; }
   #emptyState {
     flex: 1;
     display: flex;
@@ -175,8 +180,6 @@
     text-align: center;
     padding: 30px;
   }
-
-  /* ── Toolbar (auto-scroll / clear chat) ── */
   #toolbar {
     display: flex;
     align-items: center;
@@ -215,8 +218,6 @@
     margin: 0 auto 6px auto;
   }
   #jumpToBottomBtn:hover { border-color: #475569; }
-
-  /* ── Ping-you button (toolbar) ── */
   #pingYouBtn {
     background: transparent;
     border: 1.5px solid #f59e0b;
@@ -224,8 +225,6 @@
   }
   #pingYouBtn:hover { background: rgba(245,158,11,.12); }
   #pingYouBtn:disabled { opacity: .5; cursor: not-allowed; border-color: #334155; color: #64748b; background: transparent; }
-
-  /* ── Ping-you popover ── */
   #pingYouPanel {
     display: none;
     position: absolute;
@@ -254,8 +253,6 @@
     max-height: 80px;
   }
   #pingYouPanel textarea:focus { border-color: #22c55e; }
-
-  /* ── Composer ── */
   #composer {
     display: flex;
     gap: 12px;
@@ -326,8 +323,6 @@
   }
   #sendBtn:hover { background: #4ade80; }
   #sendBtn:disabled { opacity: .5; cursor: not-allowed; }
-
-  /* ── @mention dropdown ── */
   #mentionDropdown {
     display: none;
     position: absolute;
@@ -361,7 +356,6 @@
     font-size: 13.5px;
     padding: 8px 10px;
   }
-
   #connError {
     display: none;
     padding: 12px 21px;
@@ -382,8 +376,6 @@
   }
   #changeNameBtn:hover { color: #f1f5f9 !important; border-color: #475569 !important; }
   #sendBtn.cooldown { background: #334155; color: #64748b; cursor: not-allowed; }
-
-  /* ── Ping toast (shown when you get @pinged) ── */
   #pingToast {
     display: none;
     position: fixed;
@@ -400,8 +392,6 @@
   }
   #pingToast .ping-toast-title { color: #4ade80; font-weight: 700; font-size: 15px; margin-bottom: 4px; }
   #pingToast .ping-toast-body { color: #f1f5f9; font-size: 14px; line-height: 1.4; }
-
-  /* ══════════════════ Rooms system ══════════════════ */
   #roomsToggleBtn {
     background: transparent;
     border: 1.5px solid #334155;
@@ -422,7 +412,6 @@
     background: #ef4444;
     border: 1.5px solid #0f172a;
   }
-
   #roomsSidebarOverlay {
     display: none;
     position: fixed;
@@ -466,7 +455,6 @@
     padding: 4px 8px;
   }
   #roomsSidebarClose:hover { color: #f1f5f9; }
-
   #roomsSidebarBody {
     flex: 1;
     overflow-y: auto;
@@ -481,7 +469,6 @@
     margin: 14px 0 8px 0;
   }
   .rooms-section-title:first-child { margin-top: 0; }
-
   .room-card {
     background: #1e293b;
     border: 1.5px solid #334155;
@@ -555,14 +542,12 @@
     padding: 1px 6px;
     margin-left: 6px;
   }
-
   .rooms-empty {
     color: #64748b;
     font-size: 13px;
     padding: 6px 2px 14px 2px;
     line-height: 1.5;
   }
-
   #roomsSidebarFooter {
     padding: 14px 16px;
     border-top: 1.5px solid #1f2937;
@@ -598,8 +583,6 @@
   #createRoomBtn:disabled, #joinByCodeBtn:disabled { opacity: .5; cursor: not-allowed; }
   #roomsFooterMsg { font-size: 12.5px; color: #94a3b8; min-height: 16px; }
   #roomsFooterMsg.err { color: #ef4444; }
-
-  /* ── Room top bar (shown inside chatScreen while in a custom room) ── */
   #roomTopBar {
     display: none;
     align-items: center;
@@ -629,9 +612,6 @@
   .room-top-btn:hover { color: #f1f5f9; border-color: #475569; }
   .room-top-btn.leave { border-color: #7f1d1d; color: #f87171; }
   .room-top-btn.leave:hover { background: rgba(239,68,68,.1); }
-
-  /* ── Generic small modal (used for: create room, room settings, kick
-       confirm, extend prompt, transfer offer) ── */
   .chat-modal-overlay {
     display: none;
     position: fixed;
@@ -649,6 +629,8 @@
     padding: 20px;
     width: 100%;
     max-width: 320px;
+    max-height: 85vh;
+    overflow-y: auto;
   }
   .chat-modal h3 { font-size: 16.5px; font-weight: 700; margin-bottom: 10px; }
   .chat-modal p { font-size: 14px; color: #94a3b8; line-height: 1.5; margin-bottom: 12px; }
@@ -676,8 +658,6 @@
   .chat-modal-err { color: #ef4444; font-size: 13px; min-height: 16px; margin-top: 4px; }
   .chat-modal-toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
   .chat-modal-toggle-row label { margin-bottom: 0; color: #f1f5f9; font-size: 14px; }
-
-  /* ── Members list (inside room settings, for kick) ── */
   .room-member-row {
     display: flex;
     align-items: center;
@@ -702,6 +682,24 @@
   .room-member-actions button:hover { color: #f1f5f9; border-color: #475569; }
   .room-member-actions button.kick { border-color: #7f1d1d; color: #f87171; }
   .room-member-actions button.kick:hover { background: rgba(239,68,68,.1); }
+  .role-menu-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    text-align: left;
+    background: #0f172a;
+    border: 1.5px solid #334155;
+    color: #f1f5f9;
+    font-size: 14.5px;
+    padding: 10px 13px;
+    border-radius: 9px;
+    cursor: pointer;
+    margin-bottom: 8px;
+  }
+  .role-menu-option:hover { border-color: #475569; }
+  .role-menu-option .role-menu-icon { font-size: 17px; }
 </style>
 </head>
 <body>
@@ -724,13 +722,11 @@
 <div id="connError"></div>
 <div id="composerNotice"></div>
 
-<!-- Ping toast: shown briefly to the targeted person when someone @pings them -->
 <div id="pingToast">
   <div class="ping-toast-title" id="pingToastTitle">You were pinged</div>
   <div class="ping-toast-body" id="pingToastBody"></div>
 </div>
 
-<!-- Rooms sidebar -->
 <div id="roomsSidebarOverlay"></div>
 <div id="roomsSidebar">
   <div id="roomsSidebarHeader">
@@ -748,7 +744,6 @@
   </div>
 </div>
 
-<!-- Room top bar: shown inside chatScreen only while in a custom (non-main) room -->
 <div id="roomTopBar">
   <div id="roomTopBarLeft">
     <span id="roomTopBarName"></span>
@@ -761,7 +756,6 @@
   </div>
 </div>
 
-<!-- Create Room modal -->
 <div class="chat-modal-overlay" id="createRoomOverlay">
   <div class="chat-modal">
     <h3>Create a Room</h3>
@@ -775,33 +769,27 @@
   </div>
 </div>
 
-<!-- Room Settings modal (owner only): rename, public/private, change code, members/kick, transfer -->
 <div class="chat-modal-overlay" id="roomSettingsOverlay">
   <div class="chat-modal" style="max-width:340px">
     <h3>Room Settings</h3>
-
     <div class="chat-modal-toggle-row">
       <label>Public room</label>
       <button class="room-top-btn" id="roomPublicToggleBtn">Off</button>
     </div>
-
     <label for="roomCodeInput">Room code (max 20 chars)</label>
     <input type="text" id="roomCodeInput" maxlength="20">
     <div class="chat-modal-err" id="roomCodeErr"></div>
     <div class="chat-modal-row" style="margin-bottom:14px">
       <button class="chat-modal-btn-secondary" id="roomCodeSaveBtn" style="flex:none;padding:7px 14px;font-size:13px">Save Code</button>
     </div>
-
     <label>Members</label>
     <div id="roomMembersList" style="margin-bottom:8px"></div>
-
     <div class="chat-modal-row">
       <button class="chat-modal-btn-secondary" id="roomSettingsCloseBtn">Close</button>
     </div>
   </div>
 </div>
 
-<!-- Extend-room prompt: appears automatically with 1 minute left -->
 <div class="chat-modal-overlay" id="extendRoomOverlay">
   <div class="chat-modal">
     <h3>⏳ Room expiring soon</h3>
@@ -813,7 +801,6 @@
   </div>
 </div>
 
-<!-- Ownership transfer offer -->
 <div class="chat-modal-overlay" id="transferOfferOverlay">
   <div class="chat-modal">
     <h3>👑 Ownership offer</h3>
@@ -825,7 +812,6 @@
   </div>
 </div>
 
-<!-- Kick confirmation -->
 <div class="chat-modal-overlay" id="kickConfirmOverlay">
   <div class="chat-modal">
     <h3>Kick member?</h3>
@@ -837,14 +823,35 @@
   </div>
 </div>
 
-<!-- Join screen: ask for a display name before entering the room.
-     Content is built dynamically in JS depending on whether a previous
-     name is saved (renderJoinReturning / renderJoinNameEntry). -->
+<!-- Roles dropdown modal: opened from the status dot, centered like Room
+     Settings. Lists claimable roles; picking one opens the claim modal. -->
+<div class="chat-modal-overlay" id="rolesMenuOverlay">
+  <div class="chat-modal">
+    <h3>Claim a role</h3>
+    <div id="rolesMenuList"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="rolesMenuCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Role claim modal: shared UI for any role in ROLES, rendered dynamically
+     by renderRoleClaimModal() depending on which role was picked above. -->
+<div class="chat-modal-overlay" id="roleClaimOverlay">
+  <div class="chat-modal">
+    <h3 id="roleClaimTitle">Claim role</h3>
+    <div id="roleClaimBody"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="roleClaimBackBtn">Back</button>
+      <button class="chat-modal-btn-secondary" id="roleClaimCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
 <div id="joinScreen">
   <div id="joinCard"></div>
 </div>
 
-<!-- Chat screen: shown after joining -->
 <div id="chatScreen">
   <div id="messages"></div>
   <div id="emptyState" style="display:none">No messages yet — say hi!</div>
@@ -880,33 +887,11 @@
   </div>
 </div>
 
-<!-- Ping sound: preloaded so it plays instantly with no load delay when
-     someone is @pinged. Swap PING_SOUND_URL below to ping.mp3 once that's
-     uploaded — see the comment near the top of the script block. -->
 <audio id="pingSound" preload="auto"></audio>
 
-<!--
-  ═══════════════════════════════════════════════════════════
-  FIREBASE SETUP REQUIRED — read this before this chat will work
-  ═══════════════════════════════════════════════════════════
-  1. Go to https://console.firebase.google.com and create a free project.
-  2. In the project, go to "Build" → "Realtime Database" → "Create Database".
-     Start in TEST MODE for now (anyone can read/write — fine for a small
-     public chat room, but you can lock it down later with Firebase rules).
-  3. Go to Project Settings (gear icon) → General → "Your apps" → click the
-     "</>" web icon to register a web app. It'll give you a config object
-     that looks like the FIREBASE_CONFIG placeholder below.
-  4. Copy that object and paste it in place of FIREBASE_CONFIG below.
-  5. That's it — no server to run, this connects directly from the browser.
-
-  Room name: change ROOM_ID below if you want multiple separate chat rooms
-  (e.g. one for VUS Hub, one for VUSL) using the same Firebase project.
-  ═══════════════════════════════════════════════════════════
--->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script>
-/* ── Fill this in with your real Firebase project config ── */
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDxMfGQ_xk-au8YgOvaFO2R9LxAe-pa9Rg",
   authDomain: "vus-chat.firebaseapp.com",
@@ -917,67 +902,77 @@ const FIREBASE_CONFIG = {
   appId: "1:134456894391:web:bdf28487bf2b2eae593e32"
 };
 
-/* Change this to run multiple separate chat rooms off one Firebase project */
 const MAIN_ROOM_ID = "vus-hub-main";
 
-/* ── Custom room system ── */
-const ROOM_DURATION_MS = 15 * 60 * 1000;      // rooms live 15 minutes
-const ROOM_WARNING_MS = 60 * 1000;            // extend-prompt appears with 1 min left
-const ROOM_EXTEND_MS = 10 * 60 * 1000;        // "+10 minutes" button adds this much
-const ROOM_CREATE_COOLDOWN_MS = 60 * 1000;    // 1 minute between room creations, per person
+const ROOM_DURATION_MS = 15 * 60 * 1000;
+const ROOM_WARNING_MS = 60 * 1000;
+const ROOM_EXTEND_MS = 10 * 60 * 1000;
+const ROOM_CREATE_COOLDOWN_MS = 60 * 1000;
 const ROOM_CODE_DEFAULT_LENGTH = 4;
 const ROOM_CODE_MAX_LENGTH = 20;
 const ROOM_NAME_MAX_LENGTH = 30;
 const ROOM_CREATE_COOLDOWN_KEY = "vusChatLastRoomCreate";
 
-/* Only keep the most recent N messages loaded/rendered, to keep things fast
-   even after thousands of messages accumulate over time. */
 const MAX_MESSAGES = 200;
-
 const MAX_CHARS = 500;
 
-/* ── Ping You (Discord webhook) ──
-   EASY TO EDIT: just change this URL if you need a different webhook. */
 const PING_YOU_WEBHOOK_URL = "https://discord.com/api/webhooks/1536853718564216842/VZYgEyf5yEzMs03g-hbWIZRS90oNKrVh_LBN1eHv3ZVplCOUlKeRDTWKIAyolYjIshHa";
-const PING_YOU_COOLDOWN_MS = 30 * 1000; // per-person (this browser), not global
+const PING_YOU_COOLDOWN_MS = 30 * 1000;
 const PING_YOU_STORAGE_KEY = "vusChatLastPingYou";
 
-/* ── @Ping (in-chat, live sound + notification) ──
-   Cooldown is per-TARGET, global: once anyone pings a person, nobody can
-   ping that same person again until it expires — doesn't matter who tries. */
 const AT_PING_COOLDOWN_MS = 30 * 1000;
 
-/* Placeholder sound — swap to "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/ping.mp3"
-   once that real file exists on GitHub. Fetched once and cached as a Blob
-   URL below so playback is instant with no per-ping network delay. */
 const PING_SOUND_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/moannnnnygs727272.mp3";
 
-/* ── Crown (verified owner badge) ──
-   Global code system, redeemed via the mod menu. Code defaults to "0000"
-   (always inert). Requesting a code posts it to CROWN_WEBHOOK_URL — only
-   you have access to that Discord server — and the code stays valid for
-   CROWN_CODE_LIFESPAN_MS. Redemption is MULTI-USE within that window by
-   design: anyone who has the code can redeem it while it's still valid,
-   not just whoever submits first — meant for handing it to a few trusted
-   people at once on a private server. The crown PERSISTS across renames
-   and room switches (both just re-run ChatBackend.claimPresence, which
-   now carries the crown forward via _crownHeld) but is cleared by
-   clearCrown(), which runs on silent leave (releasePresenceSilently),
-   normal leave (beforeunload), and real disconnect (the onDisconnect hook
-   registered in claimPresence) — so it never survives actually leaving,
-   and nobody else later using the same name inherits it. */
-const CROWN_CODE_LIFESPAN_MS = 30 * 1000; // 30 seconds
-const CROWN_REQUEST_COOLDOWN_MS = 30 * 1000;
-const CROWN_REQUEST_COOLDOWN_KEY = "vusChatLastCrownRequest";
-const CROWN_WEBHOOK_URL = "https://discord.com/api/webhooks/1542708447991037953/Ge705Wa_quPVC-2pFhttHYNuA4-FI5ZDRIn5VwjQ059SwT0ZRCrqmVLMofb8oJhsLFFJ";
-
 /* ══════════════════════════════════════════════════════════
-   Backend abstraction layer.
-   Every actual Firebase call is isolated in this one object so
-   that swapping to a different backend later (Supabase, a custom
-   server, etc.) only means rewriting the functions below —
-   nothing in the UI code below needs to change.
-   ══════════════════════════════════════════════════════════ */
+   ROLES (Owner/Crown + Mod)
+   Both roles work identically under the hood — a global code system,
+   redeemed via the roles menu. Code defaults to "0000" (always inert).
+   Requesting a code posts it to that role's private Discord webhook, and
+   the code stays valid for ROLE_CODE_LIFESPAN_MS. Redemption is MULTI-USE
+   within that window by design — see redeemRoleCode() below.
+   A role PERSISTS across renames and room switches (both re-run
+   claimPresence, which carries every held role forward via _rolesHeld)
+   but is cleared by clearRole(roleId) on silent leave, normal leave, and
+   real disconnect — so it never survives actually leaving.
+   ROLES is the single place to add more roles later — the menu, claim
+   modal, message badges, and backend paths all read from this list. */
+const ROLE_CODE_LIFESPAN_MS = 30 * 1000;
+const ROLE_REQUEST_COOLDOWN_MS = 30 * 1000;
+
+const ROLES = {
+  crown: {
+    id: "crown",
+    label: "Owner",
+    icon: "👑",
+    dbPath: "crowned",
+    metaPath: "crownMeta",
+    webhookUrl: "https://discord.com/api/webhooks/1542708447991037953/Ge705Wa_quPVC-2pFhttHYNuA4-FI5ZDRIn5VwjQ059SwT0ZRCrqmVLMofb8oJhsLFFJ",
+    cooldownKey: "vusChatLastCrownRequest",
+    bubbleClass: "crown-bubble"
+  },
+  mod: {
+    id: "mod",
+    label: "Mod",
+    icon: "🧩",
+    dbPath: "modded",
+    metaPath: "modMeta",
+    webhookUrl: "https://discord.com/api/webhooks/1545551358118072320/4VUNceTr4bpwspeNKKkP_9Ko64Nc6iknQwN15AY-5iyl9A1SG5JvwZzEHHolXYLY6v1h",
+    cooldownKey: "vusChatLastModRequest",
+    bubbleClass: "mod-bubble"
+  }
+};
+
+/* Bubble color: was write-once, now changeable every 10s. */
+const COLOR_CHANGE_COOLDOWN_MS = 10 * 1000;
+
+/* How close together two leave-events for the same name must be to be
+   treated as one stray burst instead of two genuine separate leaves —
+   fixes repeated "X left / X left / X left" spam caused by duplicate
+   onDisconnect writes (multiple tabs under the same name, or reconnect
+   churn on a flaky connection). */
+const LEAVE_DEDUPE_WINDOW_MS = 5 * 1000;
+
 const ChatBackend = {
   _db: null,
   _ref: null,
@@ -990,37 +985,29 @@ const ChatBackend = {
   _nameColorsRef: null,
   _atPingCooldownRef: null,
   _leaveEventsRef: null,
-  _crownedRef: null,
-  _crownMetaRef: null,
-  _myCrownRef: null,
-  _crownHeld: false, // survives rename/room-switch; cleared only by clearCrown()
+  _roleRefs: {},
+  _roleMetaRefs: {},
+  _myRoleRefs: {},
+  _rolesHeld: {},
+  _recentLeaveNames: {},
   currentRoomId: null,
 
   init() {
     firebase.initializeApp(FIREBASE_CONFIG);
     this._db = firebase.database();
     this._connectedRef = this._db.ref(".info/connected");
-    this.initCrowns();
+    this.initRoles();
     this.bindToRoom(MAIN_ROOM_ID);
   },
 
-  // Crown paths are GLOBAL (not per-room, not rebuilt by bindToRoom) —
-  // being crowned should mean the same thing everywhere in the app.
-  initCrowns() {
-    this._crownedRef = this._db.ref("crowned");
-    this._crownMetaRef = this._db.ref("crownMeta");
+  initRoles() {
+    Object.values(ROLES).forEach(role => {
+      this._roleRefs[role.id] = this._db.ref(role.dbPath);
+      this._roleMetaRefs[role.id] = this._db.ref(role.metaPath);
+      this._rolesHeld[role.id] = false;
+    });
   },
 
-  // Server-corrected clock helpers — a device with a wrong system clock
-  // (bad timezone, no network time sync, VM drift, etc) would otherwise
-  // silently produce a garbage crown-code expiry with no way to detect it
-  // later. Used anywhere a crown-code expiry is set or checked.
-  // NOTE: .info/serverTimeOffset is a synthetic, connection-local value
-  // (not real stored data), so it must be read with .once("value") —
-  // .get() tries to force a server round-trip and doesn't reliably
-  // resolve it. Wrapped in try/catch so any read failure just falls back
-  // to treating the local clock as authoritative (the old behavior)
-  // instead of breaking crown-code generation/redemption entirely.
   async _serverOffset() {
     try {
       const snap = await this._db.ref(".info/serverTimeOffset").once("value");
@@ -1033,78 +1020,54 @@ const ChatBackend = {
     return Date.now() + (await this._serverOffset());
   },
 
-  watchCrownedNames(onChange) {
-    this._crownedRef.on("value", snap => {
+  watchRoleNames(roleId, onChange) {
+    this._roleRefs[roleId].on("value", snap => {
       const val = snap.val() || {};
       onChange(new Set(Object.keys(val)));
     });
   },
 
-  _randomCrownCode() {
+  _randomRoleCode() {
     const chars = "0123456789";
     let out = "";
     do {
       out = "";
       for (let i = 0; i < 4; i++) out += chars[Math.floor(Math.random() * chars.length)];
-    } while (out === "0000"); // never generate the inert default itself
+    } while (out === "0000");
     return out;
   },
 
-  // Generates a fresh code, writes it to Firebase with a 60s expiry
-  // anchored to SERVER time (see _serverNow), and posts it to the private
-  // Discord webhook. The code is meaningless to anyone who can't read
-  // that webhook's channel.
-  async generateCrownCode() {
-    const code = this._randomCrownCode();
+  async generateRoleCode(roleId) {
+    const role = ROLES[roleId];
+    const code = this._randomRoleCode();
     const serverNow = await this._serverNow();
-    const expiresAt = serverNow + CROWN_CODE_LIFESPAN_MS;
-    await this._crownMetaRef.set({ code, expiresAt });
+    const expiresAt = serverNow + ROLE_CODE_LIFESPAN_MS;
+    await this._roleMetaRefs[roleId].set({ code, expiresAt });
     let webhookOk = false;
     try {
-      const res = await fetch(CROWN_WEBHOOK_URL, {
+      const res = await fetch(role.webhookUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: "👑 Crown code: **" + code + "** (expires in " + Math.round(CROWN_CODE_LIFESPAN_MS / 1000) + "s)" })
+        body: JSON.stringify({ content: role.icon + " " + role.label + " code: **" + code + "** (expires in " + Math.round(ROLE_CODE_LIFESPAN_MS / 1000) + "s)" })
       });
-      webhookOk = res.ok; // catches bad/expired webhook URLs, rate limits, etc — not just network errors
+      webhookOk = res.ok;
     } catch (e) {
       webhookOk = false;
     }
-    // Code is still live in Firebase either way — caller decides what to
-    // show based on webhookOk, since a failed post means the code exists
-    // but nobody can actually see it to redeem it.
     return { code, webhookOk };
   },
 
-  // Atomic + single-use via transaction: only commits if the submitted
-  // code still matches AND hasn't expired, and resets to "0000" in the
-  // same write — so the same code can never be redeemed twice, and two
-  // near-simultaneous submissions can't both succeed.
-  //
-  // If the transaction doesn't commit, we diagnose why with a FRESH read
-  // taken right AFTER the failure — deliberately after, not before, so the
-  // reported reason matches what's actually true at that moment. A code
-  // that's still valid when you first glance at it can easily expire by
-  // the time you finish typing and submit; diagnosing from a stale
-  // pre-check used to mislabel that as "claimed a split second before
-  // this attempt" when it had really just expired.
-  // Multi-use within the window, by design: rather than being consumed by
-  // whoever redeems first, a code stays valid for CROWN_CODE_LIFESPAN_MS
-  // after being requested, and ANYONE who has it can redeem it during that
-  // window — each redeemer gets their own crown. This is a deliberate
-  // choice, not an oversight: crowned/{name} was already a set (multiple
-  // people can hold the crown at once), the code itself is the actual
-  // gate (posted only to a private Discord channel), and letting it be
-  // shared with trusted people within a short window doesn't weaken that.
-  // No transaction needed anymore either, since nothing is being consumed
-  // — just "is this code currently valid", a plain read.
-  async redeemCrownCode(inputCode) {
+  // Plain read + compare (not a transaction) — nothing is consumed, since
+  // a code stays valid for ROLE_CODE_LIFESPAN_MS and anyone who has it can
+  // redeem it during that window, each redeemer getting their own copy of
+  // the role. Deliberate, matching the prior crown behavior.
+  async redeemRoleCode(roleId, inputCode) {
     const clean = (inputCode || "").trim().toUpperCase();
     if (!clean || clean === "0000") return { ok: false, reason: "none" };
 
     let current;
     try {
-      const snap = await this._crownMetaRef.get();
+      const snap = await this._roleMetaRefs[roleId].get();
       current = snap.val();
     } catch (e) {
       return { ok: false, reason: "wrong" };
@@ -1119,18 +1082,22 @@ const ChatBackend = {
       return { ok: false, reason: "expired" };
     }
 
-    if (this._myCrownRef) {
-      await this._myCrownRef.set(true);
-      this._crownHeld = true;
+    if (this._myRoleRefs[roleId]) {
+      await this._myRoleRefs[roleId].set(true);
+      this._rolesHeld[roleId] = true;
     }
     return { ok: true };
   },
 
-  // Rebuilds every per-room ref to point at a new room, and detaches all
-  // listeners from whichever room was previously bound (if any) so old-room
-  // updates can never leak into the new room's UI after switching. Presence/
-  // typing for the OLD room are also explicitly released here, since
-  // switching rooms should always mean fully leaving the previous one.
+  async getRoleMeta(roleId) {
+    try {
+      const snap = await this._roleMetaRefs[roleId].get();
+      return snap.val();
+    } catch (e) {
+      return null;
+    }
+  },
+
   bindToRoom(roomId) {
     if (this.currentRoomId === roomId) return;
 
@@ -1149,10 +1116,6 @@ const ChatBackend = {
     this._leaveEventsRef = this._db.ref("rooms/" + roomId + "/leaveEvents");
   },
 
-  // Detaches every listener this object has ever attached to a per-room
-  // ref (messages, typing, presence, leave events). Does NOT touch
-  // .info/connected, which is global and stays attached across room
-  // switches. Safe to call even if some of these were never attached.
   detachAllListeners() {
     if (this._ref) this._ref.off();
     if (this._typingRef) this._typingRef.off();
@@ -1160,23 +1123,16 @@ const ChatBackend = {
     if (this._leaveEventsRef) this._leaveEventsRef.off();
   },
 
-  // Calls onStatus(true/false) whenever the connection state changes
   watchConnection(onStatus) {
     this._connectedRef.on("value", snap => onStatus(snap.val() === true));
   },
 
-  // Calls onMessage(msgObject) for every existing + new message
   watchMessages(onMessage) {
     this._ref.limitToLast(MAX_MESSAGES).on("child_added", snap => {
       onMessage({ id: snap.key, ...snap.val() });
     });
   },
 
-  // Sends an already-compressed base64 data URL as a message. No Firebase
-  // Storage involved — this stays on the free Spark plan, at the cost of
-  // bulkier message payloads than a real file host would give you. The
-  // image is compressed/resized client-side (see compressImageFile)
-  // before this is ever called, to keep that payload size reasonable.
   async sendImage(name, dataUrl) {
     const color = await this.getNameColor(name);
     return this._ref.push({
@@ -1187,13 +1143,6 @@ const ChatBackend = {
     });
   },
 
-  // Sends one message. If this name has a locked-in color, it's baked
-  // into the message itself at send time — so changing your color later
-  // only affects messages sent after the change, never past ones.
-  // `mention` (optional): { name: "TargetName" } — when present, the
-  // message is rendered with a highlighted @mention chip and triggers a
-  // live ping (sound + notification) for the target, handled separately
-  // by sendAtPing() below — this just tags the message itself.
   async send(name, text, mention) {
     const color = await this.getNameColor(name);
     return this._ref.push({
@@ -1205,7 +1154,10 @@ const ChatBackend = {
     });
   },
 
-  // ── Per-name bubble color (write-once) ──
+  // ── Per-name bubble color ──
+  // Was write-once; now changeable every COLOR_CHANGE_COOLDOWN_MS, enforced
+  // against a server-timestamped `changedAt` so a wrong local clock can't
+  // be used to bypass the cooldown.
   async getNameColor(name) {
     const snap = await this._nameColorsRef.child(this._safeKey(name)).get();
     return snap.exists() ? snap.val() : null;
@@ -1216,13 +1168,18 @@ const ChatBackend = {
     const ref = this._nameColorsRef.child(key);
     const existing = await ref.get();
     if (existing.exists()) {
-      return { ok: false, reason: "already-set" };
+      const val = existing.val();
+      const serverNow = await this._serverNow();
+      const changedAt = val && val.changedAt ? val.changedAt : 0;
+      const elapsed = serverNow - changedAt;
+      if (elapsed < COLOR_CHANGE_COOLDOWN_MS) {
+        return { ok: false, reason: "cooldown", remainingMs: COLOR_CHANGE_COOLDOWN_MS - elapsed };
+      }
     }
-    await ref.set({ bubble, text });
+    await ref.set({ bubble, text, changedAt: firebase.database.ServerValue.TIMESTAMP });
     return { ok: true };
   },
 
-  // ── Presence / name reservation ──
   async isNameTaken(name) {
     const snap = await this._presenceRef.get();
     const val = snap.val() || {};
@@ -1230,11 +1187,6 @@ const ChatBackend = {
     return Object.prototype.hasOwnProperty.call(val, key);
   },
 
-  // Posts join/leave messages to the room feed itself (not just updating
-  // presence data), so they show up inline in the chat like any other
-  // message — just rendered without a bubble via msg.system.
-  // `silent` (spectator mode) skips the join/leave feed messages entirely,
-  // while still claiming presence so the online count/list stays accurate.
   claimPresence(name, silent) {
     this.releasePresence();
     this._myPresenceRef = this._presenceRef.child(this._safeKey(name));
@@ -1249,33 +1201,26 @@ const ChatBackend = {
     this._myPresenceRef.onDisconnect().remove();
     this._myPresenceRef.set({ joinedAt: firebase.database.ServerValue.TIMESTAMP });
 
-    // Crown: carries forward across rename/room-switch (this same code path
-    // runs for both) via _crownHeld, which is only ever set true by a
-    // successful redeemCrownCode() and only ever cleared by clearCrown() —
-    // see releasePresenceSilently() and the beforeunload handler, the two
-    // places that actually leave. A genuinely fresh join always starts
-    // crown-less, since _crownHeld defaults false.
-    const crownKey = this._safeKey(name);
-    const crownRef = this._crownedRef.child(crownKey);
-    const sameCrownTarget = this._myCrownRef && this._myCrownRef.key === crownKey;
+    const roleKey = this._safeKey(name);
+    Object.values(ROLES).forEach(role => {
+      const roleRef = this._roleRefs[role.id].child(roleKey);
+      const sameRoleTarget = this._myRoleRefs[role.id] && this._myRoleRefs[role.id].key === roleKey;
 
-    if (!sameCrownTarget) {
-      // Name actually changed (rename) — detach the OLD name's crown first
-      // so it can never linger there after the switch.
-      if (this._myCrownRef) {
-        this._myCrownRef.onDisconnect().cancel();
-        this._myCrownRef.remove();
+      if (!sameRoleTarget) {
+        const oldRef = this._myRoleRefs[role.id];
+        if (oldRef) {
+          oldRef.onDisconnect().cancel();
+          oldRef.remove();
+        }
+        this._myRoleRefs[role.id] = roleRef;
+        if (this._rolesHeld[role.id]) {
+          roleRef.set(true);
+        } else {
+          roleRef.remove();
+        }
+        roleRef.onDisconnect().remove();
       }
-      this._myCrownRef = crownRef;
-      if (this._crownHeld) {
-        crownRef.set(true);
-      } else {
-        crownRef.remove(); // defensive: clear any stale value left on this name
-      }
-      crownRef.onDisconnect().remove();
-    }
-    // else: same name (room switch) — crown ref/value/onDisconnect hook are
-    // already correct, nothing to touch.
+    });
 
     if (!this._silentSession) {
       this._ref.push({
@@ -1286,9 +1231,6 @@ const ChatBackend = {
     }
   },
 
-  // Drops presence right now without ever posting a "left" message,
-  // regardless of whether this session was silent/spectator or normal.
-  // Used by the "Leave Silently" mod-menu action.
   releasePresenceSilently() {
     if (this._myLeaveEventRef) {
       this._myLeaveEventRef.onDisconnect().cancel();
@@ -1299,17 +1241,9 @@ const ChatBackend = {
       this._myPresenceRef.remove();
       this._myPresenceRef = null;
     }
-    this.clearCrown();
+    this.clearAllRoles();
   },
 
-  // Drops presence + leave-event tracking only — crown is deliberately left
-  // untouched here. This function does double duty: bindToRoom() calls it
-  // internally to clean up before binding to a new room, and the
-  // beforeunload handler calls it for a real leave. Room-switching must
-  // preserve the crown, so crown-clearing can't live here; the real-leave
-  // call site clears it explicitly via clearCrown() right alongside this
-  // call instead. See releasePresenceSilently() above for the silent-leave
-  // equivalent, which does the same pairing.
   releasePresence() {
     if (this._myPresenceRef) {
       this._myPresenceRef.remove();
@@ -1321,29 +1255,45 @@ const ChatBackend = {
     }
   },
 
-  // Explicitly clears the crown: removes it from Firebase, cancels its
-  // onDisconnect hook (since we're clearing it directly instead), and
-  // resets _crownHeld so a subsequent claimPresence() (e.g. this same tab
-  // rejoining later) starts crown-less instead of resurrecting it.
-  clearCrown() {
-    if (this._myCrownRef) {
-      this._myCrownRef.onDisconnect().cancel();
-      this._myCrownRef.remove();
-      this._myCrownRef = null;
+  clearRole(roleId) {
+    const ref = this._myRoleRefs[roleId];
+    if (ref) {
+      ref.onDisconnect().cancel();
+      ref.remove();
+      this._myRoleRefs[roleId] = null;
     }
-    this._crownHeld = false;
+    this._rolesHeld[roleId] = false;
   },
 
+  clearAllRoles() {
+    Object.keys(ROLES).forEach(roleId => this.clearRole(roleId));
+  },
+
+  // Leave-event de-duplication: multiple queued onDisconnect writes can
+  // fire in a burst for the same name (duplicate tabs under the same name,
+  // or reconnect churn each registering their own leave event) — that used
+  // to post "X left" once per stray event. Now we collapse any leave events
+  // for the same name arriving within LEAVE_DEDUPE_WINDOW_MS of the last
+  // one we actually posted, and always clean up the underlying event node
+  // either way so it can never be replayed.
   watchLeaveEvents() {
     this._leaveEventsRef.on("child_added", snap => {
       const val = snap.val();
-      if (!val) return;
+      if (!val) { snap.ref.remove(); return; }
+
+      const now = Date.now();
+      const lastPosted = this._recentLeaveNames[val.name] || 0;
+      const isDuplicate = (now - lastPosted) < LEAVE_DEDUPE_WINDOW_MS;
+
+      snap.ref.remove();
+      if (isDuplicate) return;
+
+      this._recentLeaveNames[val.name] = now;
       this._ref.push({
         system: true,
         text: val.name + " left",
         ts: firebase.database.ServerValue.TIMESTAMP
       });
-      snap.ref.remove();
     });
   },
 
@@ -1354,11 +1304,6 @@ const ChatBackend = {
     });
   },
 
-  // Calls onList(array of {name, joinedAt}) any time presence changes.
-  // Reuses the same presence/ node as everything else here, so this is
-  // exactly the set of currently-connected names, each with the server
-  // timestamp of when they claimed presence (may be null very briefly
-  // right after joining, before the server timestamp round-trips back).
   watchPresenceList(onList) {
     this._presenceRef.on("value", snap => {
       const val = snap.val() || {};
@@ -1370,7 +1315,6 @@ const ChatBackend = {
     });
   },
 
-  // ── Typing presence ──
   setTyping(name) {
     if (!this._myTypingRef) {
       this._myTypingRef = this._typingRef.child(this._safeKey(name));
@@ -1396,11 +1340,6 @@ const ChatBackend = {
     });
   },
 
-  // ── @Ping cooldown (per-target, global — see AT_PING_COOLDOWN_MS above) ──
-  // Uses a Firebase transaction so two people pinging the same target in
-  // the same instant can't both "win" — only one write succeeds as the
-  // real cooldown-setter, the loser sees committed:false and treats it as
-  // already-on-cooldown.
   async tryStartAtPingCooldown(targetName) {
     const key = this._safeKey(targetName);
     const ref = this._atPingCooldownRef.child(key);
@@ -1408,7 +1347,7 @@ const ChatBackend = {
     let resultRemainingMs = 0;
     const txResult = await ref.transaction(current => {
       if (current && typeof current === "number" && (now - current) < AT_PING_COOLDOWN_MS) {
-        return; // abort — still on cooldown, don't overwrite the existing timestamp
+        return;
       }
       return now;
     });
@@ -1427,30 +1366,6 @@ const ChatBackend = {
   }
 };
 
-/* ══════════════════════════════════════════════════════════
-   Room Manager — custom room lifecycle: creation, metadata,
-   expiry/extension, public/private visibility, ownership,
-   kicking, and ownership-transfer offers.
-
-   Stored under /roomsMeta/{code} in the SAME Firebase database
-   ChatBackend uses, but as its own top-level path — deliberately
-   separate from /rooms/{code}/... (the actual chat data:
-   messages/presence/typing/etc, which ChatBackend already
-   manages generically for whatever room it's bound to).
-
-   /roomsMeta/{code} shape:
-     {
-       name: "Movie Night" | null,      // optional display name
-       ownerName: "Alice",              // current owner's display name
-       isPublic: false,
-       createdAt: <server ts>,
-       expiresAt: <server ts + duration>,
-       kicked: { "Bob": true, ... }     // names currently kicked from THIS room
-     }
-
-   Transfer offers live at /roomsMeta/{code}/transferOffer:
-     { toName: "Bob", fromName: "Alice" } | null
-   ══════════════════════════════════════════════════════════ */
 const RoomManager = {
   _db: null,
   _metaRootRef: null,
@@ -1465,8 +1380,6 @@ const RoomManager = {
     return String(code).replace(/[.#$\[\]/]/g, "_");
   },
 
-  // Generates a random room code of the given length using an
-  // unambiguous character set (no 0/O/1/I confusion).
   _randomCode(length) {
     const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
     let out = "";
@@ -1481,24 +1394,14 @@ const RoomManager = {
     return snap.exists();
   },
 
-  // Finds an unused default-length code, retrying on the rare collision.
   async _generateUniqueCode() {
     for (let attempt = 0; attempt < 12; attempt++) {
       const candidate = this._randomCode(ROOM_CODE_DEFAULT_LENGTH);
       if (!(await this._isCodeTaken(candidate))) return candidate;
     }
-    // Extremely unlikely fallback: widen the code by a couple chars.
     return this._randomCode(ROOM_CODE_DEFAULT_LENGTH + 2);
   },
 
-  /**
-   * Creates a new room and returns its metadata (including the generated
-   * code). Does NOT check the 1-minute creation cooldown — that's tracked
-   * client-side in localStorage and checked by the caller before this runs.
-   * @param {string} ownerName
-   * @param {string} [roomName] - optional display name, max ROOM_NAME_MAX_LENGTH
-   * @returns {Promise<{code: string}>}
-   */
   async createRoom(ownerName, roomName) {
     const code = await this._generateUniqueCode();
     const now = Date.now();
@@ -1507,7 +1410,7 @@ const RoomManager = {
       ownerName: ownerName,
       isPublic: false,
       createdAt: firebase.database.ServerValue.TIMESTAMP,
-      expiresAt: now + ROOM_DURATION_MS, // client-estimated; fine for a countdown display
+      expiresAt: now + ROOM_DURATION_MS,
       kicked: {}
     };
     await this._metaRootRef.child(this._safeCode(code)).set(meta);
@@ -1519,8 +1422,6 @@ const RoomManager = {
     return snap.exists() ? { code, ...snap.val() } : null;
   },
 
-  // Live subscription to one room's metadata (owner, expiry, public/private,
-  // transfer offers, kick list) — used while actively inside that room.
   watchRoomMeta(code, callback) {
     const ref = this._metaRootRef.child(this._safeCode(code));
     const unsubscribe = ref.on("value", snap => {
@@ -1529,11 +1430,6 @@ const RoomManager = {
     return () => ref.off("value", unsubscribe);
   },
 
-  // Live subscription to every PUBLIC room's metadata, for the sidebar's
-  // "Chat Rooms" list. Expired rooms are filtered out client-side (the
-  // actual deletion/cleanup is handled by whoever's timer fires first —
-  // see checkAndHandleExpiry below — this filter just avoids a flash of a
-  // stale room between expiry and cleanup completing).
   watchPublicRooms(callback) {
     const unsubscribe = this._metaRootRef.on("value", snap => {
       const val = snap.val() || {};
@@ -1555,12 +1451,6 @@ const RoomManager = {
     await ref.transaction(current => (current || Date.now()) + ROOM_EXTEND_MS);
   },
 
-  // Changes a room's join code. The room's chat data itself
-  // (messages/presence/etc, under /rooms/{oldCode}/...) is NOT migrated —
-  // changing the code effectively starts a fresh room history under the
-  // new code, which also means anyone still using the old code can no
-  // longer find it. This matches "owner can change room code" being the
-  // deliberate mechanism for invalidating old access without a formal ban.
   async changeCode(oldCode, newCode, ownerName) {
     const safeNew = this._safeCode(newCode.trim().slice(0, ROOM_CODE_MAX_LENGTH));
     if (!safeNew) return { ok: false, reason: "empty" };
@@ -1580,10 +1470,6 @@ const RoomManager = {
     return { ok: true, newCode: safeNew };
   },
 
-  // Marks a name as kicked from this specific room. Kicking is NOT a ban —
-  // it just removes them right now and (for private rooms) drops it off
-  // their personal sidebar list client-side; they can rejoin immediately
-  // if they still have valid access (the code, or it's public).
   async kickFromRoom(code, targetName) {
     await this._metaRootRef.child(this._safeCode(code)).child("kicked").child(this._safeKeyName(targetName)).set(true);
   },
@@ -1592,7 +1478,6 @@ const RoomManager = {
     return name.replace(/[.#$\[\]/]/g, "_");
   },
 
-  // ── Ownership transfer (requires accept/decline from the target) ──
   async offerTransfer(code, fromName, toName) {
     await this._metaRootRef.child(this._safeCode(code)).child("transferOffer").set({ fromName, toName });
   },
@@ -1612,9 +1497,6 @@ const RoomManager = {
     await this._metaRootRef.child(this._safeCode(code)).child("transferOffer").remove();
   },
 
-  // Force-transfers ownership with no accept/decline step — used only when
-  // the current owner disconnects/leaves and exactly one other person
-  // remains in the room (see the presence-list watcher in the UI layer).
   async forceTransferOwnership(code, newOwnerName) {
     await this._metaRootRef.child(this._safeCode(code)).update({
       ownerName: newOwnerName,
@@ -1622,12 +1504,6 @@ const RoomManager = {
     });
   },
 
-  // Deletes a room's metadata AND its chat data (messages/presence/typing/
-  // etc under /rooms/{code}/...). Called once, by whichever client's
-  // countdown timer reaches 0 first for that room — see the expiry-check
-  // logic in the UI layer. Firebase writes are idempotent here (deleting
-  // an already-deleted path is a harmless no-op), so it's fine if more
-  // than one client's timer fires at nearly the same moment.
   async deleteRoom(code) {
     const safe = this._safeCode(code);
     await this._metaRootRef.child(safe).remove();
@@ -1635,7 +1511,6 @@ const RoomManager = {
   }
 };
 
-/* ── DOM refs ── */
 const $joinScreen  = document.getElementById("joinScreen");
 const $joinCard    = document.getElementById("joinCard");
 const $chatScreen  = document.getElementById("chatScreen");
@@ -1673,18 +1548,22 @@ const $pingToastTitle = document.getElementById("pingToastTitle");
 const $pingToastBody = document.getElementById("pingToastBody");
 const $pingSound = document.getElementById("pingSound");
 
+const $rolesMenuOverlay = document.getElementById("rolesMenuOverlay");
+const $rolesMenuList = document.getElementById("rolesMenuList");
+const $rolesMenuCloseBtn = document.getElementById("rolesMenuCloseBtn");
+const $roleClaimOverlay = document.getElementById("roleClaimOverlay");
+const $roleClaimTitle = document.getElementById("roleClaimTitle");
+const $roleClaimBody = document.getElementById("roleClaimBody");
+const $roleClaimBackBtn = document.getElementById("roleClaimBackBtn");
+const $roleClaimCloseBtn = document.getElementById("roleClaimCloseBtn");
+
 let myName = "";
 let messageCount = 0;
 let autoScroll = true;
-let isSpectator = false; // this session joined silently (no join/leave log)
-let crownedNames = new Set(); // safe-keyed names currently holding the crown
+let isSpectator = false;
+let roleHolders = {};
 
 const NAME_STORAGE_KEY = "vusChatName";
-// Placeholder name coming from VUS Hub's Settings (Display Name), read via
-// localStorage since Hub and Chat are same-origin when Chat loads inside
-// Hub's sidebar iframe or is opened via the same site. This is ONLY ever
-// used as a text-field placeholder — never auto-fills or auto-joins, per
-// the "must still choose guest/spectator deliberately" requirement.
 const HUB_DISPLAY_NAME_KEY = "vus_hub_display_name";
 
 const SEND_COOLDOWN_MS = 3000;
@@ -1728,6 +1607,15 @@ function renderMessage(msg) {
     $messages.appendChild(sysEl);
     messageCount++;
     if (autoScroll) scrollToBottom();
+
+    // If the chat just posted a "left" message for the name THIS tab is
+    // currently using, our presence is already gone server-side (someone/
+    // something else triggered it — a stray duplicate session, a kick,
+    // etc). Don't let this tab keep acting like it's still joined — drop
+    // it back to "Continue as X?" so rejoining is deliberate.
+    if (myName && msg.text === myName + " left" && $chatScreen.style.display !== "none") {
+      forceReturnToJoinScreen("You were disconnected from the chat.");
+    }
     return;
   }
 
@@ -1740,15 +1628,21 @@ function renderMessage(msg) {
   meta.textContent = (mine ? "You" : esc(msg.name)) + (msg.ts ? " · " + formatTime(msg.ts) : "");
   el.appendChild(meta);
 
-  // Crown bubble: its own small bubble, ABOVE the message bubble, only for
-  // senders who are crowned RIGHT NOW (live presence-based, not baked into
-  // the message at send time — so it always reflects current status).
-  const isCrowned = crownedNames.has(ChatBackend._safeKey(msg.name));
-  if (isCrowned) {
-    const crownBubble = document.createElement("div");
-    crownBubble.className = "crown-bubble";
-    crownBubble.textContent = "👑";
-    el.appendChild(crownBubble);
+  // Role bubbles: one small bubble per role, ABOVE the message bubble, only
+  // for senders who hold that role RIGHT NOW (live presence-based, so it
+  // always reflects current status, not what was true at send time).
+  const safeName = ChatBackend._safeKey(msg.name);
+  const heldRoles = Object.values(ROLES).filter(role => (roleHolders[role.id] || new Set()).has(safeName));
+  if (heldRoles.length > 0) {
+    const row = document.createElement("div");
+    row.className = "role-bubble-row";
+    heldRoles.forEach(role => {
+      const bubble = document.createElement("div");
+      bubble.className = role.bubbleClass;
+      bubble.textContent = role.icon;
+      row.appendChild(bubble);
+    });
+    el.appendChild(row);
   }
 
   const bubble = document.createElement("div");
@@ -1767,8 +1661,6 @@ function renderMessage(msg) {
     bubble.appendChild(link);
     bubble.style.padding = "6px";
   } else if (msg.mention) {
-    // Render the @mention as a highlighted inline chip, followed by the
-    // rest of the message text (if any).
     const chip = document.createElement("span");
     chip.className = "mention-chip-inline";
     chip.textContent = "@" + msg.mention;
@@ -1802,21 +1694,84 @@ function renderMessage(msg) {
     $jumpToBottomBtn.style.display = "block";
   }
 
-  // If this message @mentions the person currently using this tab, and it
-  // wasn't sent by them (no self-pinging), trigger the live ping: sound +
-  // in-page toast + browser notification (if permitted).
   if (msg.mention && msg.mention === myName && msg.name !== myName) {
     triggerIncomingPing(msg.name, msg.text);
   }
 }
 
+// Tracks whether THIS tab has ever seen a real disconnect while it had an
+// active (non-spectator-only-intentional) session, so a reconnect can be
+// told apart from the very first connection at boot.
+let hadConnectionDrop = false;
+
 function setConnectionStatus(isOnline) {
   $onlineDot.className = "chat-online-dot" + (isOnline ? "" : " offline");
   if (isOnline) {
     $connError.style.display = "none";
+
+    // If we're reconnecting after a real drop while we had a name/session,
+    // the server-side onDisconnect hook already wiped our presence (and
+    // posted "X left" for us) while we were gone — from everyone else's
+    // point of view we already left. Don't let the tab keep pretending
+    // it's still in that session: force it back to the "Continue as X?"
+    // screen so re-joining is a deliberate action, not automatic.
+    if (hadConnectionDrop && myName && $chatScreen.style.display !== "none") {
+      hadConnectionDrop = false;
+      forceReturnToJoinScreen("Connection dropped — you were disconnected from the chat.");
+    } else {
+      hadConnectionDrop = false;
+    }
   } else {
+    hadConnectionDrop = true;
     $connError.textContent = "Disconnected — trying to reconnect…";
     $connError.style.display = "block";
+  }
+}
+
+// Drops the client-side view of the current session and returns to the
+// join screen's "Continue as X?" prompt, without touching the person's
+// saved name in localStorage — used both for real disconnects (see
+// setConnectionStatus above) and for detecting our own "left" system
+// message coming back from the server (see watchLeaveEvents' onSelfLeft
+// hook wired up in attachRoomListeners).
+function forceReturnToJoinScreen(noticeText) {
+  stopTyping();
+  clearPendingImage();
+  closeClearPanel();
+  closeOnlineListPanel();
+  closePingYouPanel();
+  closeMentionDropdown();
+
+  // Presence/typing/roles for this session are already gone server-side
+  // (that's what triggered this in the first place) — just clear local
+  // refs so a subsequent join starts clean instead of trying to release
+  // something that no longer exists.
+  ChatBackend._myPresenceRef = null;
+  ChatBackend._myLeaveEventRef = null;
+  ChatBackend._myTypingRef = null;
+
+  const returningName = myName;
+  myName = "";
+  isSpectator = false;
+  $changeNameBtn.style.display = "none";
+  $youAre.textContent = "";
+  $chatScreen.style.display = "none";
+  $joinScreen.style.display = "flex";
+
+  if (returningName) {
+    renderJoinReturning(returningName);
+  } else {
+    const savedName = localStorage.getItem(NAME_STORAGE_KEY);
+    if (savedName) {
+      renderJoinReturning(savedName);
+    } else {
+      renderJoinNameEntry(false);
+    }
+  }
+
+  if (noticeText) {
+    const errEl = document.getElementById("joinError");
+    if (errEl) errEl.textContent = noticeText;
   }
 }
 
@@ -1830,9 +1785,6 @@ function randomSpectatorName() {
   return "Spectator #" + n;
 }
 
-// True if a name contains "spectator" anywhere, case-insensitive — used to
-// mute chat for auto-assigned spectators AND anyone who manually renames
-// into something containing that word.
 function isSpectatorName(name) {
   return /spectator/i.test(name || "");
 }
@@ -1890,9 +1842,6 @@ async function attemptJoin(rawName, isRename, errEl, submitBtn, joinSilently) {
   scrollToBottom();
 }
 
-// Reads the Hub-set display name (if any) to use as a join-screen
-// placeholder. Never auto-fills the field's value and never auto-joins —
-// this is purely a hint the person can see and choose to type/click.
 function getHubDisplayNamePlaceholder() {
   try {
     const name = localStorage.getItem(HUB_DISPLAY_NAME_KEY);
@@ -1941,9 +1890,6 @@ function renderJoinNameEntry(isRename) {
   const input = document.createElement("input");
   input.id = "nameInput";
   input.type = "text";
-  // Hub-set display name (if any) shows as a placeholder only — never
-  // auto-filled as a value, so joining still requires a deliberate choice
-  // (including choosing Guest/Spectator instead).
   input.placeholder = getHubDisplayNamePlaceholder() || "Your name…";
   input.maxLength = 24;
   input.autocomplete = "off";
@@ -2010,15 +1956,11 @@ function updateSendButtonState() {
   }
 }
 
-// Locks the composer whenever the current name contains "spectator"
-// (case-insensitive) — covers auto-assigned spectators AND anyone who
-// manually renames into something with that word in it. Swaps the
-// placeholder/button to prompt a rename instead of silently no-opping.
 function updateComposerLockState() {
   if (isSpectatorName(myName)) {
     $msgInput.disabled = true;
     $msgInput.placeholder = "Rename to chat — you're spectating";
-    $sendBtn.disabled = false; // stays clickable so it can open rename
+    $sendBtn.disabled = false;
     $sendBtn.classList.remove("cooldown");
     $sendBtn.textContent = "Rename to chat";
   } else {
@@ -2036,11 +1978,8 @@ function sendMessage() {
   if (Date.now() - lastSentAt < SEND_COOLDOWN_MS) return;
 
   const text = $msgInput.value.trim();
-  const mentionTarget = currentMentionTarget; // captured before we clear it below
+  const mentionTarget = currentMentionTarget;
 
-  // A staged image takes priority: send it now. If there's also caption
-  // text typed in, send that as a separate follow-up message right after,
-  // so neither gets silently dropped.
   if (pendingImageDataUrl) {
     const imageToSend = pendingImageDataUrl;
     clearPendingImage();
@@ -2072,10 +2011,6 @@ function sendMessage() {
 
   if (!text && !mentionTarget) return;
 
-  // If there's a mention chip active, this send attempt needs to pass the
-  // per-target @Ping cooldown check first (Firebase transaction — see
-  // tryStartAtPingCooldown). A normal message with no mention skips this
-  // entirely and sends immediately like before.
   if (mentionTarget) {
     $sendBtn.disabled = true;
     ChatBackend.tryStartAtPingCooldown(mentionTarget).then(result => {
@@ -2117,11 +2052,6 @@ function finalizeSend(text, mention) {
     .finally(() => { $msgInput.focus(); });
 }
 
-// Small transient notice shown near the composer (e.g. cooldown messages)
-// without derailing into the persistent #connError bar, which is reserved
-// for actual connection problems and gets its display toggled independently
-// by setConnectionStatus() — sharing that element caused cooldown notices
-// to get wiped out early by unrelated connection-status ticks.
 let composerNoticeTimer = null;
 function showComposerNotice(text) {
   $composerNotice.textContent = text;
@@ -2168,7 +2098,7 @@ function compressImageFile(file) {
   });
 }
 
-let pendingImageDataUrl = null; // compressed, staged image waiting for the user to hit Send
+let pendingImageDataUrl = null;
 
 function clearPendingImage() {
   pendingImageDataUrl = null;
@@ -2257,7 +2187,6 @@ $clearChatBtn.addEventListener("click", () => {
   $jumpToBottomBtn.style.display = "none";
 });
 
-/* ── Mod Menu (hidden behind the status dot) ────────────────────────── */
 const MOD_MENU_CODE = "2212";
 let modMenuUnlocked = false;
 let imagesEnabledForMe = false;
@@ -2267,10 +2196,6 @@ function updateUploadButtonVisibility() {
   $uploadImageBtn.style.display = visible ? "inline-block" : "none";
 }
 
-// Leaves the room right now with zero trace in the chat feed — no "X left"
-// message gets posted, regardless of whether this session joined normally
-// or as a spectator. Then drops back to the join screen so a new
-// name/spectator choice can be made without reloading the page.
 function leaveSilently() {
   ChatBackend.releasePresenceSilently();
   stopTyping();
@@ -2290,10 +2215,6 @@ function leaveSilently() {
   }
 }
 
-// Pre-code-entry actions shown above "Enter code:" — available to anyone,
-// no password needed. "Join as Spectator" only makes sense before you've
-// joined; "Leave Silently" only makes sense once you have joined. We show
-// whichever applies.
 function renderPreCodeActions(container) {
   if (!myName) {
     const specBtn = document.createElement("button");
@@ -2319,18 +2240,13 @@ function renderPreCodeActions(container) {
   container.appendChild(divider);
 }
 
-// "Join as Spectator" — no name screen at all. Auto-assigns "Spectator #N",
-// retrying on the rare collision, then joins silently (no join/leave log).
-// Does NOT touch localStorage's saved name, so leaving spectator mode
-// later (rename/leave) still returns to the person's real saved identity.
 async function joinAsSpectatorAuto() {
-  const dummyErr = { textContent: "" };
   let name = randomSpectatorName();
   for (let attempt = 0; attempt < 8; attempt++) {
     try {
       const taken = await ChatBackend.isNameTaken(name);
       if (!taken) break;
-    } catch (e) { break; } // if the check fails, just proceed with what we have
+    } catch (e) { break; }
     name = randomSpectatorName();
   }
 
@@ -2425,15 +2341,6 @@ async function renderModMenu() {
 
   loading.remove();
 
-  const alreadyLocked = !!existing;
-
-  if (alreadyLocked) {
-    const lockedNote = document.createElement("div");
-    lockedNote.textContent = "This name has already locked in a color — it can't be changed again.";
-    lockedNote.style.cssText = "color:#f59e0b;font-size:13px;margin-bottom:10px;line-height:1.4";
-    $globalClearPanel.appendChild(lockedNote);
-  }
-
   let pendingBubble = (existing && existing.bubble) || "#14532d";
   let pendingText = (existing && existing.text) || "#f1f5f9";
 
@@ -2450,7 +2357,7 @@ async function renderModMenu() {
   previewWrap.appendChild(previewBubble);
   $globalClearPanel.appendChild(previewWrap);
 
-  const makeColorRow = (labelText, currentValue, onChange, disabled) => {
+  const makeColorRow = (labelText, currentValue, onChange) => {
     const wrap = document.createElement("div");
     wrap.style.cssText = "display:flex;align-items:center;justify-content:space-between;margin-bottom:8px";
     const lbl = document.createElement("label");
@@ -2459,8 +2366,7 @@ async function renderModMenu() {
     const colorInput = document.createElement("input");
     colorInput.type = "color";
     colorInput.value = currentValue;
-    colorInput.disabled = !!disabled;
-    colorInput.style.cssText = "width:36px;height:28px;border:none;background:none;cursor:pointer;padding:0" + (disabled ? ";opacity:.5;cursor:not-allowed" : "");
+    colorInput.style.cssText = "width:36px;height:28px;border:none;background:none;cursor:pointer;padding:0";
     colorInput.addEventListener("input", () => onChange(colorInput.value));
     wrap.appendChild(lbl);
     wrap.appendChild(colorInput);
@@ -2471,17 +2377,17 @@ async function renderModMenu() {
     makeColorRow("Bubble color", pendingBubble, (val) => {
       pendingBubble = val;
       previewBubble.style.background = val;
-    }, alreadyLocked)
+    })
   );
   $globalClearPanel.appendChild(
     makeColorRow("Text color", pendingText, (val) => {
       pendingText = val;
       previewBubble.style.color = val;
-    }, alreadyLocked)
+    })
   );
 
   const note = document.createElement("div");
-  note.textContent = "Note: a color can only be set once per name — choose carefully.";
+  note.textContent = "Note: color can be changed again every " + Math.round(COLOR_CHANGE_COOLDOWN_MS / 1000) + " seconds.";
   note.style.cssText = "color:#64748b;font-size:12.5px;margin-bottom:10px;line-height:1.4";
   $globalClearPanel.appendChild(note);
 
@@ -2490,10 +2396,9 @@ async function renderModMenu() {
   $globalClearPanel.appendChild(confirmErr);
 
   const confirmBtn = document.createElement("button");
-  confirmBtn.textContent = alreadyLocked ? "Already locked in" : "Confirm";
+  confirmBtn.textContent = "Confirm";
   confirmBtn.className = "toolbar-btn";
   confirmBtn.style.cssText = "width:100%;margin-top:4px";
-  confirmBtn.disabled = alreadyLocked;
   confirmBtn.addEventListener("click", async () => {
     confirmBtn.disabled = true;
     confirmBtn.textContent = "Saving…";
@@ -2501,10 +2406,15 @@ async function renderModMenu() {
       const result = await ChatBackend.claimColor(myName, pendingBubble, pendingText);
       if (result.ok) {
         renderModMenu();
+      } else if (result.reason === "cooldown") {
+        const secs = Math.ceil(result.remainingMs / 1000);
+        confirmErr.textContent = "Wait " + secs + "s before changing your color again.";
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = "Confirm";
       } else {
-        confirmErr.textContent = "This name already has a color set.";
-        confirmBtn.disabled = true;
-        confirmBtn.textContent = "Already locked in";
+        confirmErr.textContent = "Couldn't save — try again.";
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = "Confirm";
       }
     } catch (e) {
       confirmErr.textContent = "Couldn't save — try again.";
@@ -2547,144 +2457,19 @@ async function renderModMenu() {
   imgNote.style.cssText = "color:#64748b;font-size:12px;line-height:1.4;margin-bottom:4px";
   $globalClearPanel.appendChild(imgNote);
 
-  const crownDivider = document.createElement("div");
-  crownDivider.style.cssText = "height:1px;background:#334155;margin:12px 0";
-  $globalClearPanel.appendChild(crownDivider);
+  const rolesDivider = document.createElement("div");
+  rolesDivider.style.cssText = "height:1px;background:#334155;margin:12px 0";
+  $globalClearPanel.appendChild(rolesDivider);
 
-  const crownTitle = document.createElement("div");
-  crownTitle.textContent = "👑 Crown (verified owner)";
-  crownTitle.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:8px";
-  $globalClearPanel.appendChild(crownTitle);
-
-  function crownRequestRemainingMs() {
-    try {
-      const last = parseInt(localStorage.getItem(CROWN_REQUEST_COOLDOWN_KEY) || "0", 10);
-      return Math.max(0, CROWN_REQUEST_COOLDOWN_MS - (Date.now() - last));
-    } catch (e) { return 0; }
-  }
-
-  const crownReqBtn = document.createElement("button");
-  crownReqBtn.className = "toolbar-btn";
-  crownReqBtn.style.cssText = "width:100%;margin-bottom:6px";
-
-  function updateCrownReqBtnState() {
-    const remaining = crownRequestRemainingMs();
-    if (remaining > 0) {
-      crownReqBtn.disabled = true;
-      crownReqBtn.textContent = "Wait " + Math.ceil(remaining / 1000) + "s";
-      setTimeout(updateCrownReqBtnState, 500);
-    } else {
-      crownReqBtn.disabled = false;
-      crownReqBtn.textContent = "Request Crown Code";
-    }
-  }
-  updateCrownReqBtnState();
-
-  crownReqBtn.addEventListener("click", async () => {
-    if (crownRequestRemainingMs() > 0) return;
-    try { localStorage.setItem(CROWN_REQUEST_COOLDOWN_KEY, String(Date.now())); } catch (e) {}
-    updateCrownReqBtnState();
-    crownReqBtn.textContent = "Sending…";
-    try {
-      const result = await ChatBackend.generateCrownCode();
-      crownReqBtn.textContent = result.webhookOk ? "Sent to Discord ✓" : "Saved, but Discord post failed";
-      refreshCrownStatus();
-    } catch (e) {
-      crownReqBtn.textContent = "Failed — try again";
-    }
+  const rolesBtn = document.createElement("button");
+  rolesBtn.textContent = "🎖 Claim a role";
+  rolesBtn.className = "toolbar-btn";
+  rolesBtn.style.cssText = "width:100%;margin-bottom:6px";
+  rolesBtn.addEventListener("click", () => {
+    closeClearPanel();
+    openRolesMenu();
   });
-  $globalClearPanel.appendChild(crownReqBtn);
-
-  // Timing-only status readout — deliberately never shows the code itself,
-  // since the whole point of posting it to a private Discord webhook is
-  // that it's NOT visible here. This just confirms whether a code is
-  // currently outstanding and how long it has left, so you can tell your
-  // request went through without leaking the digits to anyone who knows
-  // the mod-menu code but not the Discord one. One-time read + local
-  // countdown, not a persistent listener — refreshed on panel open or
-  // after requesting a new code.
-  const crownStatus = document.createElement("div");
-  crownStatus.style.cssText = "font-family:monospace;font-size:13px;color:#94a3b8;margin-bottom:8px;min-height:16px";
-  $globalClearPanel.appendChild(crownStatus);
-
-  let crownStatusTimer = null;
-  async function refreshCrownStatus() {
-    clearInterval(crownStatusTimer);
-    try {
-      const snap = await ChatBackend._crownMetaRef.get();
-      const current = snap.val();
-      if (!current || !current.code || current.code === "0000") {
-        crownStatus.textContent = "No active code right now.";
-        return;
-      }
-      const offset = await ChatBackend._serverOffset();
-      const tick = () => {
-        const remaining = current.expiresAt - (Date.now() + offset);
-        if (remaining <= 0) {
-          crownStatus.textContent = "The last code has expired.";
-          clearInterval(crownStatusTimer);
-          return;
-        }
-        crownStatus.textContent = "A code is active on Discord — expires in " + Math.ceil(remaining / 1000) + "s";
-      };
-      tick();
-      crownStatusTimer = setInterval(tick, 1000);
-    } catch (e) {
-      crownStatus.textContent = "Couldn't check code status.";
-    }
-  }
-  refreshCrownStatus();
-
-  const crownInput = document.createElement("input");
-  crownInput.type = "text";
-  crownInput.inputMode = "numeric";
-  crownInput.pattern = "[0-9]*";
-  crownInput.maxLength = 4;
-  crownInput.placeholder = "Enter crown code…";
-  crownInput.style.cssText = "width:100%;padding:8px 10px;background:#0f172a;border:1.5px solid #334155;border-radius:8px;color:#f1f5f9;font-size:14px;outline:none;margin-bottom:6px";
-  $globalClearPanel.appendChild(crownInput);
-
-  const crownErr = document.createElement("div");
-  crownErr.style.cssText = "color:#ef4444;font-size:12.5px;min-height:16px;margin-bottom:4px";
-  $globalClearPanel.appendChild(crownErr);
-
-  let crownSubmitInFlight = false; // guards against a fast double-tap firing two overlapping claims
-
-  const crownSubmitBtn = document.createElement("button");
-  crownSubmitBtn.textContent = "Claim Crown";
-  crownSubmitBtn.className = "toolbar-btn";
-  crownSubmitBtn.style.cssText = "width:100%";
-  crownSubmitBtn.addEventListener("click", async () => {
-    if (crownSubmitInFlight) return;
-    if (!myName) { crownErr.style.color = "#ef4444"; crownErr.textContent = "Join with a name first."; return; }
-    crownSubmitInFlight = true;
-    crownSubmitBtn.disabled = true;
-    crownErr.textContent = "";
-    try {
-      const result = await ChatBackend.redeemCrownCode(crownInput.value);
-      if (result.ok) {
-        crownErr.style.color = "#4ade80";
-        crownErr.textContent = "👑 Crown claimed!";
-        crownInput.value = "";
-      } else {
-        crownErr.style.color = "#ef4444";
-        const reasonText = {
-          none: "Enter a code first.",
-          wrong: "That's not the current code — check Discord for the latest one.",
-          expired: "That code expired — request a new one."
-        };
-        crownErr.textContent = reasonText[result.reason] || "Invalid code.";
-      }
-      refreshCrownStatus();
-    } catch (e) {
-      crownErr.style.color = "#ef4444";
-      crownErr.textContent = "Couldn't check code — try again.";
-    } finally {
-      crownSubmitBtn.disabled = false;
-      crownSubmitInFlight = false;
-    }
-  });
-  $globalClearPanel.appendChild(crownSubmitBtn);
+  $globalClearPanel.appendChild(rolesBtn);
 
   const closeBtn = document.createElement("button");
   closeBtn.textContent = "Close";
@@ -2709,7 +2494,192 @@ function openModMenu() {
   }
 }
 
-/* ── Online list panel (click "N online" text) ── */
+/* ══════════════════════════════════════════════════════════
+   ROLES MENU (centered modal, like Room Settings) — opened from
+   "🎖 Claim a role" inside the mod menu popover. Lists every role
+   in ROLES; picking one opens the shared role-claim modal.
+   ══════════════════════════════════════════════════════════ */
+function openRolesMenu() {
+  $rolesMenuList.innerHTML = "";
+  Object.values(ROLES).forEach(role => {
+    const btn = document.createElement("button");
+    btn.className = "role-menu-option";
+    btn.innerHTML = `<span><span class="role-menu-icon">${role.icon}</span> ${esc(role.label)}</span><span style="color:#64748b;font-size:12px">Claim →</span>`;
+    btn.addEventListener("click", () => {
+      $rolesMenuOverlay.style.display = "none";
+      openRoleClaimModal(role.id);
+    });
+    $rolesMenuList.appendChild(btn);
+  });
+  $rolesMenuOverlay.style.display = "flex";
+}
+
+$rolesMenuCloseBtn.addEventListener("click", () => {
+  $rolesMenuOverlay.style.display = "none";
+});
+$rolesMenuOverlay.addEventListener("click", (e) => {
+  if (e.target === $rolesMenuOverlay) $rolesMenuOverlay.style.display = "none";
+});
+
+/* ══════════════════════════════════════════════════════════
+   ROLE CLAIM MODAL (centered) — shared UI for any role in ROLES.
+   Replaces the old crown-only section that used to live inside the
+   top-left popover; the logic (request code / redeem code) is
+   unchanged, just generalized to whichever roleId was picked in the
+   roles menu, and moved into its own centered modal.
+   ══════════════════════════════════════════════════════════ */
+let activeRoleClaimId = null;
+let roleClaimStatusTimer = null;
+
+function roleRequestCooldownRemainingMs(role) {
+  try {
+    const last = parseInt(localStorage.getItem(role.cooldownKey) || "0", 10);
+    return Math.max(0, ROLE_REQUEST_COOLDOWN_MS - (Date.now() - last));
+  } catch (e) { return 0; }
+}
+
+function openRoleClaimModal(roleId) {
+  activeRoleClaimId = roleId;
+  renderRoleClaimModal(roleId);
+  $roleClaimOverlay.style.display = "flex";
+}
+
+function renderRoleClaimModal(roleId) {
+  const role = ROLES[roleId];
+  clearInterval(roleClaimStatusTimer);
+  $roleClaimTitle.textContent = role.icon + " " + role.label + " role";
+  $roleClaimBody.innerHTML = "";
+
+  const reqBtn = document.createElement("button");
+  reqBtn.className = "toolbar-btn";
+  reqBtn.style.cssText = "width:100%;margin-bottom:10px";
+
+  function updateReqBtnState() {
+    const remaining = roleRequestCooldownRemainingMs(role);
+    if (remaining > 0) {
+      reqBtn.disabled = true;
+      reqBtn.textContent = "Wait " + Math.ceil(remaining / 1000) + "s";
+      setTimeout(updateReqBtnState, 500);
+    } else {
+      reqBtn.disabled = false;
+      reqBtn.textContent = "Request " + role.label + " Code";
+    }
+  }
+  updateReqBtnState();
+
+  reqBtn.addEventListener("click", async () => {
+    if (roleRequestCooldownRemainingMs(role) > 0) return;
+    try { localStorage.setItem(role.cooldownKey, String(Date.now())); } catch (e) {}
+    updateReqBtnState();
+    reqBtn.textContent = "Sending…";
+    try {
+      const result = await ChatBackend.generateRoleCode(role.id);
+      reqBtn.textContent = result.webhookOk ? "Sent to Discord ✓" : "Saved, but Discord post failed";
+      refreshRoleClaimStatus(role);
+    } catch (e) {
+      reqBtn.textContent = "Failed — try again";
+    }
+  });
+  $roleClaimBody.appendChild(reqBtn);
+
+  const statusEl = document.createElement("div");
+  statusEl.style.cssText = "font-family:monospace;font-size:13px;color:#94a3b8;margin-bottom:8px;min-height:16px";
+  $roleClaimBody.appendChild(statusEl);
+
+  async function refreshRoleClaimStatus(role) {
+    clearInterval(roleClaimStatusTimer);
+    try {
+      const current = await ChatBackend.getRoleMeta(role.id);
+      if (!current || !current.code || current.code === "0000") {
+        statusEl.textContent = "No active code right now.";
+        return;
+      }
+      const offset = await ChatBackend._serverOffset();
+      const tick = () => {
+        const remaining = current.expiresAt - (Date.now() + offset);
+        if (remaining <= 0) {
+          statusEl.textContent = "The last code has expired.";
+          clearInterval(roleClaimStatusTimer);
+          return;
+        }
+        statusEl.textContent = "A code is active on Discord — expires in " + Math.ceil(remaining / 1000) + "s";
+      };
+      tick();
+      roleClaimStatusTimer = setInterval(tick, 1000);
+    } catch (e) {
+      statusEl.textContent = "Couldn't check code status.";
+    }
+  }
+  refreshRoleClaimStatus(role);
+
+  const codeInput = document.createElement("input");
+  codeInput.type = "text";
+  codeInput.inputMode = "numeric";
+  codeInput.pattern = "[0-9]*";
+  codeInput.maxLength = 4;
+  codeInput.placeholder = "Enter " + role.label.toLowerCase() + " code…";
+  codeInput.style.cssText = "width:100%;padding:8px 10px;background:#0f172a;border:1.5px solid #334155;border-radius:8px;color:#f1f5f9;font-size:14px;outline:none;margin-bottom:6px";
+  $roleClaimBody.appendChild(codeInput);
+
+  const claimErr = document.createElement("div");
+  claimErr.style.cssText = "color:#ef4444;font-size:12.5px;min-height:16px;margin-bottom:4px";
+  $roleClaimBody.appendChild(claimErr);
+
+  let submitInFlight = false;
+
+  const submitBtn = document.createElement("button");
+  submitBtn.textContent = "Claim " + role.label;
+  submitBtn.className = "toolbar-btn";
+  submitBtn.style.cssText = "width:100%";
+  submitBtn.addEventListener("click", async () => {
+    if (submitInFlight) return;
+    if (!myName) { claimErr.style.color = "#ef4444"; claimErr.textContent = "Join with a name first."; return; }
+    submitInFlight = true;
+    submitBtn.disabled = true;
+    claimErr.textContent = "";
+    try {
+      const result = await ChatBackend.redeemRoleCode(role.id, codeInput.value);
+      if (result.ok) {
+        claimErr.style.color = "#4ade80";
+        claimErr.textContent = role.icon + " " + role.label + " claimed!";
+        codeInput.value = "";
+      } else {
+        claimErr.style.color = "#ef4444";
+        const reasonText = {
+          none: "Enter a code first.",
+          wrong: "That's not the current code — check Discord for the latest one.",
+          expired: "That code expired — request a new one."
+        };
+        claimErr.textContent = reasonText[result.reason] || "Invalid code.";
+      }
+      refreshRoleClaimStatus(role);
+    } catch (e) {
+      claimErr.style.color = "#ef4444";
+      claimErr.textContent = "Couldn't check code — try again.";
+    } finally {
+      submitBtn.disabled = false;
+      submitInFlight = false;
+    }
+  });
+  $roleClaimBody.appendChild(submitBtn);
+}
+
+$roleClaimBackBtn.addEventListener("click", () => {
+  $roleClaimOverlay.style.display = "none";
+  clearInterval(roleClaimStatusTimer);
+  openRolesMenu();
+});
+$roleClaimCloseBtn.addEventListener("click", () => {
+  $roleClaimOverlay.style.display = "none";
+  clearInterval(roleClaimStatusTimer);
+});
+$roleClaimOverlay.addEventListener("click", (e) => {
+  if (e.target === $roleClaimOverlay) {
+    $roleClaimOverlay.style.display = "none";
+    clearInterval(roleClaimStatusTimer);
+  }
+});
+
 let latestPresenceList = [];
 let onlineListRefreshTimer = null;
 
@@ -2740,14 +2710,15 @@ function renderOnlineListPanel() {
     return;
   }
 
-  // Longest-present first, so regulars float to the top.
   const sorted = [...latestPresenceList].sort((a, b) => (a.joinedAt || Date.now()) - (b.joinedAt || Date.now()));
 
   sorted.forEach(entry => {
     const row = document.createElement("div");
     row.style.cssText = "display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px solid #273549;font-size:13.5px";
     const nameEl = document.createElement("span");
-    nameEl.textContent = (crownedNames.has(ChatBackend._safeKey(entry.name)) ? "👑 " : "") + entry.name;
+    const safeName = ChatBackend._safeKey(entry.name);
+    const icons = Object.values(ROLES).filter(role => (roleHolders[role.id] || new Set()).has(safeName)).map(role => role.icon).join(" ");
+    nameEl.textContent = (icons ? icons + " " : "") + entry.name;
     nameEl.style.cssText = "color:#f1f5f9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
     const timeEl = document.createElement("span");
     timeEl.textContent = formatElapsed(entry.joinedAt);
@@ -2764,7 +2735,7 @@ function closeOnlineListPanel() {
 }
 
 function openOnlineListPanel() {
-  closeClearPanel(); // don't show both panels at once
+  closeClearPanel();
   $onlineListPanel.style.display = "block";
   renderOnlineListPanel();
   clearInterval(onlineListRefreshTimer);
@@ -2817,7 +2788,6 @@ document.addEventListener("click", (e) => {
   }
 });
 
-/* ── Typing indicator ── */
 function handleTypingActivity() {
   const hasText = $msgInput.value.trim().length > 0;
   clearTimeout(typingStopTimer);
@@ -2856,12 +2826,6 @@ function renderTyping(names) {
   $typingBar.textContent = text;
   $typingBar.style.display = "block";
 }
-
-/* ══════════════════════════════════════════════════════════
-   PING YOU (Discord webhook) — toolbar button, opens a small
-   popover with an optional note, cooldown is per-person (this
-   browser) via localStorage, not global.
-   ══════════════════════════════════════════════════════════ */
 
 function getPingYouRemainingMs() {
   try {
@@ -2939,18 +2903,9 @@ $pingYouSend.addEventListener("click", () => {
     });
 });
 
-/* ══════════════════════════════════════════════════════════
-   @PING (in-chat mention) — typing "@" opens a live dropdown of
-   currently-online people, positioned above the "@". Picking one
-   turns it into a clickable chip in the composer; clicking the
-   chip re-opens the dropdown to swap targets. Sending checks the
-   per-target global cooldown (see ChatBackend.tryStartAtPingCooldown)
-   before the message goes out.
-   ══════════════════════════════════════════════════════════ */
-
-let currentMentionTarget = null; // the name currently selected as @mention, or null
+let currentMentionTarget = null;
 let mentionDropdownOpen = false;
-let mentionTriggerCharIndex = -1; // where the "@" that opened the dropdown sits in the text
+let mentionTriggerCharIndex = -1;
 
 function clearMention() {
   currentMentionTarget = null;
@@ -2973,8 +2928,6 @@ function closeMentionDropdown() {
 function renderMentionDropdown() {
   $mentionDropdown.innerHTML = "";
 
-  // Everyone currently online except yourself and spectators (pinging a
-  // spectator/yourself doesn't make sense here).
   const candidates = latestPresenceList
     .map(e => e.name)
     .filter(name => name !== myName && !isSpectatorName(name))
@@ -2995,8 +2948,6 @@ function renderMentionDropdown() {
     btn.textContent = name;
     btn.addEventListener("click", () => {
       setMention(name);
-      // Remove the triggering "@" (and anything typed right after it up to
-      // the cursor) from the text box, since the chip now represents it.
       if (mentionTriggerCharIndex >= 0) {
         const before = $msgInput.value.slice(0, mentionTriggerCharIndex);
         const after = $msgInput.value.slice($msgInput.selectionStart);
@@ -3018,18 +2969,13 @@ function openMentionDropdown(triggerIndex) {
   renderMentionDropdown();
 }
 
-// Live-refresh the dropdown's contents while it's open, since presence can
-// change at any moment (someone joins/leaves) and the list should reflect
-// that without needing to close and reopen.
 function refreshMentionDropdownIfOpen() {
   if (mentionDropdownOpen) renderMentionDropdown();
 }
 
 $mentionChip.addEventListener("click", (e) => {
   e.stopPropagation();
-  // Re-opens the dropdown to swap the target; the previous mention stays
-  // active until a new one is actually picked.
-  openMentionDropdown(-1); // -1: no "@" in the textbox to remove this time
+  openMentionDropdown(-1);
 });
 
 document.addEventListener("click", (e) => {
@@ -3038,9 +2984,6 @@ document.addEventListener("click", (e) => {
   }
 });
 
-// Detects a freshly-typed "@" immediately before the cursor and opens the
-// mention dropdown. This runs alongside the existing input handler rather
-// than replacing it.
 function handleMentionTrigger() {
   const cursor = $msgInput.selectionStart;
   const charBeforeCursor = $msgInput.value.slice(cursor - 1, cursor);
@@ -3048,11 +2991,6 @@ function handleMentionTrigger() {
     openMentionDropdown(cursor - 1);
   }
 }
-
-/* ══════════════════════════════════════════════════════════
-   Incoming @Ping handling — sound (preloaded/cached as a Blob so
-   it plays instantly) + in-page toast + browser notification.
-   ══════════════════════════════════════════════════════════ */
 
 let pingSoundReady = false;
 
@@ -3067,17 +3005,12 @@ function preloadPingSound() {
       $pingSound.src = blobUrl;
       pingSoundReady = true;
     })
-    .catch(() => {
-      // Non-critical — if this fails, incoming pings just won't have sound
-      // this session; the toast/notification still work.
-    });
+    .catch(() => {});
 }
 
 function requestNotificationPermissionIfNeeded() {
   if (!("Notification" in window)) return;
   if (Notification.permission === "default") {
-    // Ask once, quietly, the first time the person actually joins the
-    // chat (not on page load) — see attemptJoin/joinAsSpectatorAuto.
     Notification.requestPermission().catch(() => {});
   }
 }
@@ -3092,34 +3025,25 @@ function showPingToast(fromName, note) {
 }
 
 function triggerIncomingPing(fromName, note) {
-  // Sound
   if (pingSoundReady) {
     try {
       $pingSound.currentTime = 0;
       $pingSound.play().catch(() => {});
-    } catch (e) { /* ignore playback errors, e.g. autoplay restrictions */ }
+    } catch (e) {}
   }
 
-  // In-page toast
   showPingToast(fromName, note);
 
-  // Browser notification (only if permission already granted — we never
-  // prompt from inside this function, only at join time)
   if ("Notification" in window && Notification.permission === "granted") {
     try {
       new Notification(fromName + " pinged you in VUS Chat", {
         body: note || "Tap to open the chat.",
         tag: "vus-chat-ping"
       });
-    } catch (e) { /* ignore notification errors */ }
+    } catch (e) {}
   }
 }
 
-/* ══════════════════════════════════════════════════════════
-   ROOMS — sidebar, creation, join/leave, lifecycle, ownership
-   ══════════════════════════════════════════════════════════ */
-
-/* ── DOM refs ── */
 const $roomsToggleBtn = document.getElementById("roomsToggleBtn");
 const $roomsBadgeDot = document.getElementById("roomsBadgeDot");
 const $roomsSidebarOverlay = document.getElementById("roomsSidebarOverlay");
@@ -3167,17 +3091,16 @@ const $kickConfirmText = document.getElementById("kickConfirmText");
 const $kickCancelBtn = document.getElementById("kickCancelBtn");
 const $kickConfirmBtn = document.getElementById("kickConfirmBtn");
 
-/* ── State ── */
-const JOINED_ROOMS_STORAGE_KEY = "vusChatJoinedRooms"; // private rooms this browser has joined, until X'd out
-const ROOM_PING_BADGE_KEY = "vusChatRoomPingBadges";   // codes with an unread @ping, per this browser
+const JOINED_ROOMS_STORAGE_KEY = "vusChatJoinedRooms";
+const ROOM_PING_BADGE_KEY = "vusChatRoomPingBadges";
 
-let currentRoomCode = null;    // null while in the main room
-let currentRoomMeta = null;    // live metadata of whatever room we're in (main room has none)
+let currentRoomCode = null;
+let currentRoomMeta = null;
 let unsubscribeRoomMeta = null;
 let publicRoomsList = [];
-let joinedPrivateRoomCodes = new Set(); // loaded from localStorage
-let roomPingBadges = new Set();          // loaded from localStorage
-let extendPromptShownForCode = null;     // avoid re-showing the same room's prompt repeatedly
+let joinedPrivateRoomCodes = new Set();
+let roomPingBadges = new Set();
+let extendPromptShownForCode = null;
 let pendingKickTarget = null;
 let sidebarCountdownTimer = null;
 let topBarCountdownTimer = null;
@@ -3194,7 +3117,7 @@ function loadJoinedRoomsFromStorage() {
 function saveJoinedRoomsToStorage() {
   try {
     localStorage.setItem(JOINED_ROOMS_STORAGE_KEY, JSON.stringify([...joinedPrivateRoomCodes]));
-  } catch (e) { /* ignore quota errors — non-critical */ }
+  } catch (e) {}
 }
 
 function loadPingBadgesFromStorage() {
@@ -3209,7 +3132,7 @@ function loadPingBadgesFromStorage() {
 function savePingBadgesToStorage() {
   try {
     localStorage.setItem(ROOM_PING_BADGE_KEY, JSON.stringify([...roomPingBadges]));
-  } catch (e) { /* ignore */ }
+  } catch (e) {}
 }
 
 function updateRoomsHeaderBadge() {
@@ -3236,7 +3159,6 @@ function formatCountdown(msRemaining) {
   return mins + ":" + String(secs).padStart(2, "0");
 }
 
-/* ── Sidebar open/close ── */
 function openRoomsSidebar() {
   $roomsSidebarOverlay.style.display = "block";
   $roomsSidebar.classList.add("open");
@@ -3261,19 +3183,15 @@ $roomsToggleBtn.addEventListener("click", () => {
 $roomsSidebarClose.addEventListener("click", closeRoomsSidebar);
 $roomsSidebarOverlay.addEventListener("click", closeRoomsSidebar);
 
-/* ── Sidebar rendering ── */
 async function renderRoomsSidebar() {
   $roomsSidebarBody.innerHTML = "";
 
-  // Main room — always first, always pinned, never closable.
   const mainTitle = document.createElement("div");
   mainTitle.className = "rooms-section-title";
   mainTitle.textContent = "Pinned";
   $roomsSidebarBody.appendChild(mainTitle);
   $roomsSidebarBody.appendChild(buildMainRoomCard());
 
-  // Rooms this browser has joined privately (not shown in the public list),
-  // fetched fresh each render so expiry/name/timer stay current.
   const joinedTitle = document.createElement("div");
   joinedTitle.className = "rooms-section-title";
   joinedTitle.textContent = "Joined Rooms";
@@ -3289,17 +3207,15 @@ async function renderRoomsSidebar() {
     for (const code of joinedCodes) {
       const meta = await RoomManager.getRoomMeta(code);
       if (!meta) {
-        // Expired/deleted since we last saw it — drop it silently from storage.
         joinedPrivateRoomCodes.delete(code);
         saveJoinedRoomsToStorage();
         continue;
       }
-      if (meta.isPublic) continue; // shown in the public section instead, avoid duplicates
+      if (meta.isPublic) continue;
       $roomsSidebarBody.appendChild(buildRoomCard(meta, true));
     }
   }
 
-  // Public rooms — visible to everyone, not tied to localStorage at all.
   const publicTitle = document.createElement("div");
   publicTitle.className = "rooms-section-title";
   publicTitle.textContent = "Chat Rooms";
@@ -3378,7 +3294,6 @@ function buildRoomCard(meta, closable) {
   return card;
 }
 
-/* ── Room creation ── */
 function getRoomCreateCooldownRemainingMs() {
   try {
     const last = parseInt(localStorage.getItem(ROOM_CREATE_COOLDOWN_KEY) || "0", 10);
@@ -3428,7 +3343,6 @@ $createRoomConfirmBtn.addEventListener("click", async () => {
   }
 });
 
-/* ── Join by code ── */
 $joinByCodeBtn.addEventListener("click", async () => {
   const code = $joinByCodeInput.value.trim().toUpperCase();
   if (!code) return;
@@ -3440,11 +3354,6 @@ $joinByCodeBtn.addEventListener("click", async () => {
     $roomsFooterMsg.textContent = "No room found with that code.";
     $roomsFooterMsg.classList.add("err");
     return;
-  }
-  if (meta.kicked && meta.kicked[ChatBackend._safeKey ? ChatBackend._safeKey(myName) : myName]) {
-    // Kicking isn't a ban — this just confirms the check exists; rejoining
-    // is allowed, so we intentionally do NOT block here. (Left explicit
-    // rather than silently absent, in case that policy changes later.)
   }
 
   joinedPrivateRoomCodes.add(code);
@@ -3458,9 +3367,8 @@ $joinByCodeInput.addEventListener("keydown", e => {
   if (e.key === "Enter") $joinByCodeBtn.click();
 });
 
-/* ── Switching rooms ── */
 async function joinRoomByCode(code) {
-  if (!myName) return; // must already be in the main room with a name chosen
+  if (!myName) return;
   if (currentRoomCode === code) return;
 
   const meta = await RoomManager.getRoomMeta(code);
@@ -3469,7 +3377,6 @@ async function joinRoomByCode(code) {
     return;
   }
 
-  // Clear this room's unread-ping badge the moment we actually enter it.
   if (roomPingBadges.has(code)) {
     roomPingBadges.delete(code);
     savePingBadgesToStorage();
@@ -3518,11 +3425,8 @@ $roomLeaveBtn.addEventListener("click", () => {
   switchToMainRoom();
 });
 
-/* ── Live room metadata handling: countdown, expiry, ownership crown,
-     transfer offers, kick detection ── */
 function onRoomMetaUpdate(meta) {
   if (!meta) {
-    // Room was deleted (expired, or otherwise removed) while we were in it.
     showComposerNotice("This room has closed.");
     switchToMainRoom();
     return;
@@ -3530,7 +3434,6 @@ function onRoomMetaUpdate(meta) {
 
   currentRoomMeta = meta;
 
-  // Was I kicked? If my name is in the kicked map, boot myself back to main.
   const myKey = ChatBackend._safeKey(myName);
   if (meta.kicked && meta.kicked[myKey]) {
     showComposerNotice("You were removed from this room.");
@@ -3548,7 +3451,6 @@ function onRoomMetaUpdate(meta) {
   topBarCountdownTimer = setInterval(() => updateRoomCountdownUI(meta), 1000);
   updateRoomCountdownUI(meta);
 
-  // Ownership transfer offer directed at me
   if (meta.transferOffer && meta.transferOffer.toName === myName) {
     showTransferOfferModal(meta);
   } else if ($transferOfferOverlay.style.display === "flex") {
@@ -3559,10 +3461,6 @@ function onRoomMetaUpdate(meta) {
     renderRoomMembersList(meta);
   }
 
-  // Keep the Public toggle button's label/state in sync with the real
-  // value in Firebase at all times, so repeated clicks can't desync it
-  // from what's actually stored (previously it only got set once, when
-  // the settings modal first opened).
   if ($roomSettingsOverlay.style.display === "flex") {
     $roomPublicToggleBtn.textContent = meta.isPublic ? "On" : "Off";
     $roomPublicToggleBtn.classList.toggle("active", meta.isPublic);
@@ -3573,8 +3471,6 @@ function updateRoomCountdownUI(meta) {
   const remaining = (meta.expiresAt || 0) - Date.now();
 
   if (remaining <= 0) {
-    // Whichever client notices first deletes the room; Firebase deletes are
-    // idempotent, so it's harmless if more than one client races here.
     RoomManager.deleteRoom(meta.code).catch(() => {});
     return;
   }
@@ -3604,7 +3500,7 @@ $extendRoomConfirmBtn.addEventListener("click", async () => {
   $extendRoomConfirmBtn.disabled = true;
   try {
     await RoomManager.extendRoom(currentRoomCode);
-    extendPromptShownForCode = null; // allow the prompt again if it gets low a second time
+    extendPromptShownForCode = null;
   } catch (e) {
     showComposerNotice("Couldn't extend the room — try again.");
   } finally {
@@ -3613,7 +3509,6 @@ $extendRoomConfirmBtn.addEventListener("click", async () => {
   }
 });
 
-/* ── Room Settings modal (owner only) ── */
 $roomSettingsBtn.addEventListener("click", () => {
   if (!currentRoomMeta) return;
   $roomPublicToggleBtn.textContent = currentRoomMeta.isPublic ? "On" : "Off";
@@ -3657,13 +3552,12 @@ $roomCodeSaveBtn.addEventListener("click", async () => {
       $roomCodeErr.textContent = messages[result.reason] || "Couldn't change the code.";
       return;
     }
-    // Follow the room to its new code seamlessly.
     joinedPrivateRoomCodes.delete(currentRoomCode);
     joinedPrivateRoomCodes.add(result.newCode);
     saveJoinedRoomsToStorage();
     const targetCode = result.newCode;
     $roomSettingsOverlay.style.display = "none";
-    currentRoomCode = null; // force joinRoomByCode to treat this as a real switch
+    currentRoomCode = null;
     await joinRoomByCode(targetCode);
   } catch (e) {
     $roomCodeErr.textContent = "Couldn't change the code — try again.";
@@ -3743,7 +3637,6 @@ $kickConfirmBtn.addEventListener("click", async () => {
   }
 });
 
-/* ── Ownership transfer: offer / accept / decline ── */
 function showTransferOfferModal(meta) {
   $transferOfferText.textContent = meta.transferOffer.fromName + " wants to make you the owner of \u201c" + (meta.name || ("Room " + meta.code)) + "\u201d.";
   $transferOfferOverlay.style.display = "flex";
@@ -3771,25 +3664,17 @@ $transferDeclineBtn.addEventListener("click", async () => {
   }
 });
 
-// Forced auto-promotion: if the room's owner is no longer present and
-// exactly one person remains, that person becomes owner immediately, no
-// accept/decline step (per the "if the owner leaves, force give it to
-// them" requirement — distinct from the voluntary offer/accept flow above).
 function checkSoleSurvivorAutoOwnership(presenceList) {
   if (!currentRoomCode || !currentRoomMeta) return;
   const namesPresent = presenceList.map(e => e.name);
   const ownerStillPresent = namesPresent.includes(currentRoomMeta.ownerName);
   if (ownerStillPresent) return;
-  if (namesPresent.length !== 1) return; // only auto-promote when exactly one person remains
+  if (namesPresent.length !== 1) return;
   const soleSurvivor = namesPresent[0];
-  if (soleSurvivor !== myName) return; // only the survivor's own client performs the promotion
+  if (soleSurvivor !== myName) return;
   RoomManager.forceTransferOwnership(currentRoomCode, myName).catch(() => {});
 }
 
-/* ── Room-scoped Ping You (Discord): same button/flow as the main room,
-     but the webhook message includes the room code so you know which
-     room to check. See $pingYouSend's click handler for the shared logic
-     — this just changes the message content when inside a custom room. ── */
 function buildPingYouWebhookContent(note) {
   const senderName = myName || "Someone";
   if (currentRoomCode && currentRoomMeta) {
@@ -3799,8 +3684,6 @@ function buildPingYouWebhookContent(note) {
   return "🔔 **" + senderName + "** pinged" + (note ? ": " + note : " (no note)");
 }
 
-
-/* ── Wire up events ── */
 $changeNameBtn.addEventListener("click", openChangeName);
 
 $sendBtn.addEventListener("click", sendMessage);
@@ -3817,14 +3700,8 @@ $msgInput.addEventListener("input", () => {
   handleMentionTrigger();
 });
 
-// Paste-an-image support: only active when image uploads are unlocked via
-// the mod menu (same gate as the 📎 button — modMenuUnlocked AND
-// imagesEnabledForMe). If the clipboard paste contains an image, it's sent
-// through the same compress+send pipeline as a picked file, immediately,
-// matching the upload button's behavior. If the clipboard has no image
-// (just text), this does nothing and lets the paste proceed normally.
 $msgInput.addEventListener("paste", (e) => {
-  if (!modMenuUnlocked || !imagesEnabledForMe) return; // let normal text paste happen
+  if (!modMenuUnlocked || !imagesEnabledForMe) return;
 
   const items = e.clipboardData && e.clipboardData.items;
   if (!items) return;
@@ -3836,21 +3713,12 @@ $msgInput.addEventListener("paste", (e) => {
       break;
     }
   }
-  if (!imageFile) return; // no image in clipboard — fall through to normal text paste
+  if (!imageFile) return;
 
-  // There IS an image — stop it from being pasted as garbage text/inline
-  // data and stage it for sending (waits for the user to click Send,
-  // same as the file picker).
   e.preventDefault();
   stageImageFile(imageFile);
 });
 
-/* ── Boot ── */
-// Attaches all the per-room live listeners (messages, presence, typing,
-// leave events) to whatever room ChatBackend is currently bound to. Called
-// once at boot for the main room, and again every time switchToRoom() binds
-// to a different room — ChatBackend.bindToRoom() already detaches the old
-// room's listeners before this runs, so there's never a double-subscription.
 function attachRoomListeners() {
   ChatBackend.watchPresenceCount(count => {
     $onlineCount.textContent = count + " online";
@@ -3896,7 +3764,10 @@ function init() {
   }
 
   ChatBackend.watchConnection(setConnectionStatus);
-  ChatBackend.watchCrownedNames(set => { crownedNames = set; });
+  Object.values(ROLES).forEach(role => {
+    roleHolders[role.id] = new Set();
+    ChatBackend.watchRoleNames(role.id, set => { roleHolders[role.id] = set; });
+  });
   attachRoomListeners();
   watchPublicRoomsList();
   restoreSidebarRoomList();
@@ -3911,7 +3782,7 @@ function init() {
   window.addEventListener("beforeunload", () => {
     stopTyping();
     ChatBackend.releasePresence();
-    ChatBackend.clearCrown();
+    ChatBackend.clearAllRoles();
   });
 }
 
