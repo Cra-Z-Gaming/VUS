@@ -1,0 +1,2056 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VUS DM's</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: #0f172a;
+    color: #f1f5f9;
+    font-family: Arial, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  body.app-mode {
+    align-items: stretch;
+    justify-content: stretch;
+  }
+  body.app-mode #authCard { display: none; }
+  #authCard {
+    padding: 24px;
+    width: 100%;
+    max-width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  #authHeader {
+    text-align: center;
+    margin-bottom: 6px;
+  }
+  #authHeader h1 {
+    font-size: 22px;
+    font-weight: 600;
+  }
+  #authHeader p {
+    font-size: 13.5px;
+    color: #94a3b8;
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+  .auth-tabs {
+    display: flex;
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 10px;
+    padding: 3px;
+    margin-bottom: 6px;
+  }
+  .auth-tab {
+    flex: 1;
+    padding: 8px;
+    text-align: center;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    color: #94a3b8;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .auth-tab.active {
+    background: #22c55e;
+    color: #000;
+  }
+  .auth-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .auth-field label {
+    font-size: 12.5px;
+    color: #94a3b8;
+  }
+  .auth-field input {
+    width: 100%;
+    padding: 10px 13px;
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 9px;
+    color: #f1f5f9;
+    font-size: 15px;
+    outline: none;
+  }
+  .auth-field input:focus { border-color: #22c55e; }
+  .auth-hint {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: -2px;
+  }
+  #authError {
+    font-size: 13px;
+    color: #ef4444;
+    min-height: 18px;
+    line-height: 1.4;
+  }
+  #authSuccess {
+    font-size: 13px;
+    color: #4ade80;
+    min-height: 18px;
+    line-height: 1.4;
+    display: none;
+  }
+  #authSubmitBtn {
+    width: 100%;
+    padding: 11px 13px;
+    background: #22c55e;
+    border: none;
+    border-radius: 9px;
+    color: #000;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 4px;
+  }
+  #authSubmitBtn:hover { background: #4ade80; }
+  #authSubmitBtn:disabled { opacity: .5; cursor: not-allowed; }
+
+  #newIdReveal {
+    display: none;
+    background: #1e293b;
+    border: 1.5px solid #22c55e;
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+  }
+  #newIdReveal .id-label {
+    font-size: 12.5px;
+    color: #94a3b8;
+    margin-bottom: 4px;
+  }
+  #newIdReveal .id-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: #4ade80;
+    letter-spacing: 2px;
+    font-family: monospace;
+  }
+  #newIdReveal .id-note {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 6px;
+    line-height: 1.4;
+  }
+  #newIdReveal button {
+    margin-top: 10px;
+    width: 100%;
+    padding: 9px;
+    background: #22c55e;
+    border: none;
+    border-radius: 9px;
+    color: #000;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  #loggedInCard {
+    display: none;
+    text-align: center;
+  }
+  #loggedInCard h2 { font-size: 19px; margin-bottom: 8px; }
+  #loggedInCard p { font-size: 14px; color: #94a3b8; margin-bottom: 4px; }
+  #loggedInCard .li-id { font-family: monospace; color: #4ade80; }
+  #logoutBtn {
+    margin-top: 14px;
+    width: 100%;
+    padding: 10px;
+    background: transparent;
+    border: 1.5px solid #334155;
+    border-radius: 9px;
+    color: #94a3b8;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  #logoutBtn:hover { color: #f1f5f9; border-color: #475569; }
+
+  #onlinePanel {
+    margin-top: 18px;
+    text-align: left;
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 10px;
+    padding: 14px;
+  }
+  #onlinePanelHeader {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  #onlineDotIndicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #22c55e;
+  }
+  #onlineList {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  .online-list-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13.5px;
+    color: #f1f5f9;
+  }
+  .online-list-row .you-tag {
+    color: #64748b;
+    font-size: 12px;
+  }
+  .online-list-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #22c55e;
+    flex-shrink: 0;
+  }
+  #onlineEmpty {
+    font-size: 13px;
+    color: #64748b;
+  }
+
+  .app-section {
+    margin-top: 18px;
+    text-align: left;
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .app-section-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .app-section-title .count-badge {
+    font-size: 12px;
+    color: #4ade80;
+    background: rgba(34,197,94,.12);
+    border-radius: 6px;
+    padding: 1px 7px;
+  }
+  .search-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .search-row input {
+    flex: 1;
+    padding: 9px 12px;
+    background: #0f172a;
+    border: 1.5px solid #334155;
+    border-radius: 8px;
+    color: #f1f5f9;
+    font-size: 14px;
+    outline: none;
+  }
+  .search-row input:focus { border-color: #22c55e; }
+  .search-row button {
+    padding: 9px 14px;
+    background: #22c55e;
+    border: none;
+    border-radius: 8px;
+    color: #000;
+    font-weight: 600;
+    font-size: 13.5px;
+    cursor: pointer;
+  }
+  .search-row button:hover { background: #4ade80; }
+  .search-row button:disabled { opacity: .5; cursor: not-allowed; }
+
+  .person-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid #273549;
+    font-size: 13.5px;
+  }
+  .person-row:last-child { border-bottom: none; }
+  .person-row-name {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    overflow: hidden;
+  }
+  .person-row-name .pname { color: #f1f5f9; font-weight: 600; }
+  .person-row-name .pid { color: #64748b; font-size: 11.5px; font-family: monospace; }
+  .person-row-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .person-row-actions button {
+    background: transparent;
+    border: 1.5px solid #334155;
+    color: #94a3b8;
+    font-size: 12px;
+    padding: 5px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  .person-row-actions button:hover { color: #f1f5f9; border-color: #475569; }
+  .person-row-actions button.primary {
+    background: #22c55e;
+    border-color: #22c55e;
+    color: #000;
+    font-weight: 600;
+  }
+  .person-row-actions button.primary:hover { background: #4ade80; }
+  .person-row-actions button.danger {
+    border-color: #7f1d1d;
+    color: #f87171;
+  }
+  .person-row-actions button.danger:hover { background: rgba(239,68,68,.1); }
+  .person-row-actions button:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+  }
+  .section-empty {
+    font-size: 13px;
+    color: #64748b;
+    padding: 4px 0;
+  }
+  .search-note {
+    font-size: 11.5px;
+    color: #64748b;
+    margin-top: -4px;
+    margin-bottom: 10px;
+    line-height: 1.4;
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     APP SHELL — side-by-side sidebar + chat pane, Telegram-style
+     layout (structure only; palette matches the rest of the app).
+     ══════════════════════════════════════════════════════════ */
+  #appShell {
+    display: none;
+    width: 100%;
+    height: 100vh;
+  }
+  body.app-mode #appShell { display: flex; }
+
+  #sidebar {
+    width: 340px;
+    min-width: 260px;
+    max-width: 400px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    background: #111827;
+    border-right: 1.5px solid #1f2937;
+  }
+  #sidebarHeader {
+    padding: 14px 16px;
+    border-bottom: 1.5px solid #1f2937;
+    flex-shrink: 0;
+  }
+  #sidebarHeaderTop {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  #sidebarHeaderTop .app-title { font-size: 17px; font-weight: 700; }
+  #sidebarYouLine {
+    font-size: 12.5px;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #sidebarOnlineDot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #22c55e;
+    display: inline-block;
+  }
+  #sidebarLogoutBtn {
+    background: transparent;
+    border: 1.5px solid #334155;
+    color: #94a3b8;
+    font-size: 12.5px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  #sidebarLogoutBtn:hover { color: #f1f5f9; border-color: #475569; }
+
+  .sidebar-tabs {
+    display: flex;
+    gap: 4px;
+  }
+  .sidebar-tab {
+    flex: 1;
+    padding: 7px 4px;
+    text-align: center;
+    background: transparent;
+    border: 1.5px solid #334155;
+    border-radius: 8px;
+    color: #94a3b8;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    position: relative;
+  }
+  .sidebar-tab.active {
+    background: #22c55e;
+    border-color: #22c55e;
+    color: #000;
+  }
+  .sidebar-tab .tab-dot {
+    position: absolute;
+    top: -3px; right: -3px;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #ef4444;
+    display: none;
+  }
+  .sidebar-tab .tab-dot.show { display: block; }
+
+  #sidebarBody {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+  }
+  #sidebarBody .app-section {
+    margin-top: 0;
+    margin-bottom: 14px;
+  }
+  #sidebarBody .app-section:last-child { margin-bottom: 0; }
+
+  .sidebar-view { display: none; }
+  .sidebar-view.active { display: block; }
+
+  .chat-list-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 8px;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .chat-list-row:hover { background: #1e293b; }
+  .chat-list-row.selected { background: rgba(34,197,94,.12); }
+  .chat-list-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #334155;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 15px;
+    color: #f1f5f9;
+    flex-shrink: 0;
+  }
+  .chat-list-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .chat-list-name-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+  .chat-list-name {
+    font-size: 14.5px;
+    font-weight: 600;
+    color: #f1f5f9;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .chat-list-online-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #22c55e;
+    flex-shrink: 0;
+  }
+  .chat-list-preview {
+    font-size: 12.5px;
+    color: #64748b;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #chatPane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  #chatEmptyState {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #475569;
+    font-size: 16px;
+    text-align: center;
+    padding: 30px;
+  }
+  #chatThread {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+  #chatThreadHeader {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 18px;
+    border-bottom: 1.5px solid #1f2937;
+    flex-shrink: 0;
+  }
+  #chatThreadHeader .chat-list-avatar {
+    width: 34px; height: 34px; font-size: 13px;
+  }
+  #chatThreadHeaderName { font-size: 15px; font-weight: 600; }
+  #chatThreadHeaderStatus { font-size: 12px; color: #64748b; }
+
+  #chatMessages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .chat-msg {
+    max-width: 70%;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .chat-msg.mine { align-self: flex-end; align-items: flex-end; }
+  .chat-msg.theirs { align-self: flex-start; align-items: flex-start; }
+  .chat-msg-bubble {
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 15px;
+    padding: 10px 14px;
+    font-size: 15px;
+    line-height: 1.4;
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+  .chat-msg.mine .chat-msg-bubble {
+    background: #14532d;
+    border-color: #166534;
+  }
+  .chat-msg-meta {
+    font-size: 11px;
+    color: #64748b;
+    padding: 0 4px;
+  }
+
+  #chatComposer {
+    display: flex;
+    gap: 10px;
+    padding: 14px 18px;
+    border-top: 1.5px solid #1f2937;
+    flex-shrink: 0;
+  }
+  #chatMsgInput {
+    flex: 1;
+    padding: 10px 14px;
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 12px;
+    color: #f1f5f9;
+    font-size: 15px;
+    outline: none;
+    resize: none;
+    max-height: 120px;
+    font-family: inherit;
+  }
+  #chatMsgInput:focus { border-color: #22c55e; }
+  #chatSendBtn {
+    padding: 0 22px;
+    background: #22c55e;
+    border: none;
+    border-radius: 12px;
+    color: #000;
+    font-weight: 600;
+    font-size: 15px;
+    cursor: pointer;
+  }
+  #chatSendBtn:hover { background: #4ade80; }
+  #chatSendBtn:disabled { opacity: .5; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<div id="appShell">
+  <div id="sidebar">
+    <div id="sidebarHeader">
+      <div id="sidebarHeaderTop">
+        <span class="app-title">VUS DM's</span>
+        <button id="sidebarLogoutBtn">Log out</button>
+      </div>
+      <div id="sidebarYouLine">
+        <span id="sidebarOnlineDot"></span>
+        <span id="sidebarYouText"></span>
+      </div>
+      <div class="sidebar-tabs" style="margin-top:10px">
+        <button class="sidebar-tab active" id="tabChats">Chats</button>
+        <button class="sidebar-tab" id="tabFind">Find<span class="tab-dot" id="findTabDot"></span></button>
+        <button class="sidebar-tab" id="tabBlocked">Blocked</button>
+      </div>
+    </div>
+
+    <div id="sidebarBody">
+
+      <div class="sidebar-view active" id="viewChats">
+        <div id="friendsList"></div>
+        <div id="friendsEmpty" class="section-empty">No friends yet — use Find to add someone.</div>
+      </div>
+
+      <div class="sidebar-view" id="viewFind">
+        <div class="app-section">
+          <div class="app-section-title">Find people</div>
+          <div class="search-row">
+            <input type="text" id="searchInput" placeholder="Username or 6-digit ID…" maxlength="24">
+            <button id="searchBtn">Search</button>
+          </div>
+          <div class="search-note">Matches the start of a username, or an exact 6-digit ID. Blocking controls whether requests reach you, not whether you can be found.</div>
+          <div id="searchResults"></div>
+          <div id="searchEmpty" class="section-empty" style="display:none">No results.</div>
+        </div>
+
+        <div class="app-section">
+          <div class="app-section-title">
+            <span>Friend requests</span>
+            <span class="count-badge" id="incomingCountBadge" style="display:none"></span>
+          </div>
+          <div id="incomingRequestsList"></div>
+          <div id="incomingRequestsEmpty" class="section-empty">No incoming requests.</div>
+        </div>
+
+        <div class="app-section">
+          <div class="app-section-title">
+            <span>Hidden requests</span>
+            <span class="count-badge" id="hiddenCountBadge" style="display:none"></span>
+          </div>
+          <div class="search-note">Requests from people you've blocked land here instead.</div>
+          <div id="hiddenRequestsList"></div>
+          <div id="hiddenRequestsEmpty" class="section-empty">No hidden requests.</div>
+        </div>
+
+        <div class="app-section">
+          <div class="app-section-title">Sent requests</div>
+          <div id="outgoingRequestsList"></div>
+          <div id="outgoingRequestsEmpty" class="section-empty">No pending sent requests.</div>
+        </div>
+
+        <div class="app-section">
+          <div class="app-section-title">
+            <span>Online now</span>
+            <span id="onlineCountText" style="font-size:12px;color:#64748b"></span>
+          </div>
+          <div id="onlineList"></div>
+          <div id="onlineEmpty" style="display:none">No one else online right now.</div>
+        </div>
+      </div>
+
+      <div class="sidebar-view" id="viewBlocked">
+        <div class="app-section">
+          <div class="app-section-title">Blocked</div>
+          <div id="blockedList"></div>
+          <div id="blockedEmpty" class="section-empty">No one blocked.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="chatPane">
+    <div id="chatEmptyState">Select a friend to start chatting.</div>
+    <div id="chatThread">
+      <div id="chatThreadHeader">
+        <div class="chat-list-avatar" id="chatThreadAvatar"></div>
+        <div>
+          <div id="chatThreadHeaderName"></div>
+          <div id="chatThreadHeaderStatus"></div>
+        </div>
+      </div>
+      <div id="chatMessages"></div>
+      <div id="chatComposer">
+        <textarea id="chatMsgInput" rows="1" placeholder="Type a message…" maxlength="2000"></textarea>
+        <button id="chatSendBtn">Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="authCard">
+
+  <div id="authFlow">
+    <div id="authHeader">
+      <h1>VUS DM's</h1>
+      <p>Log in or create an account to start messaging.</p>
+    </div>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tabLogin">Log In</button>
+      <button class="auth-tab" id="tabSignup">Sign Up</button>
+    </div>
+
+    <div id="newIdReveal">
+      <div class="id-label">Your account ID</div>
+      <div class="id-value" id="revealedId"></div>
+      <div class="id-note">Save this — you (or friends) can use it to log in or add you. You can change it later in settings.</div>
+      <button id="newIdContinueBtn">Continue to Log In</button>
+    </div>
+
+    <form id="authForm" autocomplete="off">
+      <div id="loginFields" style="display:flex;flex-direction:column;gap:12px">
+        <div class="auth-field">
+          <label for="loginIdentifier">Username or ID</label>
+          <input type="text" id="loginIdentifier" placeholder="e.g. alex or 384021" maxlength="24">
+        </div>
+        <div class="auth-field">
+          <label for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" placeholder="Password">
+        </div>
+      </div>
+
+      <div id="signupFields" style="display:none;flex-direction:column;gap:12px">
+        <div class="auth-field">
+          <label for="signupUsername">Username</label>
+          <input type="text" id="signupUsername" placeholder="Pick a username" maxlength="24" autocomplete="off">
+          <div class="auth-hint">Letters, numbers, underscores. Must be unique.</div>
+        </div>
+        <div class="auth-field">
+          <label for="signupPassword">Password</label>
+          <input type="password" id="signupPassword" placeholder="Choose a password" autocomplete="new-password">
+        </div>
+        <div class="auth-field">
+          <label for="signupPasswordConfirm">Confirm password</label>
+          <input type="password" id="signupPasswordConfirm" placeholder="Retype your password" autocomplete="new-password">
+        </div>
+      </div>
+
+      <div id="authError"></div>
+      <div id="authSuccess"></div>
+
+      <button type="submit" id="authSubmitBtn">Log In</button>
+    </form>
+  </div>
+
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+/* ══════════════════════════════════════════════════════════
+   FIREBASE CONFIG
+   Same project pattern as the group chat app. Fill in your own
+   values below. This app does NOT use Firebase Authentication —
+   accounts (username, 6-digit ID, password) are plain records in
+   Realtime Database. See the note above AuthBackend for why, and
+   what that does and doesn't protect against.
+   ══════════════════════════════════════════════════════════ */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyC_cxqIYzFcQ8nVTo679JuVEgIZDAyrPEQ",
+  authDomain: "vus-dm.firebaseapp.com",
+  databaseURL: "https://vus-dm-default-rtdb.firebaseio.com",
+  projectId: "vus-dm",
+  storageBucket: "vus-dm.firebasestorage.app",
+  messagingSenderId: "768508136182",
+  appId: "1:768508136182:web:abd44cb531dd2c43dd7ad7",
+  measurementId: "G-H8CMTKZWJN"
+};
+
+/* ══════════════════════════════════════════════════════════
+   IMPORTANT SECURITY NOTE (read this before using in anything real)
+   ─────────────────────────────────────────────────────────
+   There is no Firebase Auth here. Passwords are stored as plain
+   fields on each account record in Realtime Database, and "login"
+   is just a client-side read + string comparison. This is a
+   deliberate, discussed tradeoff (see project notes) to avoid
+   Cloud Functions / Blaze billing exposure — it is NOT real
+   cryptographic auth. Treat it like a screen-lock PIN, not a
+   vault: someone with direct, targeted access to your database
+   rules or a rules misconfiguration could read a specific
+   password if they already know which account to target. Do not
+   store anything genuinely sensitive behind this, and do not
+   reuse these passwords elsewhere.
+   Security Rules (set in the Firebase console, NOT in this file)
+   should still be configured so that:
+     - /users/{uid} is only readable by path, not listable/scannable
+       as a whole (no wildcard "read everything" rule)
+     - /usernameIndex and /idIndex (see below) are readable for
+       lookups but not writable by clients directly beyond the
+       expected shape
+   This file assumes those rules exist; it does not create them.
+   ══════════════════════════════════════════════════════════ */
+
+const USERNAME_MAX_LENGTH = 24;
+const USERNAME_MIN_LENGTH = 3;
+const ID_LENGTH = 6;
+const ID_MIN = 100000;
+const ID_MAX = 999999;
+const SESSION_STORAGE_KEY = "dmAppSession"; // stores the logged-in account's internal key
+
+let db = null;
+let usersRef = null;
+let usernameIndexRef = null; // lowercase username -> internal account key (uniqueness + login lookup)
+let idIndexRef = null;       // 6-digit id -> internal account key (uniqueness + login lookup)
+let presenceRef = null;      // global online-presence node: presence/{accountKey} = { username }
+let connectedRef = null;     // Firebase's special .info/connected node
+let myPresenceRef = null;    // this tab's own presence entry, set once logged in
+
+function initFirebase() {
+  firebase.initializeApp(FIREBASE_CONFIG);
+  db = firebase.database();
+  usersRef = db.ref("users");
+  usernameIndexRef = db.ref("usernameIndex");
+  idIndexRef = db.ref("idIndex");
+  presenceRef = db.ref("presence");
+  connectedRef = db.ref(".info/connected");
+  dmsRef = db.ref("dms");
+}
+
+function normalizeUsernameKey(username) {
+  // Case-insensitive matching: index key is lowercased, display value keeps original casing.
+  return username.trim().toLowerCase();
+}
+
+function isValidUsernameFormat(username) {
+  return /^[a-zA-Z0-9_]+$/.test(username) &&
+    username.length >= USERNAME_MIN_LENGTH &&
+    username.length <= USERNAME_MAX_LENGTH;
+}
+
+function isLikelyId(identifier) {
+  return /^[0-9]{6}$/.test(identifier.trim());
+}
+
+function randomSixDigitId() {
+  return String(Math.floor(Math.random() * (ID_MAX - ID_MIN + 1)) + ID_MIN);
+}
+
+async function generateUniqueId() {
+  for (let attempt = 0; attempt < 15; attempt++) {
+    const candidate = randomSixDigitId();
+    const snap = await idIndexRef.child(candidate).get();
+    if (!snap.exists()) return candidate;
+  }
+  throw new Error("Couldn't generate a unique ID right now — try again.");
+}
+
+/* ── Account creation ── */
+async function createAccount(username, password) {
+  const cleanUsername = username.trim();
+  const usernameKey = normalizeUsernameKey(cleanUsername);
+
+  if (!isValidUsernameFormat(cleanUsername)) {
+    return { ok: false, error: "Username must be " + USERNAME_MIN_LENGTH + "-" + USERNAME_MAX_LENGTH + " characters: letters, numbers, or underscores only." };
+  }
+  if (!password || password.length < 4) {
+    return { ok: false, error: "Password must be at least 4 characters." };
+  }
+
+  // Uniqueness check against the index (case-insensitive).
+  const existing = await usernameIndexRef.child(usernameKey).get();
+  if (existing.exists()) {
+    return { ok: false, error: "That username is already taken." };
+  }
+
+  let newId;
+  try {
+    newId = await generateUniqueId();
+  } catch (e) {
+    return { ok: false, error: e.message || "Couldn't generate an ID — try again." };
+  }
+
+  const accountRef = usersRef.push();
+  const accountKey = accountRef.key;
+
+  const accountData = {
+    username: cleanUsername,
+    usernameLower: usernameKey,
+    id: newId,
+    password: password, // see security note above — plain field by design, not encrypted/hashed
+    createdAt: firebase.database.ServerValue.TIMESTAMP,
+    friends: {},
+    friendRequestsIncoming: {},
+    friendRequestsOutgoing: {},
+    blockedUsers: {}
+  };
+
+  try {
+    // Write account + both index entries together so nothing is left half-created.
+    const updates = {};
+    updates["users/" + accountKey] = accountData;
+    updates["usernameIndex/" + usernameKey] = accountKey;
+    updates["idIndex/" + newId] = accountKey;
+    await db.ref().update(updates);
+  } catch (e) {
+    return { ok: false, error: "Couldn't create your account — try again." };
+  }
+
+  return { ok: true, accountKey, username: cleanUsername, id: newId };
+}
+
+/* ── Login ── */
+async function findAccountKeyByIdentifier(identifier) {
+  const clean = identifier.trim();
+  if (isLikelyId(clean)) {
+    const snap = await idIndexRef.child(clean).get();
+    return snap.exists() ? snap.val() : null;
+  }
+  const usernameKey = normalizeUsernameKey(clean);
+  const snap = await usernameIndexRef.child(usernameKey).get();
+  return snap.exists() ? snap.val() : null;
+}
+
+async function login(identifier, password) {
+  if (!identifier.trim() || !password) {
+    return { ok: false, error: "Enter your username/ID and password." };
+  }
+
+  let accountKey;
+  try {
+    accountKey = await findAccountKeyByIdentifier(identifier);
+  } catch (e) {
+    return { ok: false, error: "Couldn't reach the server — try again." };
+  }
+
+  if (!accountKey) {
+    return { ok: false, error: "No account found with that username or ID." };
+  }
+
+  let accountSnap;
+  try {
+    accountSnap = await usersRef.child(accountKey).get();
+  } catch (e) {
+    return { ok: false, error: "Couldn't reach the server — try again." };
+  }
+
+  const account = accountSnap.val();
+  if (!account || account.password !== password) {
+    return { ok: false, error: "Incorrect password." };
+  }
+
+  return { ok: true, accountKey, username: account.username, id: account.id };
+}
+
+function saveSession(accountKey, username, id) {
+  try {
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ accountKey, username, id }));
+  } catch (e) {}
+}
+
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function clearSession() {
+  try { localStorage.removeItem(SESSION_STORAGE_KEY); } catch (e) {}
+}
+
+/* ── Global online presence ──
+   Same onDisconnect() pattern as the group chat app: claim a node under
+   /presence keyed by this account's real key, mark it for auto-removal
+   if the connection drops, and watch the whole node live to render a
+   count + list. This is intentionally global (no rooms yet) per project
+   decision. */
+function claimPresence(accountKey, username) {
+  releasePresence();
+  myPresenceRef = presenceRef.child(accountKey);
+  myPresenceRef.onDisconnect().remove();
+  myPresenceRef.set({
+    username: username,
+    joinedAt: firebase.database.ServerValue.TIMESTAMP
+  });
+}
+
+function releasePresence() {
+  if (myPresenceRef) {
+    myPresenceRef.onDisconnect().cancel();
+    myPresenceRef.remove();
+    myPresenceRef = null;
+  }
+}
+
+function watchPresenceList(onList) {
+  presenceRef.on("value", snap => {
+    const val = snap.val() || {};
+    const list = Object.entries(val).map(([key, v]) => ({
+      accountKey: key,
+      username: (v && v.username) || "Unknown",
+      joinedAt: (v && v.joinedAt) || null
+    }));
+    onList(list);
+  });
+}
+
+/* ══════════════════════════════════════════════════════════
+   SEARCH + FRIEND REQUESTS + BLOCKING
+   ══════════════════════════════════════════════════════════ */
+
+// Username search: starts-with match, keyed directly off usernameIndex's
+// keys (usernameIndex/{usernameLower} = accountKey). Ordering by key is
+// native to Realtime Database, so this needs no .indexOn and no separate
+// public/opt-in list — every account is findable by name or ID, always;
+// blocking (below) controls request visibility instead of search
+// visibility, per project decision.
+async function searchByUsernamePrefix(prefix) {
+  const lower = prefix.trim().toLowerCase();
+  if (!lower) return [];
+  const endBound = lower + "\uf8ff"; // high-codepoint suffix trick for prefix range queries
+  const snap = await usernameIndexRef.orderByKey().startAt(lower).endAt(endBound).limitToFirst(20).get();
+  const val = snap.val() || {};
+  const entries = Object.entries(val); // [usernameLower, accountKey][]
+
+  // usernameIndex only stores the account key, not the display-cased
+  // username or id — fetch each matched account's profile to fill those
+  // in for the results list.
+  const accounts = await Promise.all(entries.map(([, accountKey]) => usersRef.child(accountKey).get()));
+  return accounts
+    .map((accSnap, i) => {
+      const acc = accSnap.val();
+      if (!acc) return null;
+      return { accountKey: entries[i][1], username: acc.username, id: acc.id };
+    })
+    .filter(Boolean);
+}
+
+// Exact 6-digit ID search: same lookup as before, unaffected by blocking —
+// blocking never hides someone from being found, only re-routes requests.
+async function searchByExactId(idStr) {
+  const clean = idStr.trim();
+  if (!isLikelyId(clean)) return [];
+  const snap = await idIndexRef.child(clean).get();
+  if (!snap.exists()) return [];
+  const accountKey = snap.val();
+  const accountSnap = await usersRef.child(accountKey).get();
+  const account = accountSnap.val();
+  if (!account) return [];
+  return [{ accountKey, username: account.username, id: account.id }];
+}
+
+async function performSearch(query) {
+  const clean = query.trim();
+  if (!clean) return [];
+  if (isLikelyId(clean)) {
+    return searchByExactId(clean);
+  }
+  return searchByUsernamePrefix(clean);
+}
+
+// Relationship state between the logged-in user and some other account,
+// used to decide what button/label to show in search results and lists.
+// Reads directly off currentUserData (kept live via watchOwnAccount), so
+// no extra round trip per row.
+function getRelationshipStatus(otherAccountKey) {
+  if (!currentUserData) return "unknown";
+  if (currentSession && otherAccountKey === currentSession.accountKey) return "self";
+  if (currentUserData.friends && currentUserData.friends[otherAccountKey]) return "friends";
+  if (currentUserData.friendRequestsOutgoing && currentUserData.friendRequestsOutgoing[otherAccountKey]) return "outgoing";
+  if (currentUserData.friendRequestsIncoming && currentUserData.friendRequestsIncoming[otherAccountKey]) return "incoming";
+  return "none";
+}
+
+async function sendFriendRequest(toAccountKey, toUsername) {
+  if (!currentSession) return { ok: false, error: "Not logged in." };
+  if (toAccountKey === currentSession.accountKey) return { ok: false, error: "You can't friend yourself." };
+
+  const status = getRelationshipStatus(toAccountKey);
+  if (status === "friends") return { ok: false, error: "Already friends." };
+  if (status === "outgoing") return { ok: false, error: "Request already pending." };
+
+  // Check whether the RECIPIENT has blocked the sender — if so, the
+  // request still goes through, but lands in their Hidden Requests
+  // instead of the normal list. The sender never learns this happened;
+  // their own outgoing-request view looks identical either way.
+  let isHiddenForRecipient = false;
+  try {
+    const blockSnap = await usersRef.child(toAccountKey).child("blockedUsers").child(currentSession.accountKey).get();
+    isHiddenForRecipient = blockSnap.exists();
+  } catch (e) {
+    isHiddenForRecipient = false; // fail open to "visible" rather than block sending entirely on a read hiccup
+  }
+
+  const updates = {};
+  updates["users/" + toAccountKey + "/friendRequestsIncoming/" + currentSession.accountKey] = {
+    fromUsername: currentSession.username,
+    sentAt: firebase.database.ServerValue.TIMESTAMP,
+    hidden: isHiddenForRecipient
+  };
+  updates["users/" + currentSession.accountKey + "/friendRequestsOutgoing/" + toAccountKey] = {
+    toUsername: toUsername,
+    sentAt: firebase.database.ServerValue.TIMESTAMP
+  };
+
+  try {
+    await db.ref().update(updates);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: "Couldn't send request — try again." };
+  }
+}
+
+async function acceptFriendRequest(fromAccountKey, fromUsername) {
+  if (!currentSession) return { ok: false, error: "Not logged in." };
+
+  const updates = {};
+  // Clear the request pair.
+  updates["users/" + currentSession.accountKey + "/friendRequestsIncoming/" + fromAccountKey] = null;
+  updates["users/" + fromAccountKey + "/friendRequestsOutgoing/" + currentSession.accountKey] = null;
+  // Write the friendship on both sides.
+  updates["users/" + currentSession.accountKey + "/friends/" + fromAccountKey] = {
+    username: fromUsername,
+    since: firebase.database.ServerValue.TIMESTAMP
+  };
+  updates["users/" + fromAccountKey + "/friends/" + currentSession.accountKey] = {
+    username: currentSession.username,
+    since: firebase.database.ServerValue.TIMESTAMP
+  };
+
+  try {
+    await db.ref().update(updates);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: "Couldn't accept — try again." };
+  }
+}
+
+async function declineFriendRequest(fromAccountKey) {
+  if (!currentSession) return { ok: false, error: "Not logged in." };
+
+  const updates = {};
+  updates["users/" + currentSession.accountKey + "/friendRequestsIncoming/" + fromAccountKey] = null;
+  updates["users/" + fromAccountKey + "/friendRequestsOutgoing/" + currentSession.accountKey] = null;
+
+  try {
+    await db.ref().update(updates);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: "Couldn't decline — try again." };
+  }
+}
+
+async function cancelOutgoingRequest(toAccountKey) {
+  if (!currentSession) return { ok: false, error: "Not logged in." };
+
+  const updates = {};
+  updates["users/" + currentSession.accountKey + "/friendRequestsOutgoing/" + toAccountKey] = null;
+  updates["users/" + toAccountKey + "/friendRequestsIncoming/" + currentSession.accountKey] = null;
+
+  try {
+    await db.ref().update(updates);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: "Couldn't cancel — try again." };
+  }
+}
+
+async function unfriend(otherAccountKey) {
+  if (!currentSession) return { ok: false, error: "Not logged in." };
+
+  const updates = {};
+  updates["users/" + currentSession.accountKey + "/friends/" + otherAccountKey] = null;
+  updates["users/" + otherAccountKey + "/friends/" + currentSession.accountKey] = null;
+
+  try {
+    await db.ref().update(updates);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: "Couldn't unfriend — try again." };
+  }
+}
+
+// Blocking is one-directional and lives only on the blocker's account —
+// it does not write anything to the blocked person's record. It clears
+// any existing friendship or pending request between the pair (both
+// sides), and going forward, sendFriendRequest() checks blockedUsers on
+// the recipient's side to decide whether a NEW request from this person
+// should land in Hidden Requests instead of the normal list.
+async function blockUser(otherAccountKey, otherUsername) {
+  if (!currentSession) return { ok: false, error: "Not logged in." };
+  if (otherAccountKey === currentSession.accountKey) return { ok: false, error: "You can't block yourself." };
+
+  const updates = {};
+  // Clear friendship both sides, if any.
+  updates["users/" + currentSession.accountKey + "/friends/" + otherAccountKey] = null;
+  updates["users/" + otherAccountKey + "/friends/" + currentSession.accountKey] = null;
+  // Clear any pending request between the pair, either direction.
+  updates["users/" + currentSession.accountKey + "/friendRequestsIncoming/" + otherAccountKey] = null;
+  updates["users/" + otherAccountKey + "/friendRequestsOutgoing/" + currentSession.accountKey] = null;
+  updates["users/" + currentSession.accountKey + "/friendRequestsOutgoing/" + otherAccountKey] = null;
+  updates["users/" + otherAccountKey + "/friendRequestsIncoming/" + currentSession.accountKey] = null;
+  // Record the block, blocker's side only.
+  updates["users/" + currentSession.accountKey + "/blockedUsers/" + otherAccountKey] = {
+    username: otherUsername,
+    blockedAt: firebase.database.ServerValue.TIMESTAMP
+  };
+
+  try {
+    await db.ref().update(updates);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: "Couldn't block — try again." };
+  }
+}
+
+async function unblockUser(otherAccountKey) {
+  if (!currentSession) return { ok: false, error: "Not logged in." };
+
+  try {
+    await usersRef.child(currentSession.accountKey).child("blockedUsers").child(otherAccountKey).remove();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: "Couldn't unblock — try again." };
+  }
+}
+
+// Live view of the logged-in user's own account record (friends, requests,
+// etc.) — watched continuously so all the list UIs update in real time
+// without needing manual refresh/re-fetch after every action.
+let currentUserData = null;
+function watchOwnAccount(accountKey, onChange) {
+  usersRef.child(accountKey).on("value", snap => {
+    currentUserData = snap.val();
+    onChange(currentUserData);
+  });
+}
+
+function unwatchOwnAccount(accountKey) {
+  if (accountKey) usersRef.child(accountKey).off("value");
+  currentUserData = null;
+}
+
+/* ══════════════════════════════════════════════════════════
+   DIRECT MESSAGES
+   Thread ID is deterministic: both account keys, sorted, joined with an
+   underscore. Either side can always recompute it without a lookup, and
+   there's exactly one thread per friend pair by construction (matches
+   the "Option A" decision from planning — simpler, fewer failure modes,
+   at the cost of not supporting multiple/archivable threads per pair,
+   which isn't needed right now).
+   ══════════════════════════════════════════════════════════ */
+let dmsRef = null; // set in initFirebase alongside the other refs
+
+function threadIdFor(accountKeyA, accountKeyB) {
+  return [accountKeyA, accountKeyB].sort().join("_");
+}
+
+async function sendDirectMessage(otherAccountKey, text) {
+  if (!currentSession) return { ok: false, error: "Not logged in." };
+  const clean = text.trim();
+  if (!clean) return { ok: false, error: "Message is empty." };
+
+  const threadId = threadIdFor(currentSession.accountKey, otherAccountKey);
+  try {
+    await dmsRef.child(threadId).child("messages").push({
+      fromAccountKey: currentSession.accountKey,
+      text: clean,
+      ts: firebase.database.ServerValue.TIMESTAMP
+    });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: "Message failed to send — try again." };
+  }
+}
+
+let currentThreadMessagesRef = null; // the child ref currently being watched, so we can .off() it when switching threads
+
+function watchThreadMessages(otherAccountKey, onMessage) {
+  stopWatchingOpenChat();
+  const threadId = threadIdFor(currentSession.accountKey, otherAccountKey);
+  currentThreadMessagesRef = dmsRef.child(threadId).child("messages");
+  currentThreadMessagesRef.limitToLast(200).on("child_added", snap => {
+    onMessage({ id: snap.key, ...snap.val() });
+  });
+}
+
+function stopWatchingOpenChat() {
+  if (currentThreadMessagesRef) {
+    currentThreadMessagesRef.off("child_added");
+    currentThreadMessagesRef = null;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   UI WIRING
+   ══════════════════════════════════════════════════════════ */
+const $authFlow = document.getElementById("authFlow");
+const $appShell = document.getElementById("appShell");
+const $sidebarYouText = document.getElementById("sidebarYouText");
+const $sidebarLogoutBtn = document.getElementById("sidebarLogoutBtn");
+
+const $tabChats = document.getElementById("tabChats");
+const $tabFind = document.getElementById("tabFind");
+const $tabBlocked = document.getElementById("tabBlocked");
+const $findTabDot = document.getElementById("findTabDot");
+const $viewChats = document.getElementById("viewChats");
+const $viewFind = document.getElementById("viewFind");
+const $viewBlocked = document.getElementById("viewBlocked");
+
+const $chatEmptyState = document.getElementById("chatEmptyState");
+const $chatThread = document.getElementById("chatThread");
+const $chatThreadAvatar = document.getElementById("chatThreadAvatar");
+const $chatThreadHeaderName = document.getElementById("chatThreadHeaderName");
+const $chatThreadHeaderStatus = document.getElementById("chatThreadHeaderStatus");
+const $chatMessages = document.getElementById("chatMessages");
+const $chatMsgInput = document.getElementById("chatMsgInput");
+const $chatSendBtn = document.getElementById("chatSendBtn");
+
+const $tabLogin = document.getElementById("tabLogin");
+const $tabSignup = document.getElementById("tabSignup");
+const $loginFields = document.getElementById("loginFields");
+const $signupFields = document.getElementById("signupFields");
+const $authForm = document.getElementById("authForm");
+const $authSubmitBtn = document.getElementById("authSubmitBtn");
+const $authError = document.getElementById("authError");
+const $authSuccess = document.getElementById("authSuccess");
+
+const $loginIdentifier = document.getElementById("loginIdentifier");
+const $loginPassword = document.getElementById("loginPassword");
+const $signupUsername = document.getElementById("signupUsername");
+const $signupPassword = document.getElementById("signupPassword");
+const $signupPasswordConfirm = document.getElementById("signupPasswordConfirm");
+
+const $newIdReveal = document.getElementById("newIdReveal");
+const $revealedId = document.getElementById("revealedId");
+const $newIdContinueBtn = document.getElementById("newIdContinueBtn");
+
+const $onlineCountText = document.getElementById("onlineCountText");
+const $onlineList = document.getElementById("onlineList");
+const $onlineEmpty = document.getElementById("onlineEmpty");
+
+const $searchInput = document.getElementById("searchInput");
+const $searchBtn = document.getElementById("searchBtn");
+const $searchResults = document.getElementById("searchResults");
+const $searchEmpty = document.getElementById("searchEmpty");
+
+const $incomingRequestsList = document.getElementById("incomingRequestsList");
+const $incomingRequestsEmpty = document.getElementById("incomingRequestsEmpty");
+const $incomingCountBadge = document.getElementById("incomingCountBadge");
+const $hiddenRequestsList = document.getElementById("hiddenRequestsList");
+const $hiddenRequestsEmpty = document.getElementById("hiddenRequestsEmpty");
+const $hiddenCountBadge = document.getElementById("hiddenCountBadge");
+const $outgoingRequestsList = document.getElementById("outgoingRequestsList");
+const $outgoingRequestsEmpty = document.getElementById("outgoingRequestsEmpty");
+const $friendsList = document.getElementById("friendsList");
+const $friendsEmpty = document.getElementById("friendsEmpty");
+const $blockedList = document.getElementById("blockedList");
+const $blockedEmpty = document.getElementById("blockedEmpty");
+
+let mode = "login"; // "login" | "signup"
+
+function setMode(newMode) {
+  mode = newMode;
+  $authError.textContent = "";
+  $authSuccess.style.display = "none";
+  $newIdReveal.style.display = "none";
+  $authForm.style.display = "flex";
+  $authForm.style.flexDirection = "column";
+  $authForm.style.gap = "12px";
+
+  if (mode === "login") {
+    $tabLogin.classList.add("active");
+    $tabSignup.classList.remove("active");
+    $loginFields.style.display = "flex";
+    $signupFields.style.display = "none";
+    $authSubmitBtn.textContent = "Log In";
+  } else {
+    $tabSignup.classList.add("active");
+    $tabLogin.classList.remove("active");
+    $loginFields.style.display = "none";
+    $signupFields.style.display = "flex";
+    $authSubmitBtn.textContent = "Sign Up";
+  }
+}
+
+$tabLogin.addEventListener("click", () => setMode("login"));
+$tabSignup.addEventListener("click", () => setMode("signup"));
+
+let currentSession = null; // { accountKey, username, id }, set once logged in
+
+function renderOnlineList(list) {
+  latestPresenceAccountKeys = new Set(list.map(e => e.accountKey));
+
+  $onlineCountText.textContent = list.length + " online";
+  $onlineList.innerHTML = "";
+
+  const sorted = [...list].sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
+
+  if (sorted.length === 0) {
+    $onlineEmpty.style.display = "block";
+  } else {
+    $onlineEmpty.style.display = "none";
+    sorted.forEach(entry => {
+      const row = document.createElement("div");
+      row.className = "online-list-row";
+      const isMe = currentSession && entry.accountKey === currentSession.accountKey;
+      row.innerHTML = `<span class="online-list-dot"></span><span>${entry.username}</span>` +
+        (isMe ? `<span class="you-tag">(you)</span>` : "");
+      $onlineList.appendChild(row);
+    });
+  }
+
+  // Friends list shows an online dot per row — re-render it whenever
+  // presence changes so those dots stay live without needing a fresh
+  // account-data event.
+  if (currentUserData) renderFriendsList(currentUserData);
+  if (openChatAccountKey) updateChatThreadHeaderStatus();
+}
+
+let lastSearchResults = []; // re-rendered whenever currentUserData updates, so button states (Pending/Friends/etc) stay live without re-searching
+
+function renderSearchResults(results) {
+  lastSearchResults = results;
+  $searchResults.innerHTML = "";
+  if (results.length === 0) {
+    $searchEmpty.style.display = "block";
+    return;
+  }
+  $searchEmpty.style.display = "none";
+
+  results.forEach(person => {
+    const row = document.createElement("div");
+    row.className = "person-row";
+
+    const nameWrap = document.createElement("div");
+    nameWrap.className = "person-row-name";
+    nameWrap.innerHTML = `<span class="pname">${esc(person.username)}</span><span class="pid">ID: ${esc(String(person.id))}</span>`;
+    row.appendChild(nameWrap);
+
+    const actions = document.createElement("div");
+    actions.className = "person-row-actions";
+
+    const status = getRelationshipStatus(person.accountKey);
+    const btn = document.createElement("button");
+
+    if (status === "self") {
+      btn.textContent = "You";
+      btn.disabled = true;
+    } else if (status === "friends") {
+      btn.textContent = "Friends";
+      btn.disabled = true;
+    } else if (status === "outgoing") {
+      btn.textContent = "Pending";
+      btn.disabled = true;
+    } else if (status === "incoming") {
+      btn.textContent = "Respond below";
+      btn.disabled = true;
+    } else {
+      btn.textContent = "Add Friend";
+      btn.className = "primary";
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        btn.textContent = "Sending…";
+        const result = await sendFriendRequest(person.accountKey, person.username);
+        if (!result.ok) {
+          showComposerNotice(result.error);
+          btn.disabled = false;
+          btn.textContent = "Add Friend";
+        }
+        // On success, the live watchOwnAccount subscription re-renders
+        // this button via the next search (button state itself won't
+        // auto-update mid-list without a re-search, which is fine here).
+      });
+    }
+
+    actions.appendChild(btn);
+    row.appendChild(actions);
+    $searchResults.appendChild(row);
+  });
+}
+
+function esc(s = "") {
+  return String(s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// Shared row builder for an incoming request (used for both the normal
+// and hidden lists — same actions apply either way, per project decision
+// that hidden just changes which bucket it's shown in, not what you can
+// do with it).
+function buildIncomingRequestRow(fromAccountKey, req) {
+  const row = document.createElement("div");
+  row.className = "person-row";
+
+  const nameWrap = document.createElement("div");
+  nameWrap.className = "person-row-name";
+  nameWrap.innerHTML = `<span class="pname">${esc(req.fromUsername)}</span>`;
+  row.appendChild(nameWrap);
+
+  const actions = document.createElement("div");
+  actions.className = "person-row-actions";
+
+  const acceptBtn = document.createElement("button");
+  acceptBtn.className = "primary";
+  acceptBtn.textContent = "Accept";
+  acceptBtn.addEventListener("click", async () => {
+    setRowButtonsDisabled(true);
+    const result = await acceptFriendRequest(fromAccountKey, req.fromUsername);
+    if (!result.ok) { showComposerNotice(result.error); setRowButtonsDisabled(false); }
+  });
+
+  const declineBtn = document.createElement("button");
+  declineBtn.className = "danger";
+  declineBtn.textContent = "Decline";
+  declineBtn.addEventListener("click", async () => {
+    setRowButtonsDisabled(true);
+    const result = await declineFriendRequest(fromAccountKey);
+    if (!result.ok) { showComposerNotice(result.error); setRowButtonsDisabled(false); }
+  });
+
+  const blockBtn = document.createElement("button");
+  blockBtn.textContent = "Block";
+  blockBtn.addEventListener("click", async () => {
+    setRowButtonsDisabled(true);
+    const result = await blockUser(fromAccountKey, req.fromUsername);
+    if (!result.ok) { showComposerNotice(result.error); setRowButtonsDisabled(false); }
+  });
+
+  function setRowButtonsDisabled(disabled) {
+    acceptBtn.disabled = disabled;
+    declineBtn.disabled = disabled;
+    blockBtn.disabled = disabled;
+  }
+
+  actions.appendChild(acceptBtn);
+  actions.appendChild(declineBtn);
+  actions.appendChild(blockBtn);
+  row.appendChild(actions);
+  return row;
+}
+
+function renderIncomingRequests(userData) {
+  const incoming = (userData && userData.friendRequestsIncoming) || {};
+  const visible = Object.entries(incoming).filter(([, req]) => !req.hidden);
+  const hidden = Object.entries(incoming).filter(([, req]) => req.hidden);
+
+  $incomingRequestsList.innerHTML = "";
+  if (visible.length === 0) {
+    $incomingRequestsEmpty.style.display = "block";
+    $incomingCountBadge.style.display = "none";
+  } else {
+    $incomingRequestsEmpty.style.display = "none";
+    $incomingCountBadge.style.display = "inline-block";
+    $incomingCountBadge.textContent = visible.length;
+  }
+  visible.forEach(([fromAccountKey, req]) => {
+    $incomingRequestsList.appendChild(buildIncomingRequestRow(fromAccountKey, req));
+  });
+
+  $hiddenRequestsList.innerHTML = "";
+  if (hidden.length === 0) {
+    $hiddenRequestsEmpty.style.display = "block";
+    $hiddenCountBadge.style.display = "none";
+  } else {
+    $hiddenRequestsEmpty.style.display = "none";
+    $hiddenCountBadge.style.display = "inline-block";
+    $hiddenCountBadge.textContent = hidden.length;
+  }
+  hidden.forEach(([fromAccountKey, req]) => {
+    $hiddenRequestsList.appendChild(buildIncomingRequestRow(fromAccountKey, req));
+  });
+}
+
+function renderOutgoingRequests(userData) {
+  const outgoing = (userData && userData.friendRequestsOutgoing) || {};
+  const entries = Object.entries(outgoing);
+
+  $outgoingRequestsList.innerHTML = "";
+  $outgoingRequestsEmpty.style.display = entries.length === 0 ? "block" : "none";
+
+  entries.forEach(([toAccountKey, req]) => {
+    const row = document.createElement("div");
+    row.className = "person-row";
+
+    const nameWrap = document.createElement("div");
+    nameWrap.className = "person-row-name";
+    nameWrap.innerHTML = `<span class="pname">${esc(req.toUsername)}</span><span class="pid">Pending…</span>`;
+    row.appendChild(nameWrap);
+
+    const actions = document.createElement("div");
+    actions.className = "person-row-actions";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.addEventListener("click", async () => {
+      cancelBtn.disabled = true;
+      const result = await cancelOutgoingRequest(toAccountKey);
+      if (!result.ok) {
+        showComposerNotice(result.error);
+        cancelBtn.disabled = false;
+      }
+    });
+
+    actions.appendChild(cancelBtn);
+    row.appendChild(actions);
+    $outgoingRequestsList.appendChild(row);
+  });
+}
+
+let latestPresenceAccountKeys = new Set(); // kept in sync by watchPresenceList's onList callback, used to show online dots in the chat list
+
+function initialsFor(username) {
+  return (username || "?").trim().slice(0, 1).toUpperCase();
+}
+
+function renderFriendsList(userData) {
+  const friends = (userData && userData.friends) || {};
+  const entries = Object.entries(friends);
+
+  $friendsList.innerHTML = "";
+  $friendsEmpty.style.display = entries.length === 0 ? "block" : "none";
+
+  entries.forEach(([friendAccountKey, friendData]) => {
+    const wrap = document.createElement("div");
+
+    const row = document.createElement("div");
+    row.className = "chat-list-row" + (openChatAccountKey === friendAccountKey ? " selected" : "");
+    row.addEventListener("click", () => openChatWith(friendAccountKey, friendData.username));
+
+    const avatar = document.createElement("div");
+    avatar.className = "chat-list-avatar";
+    avatar.textContent = initialsFor(friendData.username);
+    row.appendChild(avatar);
+
+    const info = document.createElement("div");
+    info.className = "chat-list-info";
+    const nameRow = document.createElement("div");
+    nameRow.className = "chat-list-name-row";
+    const nameEl = document.createElement("span");
+    nameEl.className = "chat-list-name";
+    nameEl.textContent = friendData.username;
+    nameRow.appendChild(nameEl);
+    if (latestPresenceAccountKeys.has(friendAccountKey)) {
+      const dot = document.createElement("span");
+      dot.className = "chat-list-online-dot";
+      nameRow.appendChild(dot);
+    }
+    info.appendChild(nameRow);
+
+    const preview = document.createElement("div");
+    preview.className = "chat-list-preview";
+    preview.textContent = "Click to open chat";
+    info.appendChild(preview);
+
+    row.appendChild(info);
+
+    // Small "⋮" menu button, click stops propagation so it doesn't also
+    // open the chat — reveals Unfriend/Block inline underneath rather than
+    // cluttering the row with two always-visible buttons.
+    const menuBtn = document.createElement("button");
+    menuBtn.textContent = "⋮";
+    menuBtn.style.cssText = "background:transparent;border:none;color:#64748b;font-size:18px;cursor:pointer;padding:4px 8px;flex-shrink:0";
+    menuBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      actionsRow.style.display = actionsRow.style.display === "flex" ? "none" : "flex";
+    });
+    row.appendChild(menuBtn);
+
+    wrap.appendChild(row);
+
+    const actionsRow = document.createElement("div");
+    actionsRow.className = "person-row-actions";
+    actionsRow.style.cssText = "display:none;padding:0 8px 8px 58px";
+
+    const unfriendBtn = document.createElement("button");
+    unfriendBtn.className = "danger";
+    unfriendBtn.textContent = "Unfriend";
+    unfriendBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      unfriendBtn.disabled = true;
+      blockBtn.disabled = true;
+      const result = await unfriend(friendAccountKey);
+      if (!result.ok) {
+        showComposerNotice(result.error);
+        unfriendBtn.disabled = false;
+        blockBtn.disabled = false;
+      }
+    });
+    actionsRow.appendChild(unfriendBtn);
+
+    const blockBtn = document.createElement("button");
+    blockBtn.textContent = "Block";
+    blockBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      unfriendBtn.disabled = true;
+      blockBtn.disabled = true;
+      const result = await blockUser(friendAccountKey, friendData.username);
+      if (!result.ok) {
+        showComposerNotice(result.error);
+        unfriendBtn.disabled = false;
+        blockBtn.disabled = false;
+      }
+    });
+    actionsRow.appendChild(blockBtn);
+
+    wrap.appendChild(actionsRow);
+    $friendsList.appendChild(wrap);
+  });
+}
+
+function renderBlockedList(userData) {
+  const blocked = (userData && userData.blockedUsers) || {};
+  const entries = Object.entries(blocked);
+
+  $blockedList.innerHTML = "";
+  $blockedEmpty.style.display = entries.length === 0 ? "block" : "none";
+
+  entries.forEach(([blockedAccountKey, blockedData]) => {
+    const row = document.createElement("div");
+    row.className = "person-row";
+
+    const nameWrap = document.createElement("div");
+    nameWrap.className = "person-row-name";
+    nameWrap.innerHTML = `<span class="pname">${esc(blockedData.username)}</span>`;
+    row.appendChild(nameWrap);
+
+    const actions = document.createElement("div");
+    actions.className = "person-row-actions";
+
+    const unblockBtn = document.createElement("button");
+    unblockBtn.textContent = "Unblock";
+    unblockBtn.addEventListener("click", async () => {
+      unblockBtn.disabled = true;
+      const result = await unblockUser(blockedAccountKey);
+      if (!result.ok) {
+        showComposerNotice(result.error);
+        unblockBtn.disabled = false;
+      }
+    });
+    actions.appendChild(unblockBtn);
+
+    row.appendChild(actions);
+    $blockedList.appendChild(row);
+  });
+}
+
+function renderAllRelationshipUI(userData) {
+  renderIncomingRequests(userData);
+  renderOutgoingRequests(userData);
+  renderFriendsList(userData);
+  renderBlockedList(userData);
+  updateFindTabDot(userData);
+  if (lastSearchResults.length > 0) renderSearchResults(lastSearchResults);
+}
+
+$searchBtn.addEventListener("click", async () => {
+  const query = $searchInput.value;
+  $searchBtn.disabled = true;
+  try {
+    const results = await performSearch(query);
+    renderSearchResults(results);
+  } catch (e) {
+    showComposerNotice("Search failed — try again.");
+  } finally {
+    $searchBtn.disabled = false;
+  }
+});
+$searchInput.addEventListener("keydown", e => {
+  if (e.key === "Enter") { e.preventDefault(); $searchBtn.click(); }
+});
+
+// Small notice helper reused from the group chat app's pattern — shows a
+// brief inline message for errors that don't belong in the main authError
+// box (e.g. an action failing after the user's already logged in).
+let composerNoticeTimer = null;
+function showComposerNotice(text) {
+  // Reuses the authError element as a lightweight toast-ish notice since
+  // there's no separate composer/toolbar in this app yet.
+  $authError.textContent = text;
+  clearTimeout(composerNoticeTimer);
+  composerNoticeTimer = setTimeout(() => { $authError.textContent = ""; }, 4000);
+}
+
+function showLoggedInState(session) {
+  document.body.classList.add("app-mode");
+  $sidebarYouText.textContent = session.username + " · ID " + session.id;
+}
+
+function showAuthFlow() {
+  document.body.classList.remove("app-mode");
+  $authFlow.style.display = "block";
+}
+
+$sidebarLogoutBtn.addEventListener("click", () => {
+  releasePresence();
+  unwatchOwnAccount(currentSession && currentSession.accountKey);
+  stopWatchingOpenChat();
+  currentSession = null;
+  clearSession();
+  showAuthFlow();
+  setMode("login");
+  $loginIdentifier.value = "";
+  $loginPassword.value = "";
+});
+
+$newIdContinueBtn.addEventListener("click", () => {
+  $newIdReveal.style.display = "none";
+  $authForm.style.display = "flex";
+  $authForm.style.flexDirection = "column";
+  $authForm.style.gap = "12px";
+  setMode("login");
+});
+
+$authForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $authError.textContent = "";
+  $authSuccess.style.display = "none";
+  $authSubmitBtn.disabled = true;
+
+  try {
+    if (mode === "login") {
+      const identifier = $loginIdentifier.value;
+      const password = $loginPassword.value;
+      const result = await login(identifier, password);
+      if (!result.ok) {
+        $authError.textContent = result.error;
+        return;
+      }
+      saveSession(result.accountKey, result.username, result.id);
+      currentSession = result;
+      claimPresence(result.accountKey, result.username);
+      watchOwnAccount(result.accountKey, renderAllRelationshipUI);
+      showLoggedInState(result);
+    } else {
+      const username = $signupUsername.value;
+      const password = $signupPassword.value;
+      const confirm = $signupPasswordConfirm.value;
+
+      if (password !== confirm) {
+        $authError.textContent = "Passwords don't match.";
+        return;
+      }
+
+      const result = await createAccount(username, password);
+      if (!result.ok) {
+        $authError.textContent = result.error;
+        return;
+      }
+
+      // Show the new ID clearly before dropping them into login.
+      $authForm.style.display = "none";
+      $revealedId.textContent = result.id;
+      $newIdReveal.style.display = "block";
+
+      // Pre-fill login fields so continuing is one click away.
+      $loginIdentifier.value = result.username;
+      $loginPassword.value = "";
+
+      // Clear signup fields for next time.
+      $signupUsername.value = "";
+      $signupPassword.value = "";
+      $signupPasswordConfirm.value = "";
+    }
+  } catch (e) {
+    console.error("Auth error:", e);
+    $authError.textContent = "Error: " + (e && e.message ? e.message : String(e));
+  } finally {
+    $authSubmitBtn.disabled = false;
+  }
+});
+
+/* ══════════════════════════════════════════════════════════
+   CHAT THREAD UI — opening a friend's thread, rendering messages,
+   sending from the composer.
+   ══════════════════════════════════════════════════════════ */
+let openChatAccountKey = null;
+let openChatUsername = null;
+let chatMessageCount = 0;
+
+function updateChatThreadHeaderStatus() {
+  if (!openChatAccountKey) return;
+  const isOnline = latestPresenceAccountKeys.has(openChatAccountKey);
+  $chatThreadHeaderStatus.textContent = isOnline ? "Online" : "Offline";
+}
+
+function renderChatMessage(msg) {
+  const el = document.createElement("div");
+  const mine = msg.fromAccountKey === currentSession.accountKey;
+  el.className = "chat-msg " + (mine ? "mine" : "theirs");
+
+  const bubble = document.createElement("div");
+  bubble.className = "chat-msg-bubble";
+  bubble.textContent = msg.text;
+  el.appendChild(bubble);
+
+  const meta = document.createElement("div");
+  meta.className = "chat-msg-meta";
+  meta.textContent = msg.ts ? new Date(msg.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+  el.appendChild(meta);
+
+  $chatMessages.appendChild(el);
+  chatMessageCount++;
+  requestAnimationFrame(() => { $chatMessages.scrollTop = $chatMessages.scrollHeight; });
+}
+
+function openChatWith(accountKey, username) {
+  openChatAccountKey = accountKey;
+  openChatUsername = username;
+  chatMessageCount = 0;
+
+  $chatEmptyState.style.display = "none";
+  $chatThread.style.display = "flex";
+  $chatThreadAvatar.textContent = initialsFor(username);
+  $chatThreadHeaderName.textContent = username;
+  updateChatThreadHeaderStatus();
+
+  $chatMessages.innerHTML = "";
+  watchThreadMessages(accountKey, renderChatMessage);
+
+  // Re-render the friend list so the "selected" highlight moves to this row.
+  if (currentUserData) renderFriendsList(currentUserData);
+
+  if (!isSpectatorLikeInput()) $chatMsgInput.focus();
+}
+
+function isSpectatorLikeInput() {
+  return false; // placeholder hook in case a read-only/spectator mode is added later
+}
+
+function sendChatMessage() {
+  if (!openChatAccountKey) return;
+  const text = $chatMsgInput.value;
+  if (!text.trim()) return;
+
+  $chatSendBtn.disabled = true;
+  sendDirectMessage(openChatAccountKey, text).then(result => {
+    if (!result.ok) {
+      showComposerNotice(result.error);
+    } else {
+      $chatMsgInput.value = "";
+      autosizeChatInput();
+    }
+  }).finally(() => {
+    $chatSendBtn.disabled = false;
+    $chatMsgInput.focus();
+  });
+}
+
+function autosizeChatInput() {
+  $chatMsgInput.style.height = "auto";
+  $chatMsgInput.style.height = Math.min($chatMsgInput.scrollHeight, 120) + "px";
+}
+
+$chatSendBtn.addEventListener("click", sendChatMessage);
+$chatMsgInput.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendChatMessage();
+  }
+});
+$chatMsgInput.addEventListener("input", autosizeChatInput);
+
+/* ══════════════════════════════════════════════════════════
+   SIDEBAR TAB SWITCHING — Chats / Find / Blocked
+   ══════════════════════════════════════════════════════════ */
+function setSidebarTab(tab) {
+  $tabChats.classList.toggle("active", tab === "chats");
+  $tabFind.classList.toggle("active", tab === "find");
+  $tabBlocked.classList.toggle("active", tab === "blocked");
+  $viewChats.classList.toggle("active", tab === "chats");
+  $viewFind.classList.toggle("active", tab === "find");
+  $viewBlocked.classList.toggle("active", tab === "blocked");
+}
+$tabChats.addEventListener("click", () => setSidebarTab("chats"));
+$tabFind.addEventListener("click", () => setSidebarTab("find"));
+$tabBlocked.addEventListener("click", () => setSidebarTab("blocked"));
+
+// Small red dot on the Find tab when there's something worth noticing
+// there (an incoming request) and the person isn't already looking at
+// that tab — mirrors the count badges already shown inside the panel
+// itself, just visible from the Chats view too.
+function updateFindTabDot(userData) {
+  const incoming = (userData && userData.friendRequestsIncoming) || {};
+  const visibleCount = Object.values(incoming).filter(r => !r.hidden).length;
+  $findTabDot.classList.toggle("show", visibleCount > 0);
+}
+
+function init() {
+  const usingPlaceholderConfig = FIREBASE_CONFIG.apiKey === "PASTE_YOUR_API_KEY_HERE";
+  if (usingPlaceholderConfig) {
+    document.getElementById("authCard").innerHTML = `
+      <h2>Not set up yet</h2>
+      <p style="color:#94a3b8;font-size:14px;line-height:1.5;margin-top:8px">
+        Fill in FIREBASE_CONFIG near the top of the script with your own
+        Firebase project's values before this will work.
+      </p>
+    `;
+    return;
+  }
+
+  try {
+    initFirebase();
+  } catch (e) {
+    document.getElementById("authCard").innerHTML =
+      `<h2>Couldn't connect</h2><p style="color:#94a3b8;font-size:14px">${(e.message || "Unknown error")}</p>`;
+    return;
+  }
+
+  const session = loadSession();
+  if (session && session.accountKey) {
+    currentSession = session;
+    claimPresence(session.accountKey, session.username);
+    watchOwnAccount(session.accountKey, renderAllRelationshipUI);
+    showLoggedInState(session);
+  } else {
+    showAuthFlow();
+    setMode("login");
+  }
+
+  // Presence list is watched regardless of login state so the panel is
+  // ready the instant showLoggedInState() reveals it, and stays live
+  // afterward without needing to be re-subscribed.
+  watchPresenceList(renderOnlineList);
+
+  window.addEventListener("beforeunload", () => {
+    releasePresence();
+  });
+}
+
+init();
+</script>
+</body>
+</html>
