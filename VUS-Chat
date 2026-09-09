@@ -967,7 +967,7 @@ const PING_YOU_COOLDOWN_MS = 30 * 1000;
 const PING_YOU_STORAGE_KEY = "vusChatLastPingYou";
 
 const AT_PING_COOLDOWN_MS = 30 * 1000;
-const LEAVE_DEDUPE_WINDOW_MS = 5 * 1000; //
+
 const PING_SOUND_URL = "https://github.com/Cra-Z-Gaming/VUS/raw/refs/heads/main/ping.mp3";
 
 /* ══════════════════════════════════════════════════════════
