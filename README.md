@@ -22,12 +22,12 @@ EASY links:
 
 I made this for myself and probably my whole school, but since my school likes to be a **BEAAACH** about games and websites, I'm not really supposed to share them anymore.
 
-This is literally the only thing I'm good at, so I'm going to keep making them.
+This is literally the only thing I'm good at, so I'm going to keep sharing them.
 
-I don't mainly make these sites for myself, I make them for the little jits at school who just want something fun to do.
+I don't even make these sites for myself, I make them for the little jits at school who just want something fun to do.
 
 
-anyways, here is how to actually use this correctly/how to build it
+anyways, here is how to actually use this correctly/how to build the launcher
 
 first go to [STARTER BUTTON](https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/STARTER%20BUTTON), copy code, go to any html viewer and paste the code.
 then just click the button and it should show my Hub and YT. theres also other tabs for tools and links.
