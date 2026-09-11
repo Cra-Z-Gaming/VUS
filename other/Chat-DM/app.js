@@ -12,10 +12,6 @@ const FIREBASE_CONFIG = {
   measurementId: "G-4RNCZJB0E5"
 };
 
-/* Same plain-record auth tradeoff as before — see original project notes.
-   Not real cryptographic auth. Security hardening explicitly out of scope
-   for this pass. */
-
 const USERNAME_MAX_LENGTH = 24;
 const USERNAME_MIN_LENGTH = 3;
 const ID_LENGTH = 6;
@@ -24,7 +20,7 @@ const ID_MAX = 999999;
 const SESSION_STORAGE_KEY = "dmAppSession";
 const GC_MAX_MEMBERS = 20;
 const SEND_DELAY_MS = 2000;
-const TYPING_TIMEOUT_MS = 4000; // how long a typing flag lives before auto-expiring
+const TYPING_TIMEOUT_MS = 4000;
 
 let db = null;
 let usersRef = null, usernameIndexRef = null, idIndexRef = null;
@@ -128,12 +124,10 @@ function loadSession() {
 }
 function clearSession() { try { localStorage.removeItem(SESSION_STORAGE_KEY); } catch (e) {} }
 
-/* ── Presence, now with lastSeen written on release ── */
 function claimPresence(accountKey, username) {
   releasePresence();
   myPresenceRef = presenceRef.child(accountKey);
   myPresenceRef.onDisconnect().remove();
-  myPresenceRef.onDisconnect().update; // no-op placeholder kept minimal; lastSeen is best-effort (see releasePresence)
   myPresenceRef.set({ username: username, joinedAt: firebase.database.ServerValue.TIMESTAMP });
 }
 function releasePresence() {
@@ -143,10 +137,6 @@ function releasePresence() {
     myPresenceRef = null;
   }
 }
-// Best-effort "last seen" write — only fires on a clean logout, not on tab
-// close/crash (a true last-seen-on-disconnect would need a Cloud Function
-// or onDisconnect().update() on a *different* node, since onDisconnect
-// only supports one terminal action per ref).
 async function recordLastSeen(accountKey) {
   try { await usersRef.child(accountKey).child("lastSeen").set(firebase.database.ServerValue.TIMESTAMP); } catch (e) {}
 }
@@ -161,9 +151,6 @@ function watchPresenceList(onList) {
   });
 }
 
-/* ══════════════════════════════════════════════════════════
-   SEARCH + FRIEND REQUESTS + BLOCKING (unchanged from original)
-   ══════════════════════════════════════════════════════════ */
 async function searchByUsernamePrefix(prefix) {
   const lower = prefix.trim().toLowerCase();
   if (!lower) return [];
@@ -288,16 +275,6 @@ async function unblockUser(otherAccountKey) {
   catch (e) { return { ok: false, error: "Couldn't unblock — try again." }; }
 }
 
-/* ══════════════════════════════════════════════════════════
-   PROFILE — display name + small avatar image.
-   Avatar is stored the same way message images are (compressed
-   JPEG data URL directly on the account record) rather than via
-   Firebase Storage, matching this project's existing no-Storage
-   constraint. Kept small (64x64, low quality) on purpose — this
-   gets fetched far more often than any single message image
-   (every friend row, every online-list entry, every message
-   header), so it needs to be cheap.
-   ══════════════════════════════════════════════════════════ */
 const AVATAR_MAX_DIMENSION = 64;
 const AVATAR_JPEG_QUALITY = 0.55;
 
@@ -308,7 +285,6 @@ function compressAvatarFile(file) {
       const img = new Image();
       img.onload = () => {
         try {
-          // Center-crop to a square first so avatars aren't squashed.
           const side = Math.min(img.width, img.height);
           const sx = (img.width - side) / 2;
           const sy = (img.height - side) / 2;
@@ -362,9 +338,6 @@ async function updateProfile(newUsername, newAvatarDataUrl) {
     if (usernameChanged) {
       currentSession.username = newUsername.trim();
       saveSession(currentSession.accountKey, currentSession.username, currentSession.id);
-      // Presence and any friends' cached labels read from the account
-      // record itself elsewhere, so the display name updates live for
-      // them too — only our own local session object needs a manual bump.
       claimPresence(currentSession.accountKey, currentSession.username);
     }
     return { ok: true, username: currentSession.username };
@@ -391,10 +364,6 @@ function unwatchOwnAccount(accountKey) {
   currentUserData = null;
 }
 
-/* ══════════════════════════════════════════════════════════
-   DIRECT MESSAGES — now with reactions, edit, delete, replies,
-   read-receipt tracking (lastRead per user per thread).
-   ══════════════════════════════════════════════════════════ */
 function threadIdFor(accountKeyA, accountKeyB) { return [accountKeyA, accountKeyB].sort().join("_"); }
 
 async function sendDirectMessage(otherAccountKey, text, imageData, replyTo) {
@@ -411,7 +380,6 @@ async function sendDirectMessage(otherAccountKey, text, imageData, replyTo) {
       ...(replyTo ? { replyTo: replyTo.id, replyToLabel: replyTo.fromLabel, replyToSnippet: replyTo.snippet } : {}),
       ts: firebase.database.ServerValue.TIMESTAMP
     });
-    // Mark our own thread as read up to the message we just sent.
     await markThreadRead(threadId, pushRef.key);
     return { ok: true };
   } catch (e) { return { ok: false, error: "Message failed to send — try again." }; }
@@ -473,10 +441,6 @@ function stopWatchingOpenChat() {
   unwatchThreadReads();
 }
 
-/* ── Typing indicators ──
-   /dms/{threadId}/typing/{accountKey} = timestamp, self-expiring by the
-   reader ignoring anything older than TYPING_TIMEOUT_MS, and actively
-   cleared on blur/send/stop-typing so it doesn't linger. */
 let typingRef = null;
 let typingTimer = null;
 function scopeTypingRef(isGroup, id) {
@@ -511,7 +475,6 @@ function unwatchTyping() {
   if (typingRef) { typingRef.off("value"); typingRef = null; }
 }
 
-/* ── Read receipts (DM only — "Seen" under your own last message) ── */
 let threadReadsRef = null;
 function watchThreadReads(threadId, onChange) {
   unwatchThreadReads();
@@ -522,10 +485,6 @@ function unwatchThreadReads() {
   if (threadReadsRef) { threadReadsRef.off("value"); threadReadsRef = null; }
 }
 
-/* ══════════════════════════════════════════════════════════
-   GROUP CHATS — unchanged structurally, plus messages support
-   the same edit/delete/reaction/reply fields as DMs.
-   ══════════════════════════════════════════════════════════ */
 async function createGroupChat(name) {
   if (!currentSession) return { ok: false, error: "Not logged in." };
   const clean = name.trim();
@@ -660,9 +619,6 @@ function watchMyGroupChats(onList) {
 }
 function unwatchMyGroupChats() { groupChatsRef.off("value"); }
 
-/* ══════════════════════════════════════════════════════════
-   IMAGES — unchanged compression pipeline.
-   ══════════════════════════════════════════════════════════ */
 const MAX_IMAGE_SOURCE_BYTES = 15 * 1024 * 1024;
 const IMAGE_MAX_DIMENSION = 1000;
 const IMAGE_JPEG_QUALITY = 0.7;
@@ -693,10 +649,6 @@ function compressImageFile(file) {
   });
 }
 
-/* ══════════════════════════════════════════════════════════
-   SMALL DOM HELPER — cuts down on manual createElement chains.
-   h("div", {className:"x", onclick: fn}, "text", childEl, ...)
-   ══════════════════════════════════════════════════════════ */
 function h(tag, props, ...children) {
   const el = document.createElement(tag);
   if (props) {
@@ -718,9 +670,6 @@ function esc(s = "") {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-// Turns bare URLs into clickable links. Escapes first, then relinkifies —
-// safe because esc() only produces entities, never raw "<"/">" that could
-// be reopened by the URL regex.
 const URL_RE = /(https?:\/\/[^\s<]+)/g;
 function linkify(escapedText) {
   return escapedText.replace(URL_RE, url => {
@@ -759,7 +708,6 @@ function formatLastSeen(ts) {
 }
 
 /* ══════════════════════════════════════════════════════════
-/* ══════════════════════════════════════════════════════════
    UI WIRING
    ══════════════════════════════════════════════════════════ */
 const $authFlow = document.getElementById("authFlow");
@@ -768,11 +716,10 @@ const $appShell = document.getElementById("appShell");
 const $rail = document.getElementById("rail");
 const $railAvatarBtn = document.getElementById("railAvatarBtn");
 const $railSettingsBtn = document.getElementById("railSettingsBtn");
-const $tabChats = document.getElementById("tabChats");
-const $tabFind = document.getElementById("tabFind");
-const $tabBlocked = document.getElementById("tabBlocked");
-const $tabChatRoom = document.getElementById("tabChatRoom");
-const $chatRoomTabDot = document.getElementById("chatRoomTabDot");
+const $tabChats = document.getElementById("navChats");
+const $tabFind = document.getElementById("navFind");
+const $tabBlocked = document.getElementById("navBlocked");
+const $tabChatRoom = document.getElementById("navChat");
 const $chatRoomPane = document.getElementById("chatRoomPane");
 const $chatPane = document.getElementById("chatPane");
 const $findRailDot = document.getElementById("findRailDot");
@@ -864,6 +811,18 @@ const $groupInfoBtn = document.getElementById("groupInfoBtn");
 const $modalOverlay = document.getElementById("modalOverlay");
 const $modalBox = document.getElementById("modalBox");
 
+// Declared here, well before init() is called at the bottom of this
+// file, because init() calls enterSpectatorPreview() synchronously on
+// page load for logged-out visitors, and that function reads
+// chatRoomListenersAttached. `let` bindings don't hoist their
+// initialization the way function declarations do — if these were
+// declared later in the file (e.g. next to initChatRoomUI, where
+// they're mostly used), reading them during that synchronous call
+// would throw "Cannot access before initialization" and break the
+// entire app for anyone who isn't logged in.
+let chatRoomListenersAttached = false;
+let chatRoomInitialized = false;
+
 let mode = "login";
 let currentSession = null;
 
@@ -895,11 +854,6 @@ function showComposerNotice(text) {
   composerNoticeTimer = setTimeout(() => { $authError.textContent = ""; }, 4000);
 }
 
-/* ── Avatar rendering helper ──
-   Renders either an <img> (if the account has an avatar data URL) or a
-   plain initials circle, sharing one code path so every surface (rail,
-   list rows, thread header, profile popover) stays visually consistent
-   without needing to special-case "has avatar or not" at every call site. */
 function renderAvatarInto(container, username, avatarDataUrl) {
   container.innerHTML = "";
   if (avatarDataUrl) {
@@ -913,10 +867,6 @@ function renderAvatarInto(container, username, avatarDataUrl) {
 }
 function initialsFor(username) { return (username || "?").trim().slice(0, 1).toUpperCase(); }
 
-/* Lazy cache of other accounts' avatars, fetched on demand (friend list
-   render, thread open) rather than denormalized onto friend records —
-   keeps a changed avatar visible everywhere immediately without needing
-   to re-sync every place that ever cached the old one. */
 let otherAvatarCache = {};
 async function fetchAndCacheAvatar(accountKey, onLoaded) {
   if (accountKey in otherAvatarCache) { onLoaded(otherAvatarCache[accountKey]); return; }
@@ -928,14 +878,11 @@ async function fetchAndCacheAvatar(accountKey, onLoaded) {
 }
 
 /* ══════════════════════════════════════════════════════════
-   RAIL NAV — Chats / Find / Blocked, replaces the old tab bar.
+   RAIL NAV — "chats" | "find" | "blocked" | "chatroom".
+   "chatroom" swaps chatPane out for chatRoomPane (the merged VUS
+   Chat room). Logged-out visitors land on "chatroom" too, but see
+   the read-only spectator preview instead of initChatRoomUI().
    ══════════════════════════════════════════════════════════ */
-// "view" is one of "chats" | "find" | "blocked" | "chatroom". The first
-// three toggle which sidebar section is shown (unchanged from before) and
-// keep chatPane (the DM thread view) visible. "chatroom" instead hides the
-// sidebar's DM-related sections' visible pane and swaps chatPane out for
-// chatRoomPane (the merged VUS-Chat room UI) — first switch of a session
-// also boots the chat room backend, via initChatRoomUI().
 function setListView(view) {
   $tabChats.classList.toggle("active", view === "chats");
   $tabFind.classList.toggle("active", view === "find");
@@ -945,11 +892,14 @@ function setListView(view) {
   $viewFind.classList.toggle("active", view === "find");
   $viewBlocked.classList.toggle("active", view === "blocked");
 
+  const showingListPaneView = view === "chats" || view === "find" || view === "blocked";
+
   if (view === "chatroom") {
     $chatPane.style.display = "none";
     $chatRoomPane.style.display = "flex";
-    initChatRoomUI();
-  } else {
+    if (currentSession) initChatRoomUI();
+    else enterSpectatorPreview();
+  } else if (showingListPaneView) {
     $chatRoomPane.style.display = "none";
     $chatPane.style.display = "flex";
   }
@@ -965,15 +915,8 @@ function updateFindRailDot(userData) {
   $findRailDot.classList.toggle("show", visibleCount > 0);
 }
 
-/* ══════════════════════════════════════════════════════════
-   PROFILE POPOVER — avatar click: photo + display name only.
-   ══════════════════════════════════════════════════════════ */
-let pendingAvatarDataUrl = null; // staged new avatar, not yet saved
+let pendingAvatarDataUrl = null;
 
-// Redraws the profile popover's avatar button — used both when opening
-// the popover and after staging a newly picked photo. Centralized here
-// because renderAvatarInto() clears the button's innerHTML, which would
-// otherwise wipe out the little camera badge every time.
 function renderProfileAvatarButton(avatarDataUrl) {
   renderAvatarInto($profileAvatarPreviewBtn, currentSession.username, avatarDataUrl);
   const camBadge = document.createElement("span");
@@ -993,6 +936,7 @@ function closeProfilePopover() { $profilePopover.classList.remove("show"); }
 
 $railAvatarBtn.addEventListener("click", (e) => {
   e.stopPropagation();
+  if (!currentSession) return;
   if ($profilePopover.classList.contains("show")) closeProfilePopover();
   else openProfilePopover();
 });
@@ -1028,9 +972,6 @@ function refreshOwnRailAvatar() {
   renderAvatarInto($railAvatarBtn, currentSession.username, currentUserData && currentUserData.avatar);
 }
 
-/* ══════════════════════════════════════════════════════════
-   SETTINGS MODAL — gear icon: password change + logout.
-   ══════════════════════════════════════════════════════════ */
 function openSettingsModal() {
   $modalBox.innerHTML = "";
   $modalBox.appendChild(h("h3", {}, "Settings"));
@@ -1078,7 +1019,7 @@ function openSettingsModal() {
 
   $modalOverlay.classList.add("show");
 }
-$railSettingsBtn.addEventListener("click", openSettingsModal);
+$railSettingsBtn.addEventListener("click", () => { if (currentSession) openSettingsModal(); });
 
 async function doLogout() {
   const accountKey = currentSession && currentSession.accountKey;
@@ -1099,6 +1040,7 @@ async function doLogout() {
   setMode("login");
   $loginIdentifier.value = "";
   $loginPassword.value = "";
+  enterSpectatorPreview();
 }
 
 function renderOnlineList(list) {
@@ -1336,10 +1278,6 @@ function renderAllRelationshipUI(userData) {
   if (lastSearchResults.length > 0) renderSearchResults(lastSearchResults);
 }
 
-/* ══════════════════════════════════════════════════════════
-   MODALS (new group / invite / manage group) — settings modal
-   defined above, shares the same overlay.
-   ══════════════════════════════════════════════════════════ */
 function closeModal() { $modalOverlay.classList.remove("show"); $modalBox.innerHTML = ""; }
 $modalOverlay.addEventListener("click", (e) => { if (e.target === $modalOverlay) closeModal(); });
 
@@ -1486,12 +1424,14 @@ $authForm.addEventListener("submit", async (e) => {
     if (mode === "login") {
       const result = await login($loginIdentifier.value, $loginPassword.value);
       if (!result.ok) { $authError.textContent = result.error; return; }
+      exitSpectatorPreview();
       saveSession(result.accountKey, result.username, result.id);
       currentSession = result;
       claimPresence(result.accountKey, result.username);
       watchOwnAccount(result.accountKey, renderAllRelationshipUI);
       watchMyGroupChats(renderGroupsList);
       showLoggedInState(result);
+      setListView("chatroom");
     } else {
       const username = $signupUsername.value, password = $signupPassword.value, confirm = $signupPasswordConfirm.value;
       if (password !== confirm) { $authError.textContent = "Passwords don't match."; return; }
@@ -1513,7 +1453,7 @@ $authForm.addEventListener("submit", async (e) => {
 });
 
 /* ══════════════════════════════════════════════════════════
-   CHAT THREAD UI
+   DM CHAT THREAD UI
    ══════════════════════════════════════════════════════════ */
 let openChatAccountKey = null;
 let openChatUsername = null;
@@ -2013,9 +1953,23 @@ function init() {
     watchOwnAccount(session.accountKey, renderAllRelationshipUI);
     watchMyGroupChats(renderGroupsList);
     showLoggedInState(session);
+    // Deferred: setListView("chatroom") calls initChatRoomUI(), which
+    // reads ROLES/ChatBackend/RoomManager — all declared further down
+    // this file, after init() runs. Those are top-level const/let
+    // declarations that execute in file order; a setTimeout(0) callback
+    // only runs after the whole script (including all of those
+    // declarations) has finished executing once, so by the time this
+    // fires they're guaranteed to exist. Calling setListView directly
+    // here, before they're declared, would throw "Cannot access before
+    // initialization" and break login for every returning user.
+    setTimeout(() => setListView("chatroom"), 0);
   } else {
     showAuthFlow();
     setMode("login");
+    // Same deferral reasoning as above — enterSpectatorPreview() reads
+    // ROLES/ChatBackend/roleHolders/spectatorPreviewAction, all declared
+    // later in the file than this call site.
+    setTimeout(() => enterSpectatorPreview(), 0);
   }
 
   watchPresenceList(renderOnlineList);
@@ -2029,14 +1983,12 @@ function init() {
 init();
 
 /* ══════════════════════════════════════════════════════════
-   CHAT ROOM (merged from VUS-Chat) — identity is now tied to the
-   logged-in DM account (see enterChatRoomAsCurrentAccount /
-   exitChatRoom below and ChatBackend._safeKey's presence-based
-   accountKey lookup). Booted lazily via initChatRoomUI() the first
-   time the Chat tab is opened (see setListView("chatroom") above).
-   Clicking a sender's name in chat opens a small popover to add
-   them as a friend (openChatUserPopover), reusing the DM side's
-   sendFriendRequest() against the same shared Firebase project.
+   CHAT ROOM (merged from VUS-Chat) — identity is tied to the
+   logged-in DM account. Roles/timeouts/staff menu are unchanged
+   from the original chat room; DMs never had these and still don't.
+   Booted via initChatRoomUI() for logged-in accounts, or run in a
+   read-only spectator mode (see SPECTATOR PREVIEW below) for
+   logged-out visitors.
    ══════════════════════════════════════════════════════════ */
 const MAIN_ROOM_ID = "vus-hub-main";
 
@@ -2060,19 +2012,6 @@ const AT_PING_COOLDOWN_MS = 30 * 1000;
 
 const PING_SOUND_URL = "https://github.com/Cra-Z-Gaming/VUS/raw/refs/heads/main/ping.mp3";
 
-/* ══════════════════════════════════════════════════════════
-   ROLES (Owner/Crown + Mod)
-   Both roles work identically under the hood — a global code system,
-   redeemed via the roles menu. Code defaults to "0000" (always inert).
-   Requesting a code posts it to that role's private Discord webhook, and
-   the code stays valid for ROLE_CODE_LIFESPAN_MS. Redemption is MULTI-USE
-   within that window by design — see redeemRoleCode() below.
-   A role PERSISTS across renames and room switches (both re-run
-   claimPresence, which carries every held role forward via _rolesHeld)
-   but is cleared by clearRole(roleId) on silent leave, normal leave, and
-   real disconnect — so it never survives actually leaving.
-   ROLES is the single place to add more roles later — the menu, claim
-   modal, message badges, and backend paths all read from this list. */
 const ROLE_CODE_LIFESPAN_MS = 30 * 1000;
 const ROLE_REQUEST_COOLDOWN_MS = 30 * 1000;
 
@@ -2099,21 +2038,13 @@ const ROLES = {
   }
 };
 
-/* Bubble color: was write-once, now changeable every 10s. */
 const COLOR_CHANGE_COOLDOWN_MS = 10 * 1000;
-
-/* How close together two leave-events for the same name must be to be
-   treated as one stray burst instead of two genuine separate leaves —
-   fixes repeated "X left / X left / X left" spam caused by duplicate
-   onDisconnect writes (multiple tabs under the same name, or reconnect
-   churn on a flaky connection). */
 const LEAVE_DEDUPE_WINDOW_MS = 5 * 1000;
 
-/* ── Timeouts (Owner Menu / Mod Menu) ── */
-const TIMEOUT_MAX_MS = 3 * 60 * 1000; // 3:00 cap for owners
-const MOD_TIMEOUT_MAX_MS = 40 * 1000; // 0:40 cap for mods — a deliberately smaller power than owners get
-const MOD_TIMEOUT_DEFAULT_MS = 10 * 1000; // prefilled duration when a mod opens the timeout modal
-const MOD_RETIMEOUT_COOLDOWN_MS = 7 * 1000; // a mod must wait this long after setting OR clearing a timeout before re-timing-out the SAME target
+const TIMEOUT_MAX_MS = 3 * 60 * 1000;
+const MOD_TIMEOUT_MAX_MS = 40 * 1000;
+const MOD_TIMEOUT_DEFAULT_MS = 10 * 1000;
+const MOD_RETIMEOUT_COOLDOWN_MS = 7 * 1000;
 
 const ChatBackend = {
   _db: null,
@@ -2124,6 +2055,7 @@ const ChatBackend = {
   _presenceRef: null,
   _myPresenceRef: null,
   _myLeaveEventRef: null,
+  _myAccountKey: null,
   _nameColorsRef: null,
   _atPingCooldownRef: null,
   _leaveEventsRef: null,
@@ -2137,8 +2069,6 @@ const ChatBackend = {
   currentRoomId: null,
 
   init() {
-    // Firebase is already initialized by the DM side of the app (shared
-    // project/config) — just reuse that same database handle.
     this._db = firebase.database();
     this._connectedRef = this._db.ref(".info/connected");
     this.initRoles();
@@ -2202,10 +2132,6 @@ const ChatBackend = {
     return { code, webhookOk };
   },
 
-  // Plain read + compare (not a transaction) — nothing is consumed, since
-  // a code stays valid for ROLE_CODE_LIFESPAN_MS and anyone who has it can
-  // redeem it during that window, each redeemer getting their own copy of
-  // the role. Deliberate, matching the prior crown behavior.
   async redeemRoleCode(roleId, inputCode) {
     const clean = (inputCode || "").trim().toUpperCase();
     if (!clean || clean === "0000") return { ok: false, reason: "none" };
@@ -2280,10 +2206,16 @@ const ChatBackend = {
     });
   },
 
+  // fromAccountKey is stamped on every message so a sender can be added
+  // as a friend later even after they've gone offline or left — see
+  // openChatUserPopover, which looks the account up fresh by this key
+  // rather than relying on live presence. Not rendered anywhere in the
+  // chat UI itself, purely a data field for that lookup.
   async sendImage(name, dataUrl) {
     const color = await this.getNameColor(name);
     return this._ref.push({
       name: name,
+      fromAccountKey: this._myAccountKey || null,
       imageData: dataUrl,
       ts: firebase.database.ServerValue.TIMESTAMP,
       ...(color ? { bubble: color.bubble, textColor: color.text } : {})
@@ -2294,6 +2226,7 @@ const ChatBackend = {
     const color = await this.getNameColor(name);
     return this._ref.push({
       name: name,
+      fromAccountKey: this._myAccountKey || null,
       text: text,
       ts: firebase.database.ServerValue.TIMESTAMP,
       ...(mention ? { mention: mention.name } : {}),
@@ -2301,10 +2234,6 @@ const ChatBackend = {
     });
   },
 
-  // ── Per-name bubble color ──
-  // Was write-once; now changeable every COLOR_CHANGE_COOLDOWN_MS, enforced
-  // against a server-timestamped `changedAt` so a wrong local clock can't
-  // be used to bypass the cooldown.
   async getNameColor(name) {
     const snap = await this._nameColorsRef.child(this._safeKey(name)).get();
     return snap.exists() ? snap.val() : null;
@@ -2334,11 +2263,6 @@ const ChatBackend = {
     return Object.prototype.hasOwnProperty.call(val, key);
   },
 
-  // NOTE: this is now async (it wasn't before) — see the role-sync section
-  // below for why. All existing call sites already just call it without
-  // awaiting the result, which is fine: everything it does is fire off
-  // Firebase writes that resolve on their own, nothing here needs the
-  // caller to wait.
   async claimPresence(accountKey, name, silent) {
     this.releasePresence();
     this._myAccountKey = accountKey;
@@ -2367,24 +2291,16 @@ const ChatBackend = {
         }
         this._myRoleRefs[role.id] = roleRef;
 
-        // A role can now be granted directly by an owner (Owner Menu →
-        // Grant Mod) without this client ever redeeming a code, so
-        // _rolesHeld alone is no longer the full picture of what this name
-        // actually holds — it only tracks roles *this tab* obtained via
-        // redeemRoleCode(). Check the server's current value too, and treat
-        // either source as "held," so a directly-granted role survives the
-        // holder's own reconnects/renames/room-switches instead of being
-        // wiped by the unconditional roleRef.remove() this used to do.
         let heldOnServer = false;
         try {
           const snap = await roleRef.get();
           heldOnServer = snap.val() === true;
         } catch (e) {
-          heldOnServer = false; // fail safe to "not held" — never invent a role from a failed read
+          heldOnServer = false;
         }
 
         if (this._rolesHeld[role.id] || heldOnServer) {
-          this._rolesHeld[role.id] = true; // sync local flag so future claimPresence calls on this tab don't need to re-check the server
+          this._rolesHeld[role.id] = true;
           roleRef.set(true);
         } else {
           roleRef.remove();
@@ -2440,13 +2356,6 @@ const ChatBackend = {
     Object.keys(ROLES).forEach(roleId => this.clearRole(roleId));
   },
 
-  // Leave-event de-duplication: multiple queued onDisconnect writes can
-  // fire in a burst for the same name (duplicate tabs under the same name,
-  // or reconnect churn each registering their own leave event) — that used
-  // to post "X left" once per stray event. Now we collapse any leave events
-  // for the same name arriving within LEAVE_DEDUPE_WINDOW_MS of the last
-  // one we actually posted, and always clean up the underlying event node
-  // either way so it can never be replayed.
   watchLeaveEvents() {
     this._leaveEventsRef.on("child_added", snap => {
       const val = snap.val();
@@ -2483,8 +2392,6 @@ const ChatBackend = {
         name: (v && typeof v === "object" && v.name) ? v.name : accountKey,
         joinedAt: (v && typeof v === "object") ? (v.joinedAt || null) : null
       }));
-      // Keep a live name -> accountKey map for _safeKey()'s security-relevant
-      // lookups (roles/timeouts/moderation). Rebuilt on every presence change.
       const byName = {};
       list.forEach(e => { byName[e.name] = e.accountKey; });
       window._chatPresenceByName = byName;
@@ -2538,16 +2445,6 @@ const ChatBackend = {
     return { ok: true };
   },
 
-  // ── Timeouts (Owner Menu / Mod Menu) ──
-  // Stored per-room at rooms/{roomId}/timeouts/{safeName} = { expiresAt, by }.
-  // expiresAt is anchored to SERVER time (see _serverNow) so a timed-out
-  // person can't dodge it by winding back their local clock, and an
-  // owner's/mod's timeout of someone in one room has no effect in another
-  // room (matches how presence/roles-in-room are already scoped — only
-  // ROLES like crown/mod are global, timeouts are not). `by` records who
-  // set it (safe-keyed), so clearTimeout_ can enforce "only the mod who
-  // set it can clear it early" for mod-issued timeouts — see
-  // canClearTimeout below.
   async setTimeout_(targetName, durationMs, byName) {
     const serverNow = await this._serverNow();
     await this._timeoutsRef.child(this._safeKey(targetName)).set({
@@ -2556,16 +2453,10 @@ const ChatBackend = {
     });
   },
 
-  // Unconditional clear — used by the Owner Menu (crown can always clear
-  // any timeout) and internally once ownership of a clear request has
-  // already been checked (see canClearTimeout).
   async clearTimeout_(targetName) {
     await this._timeoutsRef.child(this._safeKey(targetName)).remove();
   },
 
-  // Returns { by } for the current timeout on targetName, or null if none
-  // is active. Used to decide whether the requesting mod is the one who
-  // set it, per "only the mod who set it can clear it early."
   async getTimeoutSetBy(targetName) {
     try {
       const snap = await this._timeoutsRef.child(this._safeKey(targetName)).get();
@@ -2576,10 +2467,6 @@ const ChatBackend = {
     }
   },
 
-  // Returns remaining ms if targetName is currently timed out in this
-  // room, or 0 if not (including if the record is stale/expired — a
-  // stale record is left for the next read/write to clean up rather than
-  // deleted here, to keep this a plain read with no side effects).
   async getTimeoutRemainingMs(targetName) {
     try {
       const snap = await this._timeoutsRef.child(this._safeKey(targetName)).get();
@@ -2592,9 +2479,6 @@ const ChatBackend = {
     }
   },
 
-  // Live subscription: onChange(remainingMs) fires whenever targetName's
-  // timeout record changes. Used to keep the composer lock in sync without
-  // polling, for whoever is currently timed out.
   watchTimeout(targetName, onChange) {
     const ref = this._timeoutsRef.child(this._safeKey(targetName));
     ref.on("value", async snap => {
@@ -2606,13 +2490,6 @@ const ChatBackend = {
     return () => ref.off("value");
   },
 
-  // ── Mod re-timeout cooldown ──
-  // A mod who just set OR cleared a timeout on a given target must wait
-  // MOD_RETIMEOUT_COOLDOWN_MS before they can time that same target out
-  // again. Stored server-side (per room, per mod, per target) so it can't
-  // be dodged by clearing localStorage the way the code-request cooldowns
-  // are — this one's meant to actually hold. Anchored to server time like
-  // everything else here.
   async startModRetimeoutCooldown(modName, targetName) {
     const key = this._safeKey(modName) + "__" + this._safeKey(targetName);
     const serverNow = await this._serverNow();
@@ -2633,15 +2510,6 @@ const ChatBackend = {
     }
   },
 
-  // Resolves a DISPLAY NAME to the account ID that currently holds it in
-  // this room's presence list. This is the security-relevant lookup used
-  // for roles/timeouts/moderation targeting — it is NOT derived from the
-  // name string itself (so no one can grant themselves a role or dodge a
-  // timeout by naming themselves after someone's ID or a role's raw key).
-  // If nobody online currently holds that name, falls back to a sanitized
-  // version of the name itself (matches old behavior for cosmetic-only
-  // uses like bubble colors, and fails safe for anything security-relevant
-  // since a made-up fallback key will never match a real held role).
   _safeKey(name) {
     const found = (window._chatPresenceByName || {})[name];
     if (found) return found;
@@ -2841,11 +2709,10 @@ let myName = "";
 let messageCount = 0;
 let autoScroll = true;
 let isSpectator = false;
-let myTimeoutRemainingMs = 0; // live, kept in sync by watchMyTimeout()
+let myTimeoutRemainingMs = 0;
 let unwatchMyTimeout = null;
 let myTimeoutCountdownTimer = null;
 let roleHolders = {};
-
 
 const SEND_COOLDOWN_MS = 3000;
 let lastSentAt = 0;
@@ -2853,7 +2720,6 @@ let cooldownTimer = null;
 
 let isCurrentlyTyping = false;
 let chatRoomTypingStopTimer = null;
-
 
 function formatTime(ts) {
   if (!ts) return "";
@@ -2870,72 +2736,96 @@ function scrollToBottom() {
   $jumpToBottomBtn.style.display = "none";
 }
 
-// Small popover shown when clicking a sender's name in chat — the "add a
-// friend from chat" entry point. Resolves the display name to its DM
-// account via the same live presence lookup roles/moderation already use
-// (ChatBackend._safeKey), so the request always targets the account that
-// actually holds that name right now, not a name string someone could
-// fake. Reuses sendFriendRequest() from the DM side of the app — same
-// Firebase project, same account records.
-let chatUserPopoverEl = null;
-function closeChatUserPopover() {
-  if (chatUserPopoverEl) { chatUserPopoverEl.remove(); chatUserPopoverEl = null; }
-  document.removeEventListener("click", closeChatUserPopoverOnOutsideClick);
+/* ══════════════════════════════════════════════════════════
+   CHAT-SENDER PROFILE MODAL — clicking a name in chat opens this.
+   Resolves the sender via the accountKey STAMPED ON THE MESSAGE
+   (msg.fromAccountKey), not live presence — this is what lets you
+   add someone as a friend even after they've gone offline. Always
+   re-fetches /users/{accountKey} fresh so the username/ID shown are
+   current, not whatever was true when the message was sent.
+   ══════════════════════════════════════════════════════════ */
+const $chatUserProfileOverlay = document.getElementById("chatUserProfileOverlay");
+const $chatUserProfileName = document.getElementById("chatUserProfileName");
+const $chatUserProfileId = document.getElementById("chatUserProfileId");
+const $chatUserProfileStatus = document.getElementById("chatUserProfileStatus");
+const $chatUserProfileCloseBtn = document.getElementById("chatUserProfileCloseBtn");
+const $chatUserProfileAddBtn = document.getElementById("chatUserProfileAddBtn");
+
+function closeChatUserProfile() {
+  $chatUserProfileOverlay.style.display = "none";
 }
-function closeChatUserPopoverOnOutsideClick(e) {
-  if (chatUserPopoverEl && !chatUserPopoverEl.contains(e.target)) closeChatUserPopover();
-}
-function openChatUserPopover(displayName, anchorEl) {
-  closeChatUserPopover();
+$chatUserProfileCloseBtn.addEventListener("click", closeChatUserProfile);
+$chatUserProfileOverlay.addEventListener("click", (e) => {
+  if (e.target === $chatUserProfileOverlay) closeChatUserProfile();
+});
 
-  const accountKey = ChatBackend._safeKey(displayName);
-  const isRealAccount = accountKey !== displayName.replace(/[.#$\[\]/]/g, "_") || (window._chatPresenceByName || {})[displayName] === accountKey;
+async function openChatUserPopover(displayNameAtSendTime, accountKey) {
+  $chatUserProfileName.textContent = "Loading…";
+  $chatUserProfileId.textContent = "";
+  $chatUserProfileStatus.textContent = "";
+  $chatUserProfileStatus.style.color = "";
+  $chatUserProfileAddBtn.style.display = "none";
+  $chatUserProfileOverlay.style.display = "flex";
 
-  const pop = document.createElement("div");
-  pop.className = "popover show chat-user-popover";
-  pop.style.position = "absolute";
-
-  const nameEl = document.createElement("div");
-  nameEl.className = "chat-user-popover-name";
-  nameEl.textContent = displayName;
-  pop.appendChild(nameEl);
-
-  const statusEl = document.createElement("div");
-  statusEl.className = "modal-error";
-  pop.appendChild(statusEl);
-
-  if (displayName === myName) {
-    statusEl.textContent = "That's you.";
-  } else if (!isRealAccount) {
-    // No live presence entry currently maps to this name (they've since
-    // left) — nothing safe to friend-request.
-    statusEl.textContent = "This person isn't online anymore.";
-  } else {
-    const addBtn = document.createElement("button");
-    addBtn.className = "primary-btn";
-    addBtn.textContent = "Add Friend";
-    addBtn.addEventListener("click", async () => {
-      addBtn.disabled = true;
-      const result = await sendFriendRequest(accountKey, displayName);
-      if (result.ok) {
-        statusEl.style.color = "#4ade80";
-        statusEl.textContent = "Friend request sent.";
-        addBtn.remove();
-      } else {
-        statusEl.textContent = result.error;
-        addBtn.disabled = false;
-      }
-    });
-    pop.appendChild(addBtn);
+  if (!accountKey) {
+    $chatUserProfileName.textContent = displayNameAtSendTime || "Unknown";
+    $chatUserProfileStatus.textContent = "This message is too old to look up — no account link stored.";
+    return;
   }
 
-  document.body.appendChild(pop);
-  const rect = anchorEl.getBoundingClientRect();
-  pop.style.left = Math.min(rect.left, window.innerWidth - 240) + "px";
-  pop.style.top = (rect.bottom + 6) + "px";
-  chatUserPopoverEl = pop;
+  if (currentSession && accountKey === currentSession.accountKey) {
+    $chatUserProfileName.textContent = currentSession.username;
+    $chatUserProfileId.textContent = "#" + currentSession.id;
+    $chatUserProfileStatus.textContent = "That's you.";
+    return;
+  }
 
-  setTimeout(() => document.addEventListener("click", closeChatUserPopoverOnOutsideClick), 0);
+  let account;
+  try {
+    const snap = await usersRef.child(accountKey).get();
+    account = snap.val();
+  } catch (e) {
+    account = null;
+  }
+
+  if (!account) {
+    $chatUserProfileName.textContent = displayNameAtSendTime || "Unknown";
+    $chatUserProfileStatus.textContent = "This account no longer exists.";
+    return;
+  }
+
+  $chatUserProfileName.textContent = account.username;
+  $chatUserProfileId.textContent = "#" + account.id;
+
+  const status = currentSession ? getRelationshipStatus(accountKey) : "none";
+  if (!currentSession) {
+    $chatUserProfileStatus.textContent = "Sign up to add friends.";
+  } else if (status === "friends") {
+    $chatUserProfileStatus.textContent = "Already friends.";
+  } else if (status === "outgoing") {
+    $chatUserProfileStatus.textContent = "Friend request pending.";
+  } else if (status === "incoming") {
+    $chatUserProfileStatus.textContent = "They've sent you a request — check Find.";
+  } else {
+    $chatUserProfileAddBtn.style.display = "inline-block";
+    $chatUserProfileAddBtn.disabled = false;
+    $chatUserProfileAddBtn.textContent = "Add Friend";
+    $chatUserProfileAddBtn.onclick = async () => {
+      $chatUserProfileAddBtn.disabled = true;
+      $chatUserProfileAddBtn.textContent = "Sending…";
+      const result = await sendFriendRequest(accountKey, account.username);
+      if (result.ok) {
+        $chatUserProfileStatus.style.color = "#4ade80";
+        $chatUserProfileStatus.textContent = "Friend request sent.";
+        $chatUserProfileAddBtn.style.display = "none";
+      } else {
+        $chatUserProfileStatus.style.color = "";
+        $chatUserProfileStatus.textContent = result.error;
+        $chatUserProfileAddBtn.disabled = false;
+        $chatUserProfileAddBtn.textContent = "Add Friend";
+      }
+    };
+  }
 }
 
 function renderMessage(msg) {
@@ -2952,18 +2842,13 @@ function renderMessage(msg) {
     messageCount++;
     if (autoScroll) scrollToBottom();
 
-    // If the chat just posted a "left" message for the name THIS tab is
-    // currently using, our presence is already gone server-side (someone/
-    // something else triggered it — a stray duplicate session, a kick,
-    // etc). Don't let this tab keep acting like it's still joined — drop
-    // it back to "Continue as X?" so rejoining is deliberate.
-    if (myName && msg.text === myName + " left" && $chatScreen.style.display !== "none") {
+    if (myName && msg.text === myName + " left" && $chatScreen.style.display !== "none" && !spectatorPreviewActive) {
       forceReturnToJoinScreen("You were disconnected from the chat.");
     }
     return;
   }
 
-  const mine = msg.name === myName;
+  const mine = msg.name === myName && !spectatorPreviewActive;
   const el = document.createElement("div");
   el.className = "msg" + (mine ? " mine" : "");
 
@@ -2972,25 +2857,18 @@ function renderMessage(msg) {
   if (mine) {
     meta.textContent = "You" + (msg.ts ? " · " + formatTime(msg.ts) : "");
   } else {
-    // Sender's name is a clickable span (not the whole meta row, so the
-    // timestamp doesn't look interactive too) that opens a small
-    // profile popover with an Add Friend button — this is the "add a
-    // friend straight from chat" entry point.
     const nameSpan = document.createElement("span");
     nameSpan.className = "msg-meta-name";
     nameSpan.textContent = msg.name;
     nameSpan.addEventListener("click", (e) => {
       e.stopPropagation();
-      openChatUserPopover(msg.name, nameSpan);
+      openChatUserPopover(msg.name, msg.fromAccountKey || null);
     });
     meta.appendChild(nameSpan);
     if (msg.ts) meta.appendChild(document.createTextNode(" · " + formatTime(msg.ts)));
   }
   el.appendChild(meta);
 
-  // Role bubbles: one small bubble per role, ABOVE the message bubble, only
-  // for senders who hold that role RIGHT NOW (live presence-based, so it
-  // always reflects current status, not what was true at send time).
   const safeName = ChatBackend._safeKey(msg.name);
   const heldRoles = Object.values(ROLES).filter(role => (roleHolders[role.id] || new Set()).has(safeName));
   if (heldRoles.length > 0) {
@@ -3054,14 +2932,11 @@ function renderMessage(msg) {
     $jumpToBottomBtn.style.display = "block";
   }
 
-  if (msg.mention && msg.mention === myName && msg.name !== myName) {
+  if (!spectatorPreviewActive && msg.mention && msg.mention === myName && msg.name !== myName) {
     triggerIncomingPing(msg.name, msg.text);
   }
 }
 
-// Tracks whether THIS tab has ever seen a real disconnect while it had an
-// active (non-spectator-only-intentional) session, so a reconnect can be
-// told apart from the very first connection at boot.
 let hadConnectionDrop = false;
 
 function setConnectionStatus(isOnline) {
@@ -3069,13 +2944,7 @@ function setConnectionStatus(isOnline) {
   if (isOnline) {
     $connError.style.display = "none";
 
-    // If we're reconnecting after a real drop while we had a name/session,
-    // the server-side onDisconnect hook already wiped our presence (and
-    // posted "X left" for us) while we were gone — from everyone else's
-    // point of view we already left. Don't let the tab keep pretending
-    // it's still in that session: force it back to the "Continue as X?"
-    // screen so re-joining is a deliberate action, not automatic.
-    if (hadConnectionDrop && myName && $chatScreen.style.display !== "none") {
+    if (hadConnectionDrop && myName && $chatScreen.style.display !== "none" && !spectatorPreviewActive) {
       hadConnectionDrop = false;
       forceReturnToJoinScreen("Connection dropped — you were disconnected from the chat.");
     } else {
@@ -3088,11 +2957,6 @@ function setConnectionStatus(isOnline) {
   }
 }
 
-// Drops the client-side view of the current chat session (used both for
-// real disconnects and for detecting our own "left" system message coming
-// back from the server) and immediately re-claims presence under the same
-// DM account — there's no separate join screen to return to anymore, so
-// "leaving" chat only happens via exitChatRoom() on logout/tab-away.
 function forceReturnToJoinScreen(noticeText) {
   stopTyping();
   clearChatRoomPendingImage();
@@ -3112,23 +2976,14 @@ function forceReturnToJoinScreen(noticeText) {
   }
 }
 
-// Chat identity now comes straight from the logged-in DM account — no
-// guest names, no spectators, no separate join screen. myName mirrors the
-// DM session's username (what's displayed); myAccountKey is the stable,
-// unspoofable identity used for presence/roles/moderation (see
-// ChatBackend._safeKey, which resolves display names back to this key via
-// the live presence list).
 function isSpectatorName(name) {
-  return false; // spectator concept removed — every chat participant is a real logged-in account
+  return false; // real chat participants are always logged-in DM accounts
 }
 
 let myAccountKey = "";
 
-// Called once, when the person switches into the Chat tab for the first
-// time in a session (or the account changes). Not a join screen — just
-// claims presence under the current DM account and shows the chat UI.
 function enterChatRoomAsCurrentAccount() {
-  if (!currentSession) return; // not logged in — Chat tab shouldn't be reachable anyway
+  if (!currentSession) return;
   myName = currentSession.username;
   myAccountKey = currentSession.accountKey;
   isSpectator = false;
@@ -3141,9 +2996,6 @@ function enterChatRoomAsCurrentAccount() {
   scrollToBottom();
 }
 
-// Called on logout, or when leaving the Chat tab for good (not just
-// switching to another sidebar view — presence should persist across a
-// quick tab switch, only actually drop when the person signs out).
 function exitChatRoom() {
   if (!myAccountKey) return;
   stopTyping();
@@ -3174,6 +3026,7 @@ function updateSendButtonState() {
 }
 
 function updateComposerLockState() {
+  if (spectatorPreviewActive) { updateSpectatorComposerUI(); return; }
   if (isSpectatorName(myName)) {
     $msgInput.disabled = true;
     $msgInput.placeholder = "Rename to chat — you're spectating";
@@ -3193,12 +3046,6 @@ function updateComposerLockState() {
   }
 }
 
-// Live-watches this browser's OWN timeout status in the current room so the
-// composer locks/unlocks the moment an owner issues or a timeout expires,
-// without the person needing to send a message to find out. Re-subscribes
-// whenever we (re)claim presence under a name or switch rooms — see the
-// call sites in enterChatRoomAsCurrentAccount / joinRoomByCode /
-// switchToMainRoom.
 function watchMyTimeout() {
   if (unwatchMyTimeout) { unwatchMyTimeout(); unwatchMyTimeout = null; }
   clearInterval(myTimeoutCountdownTimer);
@@ -3219,6 +3066,7 @@ function watchMyTimeout() {
 }
 
 function sendMessage() {
+  if (spectatorPreviewActive) { handleSpectatorComposerClick(); return; }
   if (myTimeoutRemainingMs > 0) {
     showChatRoomComposerNotice("You're timed out for " + formatCountdown(myTimeoutRemainingMs) + " more.");
     return;
@@ -3435,7 +3283,7 @@ $clearChatBtn.addEventListener("click", () => {
   $jumpToBottomBtn.style.display = "none";
 });
 
-const modMenuUnlocked = true; // settings panel no longer code-gated — see openModMenu()
+const modMenuUnlocked = true;
 let imagesEnabledForMe = false;
 
 function updateUploadButtonVisibility() {
@@ -3459,7 +3307,7 @@ async function renderModMenu() {
   let existing = null;
   try {
     existing = myName ? await ChatBackend.getNameColor(myName) : null;
-  } catch (e) { /* treat as no existing color if the check fails */ }
+  } catch (e) {}
 
   loading.remove();
 
@@ -3593,10 +3441,6 @@ async function renderModMenu() {
   });
   $globalClearPanel.appendChild(rolesBtn);
 
-  // Owner Menu button: only shown when this browser both has the mod-menu
-  // code unlocked AND the current name currently holds the crown, live —
-  // checked fresh here (not cached) so it disappears the moment the crown
-  // is lost (e.g. cleared on disconnect) without needing the panel reopened.
   const iAmCrowned = modMenuUnlocked && myName && (roleHolders.crown || new Set()).has(ChatBackend._safeKey(myName));
   if (iAmCrowned) {
     const ownerBtn = document.createElement("button");
@@ -3610,9 +3454,6 @@ async function renderModMenu() {
     $globalClearPanel.appendChild(ownerBtn);
   }
 
-  // Mod Menu button: shown when mod-menu code is unlocked AND the current
-  // name holds the mod role, live. A crown-holder who is ALSO modded would
-  // see both buttons — that's fine, each opens its own scoped menu.
   const iAmModded = modMenuUnlocked && myName && (roleHolders.mod || new Set()).has(ChatBackend._safeKey(myName));
   if (iAmModded) {
     const modMenuBtn = document.createElement("button");
@@ -3640,16 +3481,12 @@ function closeClearPanel() {
 }
 
 function openModMenu() {
+  if (!currentSession) return;
   closeOnlineListPanel();
   $globalClearPanel.style.display = "block";
   renderModMenu();
 }
 
-/* ══════════════════════════════════════════════════════════
-   ROLES MENU (centered modal, like Room Settings) — opened from
-   "🎖 Claim a role" inside the mod menu popover. Lists every role
-   in ROLES; picking one opens the shared role-claim modal.
-   ══════════════════════════════════════════════════════════ */
 function openRolesMenu() {
   $rolesMenuList.innerHTML = "";
   Object.values(ROLES).forEach(role => {
@@ -3672,13 +3509,6 @@ $rolesMenuOverlay.addEventListener("click", (e) => {
   if (e.target === $rolesMenuOverlay) $rolesMenuOverlay.style.display = "none";
 });
 
-/* ══════════════════════════════════════════════════════════
-   ROLE CLAIM MODAL (centered) — shared UI for any role in ROLES.
-   Replaces the old crown-only section that used to live inside the
-   top-left popover; the logic (request code / redeem code) is
-   unchanged, just generalized to whichever roleId was picked in the
-   roles menu, and moved into its own centered modal.
-   ══════════════════════════════════════════════════════════ */
 let activeRoleClaimId = null;
 let roleClaimStatusTimer = null;
 
@@ -3831,21 +3661,6 @@ $roleClaimOverlay.addEventListener("click", (e) => {
   }
 });
 
-/* ══════════════════════════════════════════════════════════
-   STAFF MENU — one shared modal backing both the crown-only Owner Menu
-   (full power: any duration up to 3:00, Grant/Remove Mod, clear anyone's
-   timeout) and the mod-only Mod Menu (limited: timeout only, capped at
-   0:40, defaults to 0:10, can only clear a timeout THEY set, and must
-   wait MOD_RETIMEOUT_COOLDOWN_MS after setting/clearing before re-timing
-   the same target out). `staffMenuMode` tracks which one is currently
-   open so the shared rendering/submit logic can branch on it without
-   duplicating the list/refresh machinery twice.
-   Reuses latestPresenceList (already kept live by attachRoomListeners)
-   rather than opening a second presence subscription — the 5s timer here
-   just re-renders from whatever that list currently holds, plus a fresh
-   per-person timeout-remaining read so stale timeouts don't linger in the
-   list display.
-   ══════════════════════════════════════════════════════════ */
 const $ownerMenuOverlay = document.getElementById("ownerMenuOverlay");
 const $ownerMenuTitle = document.getElementById("ownerMenuTitle");
 const $ownerMenuSubtitle = document.getElementById("ownerMenuSubtitle");
@@ -3867,7 +3682,7 @@ const $grantModConfirmTitle = document.getElementById("grantModConfirmTitle");
 const $grantModCancelBtn = document.getElementById("grantModCancelBtn");
 const $grantModConfirmBtn = document.getElementById("grantModConfirmBtn");
 
-let staffMenuMode = "owner"; // "owner" | "mod" — which gate/limits currently apply
+let staffMenuMode = "owner";
 let ownerMenuRefreshTimer = null;
 let pendingTimeoutTarget = null;
 let pendingGrantModTarget = null;
@@ -3890,10 +3705,6 @@ function openOwnerMenu() {
   ownerMenuRefreshTimer = setInterval(renderOwnerMenuList, 5000);
 }
 
-// Mod Menu: same modal, same list/refresh machinery, far fewer buttons per
-// row (see renderOwnerMenuList's staffMenuMode branch below) — mods only
-// ever see a Timeout button, capped smaller, with their own re-timeout
-// cooldown and "only I can clear my own" restriction enforced there.
 function openModMenuStaff() {
   staffMenuMode = "mod";
   closeClearPanel();
@@ -3916,10 +3727,6 @@ $ownerMenuOverlay.addEventListener("click", (e) => {
 });
 
 async function renderOwnerMenuList() {
-  // Re-check the relevant gate every refresh too — if the role backing
-  // whichever menu is open gets lost while it's open (timeout, disconnect,
-  // another owner revokes it, etc.) the menu should close itself rather
-  // than keep offering actions the person no longer has.
   const stillEligible = staffMenuMode === "owner"
     ? (modMenuUnlocked && isCrownHolder(myName))
     : (modMenuUnlocked && isModHolder(myName));
@@ -3956,7 +3763,6 @@ async function renderOwnerMenuList() {
     const actions = document.createElement("div");
     actions.className = "room-member-actions";
 
-    // Grant/Remove Mod: owner-only power, never shown in the mod menu.
     if (staffMenuMode === "owner") {
       const modToggleBtn = document.createElement("button");
       if (isModHolder(name)) {
@@ -3981,21 +3787,11 @@ async function renderOwnerMenuList() {
 
     if (remainingMs > 0) {
       timeoutBtn.textContent = "Timed out (" + formatCountdown(remainingMs) + ")";
-      // Owners can always clear any timeout. Mods can only clear a timeout
-      // THEY personally set — per "only the mod who set it can clear it
-      // early." A mod looking at a timeout someone else (owner or another
-      // mod) set just sees the countdown with no click action.
       const canClear = staffMenuMode === "owner" || (staffMenuMode === "mod" && setBy === ChatBackend._safeKey(myName));
       if (canClear) {
         timeoutBtn.addEventListener("click", () => {
           ChatBackend.clearTimeout_(name).then(async () => {
             if (staffMenuMode === "mod") {
-              // Belt-and-suspenders: watchModIssuedTimeoutExpiry (started
-              // when this timeout was set) already starts the cooldown the
-              // moment this remove() fires. This second call is a no-op
-              // duplicate write in the normal case, and only matters if
-              // that watcher somehow isn't still attached (e.g. a page
-              // reload happened between setting and clearing).
               await ChatBackend.startModRetimeoutCooldown(myName, name).catch(() => {});
             }
             renderOwnerMenuList();
@@ -4029,8 +3825,6 @@ async function renderOwnerMenuList() {
   }
 }
 
-/* ── Timeout duration modal — shared by both menus, limits/defaults set
-   by openTimeoutSetModal based on staffMenuMode. ── */
 function openTimeoutSetModal(targetName) {
   pendingTimeoutTarget = targetName;
   $timeoutSetTitle.textContent = "Timeout " + targetName;
@@ -4062,10 +3856,6 @@ $timeoutSetOverlay.addEventListener("click", (e) => {
   }
 });
 
-// Digit-only guards on the two duration fields — minutes capped to a
-// single digit (0-3) and seconds to two digits (0-59) at the input level,
-// with the real 3:00 ceiling enforced on submit below regardless of what
-// slips through here.
 $timeoutMinutesInput.addEventListener("input", () => {
   $timeoutMinutesInput.value = $timeoutMinutesInput.value.replace(/[^0-9]/g, "").slice(0, 1);
 });
@@ -4094,11 +3884,6 @@ $timeoutSetConfirmBtn.addEventListener("click", async () => {
   $timeoutSetErr.textContent = "";
   try {
     await ChatBackend.setTimeout_(pendingTimeoutTarget, totalMs, myName);
-    // NOTE: the re-timeout cooldown is deliberately NOT started here. It
-    // should apply AFTER the timeout ends (naturally or via early clear),
-    // not from the moment it's set — starting it here would let most of
-    // the 7s tick away underneath a long timeout instead of coming after
-    // it. See watchModIssuedTimeoutExpiry for where it actually starts.
     if (staffMenuMode === "mod") {
       watchModIssuedTimeoutExpiry(myName, pendingTimeoutTarget);
     }
@@ -4112,17 +3897,6 @@ $timeoutSetConfirmBtn.addEventListener("click", async () => {
   }
 });
 
-// Watches a mod-issued timeout on targetName and starts that mod's
-// re-timeout cooldown against targetName the moment it actually ends —
-// either by running out naturally, or by being cleared early (which also
-// calls startModRetimeoutCooldown directly in the "clear" click handler in
-// renderOwnerMenuList; that early-clear path additionally removes the
-// Firebase record, which this watcher treats the same as natural expiry).
-// Firebase's "value" listener only fires on writes, not on the passage of
-// time, so a plain listener would never notice a record that simply goes
-// stale — this pairs the listener with a timer set for exactly when
-// expiresAt is reached, and re-arms that timer if the record changes
-// (e.g. an owner extends/replaces it) before then.
 function watchModIssuedTimeoutExpiry(modName, targetName) {
   const key = ChatBackend._safeKey(targetName);
   const ref = ChatBackend._timeoutsRef.child(key);
@@ -4150,11 +3924,7 @@ function watchModIssuedTimeoutExpiry(modName, targetName) {
   });
 }
 
-/* ── Grant/Remove-mod double confirm — shares one overlay, `pendingModConfirmAction`
-   tracks whether this open is a grant or a remove so the confirm button
-   applies the right change. Kept as one modal since the two flows are
-   otherwise identical (name a target, ask for a second explicit click). ── */
-let pendingModConfirmAction = null; // "grant" | "remove"
+let pendingModConfirmAction = null;
 
 function openGrantModConfirm(targetName) {
   pendingGrantModTarget = targetName;
@@ -4193,19 +3963,8 @@ $grantModConfirmBtn.addEventListener("click", async () => {
   try {
     const modRef = ChatBackend._roleRefs.mod.child(ChatBackend._safeKey(pendingGrantModTarget));
     if (pendingModConfirmAction === "grant") {
-      // Grants mod directly via the same DB path redeemRoleCode() writes
-      // to, rather than going through a code — the owner is already an
-      // authenticated actor here (crown-gated), so no code-in-the-middle
-      // is needed for an owner explicitly choosing a specific person.
       await modRef.set(true);
     } else {
-      // Removes it the same direct way. Note this only clears the LIVE
-      // flag at modded/{name} — it doesn't reach into that person's own
-      // browser to flip their local _rolesHeld.mod, so if they were the
-      // one who originally redeemed a code for it, redeeming that same
-      // (still-live) code again would restore it. That mirrors how kicks
-      // work elsewhere in this app (removal is immediate, not a ban) and
-      // is fine here since codes already expire quickly.
       await modRef.remove();
     }
     $grantModConfirmOverlay.style.display = "none";
@@ -4299,6 +4058,7 @@ document.addEventListener("click", (e) => {
 
 $onlineDot.addEventListener("click", (e) => {
   e.stopPropagation();
+  if (!currentSession) return;
   const isOpen = $globalClearPanel.style.display === "block";
   if (isOpen) {
     closeClearPanel();
@@ -4309,7 +4069,7 @@ $onlineDot.addEventListener("click", (e) => {
 
 document.addEventListener("keydown", (e) => {
   if (e.key !== ".") return;
-  if (!modMenuUnlocked) return;
+  if (!modMenuUnlocked || !currentSession) return;
   const active = document.activeElement;
   const isTypingSomewhere = active && (active.tagName === "TEXTAREA" || active.tagName === "INPUT");
   if (isTypingSomewhere) return;
@@ -4538,12 +4298,9 @@ function preloadPingSound() {
 
   $pingSound.addEventListener("canplaythrough", () => {
     pingSoundReady = true;
-    console.log("Ping sound loaded!");
   }, { once: true });
 
-  $pingSound.addEventListener("error", () => {
-    console.error("Ping sound failed to load:", $pingSound.error);
-  }, { once: true });
+  $pingSound.addEventListener("error", () => {}, { once: true });
 
   $pingSound.load();
 }
@@ -4700,6 +4457,7 @@ function formatCountdown(msRemaining) {
 }
 
 function openRoomsSidebar() {
+  if (!currentSession) return;
   $roomsSidebarOverlay.style.display = "block";
   $roomsSidebar.classList.add("open");
   $roomsSidebarOverlay.style.display = "block";
@@ -5226,7 +4984,6 @@ function buildPingYouWebhookContent(note) {
   return "🔔 **" + senderName + "** pinged" + (note ? ": " + note : " (no note)");
 }
 
-
 $sendBtn.addEventListener("click", sendMessage);
 $msgInput.addEventListener("keydown", e => {
   if (e.key === "Enter" && !e.shiftKey) {
@@ -5275,36 +5032,44 @@ function attachRoomListeners() {
   ChatBackend.watchTyping(renderTyping, () => myName);
 }
 
-// Called once, the first time the person opens the Chat tab in a session
-// (see setMode() / tabChat handler). Does NOT create its own Firebase
-// connection — db is already initialized by the DM side of the app; this
-// just wires up ChatBackend/RoomManager against that same connection and
-// claims presence under the current DM account.
-let chatRoomInitialized = false;
-
+// Two separate flags, deliberately not merged into one:
+// - chatRoomListenersAttached tracks whether the Firebase listeners
+//   (watchMessages/watchPresenceCount/watchRoleNames/watchConnection/
+//   watchTyping/watchLeaveEvents, all wired via attachRoomListeners())
+//   are already live. These have NO internal de-dupe — calling
+//   attachRoomListeners() twice stacks a second "child_added" handler
+//   on top of the first, so every message would render twice, presence
+//   counts would double, etc. Spectator preview (enterSpectatorPreview)
+//   attaches a subset of these same listeners; this flag is shared with
+//   it so logging in after spectating reuses them instead of doubling up.
+// - chatRoomInitialized tracks the one-time-per-page-load setup (rooms
+//   sidebar restore, upload/ping button state, ping sound preload) that
+//   only makes sense once a real account exists, separate from whether
+//   the underlying Firebase listeners are already running.
 function initChatRoomUI() {
   if (chatRoomInitialized) {
-    // Already booted once this session — just re-claim presence (e.g. the
-    // person switched away to DMs and back) and show the chat screen.
     enterChatRoomAsCurrentAccount();
     return;
   }
   chatRoomInitialized = true;
 
   try {
-    ChatBackend.init();
+    if (!chatRoomListenersAttached) ChatBackend.init();
     RoomManager.init(db);
   } catch (e) {
     showChatRoomComposerNotice("Couldn't connect to chat — try again.");
     return;
   }
 
-  ChatBackend.watchConnection(setConnectionStatus);
-  Object.values(ROLES).forEach(role => {
-    roleHolders[role.id] = new Set();
-    ChatBackend.watchRoleNames(role.id, set => { roleHolders[role.id] = set; });
-  });
-  attachRoomListeners();
+  if (!chatRoomListenersAttached) {
+    chatRoomListenersAttached = true;
+    ChatBackend.watchConnection(setConnectionStatus);
+    Object.values(ROLES).forEach(role => {
+      roleHolders[role.id] = new Set();
+      ChatBackend.watchRoleNames(role.id, set => { roleHolders[role.id] = set; });
+    });
+    attachRoomListeners();
+  }
   watchPublicRoomsList();
   restoreSidebarRoomList();
 
@@ -5322,4 +5087,89 @@ function initChatRoomUI() {
     ChatBackend.releasePresence();
     ChatBackend.clearAllRoles();
   });
+}
+
+/* ══════════════════════════════════════════════════════════
+   SPECTATOR PREVIEW — the chat room is visible read-only to anyone
+   who hasn't logged in, so visitors can see what it's about before
+   signing up. A spectator:
+   - never calls claimPresence, so they never appear in presence,
+     roles, or timeouts — nothing in the moderation system can
+     target them, because there is no account for it to target.
+   - can watch messages exactly like a real participant (reading is
+     harmless), including role badges on others' messages.
+   - has the composer disabled, replaced with a "Sign up to chat"
+     prompt that jumps straight to the signup tab.
+   Ends the moment they log in or sign up (exitSpectatorPreview(),
+   called from the auth submit handler's success path) — the
+   Firebase listeners set up here are reused by initChatRoomUI()
+   rather than torn down, since ChatBackend.init() is idempotent
+   with respect to already-attached listeners for this session.
+   ══════════════════════════════════════════════════════════ */
+let spectatorPreviewActive = false;
+
+function enterSpectatorPreview() {
+  // Only currentSession gates this — NOT chatRoomInitialized. That flag
+  // means "the one-time real-account chat room setup has already run at
+  // some point this page load," which stays true forever once a person
+  // logs in, even after they log back out. Guarding on it here would
+  // make enterSpectatorPreview() a permanent no-op after any login this
+  // session — exactly the case doLogout() needs it to work for, so a
+  // logged-out visitor sees the read-only preview again instead of the
+  // blank pane exitChatRoom() leaves behind.
+  if (currentSession) return;
+  spectatorPreviewActive = true;
+
+  $chatRoomPane.style.display = "flex";
+  // $chatScreen (the inner messages/composer container, nested inside
+  // $chatRoomPane) defaults to visible via its own inline style in the
+  // HTML, but exitChatRoom() explicitly hides it ($chatScreen.style
+  // .display = "none") on logout. That "none" persists until something
+  // sets it back — nothing else does, so without this line a
+  // post-logout visitor would see the outer chat pane but an empty gap
+  // where messages and the composer should be.
+  $chatScreen.style.display = "flex";
+  $emptyState.style.display = "flex";
+  updateSpectatorComposerUI();
+
+  // If listeners are already attached (e.g. re-entering spectator mode
+  // after a prior spectator session in this same page load), don't
+  // register a second set — just update the UI above and return.
+  if (chatRoomListenersAttached) return;
+
+  try {
+    ChatBackend.init();
+  } catch (e) {
+    showChatRoomComposerNotice("Couldn't load chat preview.");
+    return;
+  }
+  chatRoomListenersAttached = true;
+  ChatBackend.watchConnection(setConnectionStatus);
+  ChatBackend.watchMessages(renderMessage);
+  Object.values(ROLES).forEach(role => {
+    roleHolders[role.id] = new Set();
+    ChatBackend.watchRoleNames(role.id, set => { roleHolders[role.id] = set; });
+  });
+  ChatBackend.watchPresenceCount(count => {
+    $onlineCount.textContent = count + " online";
+  });
+}
+
+function exitSpectatorPreview() {
+  spectatorPreviewActive = false;
+}
+
+function updateSpectatorComposerUI() {
+  $msgInput.disabled = true;
+  $msgInput.placeholder = "Sign up to chat";
+  $sendBtn.disabled = false;
+  $sendBtn.classList.remove("cooldown");
+  $sendBtn.textContent = "Sign up to chat";
+  $youAre.textContent = "Spectating";
+}
+
+function handleSpectatorComposerClick() {
+  showAuthFlow();
+  setMode("signup");
+  if ($signupUsername) $signupUsername.focus();
 }
