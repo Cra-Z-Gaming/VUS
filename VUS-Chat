@@ -963,13 +963,13 @@ const FIREBASE_CONFIG = {
 };
 
 const DM_AUTH_CONFIG = {
-  apiKey: "AIzaSyC60NQgrGpoChAUgHBVpZRIBLM_bTkvi0M",
-  authDomain: "vus-chat-dm.firebaseapp.com",
-  databaseURL: "https://vus-chat-dm-default-rtdb.firebaseio.com",
-  projectId: "vus-chat-dm",
-  storageBucket: "vus-chat-dm.firebasestorage.app",
-  messagingSenderId: "898140075693",
-  appId: "1:898140075693:web:0ad830a523dd12135f3824"
+  apiKey: "AIzaSyC_cxqIYzFcQ8nVTo679JuVEgIZDAyrPEQ",
+  authDomain: "vus-dm.firebaseapp.com",
+  databaseURL: "https://vus-dm-default-rtdb.firebaseio.com",
+  projectId: "vus-dm",
+  storageBucket: "vus-dm.firebasestorage.app",
+  messagingSenderId: "768508136182",
+  appId: "1:768508136182:web:abd44cb531dd2c43dd7ad7"
 };
 
 let dmAuthDb = null;
