@@ -1001,13 +1001,17 @@ async function loginFromChat(identifier, password) {
     : "usernameIndex/" + clean.toLowerCase();
   let foundAccount = false;
   for (const database of [dmAuthDb, legacyDmAuthDb]) {
-    const accountKeySnapshot = await database.ref(identifierKey).get();
-    if (!accountKeySnapshot.exists()) continue;
-    foundAccount = true;
-    const accountSnapshot = await database.ref("users/" + accountKeySnapshot.val()).get();
-    const account = accountSnapshot.val();
-    if (account && account.password === password) {
-      return { ok: true, accountKey: accountSnapshot.key, username: account.username, id: account.id };
+    try {
+      const accountKeySnapshot = await database.ref(identifierKey).get();
+      if (!accountKeySnapshot.exists()) continue;
+      foundAccount = true;
+      const accountSnapshot = await database.ref("users/" + accountKeySnapshot.val()).get();
+      const account = accountSnapshot.val();
+      if (account && account.password === password) {
+        return { ok: true, accountKey: accountSnapshot.key, username: account.username, id: account.id };
+      }
+    } catch (e) {
+      continue;
     }
   }
   return { ok: false, error: foundAccount ? "Incorrect password." : "No account found with that username or ID." };
