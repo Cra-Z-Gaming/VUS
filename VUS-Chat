@@ -1742,6 +1742,14 @@ const ChatBackend = {
     this.scheduleTemporaryRoleExpiry(roleId, loginId, username, expiresAt);
   },
 
+  async grantRole(roleId, loginId, username) {
+    if (!ROLES[roleId] || roleId === "crown" || !loginId) {
+      throw new Error("Invalid permanent role grant");
+    }
+    await this._db.ref("temporaryRoles/" + roleId + "/" + this._safeKey(String(loginId))).remove();
+    await this._roleRefs[roleId].child(this._safeKey(username)).set(true);
+  },
+
   async unbanUser(loginId) {
     if (!loginId) throw new Error("Missing login ID");
     await this._bansRef.child(this._safeKey(String(loginId))).remove();
@@ -2740,15 +2748,16 @@ async function handleModerationCommand(text) {
       return true;
     }
   } else {
-    if (parts.length !== 4) {
-      showComposerNotice("Use /grant rank time name");
+    if (parts.length !== 3 && parts.length !== 4) {
+      showComposerNotice("Use /grant rank username or /grant rank time username");
       return true;
     }
     const rank = parts[1].toLowerCase();
-    durationMs = parseModerationDuration(parts[2]);
-    targetName = parts[3];
-    if (!["mod", "admin"].includes(rank) || !durationMs || durationMs > TIMEOUT_MAX_MS) {
-      showComposerNotice("Use rank mod/admin and a time up to 30 days.");
+    const hasDuration = parts.length === 4;
+    durationMs = hasDuration ? parseModerationDuration(parts[2]) : 0;
+    targetName = hasDuration ? parts.slice(3).join(" ") : parts.slice(2).join(" ");
+    if (!["mod", "admin"].includes(rank) || (hasDuration && (!durationMs || durationMs > TIMEOUT_MAX_MS))) {
+      showComposerNotice("Use rank mod/admin and an optional time up to 30 days.");
       return true;
     }
     if (rank === "admin" && !isOwner) {
@@ -2765,10 +2774,15 @@ async function handleModerationCommand(text) {
       return true;
     }
     try {
-      await ChatBackend.grantTemporaryRole(rank, target.loginId, target.name, durationMs, myLoginId);
-      showComposerNotice("Granted temporary " + rank + " to " + target.name + ".");
+      if (durationMs) {
+        await ChatBackend.grantTemporaryRole(rank, target.loginId, target.name, durationMs, myLoginId);
+        showComposerNotice("Granted temporary " + rank + " to " + target.name + ".");
+      } else {
+        await ChatBackend.grantRole(rank, target.loginId, target.name);
+        showComposerNotice("Granted permanent " + rank + " to " + target.name + ".");
+      }
     } catch (e) {
-      showComposerNotice("Couldn't grant that role.");
+      showComposerNotice("Couldn't grant " + rank + ": " + (e && e.message ? e.message : "check your connection") + ".");
     }
     return true;
   }
@@ -3740,8 +3754,8 @@ function renderStaffCommands() {
   const commands = [
     ["/ban username", "Permanently ban a logged-in user.", isOwner || isAdmin],
     ["/tempban time username", "Temporarily ban a user, for example 2h.", isOwner || isAdmin],
-    ["/grant mod time username", "Give temporary Mod status.", isOwner || isAdmin],
-    ["/grant admin time username", "Give temporary Admin status.", isOwner],
+    ["/grant mod [time] username", "Give permanent or temporary Mod status.", isOwner || isAdmin],
+    ["/grant admin [time] username", "Give permanent or temporary Admin status.", isOwner],
     ["/timeout", "Use the Timeout button beside a user.", !isOwner && !isAdmin]
   ];
   commands.forEach(([command, description, visible]) => {
@@ -4510,7 +4524,7 @@ document.addEventListener("click", (e) => {
 function handleMentionTrigger() {
   const cursor = $msgInput.selectionStart;
   const before = $msgInput.value.slice(0, cursor);
-  const moderationMatch = before.match(/(?:^|\s)\/(?:ban\s+|tempban\s+\S+\s+|grant\s+(?:mod|admin)\s+\S+\s+)([^\s]*)$/i);
+  const moderationMatch = before.match(/(?:^|\s)\/(?:ban\s+|tempban\s+\S+\s+|grant\s+(?:mod|admin)\s+(?:(?:\S+\s+)?))([^\s]*)$/i);
   if (moderationMatch) {
     openModerationTargetDropdown(cursor - moderationMatch[1].length);
     return;
