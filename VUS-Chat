@@ -717,7 +717,6 @@
   }
   .role-menu-option:hover { border-color: #475569; }
   .role-menu-option .role-menu-icon { font-size: 17px; }
-  #ownerMenuOverlay, #timeoutSetOverlay, #grantModConfirmOverlay { display: none !important; }
 </style>
 </head>
 <body>
@@ -913,32 +912,7 @@
   </div>
 </div>
 
-<div id="authScreen">
-  <div id="authCard">
-    <h2>Log in to VUS Chat</h2>
-    <p>Use the same account as VUS DM's.</p>
-    <div class="auth-tabs">
-      <button class="auth-tab active" id="authLoginTab" type="button">Log In</button>
-      <button class="auth-tab" id="authSignupTab" type="button">Sign Up</button>
-    </div>
-    <form id="chatAuthForm" autocomplete="off">
-      <div id="authLoginFields" class="auth-field" style="gap:12px">
-        <div class="auth-field"><label for="authIdentifier">Username or ID</label><input id="authIdentifier" type="text" maxlength="24" autocomplete="username"></div>
-        <div class="auth-field"><label for="authPassword">Password</label><input id="authPassword" type="password" autocomplete="current-password"></div>
-      </div>
-      <div id="authSignupFields" style="display:none;flex-direction:column;gap:12px">
-        <div class="auth-field"><label for="authUsername">Username</label><input id="authUsername" type="text" maxlength="24" autocomplete="off"></div>
-        <div class="auth-field"><label for="authSignupPassword">Password</label><input id="authSignupPassword" type="password" autocomplete="new-password"></div>
-        <div class="auth-field"><label for="authPasswordConfirm">Confirm password</label><input id="authPasswordConfirm" type="password" autocomplete="new-password"></div>
-      </div>
-      <div id="authError"></div>
-      <div id="authSuccess"></div>
-      <button id="authSubmitBtn" type="submit">Log In</button>
-    </form>
-  </div>
-</div>
-
-<div id="joinScreen" style="display:none">
+<div id="joinScreen">
   <div id="joinCard"></div>
 </div>
 
@@ -991,92 +965,6 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "134456894391",
   appId: "1:134456894391:web:bdf28487bf2b2eae593e32"
 };
-
-const DM_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyC_cxqIYzFcQ8nVTo679JuVEgIZDAyrPEQ",
-  authDomain: "vus-dm.firebaseapp.com",
-  databaseURL: "https://vus-dm-default-rtdb.firebaseio.com",
-  projectId: "vus-dm",
-  storageBucket: "vus-dm.firebasestorage.app",
-  messagingSenderId: "768508136182",
-  appId: "1:768508136182:web:abd44cb531dd2c43dd7ad7"
-};
-
-const CHAT_SESSION_STORAGE_KEY = "dmAppSession";
-let authDb = null;
-let authMode = "login";
-
-function initChatAuth() {
-  firebase.initializeApp(DM_FIREBASE_CONFIG, "dmAuth");
-  authDb = firebase.app("dmAuth").database();
-}
-
-function loadChatAuthSession() {
-  try {
-    const raw = localStorage.getItem(CHAT_SESSION_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch (e) {
-    return null;
-  }
-}
-
-function saveChatAuthSession(session) {
-  try { localStorage.setItem(CHAT_SESSION_STORAGE_KEY, JSON.stringify(session)); } catch (e) {}
-}
-
-function setChatAuthMode(mode) {
-  authMode = mode;
-  document.getElementById("authLoginTab").classList.toggle("active", mode === "login");
-  document.getElementById("authSignupTab").classList.toggle("active", mode === "signup");
-  document.getElementById("authLoginFields").style.display = mode === "login" ? "flex" : "none";
-  document.getElementById("authSignupFields").style.display = mode === "signup" ? "flex" : "none";
-  document.getElementById("authSubmitBtn").textContent = mode === "login" ? "Log In" : "Sign Up";
-  document.getElementById("authError").textContent = "";
-  document.getElementById("authSuccess").textContent = "";
-}
-
-async function chatAuthLogin(identifier, password) {
-  if (!identifier.trim() || !password) return { ok: false, error: "Enter your username/ID and password." };
-  const clean = identifier.trim();
-  try {
-    const indexPath = /^[0-9]{6}$/.test(clean) ? "idIndex/" + clean : "usernameIndex/" + clean.toLowerCase();
-    const indexSnap = await authDb.ref(indexPath).once("value");
-    const accountKey = indexSnap.val();
-    if (!accountKey) return { ok: false, error: "No account found with that username or ID." };
-    const account = (await authDb.ref("users/" + accountKey).once("value")).val();
-    if (!account || account.password !== password) return { ok: false, error: "Incorrect password." };
-    return { ok: true, accountKey, username: account.username, id: account.id };
-  } catch (e) {
-    return { ok: false, error: "Couldn't reach the server — try again." };
-  }
-}
-
-async function chatAuthSignup(username, password, confirmation) {
-  const clean = username.trim();
-  if (!/^[a-zA-Z0-9_]{3,24}$/.test(clean)) return { ok: false, error: "Username must be 3-24 letters, numbers, or underscores." };
-  if (!password || password.length < 4) return { ok: false, error: "Password must be at least 4 characters." };
-  if (password !== confirmation) return { ok: false, error: "Passwords do not match." };
-  try {
-    const usernameKey = clean.toLowerCase();
-    if ((await authDb.ref("usernameIndex/" + usernameKey).once("value")).exists()) return { ok: false, error: "That username is already taken." };
-    let id;
-    for (let attempt = 0; attempt < 15; attempt++) {
-      const candidate = String(Math.floor(Math.random() * 900000) + 100000);
-      if (!(await authDb.ref("idIndex/" + candidate).once("value")).exists()) { id = candidate; break; }
-    }
-    if (!id) return { ok: false, error: "Couldn't generate an account ID — try again." };
-    const accountRef = authDb.ref("users").push();
-    const account = { username: clean, usernameLower: usernameKey, id, password, createdAt: firebase.database.ServerValue.TIMESTAMP, friends: {}, friendRequestsIncoming: {}, friendRequestsOutgoing: {}, blockedUsers: {} };
-    const updates = {};
-    updates["users/" + accountRef.key] = account;
-    updates["usernameIndex/" + usernameKey] = accountRef.key;
-    updates["idIndex/" + id] = accountRef.key;
-    await authDb.ref().update(updates);
-    return { ok: true, accountKey: accountRef.key, username: clean, id };
-  } catch (e) {
-    return { ok: false, error: "Couldn't create your account — try again." };
-  }
-}
 
 const MAIN_ROOM_ID = "vus-hub-main";
 
@@ -1373,34 +1261,12 @@ const ChatBackend = {
     return Object.prototype.hasOwnProperty.call(val, key);
   },
 
-  async getBan(accountId) {
-    if (!accountId) return null;
-    const snap = await this._db.ref("bans/" + this._safeKey(accountId)).get();
-    const ban = snap.val();
-    if (!ban) return null;
-    if (ban.expiresAt && ban.expiresAt <= Date.now()) {
-      await snap.ref.remove();
-      return null;
-    }
-    return ban;
-  },
-
-  async banAccount(accountId, byName, durationMs) {
-    const expiresAt = durationMs ? Date.now() + durationMs : null;
-    await this._db.ref("bans/" + this._safeKey(accountId)).set({ accountId, by: byName || null, expiresAt });
-    const presenceSnap = await this._presenceRef.get();
-    const presence = presenceSnap.val() || {};
-    for (const [nameKey, value] of Object.entries(presence)) {
-      if (value && value.accountId === accountId) await this._presenceRef.child(nameKey).remove();
-    }
-  },
-
   // NOTE: this is now async (it wasn't before) — see the role-sync section
   // below for why. All existing call sites already just call it without
   // awaiting the result, which is fine: everything it does is fire off
   // Firebase writes that resolve on their own, nothing here needs the
   // caller to wait.
-  async claimPresence(name, silent, accountId) {
+  async claimPresence(name, silent) {
     this.releasePresence();
     this._myPresenceRef = this._presenceRef.child(this._safeKey(name));
     this._silentSession = !!silent;
@@ -1412,7 +1278,7 @@ const ChatBackend = {
     this._myLeaveEventRef = leaveEventRef;
 
     this._myPresenceRef.onDisconnect().remove();
-    this._myPresenceRef.set({ joinedAt: firebase.database.ServerValue.TIMESTAMP, accountId: accountId || null });
+    this._myPresenceRef.set({ joinedAt: firebase.database.ServerValue.TIMESTAMP });
 
     const roleKey = this._safeKey(name);
     for (const role of Object.values(ROLES)) {
@@ -1540,7 +1406,6 @@ const ChatBackend = {
       const val = snap.val() || {};
       const list = Object.entries(val).map(([key, v]) => ({
         name: key,
-        accountId: (v && typeof v === "object") ? (v.accountId || null) : null,
         joinedAt: (v && typeof v === "object") ? (v.joinedAt || null) : null
       }));
       onList(list);
@@ -1886,7 +1751,6 @@ const $roleClaimBackBtn = document.getElementById("roleClaimBackBtn");
 const $roleClaimCloseBtn = document.getElementById("roleClaimCloseBtn");
 
 let myName = "";
-let myAccountId = "";
 let messageCount = 0;
 let autoScroll = true;
 let isSpectator = false;
@@ -2141,12 +2005,6 @@ async function attemptJoin(rawName, isRename, errEl, submitBtn, joinSilently) {
   if (submitBtn) submitBtn.disabled = true;
   errEl.textContent = "";
   try {
-    const ban = await ChatBackend.getBan(myAccountId);
-    if (ban) {
-      errEl.textContent = ban.expiresAt ? "You are temporarily banned." : "You are banned from VUS Chat.";
-      if (submitBtn) submitBtn.disabled = false;
-      return;
-    }
     const taken = await ChatBackend.isNameTaken(name);
     if (taken) {
       errEl.textContent = "That name is already used.";
@@ -2169,7 +2027,7 @@ async function attemptJoin(rawName, isRename, errEl, submitBtn, joinSilently) {
   myName = name;
   isSpectator = !!joinSilently;
   localStorage.setItem(NAME_STORAGE_KEY, name);
-  ChatBackend.claimPresence(myName, isSpectator, myAccountId);
+  ChatBackend.claimPresence(myName, isSpectator);
   watchMyTimeout();
   requestNotificationPermissionIfNeeded();
   $youAre.textContent = "You: " + name + (isSpectator ? " (spectating)" : "");
@@ -2257,6 +2115,24 @@ function renderJoinNameEntry(isRename) {
   $joinCard.appendChild(errEl);
   $joinCard.appendChild(joinBtn);
 
+  if (!isRename) {
+    const divider = document.createElement("div");
+    divider.className = "join-divider";
+    divider.textContent = "or";
+
+    const guestBtn = document.createElement("button");
+    guestBtn.className = "join-secondary-btn";
+    guestBtn.textContent = "Join as Guest";
+    guestBtn.addEventListener("click", () => {
+      const guestName = randomGuestName();
+      input.value = guestName;
+      submit();
+    });
+
+    $joinCard.appendChild(divider);
+    $joinCard.appendChild(guestBtn);
+  }
+
   input.focus();
   if (isRename) input.select();
 }
@@ -2328,57 +2204,6 @@ function watchMyTimeout() {
   });
 }
 
-function parseCommandDuration(value) {
-  const match = String(value || "").trim().toLowerCase().match(/^(\d+)(s|m|h|d)$/);
-  if (!match) return 0;
-  const units = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
-  return Number(match[1]) * units[match[2]];
-}
-
-function findOnlineMember(name) {
-  const target = String(name || "").toLowerCase();
-  return latestPresenceList.find(entry => entry.name.toLowerCase() === target) || null;
-}
-
-async function executeStaffCommand(text) {
-  const parts = text.trim().split(/\s+/);
-  const command = parts[0].toLowerCase();
-  if (!["/grant", "/tempban", "/ban"].includes(command)) return false;
-
-  if (command === "/grant") {
-    if (!isCrownHolder(myName)) { showComposerNotice("Only the Owner can grant Mod."); return true; }
-    const durationMs = parseCommandDuration(parts[parts.length - 1]);
-    const target = findOnlineMember(parts.slice(1, -1).join(" "));
-    if (!target || !durationMs) { showComposerNotice("Use /grant <name> <time>, for example /grant Alex 1h."); return true; }
-    try {
-      await ChatBackend._roleRefs.mod.child(ChatBackend._safeKey(target.name)).set({ grantedBy: myName, expiresAt: Date.now() + durationMs });
-      showComposerNotice("Mod granted to " + target.name + " for " + parts[parts.length - 1] + ".");
-    } catch (e) { showComposerNotice("Couldn't grant Mod — try again."); }
-    return true;
-  }
-
-  if (command === "/tempban") {
-    if (!isCrownHolder(myName) && !isModHolder(myName)) { showComposerNotice("Only Mods or Owners can tempban members."); return true; }
-    const durationMs = parseCommandDuration(parts[parts.length - 1]);
-    const target = findOnlineMember(parts.slice(1, -1).join(" "));
-    if (!target || !durationMs) { showComposerNotice("Use /tempban <name> <time>, for example /tempban Alex 10m."); return true; }
-    try {
-      await ChatBackend.setTimeout_(target.name, durationMs, myName);
-      showComposerNotice(target.name + " was tempbanned for " + parts[parts.length - 1] + ".");
-    } catch (e) { showComposerNotice("Couldn't tempban — try again."); }
-    return true;
-  }
-
-  if (!isCrownHolder(myName)) { showComposerNotice("Only the Owner can permanently ban accounts."); return true; }
-  const accountId = String(parts[1] || "").trim();
-  if (!/^\d{6}$/.test(accountId)) { showComposerNotice("Use /ban <6-digit account ID>."); return true; }
-  try {
-    await ChatBackend.banAccount(accountId, myName);
-    showComposerNotice("Account " + accountId + " was permanently banned.");
-  } catch (e) { showComposerNotice("Couldn't ban that account — try again."); }
-  return true;
-}
-
 function sendMessage() {
   if (isSpectatorName(myName)) {
     openChangeName();
@@ -2392,15 +2217,6 @@ function sendMessage() {
 
   const text = $msgInput.value.trim();
   const mentionTarget = currentMentionTarget;
-
-  if (text.startsWith("/")) {
-    executeStaffCommand(text);
-    $msgInput.value = "";
-    autosizeInput();
-    updateCharCounter();
-    stopTyping();
-    return;
-  }
 
   if (pendingImageDataUrl) {
     const imageToSend = pendingImageDataUrl;
@@ -2609,7 +2425,7 @@ $clearChatBtn.addEventListener("click", () => {
   $jumpToBottomBtn.style.display = "none";
 });
 
-const MOD_MENU_CODE = "5216";
+const MOD_MENU_CODE = "2212";
 let modMenuUnlocked = false;
 let imagesEnabledForMe = false;
 
@@ -2674,7 +2490,7 @@ async function joinAsSpectatorAuto() {
 
   myName = name;
   isSpectator = true;
-  ChatBackend.claimPresence(myName, true, myAccountId);
+  ChatBackend.claimPresence(myName, true);
   watchMyTimeout();
   requestNotificationPermissionIfNeeded();
   $youAre.textContent = "You: " + name;
@@ -2893,6 +2709,39 @@ async function renderModMenu() {
     openRolesMenu();
   });
   $globalClearPanel.appendChild(rolesBtn);
+
+  // Owner Menu button: only shown when this browser both has the mod-menu
+  // code unlocked AND the current name currently holds the crown, live —
+  // checked fresh here (not cached) so it disappears the moment the crown
+  // is lost (e.g. cleared on disconnect) without needing the panel reopened.
+  const iAmCrowned = modMenuUnlocked && myName && (roleHolders.crown || new Set()).has(ChatBackend._safeKey(myName));
+  if (iAmCrowned) {
+    const ownerBtn = document.createElement("button");
+    ownerBtn.textContent = "👑 Owner Menu";
+    ownerBtn.className = "toolbar-btn";
+    ownerBtn.style.cssText = "width:100%;margin-bottom:6px";
+    ownerBtn.addEventListener("click", () => {
+      closeClearPanel();
+      openOwnerMenu();
+    });
+    $globalClearPanel.appendChild(ownerBtn);
+  }
+
+  // Mod Menu button: shown when mod-menu code is unlocked AND the current
+  // name holds the mod role, live. A crown-holder who is ALSO modded would
+  // see both buttons — that's fine, each opens its own scoped menu.
+  const iAmModded = modMenuUnlocked && myName && (roleHolders.mod || new Set()).has(ChatBackend._safeKey(myName));
+  if (iAmModded) {
+    const modMenuBtn = document.createElement("button");
+    modMenuBtn.textContent = "🧩 Mod Menu";
+    modMenuBtn.className = "toolbar-btn";
+    modMenuBtn.style.cssText = "width:100%;margin-bottom:6px";
+    modMenuBtn.addEventListener("click", () => {
+      closeClearPanel();
+      openModMenuStaff();
+    });
+    $globalClearPanel.appendChild(modMenuBtn);
+  }
 
   const closeBtn = document.createElement("button");
   closeBtn.textContent = "Close";
@@ -3529,7 +3378,7 @@ function renderOnlineListPanel() {
     const nameEl = document.createElement("span");
     const safeName = ChatBackend._safeKey(entry.name);
     const icons = Object.values(ROLES).filter(role => (roleHolders[role.id] || new Set()).has(safeName)).map(role => role.icon).join(" ");
-    nameEl.textContent = (icons ? icons + " " : "") + entry.name + (entry.accountId ? " · " + entry.accountId : "");
+    nameEl.textContent = (icons ? icons + " " : "") + entry.name;
     nameEl.style.cssText = "color:#f1f5f9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
     const timeEl = document.createElement("span");
     timeEl.textContent = formatElapsed(entry.joinedAt);
@@ -4198,7 +4047,7 @@ async function joinRoomByCode(code) {
   teardownCurrentRoomMetaWatch();
   currentRoomCode = code;
   ChatBackend.bindToRoom(code);
-  ChatBackend.claimPresence(myName, isSpectator, myAccountId);
+  ChatBackend.claimPresence(myName, isSpectator);
   watchMyTimeout();
   attachRoomListeners();
 
@@ -4217,7 +4066,7 @@ function switchToMainRoom() {
   currentRoomCode = null;
   currentRoomMeta = null;
   ChatBackend.bindToRoom(MAIN_ROOM_ID);
-  if (myName) ChatBackend.claimPresence(myName, isSpectator, myAccountId);
+  if (myName) ChatBackend.claimPresence(myName, isSpectator);
   watchMyTimeout();
   attachRoomListeners();
 
@@ -4609,11 +4458,10 @@ function init() {
   }
 
   try {
-    initChatAuth();
     ChatBackend.init();
     RoomManager.init(ChatBackend._db);
   } catch (e) {
-    document.getElementById("authCard").innerHTML = `<h2>Couldn't connect</h2><p>${esc(e.message || "Unknown error")}</p>`;
+    $joinCard.innerHTML = `<h2>Couldn't connect</h2><p>${esc(e.message || "Unknown error")}</p>`;
     return;
   }
 
@@ -4648,14 +4496,6 @@ function init() {
   window.addEventListener("beforeunload", () => {
     stopTyping();
     ChatBackend.releasePresence();
-    ChatBackend.clearAllRoles();
-  });
-}
-
-init();
-</script>
-</body>
-</html>
     ChatBackend.clearAllRoles();
   });
 }
