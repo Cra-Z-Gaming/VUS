@@ -44,12 +44,23 @@
   }
   #joinCard {
     width: 100%;
-    max-width: 280px;
+    max-width: 340px;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 12px;
   }
+  .auth-eyebrow { color: #4ade80; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+  .auth-title { font-size: 24px !important; font-weight: 700 !important; }
+  .auth-subtitle { max-width: 300px; }
+  .auth-form { gap: 12px !important; }
+  .auth-field { display: flex; flex-direction: column; gap: 5px; width: 100%; }
+  .auth-field label { color: #cbd5e1; font-size: 12.5px; font-weight: 600; }
+  .auth-input { width: 100%; padding: 11px 13px; background: #1e293b; border: 1.5px solid #334155; border-radius: 9px; color: #f1f5f9; font-size: 15px; outline: none; }
+  .auth-input:focus { border-color: #22c55e; }
+  .auth-error { color: #f87171; font-size: 13px; min-height: 18px; text-align: center; }
+  .auth-submit { margin-top: 2px; }
+  .auth-switch { border: none; padding: 5px; }
   #joinScreen h2 { font-size: 19px; font-weight: 500; margin-bottom: 2px; text-align: center; }
   #joinScreen p { font-size: 13.5px; color: #94a3b8; text-align: center; margin-bottom: 4px; line-height: 1.4; }
   #nameInput {
@@ -908,6 +919,18 @@
   </div>
 </div>
 
+<div class="chat-modal-overlay" id="banConfirmOverlay">
+  <div class="chat-modal">
+    <h3 id="banConfirmTitle">Ban user?</h3>
+    <p id="banConfirmText"></p>
+    <div class="chat-modal-err" id="banConfirmErr"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="banCancelBtn">Cancel</button>
+      <button class="chat-modal-btn-danger" id="banConfirmBtn">Ban</button>
+    </div>
+  </div>
+</div>
+
 <div id="joinScreen">
   <div id="joinCard"></div>
 </div>
@@ -986,26 +1009,62 @@ let dmAuthDb = null;
 let legacyDmAuthDb = null;
 
 function initDmAuthDatabase() {
-  const app = firebase.initializeApp(DM_AUTH_CONFIG, "vusDmAuth");
-  const legacyApp = firebase.initializeApp(LEGACY_DM_AUTH_CONFIG, "legacyVusDmAuth");
-  dmAuthDb = firebase.database(app);
-  legacyDmAuthDb = firebase.database(legacyApp);
+  const appName = "vusDmAuth";
+  const legacyAppName = "legacyVusDmAuth";
+
+  if (!firebase.apps.some(app => app.name === appName)) {
+    firebase.initializeApp(DM_AUTH_CONFIG, appName);
+  }
+  if (!firebase.apps.some(app => app.name === legacyAppName)) {
+    firebase.initializeApp(LEGACY_DM_AUTH_CONFIG, legacyAppName);
+  }
+
+  dmAuthDb = firebase.database(firebase.app(appName));
+  legacyDmAuthDb = firebase.database(firebase.app(legacyAppName));
+}
+
+async function lookupAccountByIdentifier(database, identifier) {
+  const clean = (identifier || "").trim();
+  if (!clean) return null;
+
+  const usernameKey = clean.toLowerCase();
+
+  try {
+    const usernameSnap = await database.ref("usernameIndex/" + usernameKey).get();
+    if (usernameSnap.exists()) return { accountKey: usernameSnap.val(), source: "username" };
+  } catch (e) {}
+
+  if (/^[0-9]{6}$/.test(clean)) {
+    try {
+      const idSnap = await database.ref("idIndex/" + clean).get();
+      if (idSnap.exists()) return { accountKey: idSnap.val(), source: "id" };
+    } catch (e) {}
+  }
+
+  try {
+    const userMatchesSnap = await database.ref("users").orderByChild("usernameLower").equalTo(usernameKey).limitToFirst(1).get();
+    const matches = userMatchesSnap.val();
+    if (matches) {
+      const [accountKey] = Object.keys(matches);
+      if (accountKey) return { accountKey, source: "fallback" };
+    }
+  } catch (e) {}
+
+  return null;
 }
 
 async function loginFromChat(identifier, password) {
   const clean = identifier.trim();
   if (!clean || !password) return { ok: false, error: "Enter your username/ID and password." };
 
-  const identifierKey = /^[0-9]{6}$/.test(clean)
-    ? "idIndex/" + clean
-    : "usernameIndex/" + clean.toLowerCase();
   let foundAccount = false;
   for (const database of [dmAuthDb, legacyDmAuthDb]) {
+    if (!database) continue;
     try {
-      const accountKeySnapshot = await database.ref(identifierKey).get();
-      if (!accountKeySnapshot.exists()) continue;
+      const accountInfo = await lookupAccountByIdentifier(database, clean);
+      if (!accountInfo) continue;
       foundAccount = true;
-      const accountSnapshot = await database.ref("users/" + accountKeySnapshot.val()).get();
+      const accountSnapshot = await database.ref("users/" + accountInfo.accountKey).get();
       const account = accountSnapshot.val();
       if (account && account.password === password) {
         return { ok: true, accountKey: accountSnapshot.key, username: account.username, id: account.id };
@@ -2212,7 +2271,7 @@ function randomSpectatorName() {
 
 function loadDmSession() {
   try {
-    const raw = localStorage.getItem(DM_SESSION_STORAGE_KEY);
+    const raw = sessionStorage.getItem(DM_SESSION_STORAGE_KEY);
     const session = raw ? JSON.parse(raw) : null;
     return session && session.accountKey && session.username && session.id ? session : null;
   } catch (e) {
@@ -2224,47 +2283,74 @@ function renderDmLoginPrompt(message) {
   let authMode = "login";
   $joinCard.innerHTML = "";
 
+  const eyebrow = document.createElement("div");
+  eyebrow.className = "auth-eyebrow";
+  eyebrow.textContent = "VUS DM ACCOUNT";
   const h2 = document.createElement("h2");
+  h2.className = "auth-title";
   h2.textContent = "Log in to VUS Chat";
   const p = document.createElement("p");
+  p.className = "auth-subtitle";
   p.textContent = message || "Log in with your VUS account to join the chat.";
 
   const form = document.createElement("form");
+  form.className = "auth-form";
   form.autocomplete = "on";
-  form.style.cssText = "display:flex;flex-direction:column;gap:10px;width:100%";
+  form.style.cssText = "display:flex;flex-direction:column;width:100%";
 
+  const identifierField = document.createElement("div");
+  identifierField.className = "auth-field";
+  const identifierLabel = document.createElement("label");
+  identifierLabel.textContent = "Username or VUS DM ID";
   const identifierInput = document.createElement("input");
+  identifierInput.className = "auth-input";
+  identifierInput.id = "chatLoginIdentifier";
   identifierInput.type = "text";
   identifierInput.placeholder = "Username or 6-digit ID";
   identifierInput.autocomplete = "username";
   identifierInput.required = true;
-  identifierInput.style.cssText = "width:100%;padding:10px 13px;background:#1e293b;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:15px;outline:none";
+  identifierField.appendChild(identifierLabel);
+  identifierField.appendChild(identifierInput);
 
+  const passwordField = document.createElement("div");
+  passwordField.className = "auth-field";
+  const passwordLabel = document.createElement("label");
+  passwordLabel.textContent = "Password";
   const passwordInput = document.createElement("input");
+  passwordInput.className = "auth-input";
+  passwordInput.id = "chatLoginPassword";
   passwordInput.type = "password";
   passwordInput.placeholder = "Password";
   passwordInput.autocomplete = "current-password";
   passwordInput.required = true;
-  passwordInput.style.cssText = identifierInput.style.cssText;
+  passwordField.appendChild(passwordLabel);
+  passwordField.appendChild(passwordInput);
 
   const error = document.createElement("div");
-  error.style.cssText = "color:#ef4444;font-size:13px;min-height:18px";
+  error.className = "auth-error";
 
+  const confirmField = document.createElement("div");
+  confirmField.className = "auth-field";
+  const confirmLabel = document.createElement("label");
+  confirmLabel.textContent = "Confirm password";
   const confirmInput = document.createElement("input");
+  confirmInput.className = "auth-input";
   confirmInput.type = "password";
   confirmInput.placeholder = "Confirm password";
   confirmInput.autocomplete = "new-password";
   confirmInput.required = true;
-  confirmInput.style.cssText = identifierInput.style.cssText;
-  confirmInput.style.display = "none";
+  confirmField.appendChild(confirmLabel);
+  confirmField.appendChild(confirmInput);
+  confirmField.style.display = "none";
 
   const modeToggle = document.createElement("button");
   modeToggle.type = "button";
-  modeToggle.className = "join-secondary-btn";
+  modeToggle.className = "join-secondary-btn auth-switch";
   modeToggle.textContent = "Need an account? Sign Up";
 
   const loginBtn = document.createElement("button");
   loginBtn.id = "joinBtn";
+  loginBtn.className = "auth-submit";
   loginBtn.type = "submit";
   loginBtn.textContent = "Log In";
 
@@ -2275,16 +2361,16 @@ function renderDmLoginPrompt(message) {
     p.textContent = signup ? "This account will work in VUS DM's and VUS Chat." : (message || "Log in with your VUS account to join the chat.");
     identifierInput.placeholder = signup ? "Choose a username" : "Username or 6-digit ID";
     identifierInput.autocomplete = signup ? "username" : "username";
-    confirmInput.style.display = signup ? "block" : "none";
+    confirmField.style.display = signup ? "flex" : "none";
     confirmInput.required = signup;
     loginBtn.textContent = signup ? "Create Account" : "Log In";
     modeToggle.textContent = signup ? "Already have an account? Log In" : "Need an account? Sign Up";
     error.textContent = "";
   });
 
-  form.appendChild(identifierInput);
-  form.appendChild(passwordInput);
-  form.appendChild(confirmInput);
+  form.appendChild(identifierField);
+  form.appendChild(passwordField);
+  form.appendChild(confirmField);
   form.appendChild(error);
   form.appendChild(loginBtn);
   form.addEventListener("submit", async event => {
@@ -2300,7 +2386,7 @@ function renderDmLoginPrompt(message) {
         return;
       }
       saveDmSession(result);
-      await joinWithDmSession(result);
+      renderNicknamePrompt(result);
     } catch (e) {
       error.textContent = "Couldn't reach the login server — try again.";
     } finally {
@@ -2308,6 +2394,7 @@ function renderDmLoginPrompt(message) {
     }
   });
 
+  $joinCard.appendChild(eyebrow);
   $joinCard.appendChild(h2);
   $joinCard.appendChild(p);
   $joinCard.appendChild(form);
@@ -2315,15 +2402,110 @@ function renderDmLoginPrompt(message) {
 }
 
 function saveDmSession(session) {
-  try { localStorage.setItem(DM_SESSION_STORAGE_KEY, JSON.stringify(session)); } catch (e) {}
+  try { sessionStorage.setItem(DM_SESSION_STORAGE_KEY, JSON.stringify(session)); } catch (e) {}
 }
 
-async function joinWithDmSession(session) {
-  const name = session.username.trim();
-  if (!name) {
+async function validateDmSession(session) {
+  if (!session || !session.accountKey || !session.username || !session.id) return false;
+  for (const database of [dmAuthDb, legacyDmAuthDb]) {
+    if (!database) continue;
+    try {
+      const snapshot = await database.ref("users/" + session.accountKey).get();
+      const account = snapshot.val();
+      if (account && account.username === session.username && String(account.id) === String(session.id)) {
+        return true;
+      }
+    } catch (e) {}
+  }
+  return false;
+}
+
+function renderNicknamePrompt(session, message) {
+  $joinCard.innerHTML = "";
+
+  const eyebrow = document.createElement("div");
+  eyebrow.className = "auth-eyebrow";
+  eyebrow.textContent = "STEP 2 OF 2";
+  const h2 = document.createElement("h2");
+  h2.className = "auth-title";
+  h2.textContent = "Choose a chat username";
+  const p = document.createElement("p");
+  p.className = "auth-subtitle";
+  p.textContent = message || "Your VUS DM account is logged in. Choose the username people will see in chat.";
+
+  const form = document.createElement("form");
+  form.className = "auth-form";
+  form.style.cssText = "display:flex;flex-direction:column;width:100%";
+  const nicknameField = document.createElement("div");
+  nicknameField.className = "auth-field";
+  const nicknameLabel = document.createElement("label");
+  nicknameLabel.textContent = "Chat username";
+  const input = document.createElement("input");
+  input.className = "auth-input";
+  input.type = "text";
+  input.value = session.username;
+  input.placeholder = "Choose a username";
+  input.maxLength = 24;
+  input.required = true;
+  nicknameField.appendChild(nicknameLabel);
+  nicknameField.appendChild(input);
+
+  const error = document.createElement("div");
+  error.className = "auth-error";
+  const submit = document.createElement("button");
+  submit.id = "joinBtn";
+  submit.type = "submit";
+  submit.textContent = "Enter Chat";
+
+  form.appendChild(nicknameField);
+  form.appendChild(error);
+  form.appendChild(submit);
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    submit.disabled = true;
+    error.textContent = "";
+    const name = input.value.trim().replace(/ {2,}/g, " ");
+    if (!name || name.length > 24) {
+      error.textContent = "Username must be 1-24 characters.";
+      submit.disabled = false;
+      return;
+    }
+    try {
+      const taken = await ChatBackend.isNameTaken(name);
+      if (taken && name.toLowerCase() !== session.username.toLowerCase()) {
+        error.textContent = "That username is already being used.";
+        return;
+      }
+      await joinWithDmSession(session, name);
+    } catch (e) {
+      error.textContent = "Couldn't join the chat — try again.";
+    } finally {
+      submit.disabled = false;
+    }
+  });
+
+  $joinCard.appendChild(eyebrow);
+  $joinCard.appendChild(h2);
+  $joinCard.appendChild(p);
+  $joinCard.appendChild(form);
+  input.focus();
+}
+
+async function joinWithDmSession(session, nickname) {
+  if (!session || !session.username || !session.username.trim()) {
     renderDmLoginPrompt("Your VUS DM's account does not have a valid username.");
     return;
   }
+  if (!(await validateDmSession(session))) {
+    try { sessionStorage.removeItem(DM_SESSION_STORAGE_KEY); } catch (e) {}
+    renderDmLoginPrompt("Your VUS DM session is no longer valid. Log in again to join the chat.");
+    return;
+  }
+  if (!nickname) {
+    renderNicknamePrompt(session);
+    return;
+  }
+  const name = nickname.trim();
   const result = await ChatBackend.claimPresence(name, false, session.id);
   if (!result.ok) {
     renderDmLoginPrompt(result.reason === "banned"
@@ -2351,64 +2533,12 @@ function isSpectatorName(name) {
 }
 
 async function attemptJoin(rawName, isRename, errEl, submitBtn, joinSilently) {
-  const name = rawName.trim().replace(/ {2,}/g, " ");
   const dmSession = loadDmSession();
   if (!dmSession) {
-    renderDmLoginPrompt();
+    renderDmLoginPrompt("Log in with your VUS DM's account before joining the chat.");
     return;
   }
   return joinWithDmSession(dmSession);
-
-  if (!name) {
-    errEl.textContent = "Enter a name to continue.";
-    return;
-  }
-  if (name.length > 24) {
-    errEl.textContent = "Name is too long (max 24 characters).";
-    return;
-  }
-
-  if (isRename && name === myName) {
-    $chatScreen.style.display = "flex";
-    $joinScreen.style.display = "none";
-    return;
-  }
-
-  if (submitBtn) submitBtn.disabled = true;
-  errEl.textContent = "";
-  try {
-    const taken = await ChatBackend.isNameTaken(name);
-    if (taken) {
-      errEl.textContent = "That name is already used.";
-      if (submitBtn) submitBtn.disabled = false;
-      return;
-    }
-  } catch (e) {
-    errEl.textContent = "Couldn't check name availability — try again.";
-    if (submitBtn) submitBtn.disabled = false;
-    return;
-  }
-  if (submitBtn) submitBtn.disabled = false;
-
-  if (isRename && isCurrentlyTyping) {
-    ChatBackend.clearTyping();
-    isCurrentlyTyping = false;
-  }
-  ChatBackend._myTypingRef = null;
-
-  myName = name;
-  isSpectator = !!joinSilently;
-  localStorage.setItem(NAME_STORAGE_KEY, name);
-  ChatBackend.claimPresence(myName, isSpectator, myLoginId);
-  watchMyTimeout();
-  requestNotificationPermissionIfNeeded();
-  $youAre.textContent = "You: " + name + (isSpectator ? " (spectating)" : "");
-  $changeNameBtn.style.display = "inline-block";
-  $joinScreen.style.display = "none";
-  $chatScreen.style.display = "flex";
-  updateComposerLockState();
-  if (!isSpectatorName(myName)) $msgInput.focus();
-  scrollToBottom();
 }
 
 function getHubDisplayNamePlaceholder() {
@@ -2547,6 +2677,8 @@ const BLOCKED_LANGUAGE_WORDS = [
   "gook", "wetback", "tranny"
 ];
 
+const BLOCKED_LANGUAGE_COMPACT_VARIANTS = ["fck", "sht", "btch", "ahole"];
+
 const BLOCKED_LANGUAGE_PATTERNS = BLOCKED_LANGUAGE_WORDS.map(word => {
   const letters = word.split("").join("[^a-z0-9]*");
   return new RegExp("(^|[^a-z0-9])" + letters + "([^a-z0-9]|$)", "i");
@@ -2554,10 +2686,15 @@ const BLOCKED_LANGUAGE_PATTERNS = BLOCKED_LANGUAGE_WORDS.map(word => {
 
 function containsBlockedLanguage(text) {
   if (!text) return false;
-  const normalized = String(text).toLowerCase()
+  const normalized = String(text).normalize("NFKD").toLowerCase()
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[04513@$]/g, char => ({ "0": "o", "4": "a", "5": "s", "1": "i", "3": "e", "@": "a", "$": "s" }[char]));
   const collapsed = normalized.replace(/([a-z])\1+/g, "$1");
-  return BLOCKED_LANGUAGE_PATTERNS.some(pattern => pattern.test(normalized) || pattern.test(collapsed));
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  const compactCollapsed = compact.replace(/([a-z])\1+/g, "$1");
+  return BLOCKED_LANGUAGE_PATTERNS.some(pattern => pattern.test(normalized) || pattern.test(collapsed))
+    || BLOCKED_LANGUAGE_WORDS.some(word => compact.includes(word) || compactCollapsed.includes(word))
+    || BLOCKED_LANGUAGE_COMPACT_VARIANTS.some(variant => compact.includes(variant) || compactCollapsed.includes(variant));
 }
 
 function findModerationTarget(name) {
@@ -2644,12 +2781,7 @@ async function handleModerationCommand(text) {
     showComposerNotice("You cannot moderate yourself.");
     return true;
   }
-  try {
-    await ChatBackend.banUser(target.loginId, target.name, myLoginId, durationMs);
-    showComposerNotice(durationMs ? "Temporarily banned " + target.name + "." : "Banned " + target.name + ".");
-  } catch (e) {
-    showComposerNotice("Couldn't apply that ban.");
-  }
+  openBanConfirm(target, durationMs);
   return true;
 }
 
@@ -2891,7 +3023,7 @@ $clearChatBtn.addEventListener("click", () => {
 });
 
 const MOD_MENU_CODE = "2212";
-const LOGIN_ID_LOOKUP_CODE = "5216";
+const DM_ID_LOOKUP_CODE = "VUSDM";
 let modMenuUnlocked = false;
 let imagesEnabledForMe = false;
 
@@ -2987,7 +3119,7 @@ function renderModMenuLogin() {
       modMenuUnlocked = true;
       updateUploadButtonVisibility();
       renderModMenu();
-    } else if (input.value === LOGIN_ID_LOOKUP_CODE) {
+    } else if (input.value === DM_ID_LOOKUP_CODE) {
       renderLoginIdLookup();
     } else {
       err.textContent = "Incorrect code.";
@@ -3014,12 +3146,12 @@ function renderLoginIdLookup() {
   $globalClearPanel.style.width = "260px";
 
   const title = document.createElement("div");
-  title.textContent = "Login IDs";
+  title.textContent = "VUS DM IDs";
   title.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:10px";
   $globalClearPanel.appendChild(title);
 
   const note = document.createElement("div");
-  note.textContent = "Use these six-digit IDs when logging in through VUS DM's.";
+  note.textContent = "These are each person's VUS DM account IDs.";
   note.style.cssText = "color:#94a3b8;font-size:12.5px;line-height:1.4;margin-bottom:8px";
   $globalClearPanel.appendChild(note);
 
@@ -3039,7 +3171,7 @@ function renderLoginIdLookup() {
       name.style.cssText = "color:#f1f5f9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
 
       const id = document.createElement("span");
-      id.textContent = entry.loginId ? "#" + entry.loginId : "Unavailable";
+      id.textContent = entry.loginId ? "#" + entry.loginId : "No VUS DM ID";
       id.style.cssText = "color:#4ade80;font-family:monospace;flex-shrink:0";
 
       row.appendChild(name);
@@ -3066,6 +3198,11 @@ async function renderModMenu() {
   title.textContent = "Customize your bubble";
   title.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:10px";
   $globalClearPanel.appendChild(title);
+
+  const help = document.createElement("div");
+  help.style.cssText = "color:#94a3b8;font-size:12.5px;line-height:1.45;margin-bottom:10px";
+  help.innerHTML = "<strong style='color:#f1f5f9'>Mod commands</strong><br>/ban name — permanent ban<br>/tempban time name — temporary ban<br>/grant mod/admin time name — temporary role<br><span style='color:#64748b'>Use the name popup while typing a command.</span>";
+  $globalClearPanel.appendChild(help);
 
   const loading = document.createElement("div");
   loading.textContent = "Loading…";
@@ -3499,11 +3636,20 @@ const $grantModConfirmText = document.getElementById("grantModConfirmText");
 const $grantModConfirmTitle = document.getElementById("grantModConfirmTitle");
 const $grantModCancelBtn = document.getElementById("grantModCancelBtn");
 const $grantModConfirmBtn = document.getElementById("grantModConfirmBtn");
+const $banConfirmOverlay = document.getElementById("banConfirmOverlay");
+const $banConfirmTitle = document.getElementById("banConfirmTitle");
+const $banConfirmText = document.getElementById("banConfirmText");
+const $banConfirmErr = document.getElementById("banConfirmErr");
+const $banCancelBtn = document.getElementById("banCancelBtn");
+const $banConfirmBtn = document.getElementById("banConfirmBtn");
 
 let staffMenuMode = "owner"; // "owner" | "mod" — which gate/limits currently apply
 let ownerMenuRefreshTimer = null;
 let pendingTimeoutTarget = null;
+let pendingTemporaryModTarget = null;
 let pendingGrantModTarget = null;
+let pendingBanTarget = null;
+let pendingBanDurationMs = 0;
 
 function isCrownHolder(name) {
   return !!(name && (roleHolders.crown || new Set()).has(ChatBackend._safeKey(name)));
@@ -3514,6 +3660,48 @@ function isModHolder(name) {
 function isAdminHolder(name) {
   return !!(name && (roleHolders.admin || new Set()).has(ChatBackend._safeKey(name)));
 }
+
+function openBanConfirm(target, durationMs) {
+  pendingBanTarget = target;
+  pendingBanDurationMs = durationMs;
+  $banConfirmTitle.textContent = durationMs ? "Temporary ban?" : "Ban user?";
+  $banConfirmText.textContent = durationMs
+    ? "Ban " + target.name + " (#" + target.loginId + ") for " + formatCountdown(durationMs) + "?"
+    : "Ban " + target.name + " (#" + target.loginId + ") from VUS Chat?";
+  $banConfirmErr.textContent = "";
+  $banConfirmBtn.disabled = false;
+  $banConfirmBtn.textContent = durationMs ? "Temporary ban" : "Ban";
+  $banConfirmOverlay.style.display = "flex";
+}
+
+function closeBanConfirm() {
+  pendingBanTarget = null;
+  pendingBanDurationMs = 0;
+  $banConfirmOverlay.style.display = "none";
+}
+
+$banCancelBtn.addEventListener("click", closeBanConfirm);
+$banConfirmOverlay.addEventListener("click", event => {
+  if (event.target === $banConfirmOverlay) closeBanConfirm();
+});
+$banConfirmBtn.addEventListener("click", async () => {
+  if (!pendingBanTarget) return;
+  const target = pendingBanTarget;
+  const durationMs = pendingBanDurationMs;
+  $banConfirmBtn.disabled = true;
+  $banConfirmBtn.textContent = "Applying…";
+  $banConfirmErr.textContent = "";
+  try {
+    await ChatBackend.banUser(target.loginId, target.name, myLoginId, durationMs);
+    closeBanConfirm();
+    if ($ownerMenuOverlay.style.display === "flex") renderOwnerMenuList();
+    showComposerNotice(durationMs ? "Temporarily banned " + target.name + "." : "Banned " + target.name + ".");
+  } catch (e) {
+    $banConfirmErr.textContent = "Couldn't apply that ban. Check your connection and try again.";
+    $banConfirmBtn.disabled = false;
+    $banConfirmBtn.textContent = durationMs ? "Temporary ban" : "Ban";
+  }
+});
 
 function openOwnerMenu() {
   staffMenuMode = "owner";
@@ -3637,23 +3825,27 @@ async function renderOwnerMenuList() {
       }
       actions.appendChild(modToggleBtn);
 
+      if (!isModHolder(name)) {
+        const tempModBtn = document.createElement("button");
+        tempModBtn.textContent = "Temp Mod";
+        tempModBtn.addEventListener("click", () => openTemporaryModSetModal(entry));
+        actions.appendChild(tempModBtn);
+      }
+
       const banBtn = document.createElement("button");
       banBtn.className = "kick";
       banBtn.textContent = "Ban";
       banBtn.disabled = !loginId;
       banBtn.title = loginId ? "Ban login ID #" + loginId : "This user has not supplied a login ID";
-      banBtn.addEventListener("click", async () => {
-        if (!loginId || !confirm("Ban " + name + " (#" + loginId + ") from VUS Chat?")) return;
-        banBtn.disabled = true;
-        try {
-          await ChatBackend.banUser(loginId, name, myLoginId);
-          renderOwnerMenuList();
-        } catch (e) {
-          banBtn.disabled = false;
-          showComposerNotice("Couldn't ban this user — try again.");
-        }
+      banBtn.addEventListener("click", () => {
+        if (loginId) openBanConfirm({ name, loginId }, 0);
       });
       actions.appendChild(banBtn);
+    } else if (staffMenuMode === "admin" && !isModHolder(name)) {
+      const tempModBtn = document.createElement("button");
+      tempModBtn.textContent = "Temp Mod";
+      tempModBtn.addEventListener("click", () => openTemporaryModSetModal(entry));
+      actions.appendChild(tempModBtn);
     }
 
     const timeoutBtn = document.createElement("button");
@@ -3723,6 +3915,8 @@ async function renderOwnerMenuList() {
    by openTimeoutSetModal based on staffMenuMode. ── */
 function openTimeoutSetModal(target) {
   pendingTimeoutTarget = target;
+  pendingTemporaryModTarget = null;
+  $timeoutSetConfirmBtn.textContent = "Timeout";
   $timeoutSetTitle.textContent = "Timeout " + target.name + " (#" + target.loginId + ")";
 
   if (staffMenuMode === "mod") {
@@ -3741,13 +3935,28 @@ function openTimeoutSetModal(target) {
   $timeoutMinutesInput.focus();
 }
 
+function openTemporaryModSetModal(target) {
+  pendingTemporaryModTarget = target;
+  pendingTimeoutTarget = null;
+  $timeoutSetTitle.textContent = "Temporary Mod for " + target.name + " (#" + target.loginId + ")";
+  $timeoutMinutesInput.value = "";
+  $timeoutSecondsInput.value = "";
+  $timeoutSetNote.textContent = "Max 30 days.";
+  $timeoutSetErr.textContent = "";
+  $timeoutSetConfirmBtn.textContent = "Grant Temp Mod";
+  $timeoutSetOverlay.style.display = "flex";
+  $timeoutMinutesInput.focus();
+}
+
 $timeoutSetCancelBtn.addEventListener("click", () => {
   pendingTimeoutTarget = null;
+  pendingTemporaryModTarget = null;
   $timeoutSetOverlay.style.display = "none";
 });
 $timeoutSetOverlay.addEventListener("click", (e) => {
   if (e.target === $timeoutSetOverlay) {
     pendingTimeoutTarget = null;
+    pendingTemporaryModTarget = null;
     $timeoutSetOverlay.style.display = "none";
   }
 });
@@ -3764,7 +3973,7 @@ $timeoutSecondsInput.addEventListener("input", () => {
 });
 
 $timeoutSetConfirmBtn.addEventListener("click", async () => {
-  if (!pendingTimeoutTarget) return;
+  if (!pendingTimeoutTarget && !pendingTemporaryModTarget) return;
   const mins = parseInt($timeoutMinutesInput.value || "0", 10) || 0;
   const secs = parseInt($timeoutSecondsInput.value || "0", 10) || 0;
   const totalMs = (mins * 60 + secs) * 1000;
@@ -3783,6 +3992,16 @@ $timeoutSetConfirmBtn.addEventListener("click", async () => {
   $timeoutSetConfirmBtn.disabled = true;
   $timeoutSetErr.textContent = "";
   try {
+    if (pendingTemporaryModTarget) {
+      const target = pendingTemporaryModTarget;
+      await ChatBackend.grantTemporaryRole("mod", target.loginId, target.name, totalMs, myLoginId);
+      pendingTemporaryModTarget = null;
+      $timeoutSetOverlay.style.display = "none";
+      $timeoutSetConfirmBtn.textContent = "Timeout";
+      renderOwnerMenuList();
+      showComposerNotice("Granted temporary Mod to " + target.name + ".");
+      return;
+    }
     await ChatBackend.setTimeout_(pendingTimeoutTarget.loginId, totalMs, myLoginId);
     // NOTE: the re-timeout cooldown is deliberately NOT started here. It
     // should apply AFTER the timeout ends (naturally or via early clear),
@@ -3998,7 +4217,7 @@ $onlineDot.addEventListener("click", (e) => {
 });
 
 document.addEventListener("keydown", (e) => {
-  if (e.key !== ".") return;
+  if (e.key !== "`") return;
   if (!modMenuUnlocked) return;
   const active = document.activeElement;
   const isTypingSomewhere = active && (active.tagName === "TEXTAREA" || active.tagName === "INPUT");
@@ -4135,6 +4354,7 @@ $pingYouSend.addEventListener("click", () => {
 let currentMentionTarget = null;
 let mentionDropdownOpen = false;
 let mentionTriggerCharIndex = -1;
+let mentionDropdownMode = "mention";
 
 function clearMention() {
   currentMentionTarget = null;
@@ -4150,6 +4370,7 @@ function setMention(name) {
 
 function closeMentionDropdown() {
   mentionDropdownOpen = false;
+  mentionDropdownMode = "mention";
   $mentionDropdown.style.display = "none";
   $mentionDropdown.innerHTML = "";
 }
@@ -4192,14 +4413,59 @@ function renderMentionDropdown() {
 }
 
 function openMentionDropdown(triggerIndex) {
+  mentionDropdownMode = "mention";
   mentionTriggerCharIndex = triggerIndex;
   mentionDropdownOpen = true;
   $mentionDropdown.style.display = "block";
   renderMentionDropdown();
 }
 
+function openModerationTargetDropdown(tokenStart) {
+  mentionDropdownMode = "moderation";
+  mentionTriggerCharIndex = tokenStart;
+  mentionDropdownOpen = true;
+  $mentionDropdown.style.display = "block";
+  $mentionDropdown.innerHTML = "";
+
+  const typed = $msgInput.value.slice(tokenStart).trim().toLowerCase();
+  const candidates = latestPresenceList
+    .filter(entry => entry.name !== myName && entry.loginId && !isSpectatorName(entry.name))
+    .filter(entry => !typed || entry.name.toLowerCase().startsWith(typed))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  if (candidates.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "mention-empty";
+    empty.textContent = "No logged-in users match.";
+    $mentionDropdown.appendChild(empty);
+    return;
+  }
+
+  candidates.forEach(entry => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "mention-option";
+    btn.textContent = entry.name + " (#" + entry.loginId + ")";
+    btn.addEventListener("click", () => {
+      const cursor = $msgInput.selectionStart;
+      const before = $msgInput.value.slice(0, mentionTriggerCharIndex);
+      const after = $msgInput.value.slice(cursor);
+      $msgInput.value = before + entry.name + after;
+      $msgInput.selectionStart = $msgInput.selectionEnd = before.length + entry.name.length;
+      closeMentionDropdown();
+      $msgInput.focus();
+    });
+    $mentionDropdown.appendChild(btn);
+  });
+}
+
 function refreshMentionDropdownIfOpen() {
-  if (mentionDropdownOpen) renderMentionDropdown();
+  if (!mentionDropdownOpen) return;
+  if (mentionDropdownMode === "moderation") {
+    openModerationTargetDropdown(mentionTriggerCharIndex);
+  } else {
+    renderMentionDropdown();
+  }
 }
 
 $mentionChip.addEventListener("click", (e) => {
@@ -4215,6 +4481,12 @@ document.addEventListener("click", (e) => {
 
 function handleMentionTrigger() {
   const cursor = $msgInput.selectionStart;
+  const before = $msgInput.value.slice(0, cursor);
+  const moderationMatch = before.match(/(?:^|\s)\/(?:ban\s+|tempban\s+\S+\s+|grant\s+(?:mod|admin)\s+\S+\s+)([^\s]*)$/i);
+  if (moderationMatch) {
+    openModerationTargetDropdown(cursor - moderationMatch[1].length);
+    return;
+  }
   const charBeforeCursor = $msgInput.value.slice(cursor - 1, cursor);
   if (charBeforeCursor === "@") {
     openMentionDropdown(cursor - 1);
@@ -4989,9 +5261,10 @@ function init() {
     return;
   }
 
-  const dmSession = loadDmSession();
-  if (dmSession) joinWithDmSession(dmSession);
-  else renderDmLoginPrompt();
+  // Always require an explicit login when a chat page is loaded. Browsers can
+  // clone sessionStorage into a newly opened tab, so auto-joining from a saved
+  // session would let a new tab skip the login screen.
+  renderDmLoginPrompt();
 
   ChatBackend.watchConnection(setConnectionStatus);
   Object.values(ROLES).forEach(role => {
