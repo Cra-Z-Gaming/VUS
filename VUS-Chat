@@ -877,9 +877,10 @@
      been entered this session). Lists everyone online, refreshed every 5s
      while open, with Timeout / Grant Mod actions per person. -->
 <div class="chat-modal-overlay" id="ownerMenuOverlay">
-  <div class="chat-modal" style="max-width:340px">
+  <div class="chat-modal" style="max-width:560px">
     <h3 id="ownerMenuTitle">👑 Owner Menu</h3>
     <p id="ownerMenuSubtitle" style="margin-bottom:8px">Online now — refreshes every 5s while this is open.</p>
+    <div id="ownerMenuCommands" style="margin-bottom:14px"></div>
     <div id="ownerMenuList" style="margin-bottom:8px"></div>
     <div class="chat-modal-row">
       <button class="chat-modal-btn-secondary" id="ownerMenuCloseBtn">Close</button>
@@ -3048,19 +3049,7 @@ function leaveSilently() {
 }
 
 function renderPreCodeActions(container) {
-  if (!myName) {
-    const joinBtn = document.createElement("button");
-    joinBtn.textContent = loadDmSession() ? "Join Chat" : "Log In";
-    joinBtn.className = "toolbar-btn";
-    joinBtn.style.cssText = "width:100%;margin-bottom:8px";
-    joinBtn.addEventListener("click", () => {
-      closeClearPanel();
-      const session = loadDmSession();
-      if (session) joinWithDmSession(session);
-      else renderDmLoginPrompt();
-    });
-    container.appendChild(joinBtn);
-  } else {
+  if (myName) {
     const leaveBtn = document.createElement("button");
     leaveBtn.textContent = "Leave Silently";
     leaveBtn.className = "toolbar-btn";
@@ -3198,11 +3187,6 @@ async function renderModMenu() {
   title.textContent = "Customize your bubble";
   title.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:10px";
   $globalClearPanel.appendChild(title);
-
-  const help = document.createElement("div");
-  help.style.cssText = "color:#94a3b8;font-size:12.5px;line-height:1.45;margin-bottom:10px";
-  help.innerHTML = "<strong style='color:#f1f5f9'>Mod commands</strong><br>/ban name — permanent ban<br>/tempban time name — temporary ban<br>/grant mod/admin time name — temporary role<br><span style='color:#64748b'>Use the name popup while typing a command.</span>";
-  $globalClearPanel.appendChild(help);
 
   const loading = document.createElement("div");
   loading.textContent = "Loading…";
@@ -3619,6 +3603,7 @@ $roleClaimOverlay.addEventListener("click", (e) => {
 const $ownerMenuOverlay = document.getElementById("ownerMenuOverlay");
 const $ownerMenuTitle = document.getElementById("ownerMenuTitle");
 const $ownerMenuSubtitle = document.getElementById("ownerMenuSubtitle");
+const $ownerMenuCommands = document.getElementById("ownerMenuCommands");
 const $ownerMenuList = document.getElementById("ownerMenuList");
 const $ownerMenuCloseBtn = document.getElementById("ownerMenuCloseBtn");
 
@@ -3740,6 +3725,40 @@ function openAdminMenuStaff() {
   ownerMenuRefreshTimer = setInterval(renderOwnerMenuList, 5000);
 }
 
+function renderStaffCommands() {
+  const isOwner = staffMenuMode === "owner";
+  const isAdmin = staffMenuMode === "admin";
+  $ownerMenuCommands.innerHTML = "";
+
+  const heading = document.createElement("div");
+  heading.textContent = "Commands";
+  heading.style.cssText = "color:#f1f5f9;font-weight:700;font-size:15px;margin-bottom:7px";
+  $ownerMenuCommands.appendChild(heading);
+
+  const list = document.createElement("div");
+  list.style.cssText = "display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:6px 14px;padding:10px;background:#0f172a;border:1px solid #334155;border-radius:9px";
+  const commands = [
+    ["/ban username", "Permanently ban a logged-in user.", isOwner || isAdmin],
+    ["/tempban time username", "Temporarily ban a user, for example 2h.", isOwner || isAdmin],
+    ["/grant mod time username", "Give temporary Mod status.", isOwner || isAdmin],
+    ["/grant admin time username", "Give temporary Admin status.", isOwner],
+    ["/timeout", "Use the Timeout button beside a user.", !isOwner && !isAdmin]
+  ];
+  commands.forEach(([command, description, visible]) => {
+    if (!visible) return;
+    const item = document.createElement("div");
+    item.style.cssText = "font-size:12.5px;line-height:1.35";
+    item.innerHTML = "<strong style='color:#4ade80;font-family:monospace'>" + command + "</strong><br><span style='color:#94a3b8'>" + description + "</span>";
+    list.appendChild(item);
+  });
+  $ownerMenuCommands.appendChild(list);
+
+  const note = document.createElement("div");
+  note.textContent = "Use the name popup while typing a command. Only online VUS DM accounts can be moderated.";
+  note.style.cssText = "color:#64748b;font-size:12px;line-height:1.4;margin-top:7px";
+  $ownerMenuCommands.appendChild(note);
+}
+
 function closeOwnerMenu() {
   $ownerMenuOverlay.style.display = "none";
   clearInterval(ownerMenuRefreshTimer);
@@ -3766,6 +3785,7 @@ async function renderOwnerMenuList() {
   }
 
   $ownerMenuList.innerHTML = "";
+  renderStaffCommands();
 
   if (staffMenuMode === "owner") {
     const unbanBtn = document.createElement("button");
@@ -3828,7 +3848,11 @@ async function renderOwnerMenuList() {
       if (!isModHolder(name)) {
         const tempModBtn = document.createElement("button");
         tempModBtn.textContent = "Temp Mod";
-        tempModBtn.addEventListener("click", () => openTemporaryModSetModal(entry));
+        tempModBtn.disabled = !loginId;
+        tempModBtn.title = loginId ? "Grant temporary Mod to #" + loginId : "This user needs a VUS DM account to receive Mod status";
+        tempModBtn.addEventListener("click", () => {
+          if (loginId) openTemporaryModSetModal(entry);
+        });
         actions.appendChild(tempModBtn);
       }
 
@@ -3844,7 +3868,11 @@ async function renderOwnerMenuList() {
     } else if (staffMenuMode === "admin" && !isModHolder(name)) {
       const tempModBtn = document.createElement("button");
       tempModBtn.textContent = "Temp Mod";
-      tempModBtn.addEventListener("click", () => openTemporaryModSetModal(entry));
+      tempModBtn.disabled = !loginId;
+      tempModBtn.title = loginId ? "Grant temporary Mod to #" + loginId : "This user needs a VUS DM account to receive Mod status";
+      tempModBtn.addEventListener("click", () => {
+        if (loginId) openTemporaryModSetModal(entry);
+      });
       actions.appendChild(tempModBtn);
     }
 
