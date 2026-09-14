@@ -1270,6 +1270,16 @@ const ChatBackend = {
     });
   },
 
+  async hasRole(roleId, name) {
+    if (!ROLES[roleId] || !name) return false;
+    try {
+      const snap = await this._roleRefs[roleId].child(this._safeKey(name)).get();
+      return !!snap.val();
+    } catch (e) {
+      return false;
+    }
+  },
+
   _randomRoleCode() {
     const chars = "0123456789";
     let out = "";
@@ -2347,7 +2357,7 @@ function renderDmLoginPrompt(message) {
   confirmInput.type = "password";
   confirmInput.placeholder = "Confirm password";
   confirmInput.autocomplete = "new-password";
-  confirmInput.required = true;
+  confirmInput.required = false;
   confirmField.appendChild(confirmLabel);
   confirmField.appendChild(confirmInput);
   confirmField.style.display = "none";
@@ -2715,8 +2725,8 @@ async function handleModerationCommand(text) {
   if (!text.startsWith("/")) return false;
   const parts = text.trim().split(/\s+/);
   const command = parts[0].toLowerCase();
-  const isOwner = isCrownHolder(myName);
-  const isAdmin = isAdminHolder(myName);
+  const isOwner = await ChatBackend.hasRole("crown", myName);
+  const isAdmin = await ChatBackend.hasRole("admin", myName);
   const canModerate = isOwner || isAdmin;
 
   if (!["/ban", "/tempban", "/grant"].includes(command)) {
@@ -3048,6 +3058,7 @@ function updateUploadButtonVisibility() {
 }
 
 function leaveSilently() {
+  const dmSession = loadDmSession();
   ChatBackend.releasePresenceSilently();
   stopTyping();
   clearPendingImage();
@@ -3059,7 +3070,11 @@ function leaveSilently() {
   closeClearPanel();
   $chatScreen.style.display = "none";
   $joinScreen.style.display = "flex";
-  renderDmLoginPrompt();
+  if (dmSession) {
+    renderNicknamePrompt(dmSession, "Choose the username you want to use in chat.");
+  } else {
+    renderDmLoginPrompt();
+  }
 }
 
 function renderPreCodeActions(container) {
