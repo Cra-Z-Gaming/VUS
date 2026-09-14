@@ -121,7 +121,7 @@ input:checked + .slider::before {
 <div id="hint">Enable switch to auto-open on next visit</div>
 
 <script>
-const HUB_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/index.html";
+const HUB_URL = "https://raw.githubusercontent.com/REALDABEAST-VUS-ALT2/VUS/refs/heads/main/index.html";
 const OS_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS-OS/refs/heads/main/index.html";
 const HUB_KEY = "vus_autolaunch_hub";
 const OS_KEY = "vus_autolaunch_os";
@@ -168,23 +168,44 @@ function flashSaved(labelEl) {
     setTimeout(() => { labelEl.textContent = original; }, 900);
 }
 
-async function launch(url) {
+async function launch(url, label) {
     const win = window.open("about:blank", "_blank");
-    if (!win) return;
-    const code = await fetch(url + "?v=" + Date.now()).then(r => r.text());
-    win.document.open();
-    win.document.write(code);
-    win.document.close();
+
+    if (!win) {
+        alert("Popup blocked. Please allow popups for this site.");
+        return;
+    }
+
+    win.opener = null;
+    win.document.write("<p>Loading " + label + "...</p>");
+
+    try {
+        const response = await fetch(url + "?v=" + Date.now());
+        if (!response.ok) throw new Error("HTTP " + response.status);
+
+        const html = await response.text();
+        const baseUrl = url.slice(0, url.lastIndexOf("/") + 1);
+        win.document.open();
+        win.document.write(html.replace(
+            "<head>",
+            "<head><base href=\"" + baseUrl + "\">"
+        ));
+        win.document.close();
+    } catch (error) {
+        win.document.open();
+        win.document.write("<h2>Unable to load " + label + "</h2><p>" + error.message + "</p>");
+        win.document.close();
+    }
 }
 
-hubBtn.onclick = () => launch(HUB_URL);
-osBtn.onclick = () => launch(OS_URL);
+hubBtn.onclick = () => launch(HUB_URL, "VUS Hub");
+osBtn.onclick = () => launch(OS_URL, "VUS-OS");
 
 applyUI();
 
 window.onload = () => {
-    if (getEnabled(HUB_KEY, true)) launch(HUB_URL);
-    if (getEnabled(OS_KEY, false)) launch(OS_URL);
+    if (getEnabled(HUB_KEY, true)) launch(HUB_URL, "VUS Hub");
+    if (getEnabled(OS_KEY, false)) launch(OS_URL, "VUS-OS");
 };
 </script>
 </body></html>
