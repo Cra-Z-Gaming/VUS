@@ -42,6 +42,23 @@
     justify-content: center;
     padding: 24px;
   }
+  #authScreen { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  #authCard { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 12px; }
+  #authCard h2 { font-size: 19px; font-weight: 500; text-align: center; }
+  #authCard p { font-size: 13.5px; color: #94a3b8; text-align: center; line-height: 1.4; }
+  .auth-tabs { display: flex; gap: 8px; }
+  .auth-tab { flex: 1; padding: 9px 13px; background: transparent; border: 1.5px solid #334155; border-radius: 9px; color: #94a3b8; font-size: 14px; cursor: pointer; }
+  .auth-tab.active { background: rgba(34,197,94,.12); border-color: #22c55e; color: #4ade80; }
+  .auth-field { display: flex; flex-direction: column; gap: 5px; }
+  .auth-field label { font-size: 13px; color: #94a3b8; }
+  .auth-field input { width: 100%; padding: 10px 13px; background: #1e293b; border: 1.5px solid #334155; border-radius: 9px; color: #f1f5f9; font-size: 15px; outline: none; }
+  .auth-field input:focus { border-color: #22c55e; }
+  #authSubmitBtn { width: 100%; padding: 10px 13px; background: #22c55e; border: none; border-radius: 9px; color: #000; font-size: 15px; font-weight: 600; cursor: pointer; }
+  #authSubmitBtn:disabled { opacity: .5; cursor: not-allowed; }
+  #authError { min-height: 18px; color: #ef4444; font-size: 13px; text-align: center; }
+  #authSuccess { min-height: 18px; color: #4ade80; font-size: 13px; text-align: center; }
+  #chatLogoutBtn { display: none; background: transparent; border: 1.5px solid #334155; color: #94a3b8; font-size: 13px; padding: 5px 9px; border-radius: 8px; cursor: pointer; }
+  #chatLogoutBtn:hover { color: #f1f5f9; border-color: #475569; }
   #joinCard {
     width: 100%;
     max-width: 280px;
@@ -715,6 +732,7 @@
   <div style="font-size:16.5px;color:#475569;display:flex;align-items:center;gap:10px;justify-self:end">
     <button id="roomsToggleBtn">🚪 Rooms<span class="rooms-badge-dot" id="roomsBadgeDot"></span></button>
     <span id="youAre"></span>
+    <button id="chatLogoutBtn" type="button">Log out</button>
     <button id="changeNameBtn" style="display:none;background:transparent;border:1.5px solid #334155;color:#64748b;font-size:15.8px;padding:4.5px 10.5px;border-radius:9px;cursor:pointer">Change name</button>
   </div>
 </div>
@@ -1697,6 +1715,7 @@ const $onlineCount = document.getElementById("onlineCount");
 const $connError   = document.getElementById("connError");
 const $composerNotice = document.getElementById("composerNotice");
 const $youAre      = document.getElementById("youAre");
+const $chatLogoutBtn = document.getElementById("chatLogoutBtn");
 const $changeNameBtn = document.getElementById("changeNameBtn");
 const $typingBar     = document.getElementById("typingBar");
 const $autoScrollBtn = document.getElementById("autoScrollBtn");
@@ -2050,10 +2069,16 @@ function renderJoinReturning(savedName) {
   noBtn.textContent = "No, use a different name";
   noBtn.addEventListener("click", () => renderJoinNameEntry());
 
+  const logoutBtn = document.createElement("button");
+  logoutBtn.className = "join-secondary-btn";
+  logoutBtn.textContent = "Log out of account";
+  logoutBtn.addEventListener("click", () => $chatLogoutBtn.click());
+
   $joinCard.appendChild(h2);
   $joinCard.appendChild(p);
   $joinCard.appendChild(yesBtn);
   $joinCard.appendChild(noBtn);
+  $joinCard.appendChild(logoutBtn);
   $joinCard.appendChild(errEl);
 }
 
@@ -4372,6 +4397,52 @@ function attachRoomListeners() {
   ChatBackend.watchTyping(renderTyping, () => myName);
 }
 
+function initChatAuthUi() {
+  const authScreen = document.getElementById("authScreen");
+  const authForm = document.getElementById("chatAuthForm");
+  const authError = document.getElementById("authError");
+  const authSuccess = document.getElementById("authSuccess");
+  const submitBtn = document.getElementById("authSubmitBtn");
+
+  $chatLogoutBtn.addEventListener("click", () => {
+    try { localStorage.removeItem(CHAT_SESSION_STORAGE_KEY); } catch (e) {}
+    ChatBackend.releasePresence();
+    myName = "";
+    myAccountId = "";
+    $chatScreen.style.display = "none";
+    $joinScreen.style.display = "none";
+    authScreen.style.display = "flex";
+    $chatLogoutBtn.style.display = "none";
+    document.getElementById("authIdentifier").value = "";
+    document.getElementById("authPassword").value = "";
+  });
+
+  document.getElementById("authLoginTab").addEventListener("click", () => setChatAuthMode("login"));
+  document.getElementById("authSignupTab").addEventListener("click", () => setChatAuthMode("signup"));
+  authForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    submitBtn.disabled = true;
+    authError.textContent = "";
+    authSuccess.textContent = "";
+    const result = authMode === "login"
+      ? await chatAuthLogin(document.getElementById("authIdentifier").value, document.getElementById("authPassword").value)
+      : await chatAuthSignup(document.getElementById("authUsername").value, document.getElementById("authSignupPassword").value, document.getElementById("authPasswordConfirm").value);
+    submitBtn.disabled = false;
+    if (!result.ok) {
+      authError.textContent = result.error;
+      return;
+    }
+    saveChatAuthSession({ accountKey: result.accountKey, username: result.username, id: result.id });
+    myAccountId = result.id || "";
+    authScreen.style.display = "none";
+    $chatLogoutBtn.style.display = "inline-block";
+    $joinScreen.style.display = "flex";
+    const savedName = localStorage.getItem(NAME_STORAGE_KEY);
+    if (savedName) renderJoinReturning(savedName);
+    else renderJoinNameEntry(false);
+  });
+}
+
 function init() {
   const usingPlaceholderConfig = FIREBASE_CONFIG.apiKey === "PASTE_YOUR_API_KEY_HERE";
   if (usingPlaceholderConfig) {
@@ -4394,11 +4465,16 @@ function init() {
     return;
   }
 
-  const savedName = localStorage.getItem(NAME_STORAGE_KEY);
-  if (savedName) {
-    renderJoinReturning(savedName);
-  } else {
-    renderJoinNameEntry(false);
+  initChatAuthUi();
+  const authSession = loadChatAuthSession();
+  if (authSession && authSession.accountKey && authSession.username) {
+    myAccountId = authSession.id || "";
+    document.getElementById("authScreen").style.display = "none";
+    $chatLogoutBtn.style.display = "inline-block";
+    $joinScreen.style.display = "flex";
+    const savedName = localStorage.getItem(NAME_STORAGE_KEY);
+    if (savedName) renderJoinReturning(savedName);
+    else renderJoinNameEntry(false);
   }
 
   ChatBackend.watchConnection(setConnectionStatus);
