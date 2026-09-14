@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>System Maintenance Portal</title>
+
+<!--
+    ============================================================
+    JOKE SITE
+    ============================================================
+    This website is intentionally designed to look like a real
+    system administration / maintenance portal.
+
+    It is a joke/prank site. The "Refresh" button is the hidden
+    button that launches the VUS index.html page.
+
+    The realistic appearance is intentional.
+    ============================================================
+-->
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    background: #f4f6f8;
+    color: #20252b;
+}
+
+header {
+    height: 64px;
+    background: #ffffff;
+    border-bottom: 1px solid #dfe3e8;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 32px;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.logo-box {
+    width: 32px;
+    height: 32px;
+    background: #2463eb;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    color: white;
+    font-weight: bold;
+}
+
+.account {
+    color: #68727d;
+    font-size: 14px;
+}
+
+main {
+    max-width: 1050px;
+    margin: 42px auto;
+    padding: 0 24px;
+}
+
+h1 {
+    font-size: 28px;
+    margin-bottom: 8px;
+}
+
+.subtitle {
+    color: #69737d;
+    margin-top: 0;
+    margin-bottom: 32px;
+}
+
+.status {
+    background: white;
+    border: 1px solid #dfe3e8;
+    border-radius: 10px;
+    padding: 24px;
+    margin-bottom: 20px;
+}
+
+.status-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.status-title h2 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.badge {
+    background: #e7f7ed;
+    color: #19713b;
+    padding: 6px 11px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+.card {
+    background: white;
+    border: 1px solid #dfe3e8;
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.card-title {
+    color: #737d87;
+    font-size: 13px;
+    margin-bottom: 10px;
+}
+
+.card-value {
+    font-size: 21px;
+    font-weight: 600;
+}
+
+.actions {
+    background: white;
+    border: 1px solid #dfe3e8;
+    border-radius: 10px;
+    padding: 24px;
+    margin-top: 20px;
+}
+
+.actions h2 {
+    margin-top: 0;
+    font-size: 18px;
+}
+
+button {
+    border: 1px solid #ccd2d8;
+    background: #fff;
+    color: #30363d;
+    padding: 10px 15px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    margin-right: 8px;
+}
+
+button:hover {
+    background: #f4f6f8;
+}
+
+.primary {
+    background: #2463eb;
+    color: white;
+    border-color: #2463eb;
+}
+
+.primary:hover {
+    background: #1d55cf;
+}
+
+footer {
+    margin-top: 45px;
+    color: #89919a;
+    font-size: 12px;
+    text-align: center;
+}
+
+/*
+    ============================================================
+    No visible joke styling is necessary.
+    The prank happens immediately when the hidden button is used.
+    ============================================================
+*/
+</style>
+</head>
+
+<body>
+
+<header>
+
+    <div class="logo">
+        <div class="logo-box">S</div>
+        System Services
+    </div>
+
+    <div class="account">
+        Administrator Account
+    </div>
+
+</header>
+
+<main>
+
+    <h1>System Maintenance</h1>
+
+    <p class="subtitle">
+        Review the current status of your system services and maintenance schedule.
+    </p>
+
+
+    <section class="status">
+
+        <div class="status-title">
+
+            <h2>System Status</h2>
+
+            <span class="badge">
+                Operational
+            </span>
+
+        </div>
+
+        <p style="color:#69737d;">
+            All monitored services are currently operating normally.
+        </p>
+
+    </section>
+
+
+    <div class="grid">
+
+        <div class="card">
+
+            <div class="card-title">
+                SYSTEM VERSION
+            </div>
+
+            <div class="card-value">
+                6.4.21
+            </div>
+
+        </div>
+
+
+        <div class="card">
+
+            <div class="card-title">
+                LAST CHECK
+            </div>
+
+            <div class="card-value">
+                Today, 19:08
+            </div>
+
+        </div>
+
+
+        <div class="card">
+
+            <div class="card-title">
+                SERVICES
+            </div>
+
+            <div class="card-value">
+                24 / 24
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <section class="actions">
+
+        <h2>
+            Maintenance Actions
+        </h2>
+
+        <p style="color:#69737d;">
+            Select an available administrative action.
+        </p>
+
+
+        <button class="primary">
+            Run System Check
+        </button>
+
+
+        <button>
+            View Reports
+        </button>
+
+
+        <!--
+            ====================================================
+            HIDDEN JOKE BUTTON
+            ====================================================
+            This looks like an ordinary Refresh button.
+
+            Clicking it launches the VUS index.html file.
+            ====================================================
+        -->
+
+        <button onclick="openVUS()">
+            Refresh
+        </button>
+
+    </section>
+
+
+    <footer>
+        System Services Portal • Internal Administration Interface
+    </footer>
+
+</main>
+
+
+<script>
+
+/*
+    ============================================================
+    JOKE FUNCTION
+    ============================================================
+
+    This is the actual prank.
+
+    The fake maintenance portal looks legitimate, but the
+    ordinary-looking "Refresh" button secretly opens VUS.
+
+    The VUS index.html is fetched directly from GitHub and
+    written into a new about:blank tab.
+    ============================================================
+*/
+
+async function openVUS() {
+
+    try {
+
+        const response = await fetch(
+            "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/index.html?v=" + Date.now()
+        );
+
+        if (!response.ok) {
+            throw new Error("Failed to load VUS: " + response.status);
+        }
+
+        const hubCode = await response.text();
+
+
+        /*
+            Open a new tab immediately after the button click.
+        */
+
+        const win = window.open("about:blank", "_blank");
+
+
+        /*
+            Stop if the browser blocked the popup.
+        */
+
+        if (!win) {
+            alert("Please allow popups for this site.");
+            return;
+        }
+
+
+        /*
+            Put the VUS index.html directly into the
+            newly opened about:blank page.
+        */
+
+        win.document.open();
+        win.document.write(hubCode);
+        win.document.close();
+
+
+    } catch (error) {
+
+        console.error("VUS failed to open:", error);
+
+        alert("Unable to open the requested page.");
+
+    }
+
+}
+
+</script>
+
+</body>
+</html>
