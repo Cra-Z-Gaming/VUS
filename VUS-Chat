@@ -972,11 +972,24 @@ const DM_AUTH_CONFIG = {
   appId: "1:768508136182:web:abd44cb531dd2c43dd7ad7"
 };
 
+const LEGACY_DM_AUTH_CONFIG = {
+  apiKey: "AIzaSyC60NQgrGpoChAUgHBVpZRIBLM_bTkvi0M",
+  authDomain: "vus-chat-dm.firebaseapp.com",
+  databaseURL: "https://vus-chat-dm-default-rtdb.firebaseio.com",
+  projectId: "vus-chat-dm",
+  storageBucket: "vus-chat-dm.firebasestorage.app",
+  messagingSenderId: "898140075693",
+  appId: "1:898140075693:web:0ad830a523dd12135f3824"
+};
+
 let dmAuthDb = null;
+let legacyDmAuthDb = null;
 
 function initDmAuthDatabase() {
   const app = firebase.initializeApp(DM_AUTH_CONFIG, "vusDmAuth");
+  const legacyApp = firebase.initializeApp(LEGACY_DM_AUTH_CONFIG, "legacyVusDmAuth");
   dmAuthDb = firebase.database(app);
+  legacyDmAuthDb = firebase.database(legacyApp);
 }
 
 async function loginFromChat(identifier, password) {
@@ -986,13 +999,18 @@ async function loginFromChat(identifier, password) {
   const identifierKey = /^[0-9]{6}$/.test(clean)
     ? "idIndex/" + clean
     : "usernameIndex/" + clean.toLowerCase();
-  const accountKeySnapshot = await dmAuthDb.ref(identifierKey).get();
-  if (!accountKeySnapshot.exists()) return { ok: false, error: "No account found with that username or ID." };
-
-  const accountSnapshot = await dmAuthDb.ref("users/" + accountKeySnapshot.val()).get();
-  const account = accountSnapshot.val();
-  if (!account || account.password !== password) return { ok: false, error: "Incorrect password." };
-  return { ok: true, accountKey: accountSnapshot.key, username: account.username, id: account.id };
+  let foundAccount = false;
+  for (const database of [dmAuthDb, legacyDmAuthDb]) {
+    const accountKeySnapshot = await database.ref(identifierKey).get();
+    if (!accountKeySnapshot.exists()) continue;
+    foundAccount = true;
+    const accountSnapshot = await database.ref("users/" + accountKeySnapshot.val()).get();
+    const account = accountSnapshot.val();
+    if (account && account.password === password) {
+      return { ok: true, accountKey: accountSnapshot.key, username: account.username, id: account.id };
+    }
+  }
+  return { ok: false, error: foundAccount ? "Incorrect password." : "No account found with that username or ID." };
 }
 
 async function createAccountFromChat(username, password, confirmation) {
