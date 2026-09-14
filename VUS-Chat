@@ -2756,8 +2756,8 @@ async function handleModerationCommand(text) {
   if (!text.startsWith("/")) return false;
   const parts = text.trim().split(/\s+/);
   const command = parts[0].toLowerCase();
-  const isOwner = await ChatBackend.hasRole("crown", myName);
-  const isAdmin = await ChatBackend.hasRole("admin", myName);
+  const isOwner = isCrownHolder(myName) || await ChatBackend.hasRole("crown", myName);
+  const isAdmin = isAdminHolder(myName) || await ChatBackend.hasRole("admin", myName);
   const canModerate = isOwner || isAdmin;
 
   if (!["/ban", "/tempban", "/grant"].includes(command)) {
@@ -2842,6 +2842,18 @@ async function handleModerationCommand(text) {
 }
 
 async function sendMessage() {
+  const text = $msgInput.value.trim();
+  const mentionTarget = currentMentionTarget;
+
+  // Moderation commands must run before timeout and send-cooldown guards so
+  // an Owner/Admin can always issue them and receives a useful response.
+  if (await handleModerationCommand(text)) {
+    $msgInput.value = "";
+    updateCharCounter();
+    autosizeInput();
+    return;
+  }
+
   if (isSpectatorName(myName)) {
     openChangeName();
     return;
@@ -2851,16 +2863,6 @@ async function sendMessage() {
     return;
   }
   if (Date.now() - lastSentAt < SEND_COOLDOWN_MS) return;
-
-  const text = $msgInput.value.trim();
-  const mentionTarget = currentMentionTarget;
-
-  if (await handleModerationCommand(text)) {
-    $msgInput.value = "";
-    updateCharCounter();
-    autosizeInput();
-    return;
-  }
 
   if (containsBlockedLanguage(text)) {
     showComposerNotice("Message blocked: please remove profanity or slurs.");
