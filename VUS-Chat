@@ -1232,6 +1232,7 @@ const ChatBackend = {
   _bansRef: null,
   _temporaryRoleTimers: {},
   _temporaryRoleWatchRefs: {},
+  _chatStateRef: null,
   currentRoomId: null,
 
   init() {
@@ -1239,6 +1240,7 @@ const ChatBackend = {
     this._db = firebase.database();
     this._connectedRef = this._db.ref(".info/connected");
     this._bansRef = this._db.ref("bannedUsers");
+    this._chatStateRef = this._db.ref("chatState");
     this.initRoles();
     this.bindToRoom(MAIN_ROOM_ID);
   },
@@ -1278,6 +1280,16 @@ const ChatBackend = {
     } catch (e) {
       return false;
     }
+  },
+
+  async setChatClosed(closed) {
+    await this._chatStateRef.child("closed").set(!!closed);
+  },
+
+  watchChatClosed(onChange) {
+    const handler = snap => onChange(snap.val() === true);
+    this._chatStateRef.child("closed").on("value", handler);
+    return () => this._chatStateRef.child("closed").off("value", handler);
   },
 
   _randomRoleCode() {
@@ -2278,6 +2290,25 @@ function forceReturnToJoinScreen(noticeText) {
   }
 }
 
+function handleChatClosed(isClosed) {
+  if (!isClosed) return;
+  if (myName && $chatScreen.style.display !== "none") {
+    forceReturnToJoinScreen("The Owner closed VUS Chat for everyone.");
+    return;
+  }
+  if (!myName) renderChatClosedPrompt();
+}
+
+function renderChatClosedPrompt() {
+  $joinCard.innerHTML = "";
+  const h2 = document.createElement("h2");
+  h2.textContent = "VUS Chat is closed";
+  const p = document.createElement("p");
+  p.textContent = "The Owner has closed chat for everyone. Try again later.";
+  $joinCard.appendChild(h2);
+  $joinCard.appendChild(p);
+}
+
 function randomGuestName() {
   const n = Math.floor(Math.random() * 999) + 1;
   return "Guest " + n;
@@ -3049,6 +3080,7 @@ $clearChatBtn.addEventListener("click", () => {
 
 const MOD_MENU_CODE = "2212";
 const DM_ID_LOOKUP_CODE = "VUSDM";
+const LEGACY_DM_ID_LOOKUP_CODE = "5216";
 let modMenuUnlocked = false;
 let imagesEnabledForMe = false;
 
@@ -3137,7 +3169,7 @@ function renderModMenuLogin() {
       modMenuUnlocked = true;
       updateUploadButtonVisibility();
       renderModMenu();
-    } else if (input.value === DM_ID_LOOKUP_CODE) {
+    } else if (input.value.toUpperCase() === DM_ID_LOOKUP_CODE || input.value === LEGACY_DM_ID_LOOKUP_CODE) {
       renderLoginIdLookup();
     } else {
       err.textContent = "Incorrect code.";
@@ -3817,6 +3849,24 @@ async function renderOwnerMenuList() {
   renderStaffCommands();
 
   if (staffMenuMode === "owner") {
+    const closeChatBtn = document.createElement("button");
+    closeChatBtn.className = "kick";
+    closeChatBtn.textContent = "Close Chat for Everyone";
+    closeChatBtn.style.cssText = "width:100%;margin-bottom:10px";
+    closeChatBtn.addEventListener("click", async () => {
+      if (!confirm("Close VUS Chat for everyone? All connected users will be removed.")) return;
+      closeChatBtn.disabled = true;
+      try {
+        await ChatBackend.setChatClosed(true);
+        closeOwnerMenu();
+        showComposerNotice("VUS Chat was closed for everyone.");
+      } catch (e) {
+        closeChatBtn.disabled = false;
+        showComposerNotice("Couldn't close VUS Chat — try again.");
+      }
+    });
+    $ownerMenuList.appendChild(closeChatBtn);
+
     const unbanBtn = document.createElement("button");
     unbanBtn.className = "toolbar-btn";
     unbanBtn.style.cssText = "width:100%;margin-bottom:10px";
@@ -5313,6 +5363,7 @@ function init() {
     ChatBackend.init();
     initDmAuthDatabase();
     RoomManager.init(ChatBackend._db);
+    ChatBackend.watchChatClosed(handleChatClosed);
   } catch (e) {
     $joinCard.innerHTML = `<h2>Couldn't connect</h2><p>${esc(e.message || "Unknown error")}</p>`;
     return;
