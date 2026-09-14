@@ -995,6 +995,52 @@ async function loginFromChat(identifier, password) {
   return { ok: true, accountKey: accountSnapshot.key, username: account.username, id: account.id };
 }
 
+async function createAccountFromChat(username, password, confirmation) {
+  const cleanUsername = username.trim();
+  const usernameKey = cleanUsername.toLowerCase();
+  if (!/^[a-zA-Z0-9_]{3,24}$/.test(cleanUsername)) {
+    return { ok: false, error: "Username must be 3-24 letters, numbers, or underscores." };
+  }
+  if (!password || password.length < 4) {
+    return { ok: false, error: "Password must be at least 4 characters." };
+  }
+  if (password !== confirmation) {
+    return { ok: false, error: "Passwords do not match." };
+  }
+
+  const existingUsername = await dmAuthDb.ref("usernameIndex/" + usernameKey).get();
+  if (existingUsername.exists()) return { ok: false, error: "That username is already taken." };
+
+  let id;
+  for (let attempt = 0; attempt < 15; attempt++) {
+    const candidate = String(Math.floor(100000 + Math.random() * 900000));
+    if (!(await dmAuthDb.ref("idIndex/" + candidate).get()).exists()) {
+      id = candidate;
+      break;
+    }
+  }
+  if (!id) return { ok: false, error: "Could not create an ID right now — try again." };
+
+  const accountRef = dmAuthDb.ref("users").push();
+  const account = {
+    username: cleanUsername,
+    usernameLower: usernameKey,
+    id,
+    password,
+    createdAt: firebase.database.ServerValue.TIMESTAMP,
+    friends: {},
+    friendRequestsIncoming: {},
+    friendRequestsOutgoing: {},
+    blockedUsers: {}
+  };
+  await dmAuthDb.ref().update({
+    ["users/" + accountRef.key]: account,
+    ["usernameIndex/" + usernameKey]: accountRef.key,
+    ["idIndex/" + id]: accountRef.key
+  });
+  return { ok: true, accountKey: accountRef.key, username: cleanUsername, id };
+}
+
 const MAIN_ROOM_ID = "vus-hub-main";
 
 const ROOM_DURATION_MS = 15 * 60 * 1000;
@@ -2153,6 +2199,7 @@ function loadDmSession() {
 }
 
 function renderDmLoginPrompt(message) {
+  let authMode = "login";
   $joinCard.innerHTML = "";
 
   const h2 = document.createElement("h2");
@@ -2181,13 +2228,41 @@ function renderDmLoginPrompt(message) {
   const error = document.createElement("div");
   error.style.cssText = "color:#ef4444;font-size:13px;min-height:18px";
 
+  const confirmInput = document.createElement("input");
+  confirmInput.type = "password";
+  confirmInput.placeholder = "Confirm password";
+  confirmInput.autocomplete = "new-password";
+  confirmInput.required = true;
+  confirmInput.style.cssText = identifierInput.style.cssText;
+  confirmInput.style.display = "none";
+
+  const modeToggle = document.createElement("button");
+  modeToggle.type = "button";
+  modeToggle.className = "join-secondary-btn";
+  modeToggle.textContent = "Need an account? Sign Up";
+
   const loginBtn = document.createElement("button");
   loginBtn.id = "joinBtn";
   loginBtn.type = "submit";
   loginBtn.textContent = "Log In";
 
+  modeToggle.addEventListener("click", () => {
+    authMode = authMode === "login" ? "signup" : "login";
+    const signup = authMode === "signup";
+    h2.textContent = signup ? "Create a VUS account" : "Log in to VUS Chat";
+    p.textContent = signup ? "This account will work in VUS DM's and VUS Chat." : (message || "Log in with your VUS account to join the chat.");
+    identifierInput.placeholder = signup ? "Choose a username" : "Username or 6-digit ID";
+    identifierInput.autocomplete = signup ? "username" : "username";
+    confirmInput.style.display = signup ? "block" : "none";
+    confirmInput.required = signup;
+    loginBtn.textContent = signup ? "Create Account" : "Log In";
+    modeToggle.textContent = signup ? "Already have an account? Log In" : "Need an account? Sign Up";
+    error.textContent = "";
+  });
+
   form.appendChild(identifierInput);
   form.appendChild(passwordInput);
+  form.appendChild(confirmInput);
   form.appendChild(error);
   form.appendChild(loginBtn);
   form.addEventListener("submit", async event => {
@@ -2195,7 +2270,9 @@ function renderDmLoginPrompt(message) {
     loginBtn.disabled = true;
     error.textContent = "";
     try {
-      const result = await loginFromChat(identifierInput.value, passwordInput.value);
+      const result = authMode === "signup"
+        ? await createAccountFromChat(identifierInput.value, passwordInput.value, confirmInput.value)
+        : await loginFromChat(identifierInput.value, passwordInput.value);
       if (!result.ok) {
         error.textContent = result.error;
         return;
@@ -2212,6 +2289,7 @@ function renderDmLoginPrompt(message) {
   $joinCard.appendChild(h2);
   $joinCard.appendChild(p);
   $joinCard.appendChild(form);
+  $joinCard.appendChild(modeToggle);
 }
 
 function saveDmSession(session) {
