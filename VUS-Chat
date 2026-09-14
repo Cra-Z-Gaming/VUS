@@ -57,6 +57,8 @@
   #authSubmitBtn:disabled { opacity: .5; cursor: not-allowed; }
   #authError { min-height: 18px; color: #ef4444; font-size: 13px; text-align: center; }
   #authSuccess { min-height: 18px; color: #4ade80; font-size: 13px; text-align: center; }
+  #chatLogoutBtn { display: none; background: transparent; border: 1.5px solid #334155; color: #94a3b8; font-size: 13px; padding: 5px 9px; border-radius: 8px; cursor: pointer; }
+  #chatLogoutBtn:hover { color: #f1f5f9; border-color: #475569; }
   #joinCard {
     width: 100%;
     max-width: 280px;
@@ -731,6 +733,7 @@
   <div style="font-size:16.5px;color:#475569;display:flex;align-items:center;gap:10px;justify-self:end">
     <button id="roomsToggleBtn">🚪 Rooms<span class="rooms-badge-dot" id="roomsBadgeDot"></span></button>
     <span id="youAre"></span>
+    <button id="chatLogoutBtn" type="button">Log out</button>
     <button id="changeNameBtn" style="display:none;background:transparent;border:1.5px solid #334155;color:#64748b;font-size:15.8px;padding:4.5px 10.5px;border-radius:9px;cursor:pointer">Change name</button>
   </div>
 </div>
@@ -1847,6 +1850,7 @@ const $onlineCount = document.getElementById("onlineCount");
 const $connError   = document.getElementById("connError");
 const $composerNotice = document.getElementById("composerNotice");
 const $youAre      = document.getElementById("youAre");
+const $chatLogoutBtn = document.getElementById("chatLogoutBtn");
 const $changeNameBtn = document.getElementById("changeNameBtn");
 const $typingBar     = document.getElementById("typingBar");
 const $autoScrollBtn = document.getElementById("autoScrollBtn");
@@ -2207,10 +2211,16 @@ function renderJoinReturning(savedName) {
   noBtn.textContent = "No, use a different name";
   noBtn.addEventListener("click", () => renderJoinNameEntry());
 
+  const logoutBtn = document.createElement("button");
+  logoutBtn.className = "join-secondary-btn";
+  logoutBtn.textContent = "Log out of account";
+  logoutBtn.addEventListener("click", () => $chatLogoutBtn.click());
+
   $joinCard.appendChild(h2);
   $joinCard.appendChild(p);
   $joinCard.appendChild(yesBtn);
   $joinCard.appendChild(noBtn);
+  $joinCard.appendChild(logoutBtn);
   $joinCard.appendChild(errEl);
 }
 
@@ -4545,6 +4555,19 @@ function initChatAuthUi() {
   const authSuccess = document.getElementById("authSuccess");
   const submitBtn = document.getElementById("authSubmitBtn");
 
+  $chatLogoutBtn.addEventListener("click", () => {
+    try { localStorage.removeItem(CHAT_SESSION_STORAGE_KEY); } catch (e) {}
+    ChatBackend.releasePresence();
+    myName = "";
+    myAccountId = "";
+    $chatScreen.style.display = "none";
+    $joinScreen.style.display = "none";
+    authScreen.style.display = "flex";
+    $chatLogoutBtn.style.display = "none";
+    document.getElementById("authIdentifier").value = "";
+    document.getElementById("authPassword").value = "";
+  });
+
   document.getElementById("authLoginTab").addEventListener("click", () => setChatAuthMode("login"));
   document.getElementById("authSignupTab").addEventListener("click", () => setChatAuthMode("signup"));
   authForm.addEventListener("submit", async event => {
@@ -4563,6 +4586,7 @@ function initChatAuthUi() {
     saveChatAuthSession({ accountKey: result.accountKey, username: result.username, id: result.id });
     myAccountId = result.id || "";
     authScreen.style.display = "none";
+    $chatLogoutBtn.style.display = "inline-block";
     $joinScreen.style.display = "flex";
     const savedName = localStorage.getItem(NAME_STORAGE_KEY);
     if (savedName) renderJoinReturning(savedName);
@@ -4598,6 +4622,7 @@ function init() {
   if (authSession && authSession.accountKey && authSession.username) {
     myAccountId = authSession.id || "";
     document.getElementById("authScreen").style.display = "none";
+    $chatLogoutBtn.style.display = "inline-block";
     $joinScreen.style.display = "flex";
     const savedName = localStorage.getItem(NAME_STORAGE_KEY);
     if (savedName) renderJoinReturning(savedName);
