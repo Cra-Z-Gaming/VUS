@@ -1,0 +1,190 @@
+<!doctype html>
+<html><head>
+<style>
+body {
+    margin: 0;
+    background: #000;
+    height: 100vh;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+}
+#buttons {
+    display: flex;
+    gap: 24px;
+}
+.launchCol {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+}
+.launch-btn {
+    padding: 25px 60px;
+    font-size: 28px;
+    font-weight: bold;
+    color: white;
+    background: #444;
+    border: 2px solid #666;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.launch-btn:hover {
+    background: #555;
+    transform: scale(1.05);
+}
+.launch-btn.default {
+    border-color: #4ade80;
+    box-shadow: 0 0 16px rgba(74, 222, 128, 0.25);
+}
+
+#hint {
+    color: #777;
+    font-size: 12.5px;
+    text-align: center;
+}
+.toggleGroup {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #aaa;
+    font-size: 14px;
+    user-select: none;
+}
+.toggleGroup span.active {
+    color: #4ade80;
+    font-weight: bold;
+}
+
+.switch {
+    position: relative;
+    width: 52px;
+    height: 28px;
+}
+.switch input { display: none; }
+.slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background: #555;
+    border-radius: 28px;
+    transition: 0.2s;
+}
+.slider::before {
+    content: "";
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    left: 3px;
+    top: 3px;
+    background: white;
+    border-radius: 50%;
+    transition: 0.2s;
+}
+input:checked + .slider {
+    background: #4ade80;
+}
+input:checked + .slider::before {
+    transform: translateX(24px);
+}
+</style>
+</head><body>
+
+<div id="buttons">
+    <div class="launchCol">
+        <button id="hub" class="launch-btn">Open VUS Hub</button>
+        <label class="toggleGroup">
+            <span id="labelHub">VUS Hub</span>
+            <span class="switch">
+                <input type="checkbox" id="hubToggle">
+                <span class="slider"></span>
+            </span>
+        </label>
+    </div>
+    <div class="launchCol">
+        <button id="os" class="launch-btn">Open VUS-OS</button>
+        <label class="toggleGroup">
+            <span id="labelOs">VUS-OS</span>
+            <span class="switch">
+                <input type="checkbox" id="osToggle">
+                <span class="slider"></span>
+            </span>
+        </label>
+    </div>
+</div>
+
+<div id="hint">Enable switch to auto-open on next visit</div>
+
+<script>
+const HUB_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/index.html";
+const OS_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS-OS/refs/heads/main/index.html";
+const HUB_KEY = "vus_autolaunch_hub";
+const OS_KEY = "vus_autolaunch_os";
+
+const hubBtn = document.getElementById("hub");
+const osBtn = document.getElementById("os");
+const hubToggle = document.getElementById("hubToggle");
+const osToggle = document.getElementById("osToggle");
+const labelHub = document.getElementById("labelHub");
+const labelOs = document.getElementById("labelOs");
+
+function getEnabled(key, fallback) {
+    const v = localStorage.getItem(key);
+    return v === null ? fallback : v === "true";
+}
+function setEnabled(key, value) {
+    localStorage.setItem(key, value);
+}
+function applyUI() {
+    const hubOn = getEnabled(HUB_KEY, true);   // Hub enabled by default
+    const osOn = getEnabled(OS_KEY, false);    // OS disabled by default
+    hubToggle.checked = hubOn;
+    osToggle.checked = osOn;
+    labelHub.classList.toggle("active", hubOn);
+    labelOs.classList.toggle("active", osOn);
+    hubBtn.classList.toggle("default", hubOn);
+    osBtn.classList.toggle("default", osOn);
+}
+
+hubToggle.addEventListener("change", () => {
+    setEnabled(HUB_KEY, hubToggle.checked);
+    applyUI();
+    flashSaved(labelHub);
+});
+osToggle.addEventListener("change", () => {
+    setEnabled(OS_KEY, osToggle.checked);
+    applyUI();
+    flashSaved(labelOs);
+});
+
+function flashSaved(labelEl) {
+    const original = labelEl.textContent;
+    labelEl.textContent = "Saved";
+    setTimeout(() => { labelEl.textContent = original; }, 900);
+}
+
+async function launch(url) {
+    const win = window.open("about:blank", "_blank");
+    if (!win) return;
+    const code = await fetch(url + "?v=" + Date.now()).then(r => r.text());
+    win.document.open();
+    win.document.write(code);
+    win.document.close();
+}
+
+hubBtn.onclick = () => launch(HUB_URL);
+osBtn.onclick = () => launch(OS_URL);
+
+applyUI();
+
+window.onload = () => {
+    if (getEnabled(HUB_KEY, true)) launch(HUB_URL);
+    if (getEnabled(OS_KEY, false)) launch(OS_URL);
+};
+</script>
+</body></html>
