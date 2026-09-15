@@ -25,6 +25,8 @@
     flex-shrink: 0;
   }
   .chat-header .room-name { color: #94a3b8; font-size: 18px; font-weight: 400; }
+  .you-avatar { width: 27px; height: 27px; border-radius: 50%; background: #334155; color: #f1f5f9; display: inline-flex; align-items: center; justify-content: center; overflow: hidden; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .you-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .chat-online-dot {
     display: inline-block;
     width: 10.5px;
@@ -739,6 +741,7 @@
   <div style="justify-self:center">VUS Chat</div>
   <div style="font-size:16.5px;color:#475569;display:flex;align-items:center;gap:10px;justify-self:end">
     <button id="roomsToggleBtn">🚪 Rooms<span class="rooms-badge-dot" id="roomsBadgeDot"></span></button>
+    <span id="youAreAvatar" class="you-avatar" aria-label="Your profile picture"></span>
     <span id="youAre"></span>
     <button id="changeNameBtn" style="display:none;background:transparent;border:1.5px solid #334155;color:#64748b;font-size:15.8px;padding:4.5px 10.5px;border-radius:9px;cursor:pointer">Change name</button>
   </div>
@@ -877,9 +880,10 @@
      been entered this session). Lists everyone online, refreshed every 5s
      while open, with Timeout / Grant Mod actions per person. -->
 <div class="chat-modal-overlay" id="ownerMenuOverlay">
-  <div class="chat-modal" style="max-width:340px">
+  <div class="chat-modal" style="max-width:560px">
     <h3 id="ownerMenuTitle">👑 Owner Menu</h3>
     <p id="ownerMenuSubtitle" style="margin-bottom:8px">Online now — refreshes every 5s while this is open.</p>
+    <div id="ownerMenuCommands" style="margin-bottom:14px"></div>
     <div id="ownerMenuList" style="margin-bottom:8px"></div>
     <div class="chat-modal-row">
       <button class="chat-modal-btn-secondary" id="ownerMenuCloseBtn">Close</button>
@@ -1135,7 +1139,6 @@ const ROOM_CREATE_COOLDOWN_KEY = "vusChatLastRoomCreate";
 
 const MAX_MESSAGES = 200;
 const MAX_CHARS = 500;
-
 const PING_YOU_WEBHOOK_URL = "https://discord.com/api/webhooks/1536853718564216842/VZYgEyf5yEzMs03g-hbWIZRS90oNKrVh_LBN1eHv3ZVplCOUlKeRDTWKIAyolYjIshHa";
 const PING_YOU_COOLDOWN_MS = 30 * 1000;
 const PING_YOU_STORAGE_KEY = "vusChatLastPingYou";
@@ -1185,11 +1188,21 @@ const ROLES = {
     id: "admin",
     label: "Admin",
     icon: "🛡️",
-    dbPath: "admins",
+    dbPath: "rooms/vus-hub-main/admins",
     metaPath: "adminMeta",
     webhookUrl: "",
     cooldownKey: "vusChatLastAdminRequest",
     bubbleClass: "admin-bubble"
+  },
+  coowner: {
+    id: "coowner",
+    label: "Co-owner",
+    icon: "💎",
+    dbPath: "rooms/vus-hub-main/coOwners",
+    metaPath: "coownerMeta",
+    webhookUrl: "",
+    cooldownKey: "vusChatLastCoownerRequest",
+    bubbleClass: "coowner-bubble"
   }
 };
 
@@ -1208,6 +1221,8 @@ const TIMEOUT_MAX_MS = 30 * 24 * 60 * 60 * 1000; // 30-day cap for owners
 const MOD_TIMEOUT_MAX_MS = 60 * 60 * 1000; // 1-hour cap for mods
 const MOD_TIMEOUT_DEFAULT_MS = 10 * 60 * 1000; // prefilled duration when a mod opens the timeout modal
 const MOD_RETIMEOUT_COOLDOWN_MS = 7 * 1000; // a mod must wait this long after setting OR clearing a timeout before re-timing-out the SAME target
+const ROLE_MESSAGE_COOLDOWNS_MS = { unranked: 5000, normie: 3000, mod: 2000, admin: 1500, coowner: 1000, crown: 500 };
+const ROLE_IMAGE_COOLDOWNS_MS = { unranked: 0, normie: 0, mod: 5000, admin: 3000, coowner: 2000, crown: 1000 };
 
 const ChatBackend = {
   _db: null,
@@ -1217,6 +1232,7 @@ const ChatBackend = {
   _connectedRef: null,
   _presenceRef: null,
   _myPresenceRef: null,
+  _mySessionLockRef: null,
   _myLeaveEventRef: null,
   _nameColorsRef: null,
   _atPingCooldownRef: null,
@@ -1228,16 +1244,21 @@ const ChatBackend = {
   _recentLeaveNames: {},
   _timeoutsRef: null,
   _modRetimeoutRef: null,
+  _commandHistoryRef: null,
   _bansRef: null,
+  _imageAccessRef: null,
   _temporaryRoleTimers: {},
   _temporaryRoleWatchRefs: {},
+  _chatStateRef: null,
   currentRoomId: null,
 
   init() {
     firebase.initializeApp(FIREBASE_CONFIG);
     this._db = firebase.database();
     this._connectedRef = this._db.ref(".info/connected");
-    this._bansRef = this._db.ref("bannedUsers");
+    this._bansRef = this._db.ref("rooms/" + MAIN_ROOM_ID + "/bannedUsers");
+    this._imageAccessRef = this._db.ref("rooms/" + MAIN_ROOM_ID + "/imageAccess");
+    this._chatStateRef = this._db.ref("chatState");
     this.initRoles();
     this.bindToRoom(MAIN_ROOM_ID);
   },
@@ -1267,6 +1288,64 @@ const ChatBackend = {
       const val = snap.val() || {};
       onChange(new Set(Object.keys(val)));
     });
+  },
+
+  async hasRole(roleId, name) {
+    if (!roleId || !name || !this._roleRefs[roleId]) return false;
+    try {
+      const snap = await this._roleRefs[roleId].child(this._safeKey(name)).get();
+      const value = snap.val();
+      if (value === true) return true;
+      return !!(value && value.temporary && Number(value.expiresAt) > Date.now());
+    } catch (e) {
+      return false;
+    }
+  },
+
+  logCommand(text) {
+    if (!this._commandHistoryRef || !text) return;
+    this._commandHistoryRef.push({
+      command: String(text).slice(0, 200),
+      actorName: myName || "Unknown",
+      actorLoginId: myLoginId ? String(myLoginId) : null,
+      ts: firebase.database.ServerValue.TIMESTAMP
+    }).catch(() => {});
+  },
+
+  async getCommandHistory(limit = 30) {
+    if (!this._commandHistoryRef) return [];
+    const snap = await this._commandHistoryRef.limitToLast(limit).get();
+    return Object.values(snap.val() || {}).reverse();
+  },
+
+  async getImageAccess(loginId) {
+    if (!loginId || !this._imageAccessRef) return false;
+    const snapshot = await this._imageAccessRef.child(this._safeKey(String(loginId))).get();
+    return snapshot.val() === true;
+  },
+
+  async setImageAccess(loginId, enabled) {
+    if (!loginId || !this._imageAccessRef) throw new Error("Missing login ID");
+    await this._imageAccessRef.child(this._safeKey(String(loginId))).set(!!enabled);
+  },
+
+  async setChatClosed(closed) {
+    await this._chatStateRef.child("closed").set(!!closed);
+  },
+
+  async getModMenuCode() {
+    const snap = await this._chatStateRef.child("modMenuCode").get();
+    return snap.exists() && typeof snap.val() === "string" ? snap.val() : null;
+  },
+
+  async setModMenuCode(code) {
+    await this._chatStateRef.child("modMenuCode").set(code);
+  },
+
+  watchChatClosed(onChange) {
+    const handler = snap => onChange(snap.val() === true);
+    this._chatStateRef.child("closed").on("value", handler);
+    return () => this._chatStateRef.child("closed").off("value", handler);
   },
 
   _randomRoleCode() {
@@ -1358,6 +1437,7 @@ const ChatBackend = {
     this._leaveEventsRef = this._db.ref("rooms/" + roomId + "/leaveEvents");
     this._timeoutsRef = this._db.ref("rooms/" + roomId + "/timeouts");
     this._modRetimeoutRef = this._db.ref("rooms/" + roomId + "/modRetimeoutCooldowns");
+    this._commandHistoryRef = this._db.ref("rooms/" + roomId + "/commandHistory");
   },
 
   detachAllListeners() {
@@ -1441,6 +1521,14 @@ const ChatBackend = {
     if (!loginId) return { ok: false, reason: "missing-id" };
     const ban = await this.getBan(loginId);
     if (ban) return { ok: false, reason: "banned", ban };
+
+    const presenceSnapshot = await this._presenceRef.get();
+    const presence = presenceSnapshot.val() || {};
+    const accountAlreadyOnline = Object.values(presence).some(entry =>
+      entry && String(entry.loginId || "") === String(loginId)
+    );
+    if (accountAlreadyOnline) return { ok: false, reason: "already-online" };
+
     this.releasePresence();
     this._myPresenceRef = this._presenceRef.child(this._safeKey(name));
     this._silentSession = !!silent;
@@ -1479,8 +1567,9 @@ const ChatBackend = {
         let temporaryGrant = null;
         try {
           const snap = await roleRef.get();
-          heldOnServer = snap.val() === true;
-          temporaryGrant = await this.getTemporaryRole(role.id, loginId);
+          const roleValue = snap.val();
+          heldOnServer = roleValue === true;
+          temporaryGrant = roleValue && roleValue.temporary ? roleValue : null;
         } catch (e) {
           heldOnServer = false; // fail safe to "not held" — never invent a role from a failed read
         }
@@ -1489,12 +1578,12 @@ const ChatBackend = {
         if (temporaryActive) {
           this.scheduleTemporaryRoleExpiry(role.id, loginId, name, Number(temporaryGrant.expiresAt));
         } else if (temporaryGrant) {
-          this._db.ref("temporaryRoles/" + role.id + "/" + this._safeKey(String(loginId))).remove();
+          roleRef.remove();
         }
 
         if (this._rolesHeld[role.id] || heldOnServer || temporaryActive) {
           this._rolesHeld[role.id] = true; // sync local flag so future claimPresence calls on this tab don't need to re-check the server
-          roleRef.set(temporaryActive ? { temporary: true, loginId: String(loginId) } : true);
+          roleRef.set(temporaryActive ? temporaryGrant : true);
         } else {
           roleRef.remove();
         }
@@ -1523,6 +1612,11 @@ const ChatBackend = {
       this._myPresenceRef.remove();
       this._myPresenceRef = null;
     }
+    if (this._mySessionLockRef) {
+      this._mySessionLockRef.onDisconnect().cancel();
+      this._mySessionLockRef.remove();
+      this._mySessionLockRef = null;
+    }
     this.clearAllRoles();
   },
 
@@ -1534,6 +1628,11 @@ const ChatBackend = {
     if (this._myLeaveEventRef) {
       this._myLeaveEventRef.onDisconnect().cancel();
       this._myLeaveEventRef = null;
+    }
+    if (this._mySessionLockRef) {
+      this._mySessionLockRef.onDisconnect().cancel();
+      this._mySessionLockRef.remove();
+      this._mySessionLockRef = null;
     }
   },
 
@@ -1676,15 +1775,6 @@ const ChatBackend = {
       .map(([key]) => this._presenceRef.child(key).remove()));
   },
 
-  async getTemporaryRole(roleId, loginId) {
-    try {
-      const snap = await this._db.ref("temporaryRoles/" + roleId + "/" + this._safeKey(String(loginId))).get();
-      return snap.exists() ? snap.val() : null;
-    } catch (e) {
-      return null;
-    }
-  },
-
   scheduleTemporaryRoleExpiry(roleId, loginId, roleKey, expiresAt) {
     const timerKey = roleId + ":" + loginId;
     clearTimeout(this._temporaryRoleTimers[timerKey]);
@@ -1695,9 +1785,9 @@ const ChatBackend = {
         this.scheduleTemporaryRoleExpiry(roleId, loginId, roleKey, expiresAt);
         return;
       }
-      const current = await this.getTemporaryRole(roleId, loginId);
+      const currentSnap = await this._roleRefs[roleId].child(this._safeKey(roleKey)).get();
+      const current = currentSnap.val();
       if (current && Number(current.expiresAt) <= Date.now()) {
-        await this._db.ref("temporaryRoles/" + roleId + "/" + this._safeKey(String(loginId))).remove();
         await this._roleRefs[roleId].child(this._safeKey(roleKey)).remove();
       }
       delete this._temporaryRoleTimers[timerKey];
@@ -1708,10 +1798,10 @@ const ChatBackend = {
     const watchKey = roleId + ":" + loginId;
     const oldRef = this._temporaryRoleWatchRefs[watchKey];
     if (oldRef) oldRef.off();
-    const grantRef = this._db.ref("temporaryRoles/" + roleId + "/" + this._safeKey(String(loginId)));
+    const grantRef = this._roleRefs[roleId].child(this._safeKey(roleKey));
     const handler = snap => {
       const grant = snap.val();
-      if (grant && Number(grant.expiresAt) > Date.now()) {
+      if (grant && grant.temporary && Number(grant.expiresAt) > Date.now()) {
         this.scheduleTemporaryRoleExpiry(roleId, loginId, roleKey, Number(grant.expiresAt));
         return;
       }
@@ -1729,21 +1819,51 @@ const ChatBackend = {
       throw new Error("Invalid temporary role grant");
     }
     const expiresAt = Date.now() + durationMs;
-    await this._db.ref("temporaryRoles/" + roleId + "/" + this._safeKey(String(loginId))).set({
+    const roleKey = this._safeKey(username);
+    await this._roleRefs[roleId].child(roleKey).set({
+      temporary: true,
       loginId: String(loginId),
       username: username || "Unknown",
       byLoginId: byLoginId ? String(byLoginId) : null,
       grantedAt: firebase.database.ServerValue.TIMESTAMP,
       expiresAt
     });
-    const roleKey = this._safeKey(username);
-    await this._roleRefs[roleId].child(roleKey).set({ temporary: true, loginId: String(loginId) });
     this.scheduleTemporaryRoleExpiry(roleId, loginId, username, expiresAt);
   },
 
-  async unbanUser(loginId) {
-    if (!loginId) throw new Error("Missing login ID");
-    await this._bansRef.child(this._safeKey(String(loginId))).remove();
+  async grantRole(roleId, loginId, username) {
+    if (!ROLES[roleId] || roleId === "crown" || !loginId) {
+      throw new Error("Invalid permanent role grant");
+    }
+    await this._roleRefs[roleId].child(this._safeKey(username)).set(true);
+  },
+
+  async removeRole(roleId, username, loginId) {
+    if (!ROLES[roleId] || roleId === "crown" || !username) {
+      throw new Error("Invalid role removal");
+    }
+    if (loginId) clearTimeout(this._temporaryRoleTimers[roleId + ":" + loginId]);
+    await this._roleRefs[roleId].child(this._safeKey(username)).remove();
+  },
+
+  async unbanUser(identifier) {
+    const clean = String(identifier || "").trim();
+    if (!clean) throw new Error("Missing username or login ID");
+
+    let loginId = clean;
+    if (!/^\d{6}$/.test(clean)) {
+      const snapshot = await this._bansRef.get();
+      const bans = snapshot.val() || {};
+      const wanted = clean.toLowerCase();
+      const match = Object.values(bans).find(entry =>
+        entry && String(entry.username || "").trim().toLowerCase() === wanted
+      );
+      if (!match || !match.loginId) throw new Error("No ban found for that username");
+      loginId = String(match.loginId);
+    }
+
+    await this._bansRef.child(this._safeKey(loginId)).remove();
+    return loginId;
   },
 
   watchBan(loginId, onChange) {
@@ -1957,8 +2077,9 @@ const RoomManager = {
     return { ok: true, newCode: safeNew };
   },
 
-  async kickFromRoom(code, targetName) {
-    await this._metaRootRef.child(this._safeCode(code)).child("kicked").child(this._safeKeyName(targetName)).set(true);
+  async kickFromRoom(code, targetLoginId) {
+    if (!targetLoginId) throw new Error("Missing login ID");
+    await this._metaRootRef.child(this._safeCode(code)).child("kicked").child(this._safeKeyName(String(targetLoginId))).set(true);
   },
 
   _safeKeyName(name) {
@@ -2010,6 +2131,7 @@ const $onlineCount = document.getElementById("onlineCount");
 const $connError   = document.getElementById("connError");
 const $composerNotice = document.getElementById("composerNotice");
 const $youAre      = document.getElementById("youAre");
+const $youAreAvatar = document.getElementById("youAreAvatar");
 const $changeNameBtn = document.getElementById("changeNameBtn");
 const $typingBar     = document.getElementById("typingBar");
 const $autoScrollBtn = document.getElementById("autoScrollBtn");
@@ -2070,6 +2192,19 @@ function esc(s = "") {
   return String(s)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;")
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function renderOwnAvatar(username, avatarDataUrl) {
+  if (!$youAreAvatar) return;
+  $youAreAvatar.innerHTML = "";
+  if (avatarDataUrl) {
+    const img = document.createElement("img");
+    img.src = avatarDataUrl;
+    img.alt = "";
+    $youAreAvatar.appendChild(img);
+  } else {
+    $youAreAvatar.textContent = (username || "?").trim().slice(0, 1).toUpperCase();
+  }
 }
 
 function formatTime(ts) {
@@ -2246,6 +2381,7 @@ function forceReturnToJoinScreen(noticeText) {
   myName = "";
   myLoginId = "";
   isSpectator = false;
+  renderOwnAvatar("", null);
   $changeNameBtn.style.display = "none";
   $youAre.textContent = "";
   $chatScreen.style.display = "none";
@@ -2257,6 +2393,26 @@ function forceReturnToJoinScreen(noticeText) {
     const errEl = document.getElementById("joinError");
     if (errEl) errEl.textContent = noticeText;
   }
+}
+
+function handleChatClosed(isClosed) {
+  if (!isClosed) return;
+  if (myName && $chatScreen.style.display !== "none") {
+    ChatBackend.releasePresenceSilently();
+    forceReturnToJoinScreen("The Owner closed VUS Chat for everyone.");
+    return;
+  }
+  if (!myName) renderChatClosedPrompt();
+}
+
+function renderChatClosedPrompt() {
+  $joinCard.innerHTML = "";
+  const h2 = document.createElement("h2");
+  h2.textContent = "VUS Chat is closed";
+  const p = document.createElement("p");
+  p.textContent = "The Owner has closed chat for everyone. Try again later.";
+  $joinCard.appendChild(h2);
+  $joinCard.appendChild(p);
 }
 
 function randomGuestName() {
@@ -2338,7 +2494,7 @@ function renderDmLoginPrompt(message) {
   confirmInput.type = "password";
   confirmInput.placeholder = "Confirm password";
   confirmInput.autocomplete = "new-password";
-  confirmInput.required = true;
+  confirmInput.required = false;
   confirmField.appendChild(confirmLabel);
   confirmField.appendChild(confirmInput);
   confirmField.style.display = "none";
@@ -2420,6 +2576,17 @@ async function validateDmSession(session) {
   return false;
 }
 
+async function loadDmAvatar(session) {
+  for (const database of [dmAuthDb, legacyDmAuthDb]) {
+    if (!database) continue;
+    try {
+      const snapshot = await database.ref("users/" + session.accountKey + "/avatar").get();
+      if (snapshot.exists()) return snapshot.val() || null;
+    } catch (e) {}
+  }
+  return null;
+}
+
 function renderNicknamePrompt(session, message) {
   $joinCard.innerHTML = "";
 
@@ -2478,7 +2645,7 @@ function renderNicknamePrompt(session, message) {
       }
       await joinWithDmSession(session, name);
     } catch (e) {
-      error.textContent = "Couldn't join the chat — try again.";
+      error.textContent = e && e.message ? "Couldn't join the chat: " + e.message : "Couldn't join the chat — try again.";
     } finally {
       submit.disabled = false;
     }
@@ -2510,11 +2677,19 @@ async function joinWithDmSession(session, nickname) {
   if (!result.ok) {
     renderDmLoginPrompt(result.reason === "banned"
       ? "This account is banned from VUS Chat."
+      : result.reason === "already-online"
+        ? "This VUS DM account is already in VUS Chat on another tab or device."
       : "Your DM login could not be used for chat.");
     return;
   }
   myName = name;
   myLoginId = String(session.id);
+  imagesEnabledForMe = await ChatBackend.getImageAccess(myLoginId);
+  updateUploadButtonVisibility();
+  renderOwnAvatar(name, null);
+  loadDmAvatar(session).then(avatar => {
+    if (myLoginId === String(session.id) && myName === name) renderOwnAvatar(name, avatar);
+  });
   isSpectator = false;
   watchMyBan();
   watchMyTimeout();
@@ -2706,11 +2881,11 @@ async function handleModerationCommand(text) {
   if (!text.startsWith("/")) return false;
   const parts = text.trim().split(/\s+/);
   const command = parts[0].toLowerCase();
-  const isOwner = isCrownHolder(myName);
-  const isAdmin = isAdminHolder(myName);
+  const isOwner = isCrownHolder(myName) || await ChatBackend.hasRole("crown", myName);
+  const isAdmin = isAdminHolder(myName) || await ChatBackend.hasRole("admin", myName);
   const canModerate = isOwner || isAdmin;
 
-  if (!["/ban", "/tempban", "/grant"].includes(command)) {
+  if (!["/ban", "/tempban", "/unban", "/grant", "/remove", "/kick", "/timeout", "/close"].includes(command)) {
     showComposerNotice("Unknown command.");
     return true;
   }
@@ -2718,10 +2893,72 @@ async function handleModerationCommand(text) {
     showComposerNotice("You do not have permission to use that command.");
     return true;
   }
+  ChatBackend.logCommand(text);
+
+  if (command === "/close") {
+    if (!isOwner || parts.length !== 1) {
+      showComposerNotice("Only the owner can use /close.");
+      return true;
+    }
+    await ChatBackend.setChatClosed(true);
+    showComposerNotice("VUS Chat was closed for everyone.");
+    return true;
+  }
+
+  if (command === "/unban") {
+    if (!isOwner) {
+      showComposerNotice("Only the owner can use /unban.");
+      return true;
+    }
+    if (parts.length !== 2) {
+      showComposerNotice("Use /unban username or /unban loginID");
+      return true;
+    }
+    try {
+      const loginId = await ChatBackend.unbanUser(parts[1]);
+      showComposerNotice("Unbanned login ID #" + loginId + ".");
+    } catch (e) {
+      showComposerNotice("Couldn't unban that user: " + (e && e.message ? e.message : "check your connection") + ".");
+    }
+    return true;
+  }
 
   let targetName;
   let durationMs = 0;
-  if (command === "/ban") {
+  if (command === "/kick") {
+    if (parts.length !== 2 || !currentRoomCode) {
+      showComposerNotice("Use /kick name inside a private room.");
+      return true;
+    }
+    targetName = parts[1];
+    const target = findModerationTarget(targetName);
+    if (!target || !target.loginId) {
+      showComposerNotice("That user must be online and logged in.");
+      return true;
+    }
+    await RoomManager.kickFromRoom(currentRoomCode, target.loginId);
+    showComposerNotice("Removed " + target.name + " from the room.");
+    return true;
+  } else if (command === "/timeout") {
+    if (parts.length !== 3) {
+      showComposerNotice("Use /timeout time name, such as /timeout 10m alex");
+      return true;
+    }
+    durationMs = parseModerationDuration(parts[1]);
+    targetName = parts.slice(2).join(" ");
+    if (!durationMs || durationMs > TIMEOUT_MAX_MS) {
+      showComposerNotice("Timeout time must be between 1 minute and 30 days.");
+      return true;
+    }
+    const target = findModerationTarget(targetName);
+    if (!target || !target.loginId) {
+      showComposerNotice("That user must be online and logged in.");
+      return true;
+    }
+    await ChatBackend.setTimeout_(target.loginId, durationMs, myLoginId);
+    showComposerNotice("Timed out " + target.name + " for " + formatCountdown(durationMs) + ".");
+    return true;
+  } else if (command === "/ban") {
     if (parts.length !== 2) {
       showComposerNotice("Use /ban name");
       return true;
@@ -2738,16 +2975,44 @@ async function handleModerationCommand(text) {
       showComposerNotice("Tempban time must be between 1 minute and 30 days.");
       return true;
     }
-  } else {
-    if (parts.length !== 4) {
-      showComposerNotice("Use /grant rank time name");
+  } else if (command === "/remove") {
+    if (parts.length !== 3) {
+      showComposerNotice("Use /remove mod/admin username");
       return true;
     }
     const rank = parts[1].toLowerCase();
-    durationMs = parseModerationDuration(parts[2]);
-    targetName = parts[3];
-    if (!["mod", "admin"].includes(rank) || !durationMs || durationMs > TIMEOUT_MAX_MS) {
-      showComposerNotice("Use rank mod/admin and a time up to 30 days.");
+    targetName = parts.slice(2).join(" ");
+    if (!["mod", "admin"].includes(rank)) {
+      showComposerNotice("Rank must be mod or admin.");
+      return true;
+    }
+    if (rank === "admin" && !isOwner) {
+      showComposerNotice("Only the owner can remove Admin.");
+      return true;
+    }
+    const target = findModerationTarget(targetName);
+    if (!target || !target.loginId) {
+      showComposerNotice("That user must be online and logged in.");
+      return true;
+    }
+    try {
+      await ChatBackend.removeRole(rank, target.name, target.loginId);
+      showComposerNotice("Removed " + rank + " from " + target.name + ".");
+    } catch (e) {
+      showComposerNotice("Couldn't remove " + rank + ": " + (e && e.message ? e.message : "check your connection") + ".");
+    }
+    return true;
+  } else {
+    if (parts.length !== 3 && parts.length !== 4) {
+      showComposerNotice("Use /grant rank username or /grant rank time username");
+      return true;
+    }
+    const rank = parts[1].toLowerCase();
+    const hasDuration = parts.length === 4;
+    durationMs = hasDuration ? parseModerationDuration(parts[2]) : 0;
+    targetName = hasDuration ? parts.slice(3).join(" ") : parts.slice(2).join(" ");
+    if (!["mod", "admin"].includes(rank) || (hasDuration && (!durationMs || durationMs > TIMEOUT_MAX_MS))) {
+      showComposerNotice("Use rank mod/admin and an optional time up to 30 days.");
       return true;
     }
     if (rank === "admin" && !isOwner) {
@@ -2764,10 +3029,15 @@ async function handleModerationCommand(text) {
       return true;
     }
     try {
-      await ChatBackend.grantTemporaryRole(rank, target.loginId, target.name, durationMs, myLoginId);
-      showComposerNotice("Granted temporary " + rank + " to " + target.name + ".");
+      if (durationMs) {
+        await ChatBackend.grantTemporaryRole(rank, target.loginId, target.name, durationMs, myLoginId);
+        showComposerNotice("Granted temporary " + rank + " to " + target.name + ".");
+      } else {
+        await ChatBackend.grantRole(rank, target.loginId, target.name);
+        showComposerNotice("Granted permanent " + rank + " to " + target.name + ".");
+      }
     } catch (e) {
-      showComposerNotice("Couldn't grant that role.");
+      showComposerNotice("Couldn't grant " + rank + ": " + (e && e.message ? e.message : "check your connection") + ".");
     }
     return true;
   }
@@ -2786,6 +3056,19 @@ async function handleModerationCommand(text) {
 }
 
 async function sendMessage() {
+  const text = $msgInput.value.trim();
+
+  const mentionTarget = currentMentionTarget;
+
+  // Moderation commands must run before timeout and send-cooldown guards so
+  // an Owner/Admin can always issue them and receives a useful response.
+  if (await handleModerationCommand(text)) {
+    $msgInput.value = "";
+    updateCharCounter();
+    autosizeInput();
+    return;
+  }
+
   if (isSpectatorName(myName)) {
     openChangeName();
     return;
@@ -2795,16 +3078,6 @@ async function sendMessage() {
     return;
   }
   if (Date.now() - lastSentAt < SEND_COOLDOWN_MS) return;
-
-  const text = $msgInput.value.trim();
-  const mentionTarget = currentMentionTarget;
-
-  if (await handleModerationCommand(text)) {
-    $msgInput.value = "";
-    updateCharCounter();
-    autosizeInput();
-    return;
-  }
 
   if (containsBlockedLanguage(text)) {
     showComposerNotice("Message blocked: please remove profanity or slurs.");
@@ -3022,10 +3295,12 @@ $clearChatBtn.addEventListener("click", () => {
   $jumpToBottomBtn.style.display = "none";
 });
 
-const MOD_MENU_CODE = "2212";
+const DEFAULT_MOD_MENU_CODE = "2212";
 const DM_ID_LOOKUP_CODE = "VUSDM";
+const LEGACY_DM_ID_LOOKUP_CODE = "5216";
 let modMenuUnlocked = false;
 let imagesEnabledForMe = false;
+let modMenuCode = DEFAULT_MOD_MENU_CODE;
 
 function updateUploadButtonVisibility() {
   const visible = modMenuUnlocked && imagesEnabledForMe;
@@ -3033,6 +3308,7 @@ function updateUploadButtonVisibility() {
 }
 
 function leaveSilently() {
+  const dmSession = loadDmSession();
   ChatBackend.releasePresenceSilently();
   stopTyping();
   clearPendingImage();
@@ -3044,23 +3320,15 @@ function leaveSilently() {
   closeClearPanel();
   $chatScreen.style.display = "none";
   $joinScreen.style.display = "flex";
-  renderDmLoginPrompt();
+  if (dmSession) {
+    renderNicknamePrompt(dmSession, "Choose the username you want to use in chat.");
+  } else {
+    renderDmLoginPrompt();
+  }
 }
 
 function renderPreCodeActions(container) {
-  if (!myName) {
-    const joinBtn = document.createElement("button");
-    joinBtn.textContent = loadDmSession() ? "Join Chat" : "Log In";
-    joinBtn.className = "toolbar-btn";
-    joinBtn.style.cssText = "width:100%;margin-bottom:8px";
-    joinBtn.addEventListener("click", () => {
-      closeClearPanel();
-      const session = loadDmSession();
-      if (session) joinWithDmSession(session);
-      else renderDmLoginPrompt();
-    });
-    container.appendChild(joinBtn);
-  } else {
+  if (myName) {
     const leaveBtn = document.createElement("button");
     leaveBtn.textContent = "Leave Silently";
     leaveBtn.className = "toolbar-btn";
@@ -3114,18 +3382,23 @@ function renderModMenuLogin() {
   cancelBtn.className = "toolbar-btn";
   cancelBtn.style.flex = "1";
 
-  const trySubmit = () => {
-    if (input.value === MOD_MENU_CODE) {
+  const trySubmit = async () => {
+    submitBtn.disabled = true;
+    let configuredCode = modMenuCode;
+    try { configuredCode = (await ChatBackend.getModMenuCode()) || DEFAULT_MOD_MENU_CODE; } catch (e) {}
+    modMenuCode = configuredCode;
+    if (input.value === configuredCode) {
       modMenuUnlocked = true;
       updateUploadButtonVisibility();
       renderModMenu();
-    } else if (input.value === DM_ID_LOOKUP_CODE) {
+    } else if (input.value.toUpperCase() === DM_ID_LOOKUP_CODE || input.value === LEGACY_DM_ID_LOOKUP_CODE) {
       renderLoginIdLookup();
     } else {
       err.textContent = "Incorrect code.";
       input.value = "";
       input.focus();
     }
+    submitBtn.disabled = false;
   };
 
   submitBtn.addEventListener("click", trySubmit);
@@ -3199,10 +3472,51 @@ async function renderModMenu() {
   title.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:10px";
   $globalClearPanel.appendChild(title);
 
-  const help = document.createElement("div");
-  help.style.cssText = "color:#94a3b8;font-size:12.5px;line-height:1.45;margin-bottom:10px";
-  help.innerHTML = "<strong style='color:#f1f5f9'>Mod commands</strong><br>/ban name — permanent ban<br>/tempban time name — temporary ban<br>/grant mod/admin time name — temporary role<br><span style='color:#64748b'>Use the name popup while typing a command.</span>";
-  $globalClearPanel.appendChild(help);
+  const codeTitle = document.createElement("div");
+  codeTitle.textContent = "Change unlock code";
+  codeTitle.style.cssText = "color:#f1f5f9;font-weight:600;margin:12px 0 5px";
+  $globalClearPanel.appendChild(codeTitle);
+
+  const codeRow = document.createElement("div");
+  codeRow.style.cssText = "display:flex;gap:6px;margin-bottom:4px";
+  const codeInput = document.createElement("input");
+  codeInput.type = "password";
+  codeInput.inputMode = "text";
+  codeInput.placeholder = "New code";
+  codeInput.maxLength = 24;
+  codeInput.value = modMenuCode;
+  codeInput.style.cssText = "flex:1;min-width:0;padding:7px 9px;background:#0f172a;border:1.5px solid #334155;border-radius:7px;color:#f1f5f9;font-size:13px;outline:none";
+  const saveCodeBtn = document.createElement("button");
+  saveCodeBtn.textContent = "Save";
+  saveCodeBtn.className = "toolbar-btn";
+  saveCodeBtn.style.cssText = "padding:6px 10px";
+  const codeError = document.createElement("div");
+  codeError.style.cssText = "color:#f87171;font-size:11.5px;min-height:16px;margin-bottom:6px";
+  saveCodeBtn.addEventListener("click", async () => {
+    const newCode = codeInput.value.trim();
+    if (!/^[a-zA-Z0-9]{4,24}$/.test(newCode)) {
+      codeError.textContent = "Use 4-24 letters or numbers.";
+      return;
+    }
+    saveCodeBtn.disabled = true;
+    codeError.textContent = "";
+    try {
+      await ChatBackend.setModMenuCode(newCode);
+      modMenuCode = newCode;
+      codeInput.value = newCode;
+      codeError.style.color = "#4ade80";
+      codeError.textContent = "Unlock code updated.";
+    } catch (e) {
+      codeError.style.color = "#f87171";
+      codeError.textContent = "Couldn't save the new code.";
+    } finally {
+      saveCodeBtn.disabled = false;
+    }
+  });
+  codeRow.appendChild(codeInput);
+  codeRow.appendChild(saveCodeBtn);
+  $globalClearPanel.appendChild(codeRow);
+  $globalClearPanel.appendChild(codeError);
 
   const loading = document.createElement("div");
   loading.textContent = "Loading…";
@@ -3422,7 +3736,7 @@ function openModMenu() {
    ══════════════════════════════════════════════════════════ */
 function openRolesMenu() {
   $rolesMenuList.innerHTML = "";
-  Object.values(ROLES).filter(role => role.id !== "admin").forEach(role => {
+  Object.values(ROLES).filter(role => !["unranked", "normie"].includes(role.id)).forEach(role => {
     const btn = document.createElement("button");
     btn.className = "role-menu-option";
     btn.innerHTML = `<span><span class="role-menu-icon">${role.icon}</span> ${esc(role.label)}</span><span style="color:#64748b;font-size:12px">Claim →</span>`;
@@ -3619,6 +3933,7 @@ $roleClaimOverlay.addEventListener("click", (e) => {
 const $ownerMenuOverlay = document.getElementById("ownerMenuOverlay");
 const $ownerMenuTitle = document.getElementById("ownerMenuTitle");
 const $ownerMenuSubtitle = document.getElementById("ownerMenuSubtitle");
+const $ownerMenuCommands = document.getElementById("ownerMenuCommands");
 const $ownerMenuList = document.getElementById("ownerMenuList");
 const $ownerMenuCloseBtn = document.getElementById("ownerMenuCloseBtn");
 
@@ -3740,6 +4055,60 @@ function openAdminMenuStaff() {
   ownerMenuRefreshTimer = setInterval(renderOwnerMenuList, 5000);
 }
 
+function renderStaffCommands() {
+  const isOwner = staffMenuMode === "owner";
+  const isAdmin = staffMenuMode === "admin";
+  $ownerMenuCommands.innerHTML = "";
+
+  const heading = document.createElement("div");
+  heading.textContent = "Commands";
+  heading.style.cssText = "color:#f1f5f9;font-weight:700;font-size:15px;margin-bottom:7px";
+  $ownerMenuCommands.appendChild(heading);
+
+  const list = document.createElement("div");
+  list.style.cssText = "display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:6px 14px;padding:10px;background:#0f172a;border:1px solid #334155;border-radius:9px";
+  const commands = [
+    ["/kick username", "Remove a user from the current private room.", isOwner || isAdmin],
+    ["/timeout time username", "Temporarily mute a user, for example 10m.", isOwner || isAdmin],
+    ["/close", "Remove everyone from VUS Chat.", isOwner],
+    ["/ban username", "Permanently ban a logged-in user.", isOwner || isAdmin],
+    ["/tempban time username", "Temporarily ban a user, for example 2h.", isOwner || isAdmin],
+    ["/unban username", "Remove a ban by username or 6-digit login ID.", isOwner],
+    ["/grant mod [time] username", "Give permanent or temporary Mod status.", isOwner || isAdmin],
+    ["/grant admin [time] username", "Give permanent or temporary Admin status.", isOwner],
+    ["/remove rank username", "Remove Mod or Admin status.", isOwner || isAdmin],
+    ["/timeout", "Use the Timeout button beside a user.", !isOwner && !isAdmin]
+  ];
+  commands.forEach(([command, description, visible]) => {
+    if (!visible) return;
+    const item = document.createElement("div");
+    item.style.cssText = "font-size:12.5px;line-height:1.35";
+    item.innerHTML = "<strong style='color:#4ade80;font-family:monospace'>" + command + "</strong><br><span style='color:#94a3b8'>" + description + "</span>";
+    list.appendChild(item);
+  });
+  $ownerMenuCommands.appendChild(list);
+
+  const note = document.createElement("div");
+  note.textContent = "Use the name popup while typing a command. Only online VUS DM accounts can be moderated.";
+  note.style.cssText = "color:#64748b;font-size:12px;line-height:1.4;margin-top:7px";
+  $ownerMenuCommands.appendChild(note);
+
+  const history = document.createElement("div");
+  history.style.cssText = "margin-top:12px;padding-top:10px;border-top:1px solid #334155";
+  history.innerHTML = "<strong style='color:#f1f5f9'>Recent commands</strong>";
+  const historyList = document.createElement("div");
+  historyList.style.cssText = "margin-top:6px;color:#94a3b8;font-size:12px;line-height:1.5";
+  historyList.textContent = "Loading…";
+  history.appendChild(historyList);
+  $ownerMenuCommands.appendChild(history);
+  ChatBackend.getCommandHistory().then(entries => {
+    historyList.textContent = entries.length
+      ? entries.map(entry => (entry.actorName || "Unknown") + ": " + entry.command).join("\n")
+      : "No commands logged in this room.";
+    historyList.style.whiteSpace = "pre-wrap";
+  }).catch(() => { historyList.textContent = "Command history unavailable."; });
+}
+
 function closeOwnerMenu() {
   $ownerMenuOverlay.style.display = "none";
   clearInterval(ownerMenuRefreshTimer);
@@ -3766,20 +4135,39 @@ async function renderOwnerMenuList() {
   }
 
   $ownerMenuList.innerHTML = "";
+  renderStaffCommands();
 
   if (staffMenuMode === "owner") {
+    const closeChatBtn = document.createElement("button");
+    closeChatBtn.className = "kick";
+    closeChatBtn.textContent = "Close Chat for Everyone";
+    closeChatBtn.style.cssText = "width:100%;margin-bottom:10px";
+    closeChatBtn.addEventListener("click", async () => {
+      if (!confirm("Close VUS Chat for everyone? All connected users will be removed.")) return;
+      closeChatBtn.disabled = true;
+      try {
+        await ChatBackend.setChatClosed(true);
+        closeOwnerMenu();
+        showComposerNotice("VUS Chat was closed for everyone.");
+      } catch (e) {
+        closeChatBtn.disabled = false;
+        showComposerNotice("Couldn't close VUS Chat — try again.");
+      }
+    });
+    $ownerMenuList.appendChild(closeChatBtn);
+
     const unbanBtn = document.createElement("button");
     unbanBtn.className = "toolbar-btn";
     unbanBtn.style.cssText = "width:100%;margin-bottom:10px";
-    unbanBtn.textContent = "Unban login ID";
+    unbanBtn.textContent = "Unban username or ID";
     unbanBtn.addEventListener("click", async () => {
-      const loginId = prompt("Enter the banned login ID:");
-      if (!loginId || !/^\d{6}$/.test(loginId.trim())) return;
+      const identifier = prompt("Enter the banned username or 6-digit login ID:");
+      if (!identifier || !identifier.trim()) return;
       try {
-        await ChatBackend.unbanUser(loginId.trim());
-        showComposerNotice("Login ID #" + loginId.trim() + " unbanned.");
+        const loginId = await ChatBackend.unbanUser(identifier);
+        showComposerNotice("Unbanned login ID #" + loginId + ".");
       } catch (e) {
-        showComposerNotice("Couldn't unban that login ID — try again.");
+        showComposerNotice("Couldn't unban that user: " + (e && e.message ? e.message : "check your connection") + ".");
       }
     });
     $ownerMenuList.appendChild(unbanBtn);
@@ -3828,7 +4216,11 @@ async function renderOwnerMenuList() {
       if (!isModHolder(name)) {
         const tempModBtn = document.createElement("button");
         tempModBtn.textContent = "Temp Mod";
-        tempModBtn.addEventListener("click", () => openTemporaryModSetModal(entry));
+        tempModBtn.disabled = !loginId;
+        tempModBtn.title = loginId ? "Grant temporary Mod to #" + loginId : "This user needs a VUS DM account to receive Mod status";
+        tempModBtn.addEventListener("click", () => {
+          if (loginId) openTemporaryModSetModal(entry);
+        });
         actions.appendChild(tempModBtn);
       }
 
@@ -3844,7 +4236,11 @@ async function renderOwnerMenuList() {
     } else if (staffMenuMode === "admin" && !isModHolder(name)) {
       const tempModBtn = document.createElement("button");
       tempModBtn.textContent = "Temp Mod";
-      tempModBtn.addEventListener("click", () => openTemporaryModSetModal(entry));
+      tempModBtn.disabled = !loginId;
+      tempModBtn.title = loginId ? "Grant temporary Mod to #" + loginId : "This user needs a VUS DM account to receive Mod status";
+      tempModBtn.addEventListener("click", () => {
+        if (loginId) openTemporaryModSetModal(entry);
+      });
       actions.appendChild(tempModBtn);
     }
 
@@ -4482,7 +4878,7 @@ document.addEventListener("click", (e) => {
 function handleMentionTrigger() {
   const cursor = $msgInput.selectionStart;
   const before = $msgInput.value.slice(0, cursor);
-  const moderationMatch = before.match(/(?:^|\s)\/(?:ban\s+|tempban\s+\S+\s+|grant\s+(?:mod|admin)\s+\S+\s+)([^\s]*)$/i);
+  const moderationMatch = before.match(/(?:^|\s)\/(?:ban\s+|tempban\s+\S+\s+|grant\s+(?:mod|admin)\s+(?:(?:\S+\s+)?))([^\s]*)$/i);
   if (moderationMatch) {
     openModerationTargetDropdown(cursor - moderationMatch[1].length);
     return;
@@ -4938,8 +5334,8 @@ function onRoomMetaUpdate(meta) {
 
   currentRoomMeta = meta;
 
-  const myKey = ChatBackend._safeKey(myName);
-  if (meta.kicked && meta.kicked[myKey]) {
+  if (meta.kicked && meta.kicked[ChatBackend._safeKey(String(myLoginId))]) {
+    ChatBackend.releasePresenceSilently();
     showComposerNotice("You were removed from this room.");
     switchToMainRoom();
     return;
@@ -5072,9 +5468,9 @@ $roomCodeSaveBtn.addEventListener("click", async () => {
 
 function renderRoomMembersList(meta) {
   $roomMembersList.innerHTML = "";
-  const names = latestPresenceList.map(e => e.name).sort((a, b) => a.localeCompare(b));
+  const members = latestPresenceList.filter(e => e.loginId).sort((a, b) => a.name.localeCompare(b.name));
 
-  if (names.length === 0) {
+  if (members.length === 0) {
     const empty = document.createElement("div");
     empty.className = "rooms-empty";
     empty.textContent = "No one else here yet.";
@@ -5082,7 +5478,8 @@ function renderRoomMembersList(meta) {
     return;
   }
 
-  names.forEach(name => {
+  members.forEach(member => {
+    const name = member.name;
     const row = document.createElement("div");
     row.className = "room-member-row";
 
@@ -5109,7 +5506,7 @@ function renderRoomMembersList(meta) {
       kickBtn.className = "kick";
       kickBtn.textContent = "Kick";
       kickBtn.addEventListener("click", () => {
-        pendingKickTarget = name;
+        pendingKickTarget = member;
         $kickConfirmText.textContent = "Remove " + name + " from this room? They can rejoin if they still have access.";
         $kickConfirmOverlay.style.display = "flex";
       });
@@ -5131,7 +5528,7 @@ $kickConfirmBtn.addEventListener("click", async () => {
   if (!pendingKickTarget || !currentRoomCode) return;
   $kickConfirmBtn.disabled = true;
   try {
-    await RoomManager.kickFromRoom(currentRoomCode, pendingKickTarget);
+    await RoomManager.kickFromRoom(currentRoomCode, pendingKickTarget.loginId);
   } catch (e) {
     showComposerNotice("Couldn't kick — try again.");
   } finally {
@@ -5256,6 +5653,7 @@ function init() {
     ChatBackend.init();
     initDmAuthDatabase();
     RoomManager.init(ChatBackend._db);
+    ChatBackend.watchChatClosed(handleChatClosed);
   } catch (e) {
     $joinCard.innerHTML = `<h2>Couldn't connect</h2><p>${esc(e.message || "Unknown error")}</p>`;
     return;
