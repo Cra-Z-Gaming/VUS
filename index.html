@@ -2145,6 +2145,28 @@ const chatSidebarFrame = document.getElementById("chatSidebarFrame");
 let chatFrameLoaded = false;
 let chatFrameLoading = false;
 let chatHtmlCache = null; // reused for the "pop out" window too, avoids a second fetch
+const HUB_ACCOUNT_SESSION_KEY = "vusHubAccountSession";
+
+function getHubAccountSession() {
+  try {
+    const raw = localStorage.getItem(HUB_ACCOUNT_SESSION_KEY);
+    const session = raw ? JSON.parse(raw) : null;
+    return session && session.accountKey && session.username && session.id ? session : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function sendHubAccountSession(targetWindow) {
+  const session = getHubAccountSession();
+  if (session && targetWindow) targetWindow.postMessage({ type: "vus-chat-auth", session }, "*");
+}
+
+window.addEventListener("message", event => {
+  if (event.data && event.data.type === "vus-chat-auth-request") {
+    sendHubAccountSession(event.source);
+  }
+});
 
 function loadChatFrame() {
   if (chatFrameLoaded || chatFrameLoading) return;
@@ -2159,6 +2181,7 @@ function loadChatFrame() {
       chatHtmlCache = html;
       chatSidebarFrame.srcdoc = html;
       chatFrameLoaded = true;
+      sendHubAccountSession(chatSidebarFrame.contentWindow);
     })
     .catch(() => {
       showToast("Failed to load VUS Chat", "err");
@@ -2204,6 +2227,7 @@ function openChatPopout() {
     win.document.open();
     win.document.write(chatHtmlCache);
     win.document.close();
+    sendHubAccountSession(win);
     return;
   }
 
@@ -2223,6 +2247,7 @@ function openChatPopout() {
       win.document.open();
       win.document.write(html);
       win.document.close();
+      sendHubAccountSession(win);
       showToast("VUS Chat opened in a new window", "ok");
     })
     .catch(() => {

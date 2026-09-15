@@ -27,7 +27,7 @@ const SEND_DELAY_MS = 2000;
 const TYPING_TIMEOUT_MS = 4000; // how long a typing flag lives before auto-expiring
 
 let db = null;
-let usersRef = null, usernameIndexRef = null, idIndexRef = null;
+let usersRef = null, usernameIndexRef = null, idIndexRef = null, emailIndexRef = null;
 let presenceRef = null, connectedRef = null, myPresenceRef = null;
 let dmsRef = null, groupChatsRef = null;
 
@@ -37,6 +37,7 @@ function initFirebase() {
   usersRef = db.ref("users");
   usernameIndexRef = db.ref("usernameIndex");
   idIndexRef = db.ref("idIndex");
+  emailIndexRef = db.ref("emailIndex");
   presenceRef = db.ref("presence");
   connectedRef = db.ref(".info/connected");
   dmsRef = db.ref("dms");
@@ -44,6 +45,8 @@ function initFirebase() {
 }
 
 function normalizeUsernameKey(username) { return username.trim().toLowerCase(); }
+function normalizeEmail(email) { return email.trim().toLowerCase(); }
+function isValidEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); }
 function isValidUsernameFormat(username) {
   return /^[a-zA-Z0-9_]+$/.test(username) && username.length >= USERNAME_MIN_LENGTH && username.length <= USERNAME_MAX_LENGTH;
 }
@@ -59,16 +62,20 @@ async function generateUniqueId() {
   throw new Error("Couldn't generate a unique ID right now — try again.");
 }
 
-async function createAccount(username, password) {
+async function createAccount(username, email, password) {
   const cleanUsername = username.trim();
   const usernameKey = normalizeUsernameKey(cleanUsername);
+  const emailKey = normalizeEmail(email);
   if (!isValidUsernameFormat(cleanUsername)) {
     return { ok: false, error: "Username must be " + USERNAME_MIN_LENGTH + "-" + USERNAME_MAX_LENGTH + " characters: letters, numbers, or underscores only." };
   }
+  if (!isValidEmail(emailKey)) return { ok: false, error: "Enter a valid email address." };
   if (!password || password.length < 4) return { ok: false, error: "Password must be at least 4 characters." };
 
   const existing = await usernameIndexRef.child(usernameKey).get();
   if (existing.exists()) return { ok: false, error: "That username is already taken." };
+  const existingEmail = await emailIndexRef.child(emailKey).get();
+  if (existingEmail.exists()) return { ok: false, error: "That email is already linked to an account." };
 
   let newId;
   try { newId = await generateUniqueId(); }
@@ -77,7 +84,7 @@ async function createAccount(username, password) {
   const accountRef = usersRef.push();
   const accountKey = accountRef.key;
   const accountData = {
-    username: cleanUsername, usernameLower: usernameKey, id: newId, password: password,
+    username: cleanUsername, usernameLower: usernameKey, email: emailKey, id: newId, password: password,
     createdAt: firebase.database.ServerValue.TIMESTAMP,
     friends: {}, friendRequestsIncoming: {}, friendRequestsOutgoing: {}, blockedUsers: {}
   };
@@ -87,10 +94,25 @@ async function createAccount(username, password) {
     updates["users/" + accountKey] = accountData;
     updates["usernameIndex/" + usernameKey] = accountKey;
     updates["idIndex/" + newId] = accountKey;
+    updates["emailIndex/" + emailKey] = accountKey;
     await db.ref().update(updates);
   } catch (e) { return { ok: false, error: "Couldn't create your account — try again." }; }
 
-  return { ok: true, accountKey, username: cleanUsername, id: newId };
+  return { ok: true, accountKey, username: cleanUsername, id: newId, email: emailKey };
+}
+
+async function associateEmail(accountKey, email) {
+  const emailKey = normalizeEmail(email);
+  if (!isValidEmail(emailKey)) return { ok: false, error: "Enter a valid email address." };
+  const existing = await emailIndexRef.child(emailKey).get();
+  if (existing.exists() && existing.val() !== accountKey) {
+    return { ok: false, error: "That email is already linked to another account." };
+  }
+  await db.ref().update({
+    ["users/" + accountKey + "/email"]: emailKey,
+    ["emailIndex/" + emailKey]: accountKey
+  });
+  return { ok: true, email: emailKey };
 }
 
 async function findAccountKeyByIdentifier(identifier) {
@@ -117,11 +139,11 @@ async function login(identifier, password) {
 
   const account = accountSnap.val();
   if (!account || account.password !== password) return { ok: false, error: "Incorrect password." };
-  return { ok: true, accountKey, username: account.username, id: account.id };
+  return { ok: true, accountKey, username: account.username, id: account.id, email: account.email || null };
 }
 
-function saveSession(accountKey, username, id) {
-  try { localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ accountKey, username, id })); } catch (e) {}
+function saveSession(accountKey, username, id, email) {
+  try { localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ accountKey, username, id, email: email || null })); } catch (e) {}
 }
 function loadSession() {
   try { const raw = localStorage.getItem(SESSION_STORAGE_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
@@ -361,7 +383,7 @@ async function updateProfile(newUsername, newAvatarDataUrl) {
     await db.ref().update(updates);
     if (usernameChanged) {
       currentSession.username = newUsername.trim();
-      saveSession(currentSession.accountKey, currentSession.username, currentSession.id);
+      saveSession(currentSession.accountKey, currentSession.username, currentSession.id, currentSession.email);
       // Presence and any friends' cached labels read from the account
       // record itself elsewhere, so the display name updates live for
       // them too — only our own local session object needs a manual bump.
@@ -829,6 +851,7 @@ const $authSuccess = document.getElementById("authSuccess");
 const $loginIdentifier = document.getElementById("loginIdentifier");
 const $loginPassword = document.getElementById("loginPassword");
 const $signupUsername = document.getElementById("signupUsername");
+const $signupEmail = document.getElementById("signupEmail");
 const $signupPassword = document.getElementById("signupPassword");
 const $signupPasswordConfirm = document.getElementById("signupPasswordConfirm");
 
@@ -1523,6 +1546,67 @@ function showAuthFlow() {
   $authFlow.style.display = "block";
 }
 
+function requireAssociatedEmail(session) {
+  return new Promise(resolve => {
+    $modalBox.innerHTML = "";
+    const title = document.createElement("h3");
+    title.textContent = "Associate your email";
+    const note = document.createElement("p");
+    note.textContent = "Connect an email to this account before continuing. One email can only be used for one account.";
+    const input = document.createElement("input");
+    input.type = "email";
+    input.placeholder = "you@example.com";
+    input.autocomplete = "email";
+    input.required = true;
+    input.style.cssText = "width:100%;margin-top:12px";
+    const error = document.createElement("div");
+    error.className = "modal-error";
+    const button = document.createElement("button");
+    button.className = "modal-primary";
+    button.textContent = "Associate email";
+    button.style.marginTop = "12px";
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      error.textContent = "";
+      try {
+        const result = await associateEmail(session.accountKey, input.value);
+        if (!result.ok) {
+          error.textContent = result.error;
+          return;
+        }
+        session.email = result.email;
+        $modalOverlay.classList.remove("show");
+        resolve(true);
+      } catch (e) {
+        error.textContent = "Couldn't associate that email — try again.";
+      } finally {
+        button.disabled = false;
+      }
+    });
+    $modalBox.append(title, note, input, error, button);
+    $modalOverlay.classList.add("show");
+    input.focus();
+  });
+}
+
+async function startSession(session) {
+  let account = null;
+  try {
+    account = (await usersRef.child(session.accountKey).get()).val();
+  } catch (e) {
+    throw new Error("Couldn't load your account — try again.");
+  }
+  if (!account) throw new Error("That account no longer exists.");
+  session.email = account.email || null;
+  if (!session.email) await requireAssociatedEmail(session);
+  saveSession(session.accountKey, session.username, session.id, session.email);
+  currentSession = session;
+  claimPresence(session.accountKey, session.username);
+  watchOwnAccount(session.accountKey, renderAllRelationshipUI);
+  watchMyGroupChats(renderGroupsList);
+  showLoggedInState(session);
+}
+
 $newIdContinueBtn.addEventListener("click", () => {
   $newIdReveal.style.display = "none";
   $authForm.style.display = "flex";
@@ -1540,23 +1624,18 @@ $authForm.addEventListener("submit", async (e) => {
     if (mode === "login") {
       const result = await login($loginIdentifier.value, $loginPassword.value);
       if (!result.ok) { $authError.textContent = result.error; return; }
-      saveSession(result.accountKey, result.username, result.id);
-      currentSession = result;
-      claimPresence(result.accountKey, result.username);
-      watchOwnAccount(result.accountKey, renderAllRelationshipUI);
-      watchMyGroupChats(renderGroupsList);
-      showLoggedInState(result);
+      await startSession(result);
     } else {
-      const username = $signupUsername.value, password = $signupPassword.value, confirm = $signupPasswordConfirm.value;
+      const username = $signupUsername.value, email = $signupEmail.value, password = $signupPassword.value, confirm = $signupPasswordConfirm.value;
       if (password !== confirm) { $authError.textContent = "Passwords don't match."; return; }
-      const result = await createAccount(username, password);
+      const result = await createAccount(username, email, password);
       if (!result.ok) { $authError.textContent = result.error; return; }
       $authForm.style.display = "none";
       $revealedId.textContent = result.id;
       $newIdReveal.style.display = "block";
       $loginIdentifier.value = result.username;
       $loginPassword.value = "";
-      $signupUsername.value = ""; $signupPassword.value = ""; $signupPasswordConfirm.value = "";
+      $signupUsername.value = ""; $signupEmail.value = ""; $signupPassword.value = ""; $signupPasswordConfirm.value = "";
     }
   } catch (e) {
     console.error("Auth error:", e);
@@ -1744,7 +1823,16 @@ function renderChatMessage(msg) {
     }}, "🗑") );
   }
 
-  const bubbleRow = h("div", { className: "chat-msg-bubble-row" }, bubble, hoverActions);
+  const avatar = h("div", { className: "chat-msg-avatar" });
+  if (mine) {
+    renderAvatarInto(avatar, currentSession.username, currentUserData && currentUserData.avatar);
+  } else {
+    renderAvatarInto(avatar, msg.fromUsername || openChatUsername || "them", null);
+    fetchAndCacheAvatar(msg.fromAccountKey, avatarUrl => {
+      if (avatarUrl) renderAvatarInto(avatar, msg.fromUsername || openChatUsername || "them", avatarUrl);
+    });
+  }
+  const bubbleRow = h("div", { className: "chat-msg-bubble-row" }, avatar, bubble, hoverActions);
   el.appendChild(bubbleRow);
 
   const metaBits = [formatTimeShort(msg.ts)];
@@ -2062,11 +2150,12 @@ function init() {
 
   const session = loadSession();
   if (session && session.accountKey) {
-    currentSession = session;
-    claimPresence(session.accountKey, session.username);
-    watchOwnAccount(session.accountKey, renderAllRelationshipUI);
-    watchMyGroupChats(renderGroupsList);
-    showLoggedInState(session);
+    startSession(session).catch(e => {
+      clearSession();
+      showAuthFlow();
+      setMode("login");
+      $authError.textContent = e.message || "Couldn't start your session.";
+    });
   } else {
     showAuthFlow();
     setMode("login");
