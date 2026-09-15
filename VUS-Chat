@@ -1247,7 +1247,7 @@ const COLOR_CHANGE_COOLDOWN_MS = 10 * 1000;
    fixes repeated "X left / X left / X left" spam caused by duplicate
    onDisconnect writes (multiple tabs under the same name, or reconnect
    churn on a flaky connection). */
-const LEAVE_DEDUPE_WINDOW_MS = 5 * 1000;
+const LEAVE_DEDUPE_WINDOW_MS = 5 * 1000
 
 /* ── Timeouts (Owner Menu / Mod Menu) ── */
 const TIMEOUT_MAX_MS = 30 * 24 * 60 * 60 * 1000; // 30-day cap for owners
@@ -5605,7 +5605,7 @@ function onRoomMetaUpdate(meta) {
   if (meta.kicked && meta.kicked[ChatBackend._safeKey(String(myLoginId))]) {
     ChatBackend.releasePresenceSilently();
     showComposerNotice("You were removed from this room.");
-    switchToMainRoom();
+    
     return;
   }
 
