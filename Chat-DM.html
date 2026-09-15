@@ -284,6 +284,30 @@
       </div>
     </div>
 
+    <!-- Ban duration modal — Admin+ only, opened from the Owner Menu's
+         Ban button (see openBanSetModal in app.js). Three separate
+         fields matching the code-level BAN_MAX_DAYS/HOURS/MINUTES
+         constants, so the max shown here always tracks whatever those
+         constants are currently set to without needing a matching
+         text-edit in the HTML. -->
+    <div class="chat-modal-overlay" id="banSetOverlay">
+      <div class="chat-modal">
+        <h3 id="banSetTitle">Ban</h3>
+        <label>Duration</label>
+        <div style="display:flex;gap:8px;margin-bottom:6px">
+          <input type="text" id="banDaysInput" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="Days" style="width:100%;padding:8px 11px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none;text-align:center">
+          <input type="text" id="banHoursInput" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="Hrs" style="width:100%;padding:8px 11px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none;text-align:center">
+          <input type="text" id="banMinutesInput" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="Min" style="width:100%;padding:8px 11px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none;text-align:center">
+        </div>
+        <div id="banSetNote" style="color:#64748b;font-size:12.5px;margin-bottom:8px"></div>
+        <div class="chat-modal-err" id="banSetErr"></div>
+        <div class="chat-modal-row">
+          <button class="chat-modal-btn-secondary" id="banSetCancelBtn">Cancel</button>
+          <button class="chat-modal-btn-danger" id="banSetConfirmBtn">Ban</button>
+        </div>
+      </div>
+    </div>
+
     <div class="chat-modal-overlay" id="grantModConfirmOverlay">
       <div class="chat-modal">
         <h3 id="grantModConfirmTitle">🧩 Grant Mod?</h3>
@@ -393,6 +417,20 @@
 
 <div id="authCard">
 
+  <!-- Ban lock screen — shown instead of #authFlow when login() detects
+       an active ban (see the "banned" branch in the auth submit handler),
+       or when a signed-in session's own ban status changes live (see
+       watchOwnBanStatus in app.js). Countdown text is filled in by
+       showBanLockScreen()/tickBanCountdown() in app.js; nothing here is
+       static except the label/structure. -->
+  <div id="banLockScreen" style="display:none">
+    <div id="banLockIcon">⛔</div>
+    <h2 id="banLockTitle">You've been banned</h2>
+    <p id="banLockSubtitle">You can't access chat until this ban expires.</p>
+    <div id="banLockCountdown">--:--:--</div>
+    <div id="banLockNote">This screen updates automatically — no need to keep checking back.</div>
+  </div>
+
   <div id="authFlow">
     <div id="authHeader">
       <h1>VUS DM's</h1>
@@ -470,8 +508,8 @@
    unlike eval/new Function) and loaded as a normal <script src>.
    ══════════════════════════════════════════════════════════ */
 (function loadExternalAppFiles() {
-  var CSS_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/other/vusdm/style.css";
-  var JS_URL  = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/other/vusdm/app.js";
+  var CSS_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/other/Chat-DM/style.css";
+  var JS_URL  = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/other/Chat-DM/app.js";
 
   function showLoadError(what, err) {
     document.body.innerHTML =
