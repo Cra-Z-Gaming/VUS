@@ -34,6 +34,7 @@
   body.phen-horror #phenHorrorOverlay { display: flex; }
   #phenHorrorOverlay img, #locustHorrorOverlay img { position: absolute; width: min(52vw, 520px); height: min(68vh, 620px); object-fit: cover; opacity: .42; filter: contrast(1.35) saturate(.55) brightness(.48); mix-blend-mode: screen; border-radius: 3px; }
   #phenHorrorOverlay span { color: #ff315f; font-family: Georgia, serif; font-size: clamp(32px, 9vw, 110px); font-weight: 900; letter-spacing: .12em; text-shadow: 0 0 18px #ff174f, 0 0 60px #7f092c; transform: rotate(-4deg); }
+  .phen-horror-quote { position: absolute; left: 50%; bottom: 8vh; width: min(88vw, 760px); transform: translateX(-50%); color: #f8d7df; font-family: Georgia, serif; font-size: clamp(14px, 1.8vw, 22px); line-height: 1.45; text-align: center; text-shadow: 0 2px 14px #000, 0 0 28px #7f092c; opacity: .94; }
   @keyframes phenHorrorPulse { from { opacity: .54; } to { opacity: .92; } }
   body.locust-horror #chatScreen { filter: contrast(1.25) saturate(.7); }
   #locustHorrorOverlay { display: none; position: fixed; inset: 0; pointer-events: none; z-index: 36; overflow: hidden; background: rgba(0, 0, 0, .32); }
@@ -990,8 +991,8 @@
   </div>
 </div>
 
-<div id="phenHorrorOverlay" aria-hidden="true"><img src="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=85" alt="Dark forest"><span>PHEN-228</span></div>
-<div id="locustHorrorOverlay" aria-hidden="true"><img src="https://images.unsplash.com/photo-1509248961158-e54f6934749c?auto=format&fit=crop&w=1200&q=85" alt="Abandoned house"><span>THE LOCUST</span></div>
+<div id="phenHorrorOverlay" aria-hidden="true"><img src="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=85" alt="Dark forest"><span>PHEN-228</span><p class="phen-horror-quote">The very memory of my face will cause a manifestation of my being in the future. You will be asleep in bed. I will be there, and watch over you. When you wake up, you will not be able to move any part of you. When your doctors eventually find you, they will not see me, but you will. And I'll see you too. Forever, I'll see you.</p></div>
+<div id="locustHorrorOverlay" aria-hidden="true"><img src="https://upload.wikimedia.org/wikipedia/commons/6/63/Desert_locust_-_W%C3%BCstenheuschrecke_-_Criquet_p%C3%A8lerin_-_Schistocerca_gregaria.jpg" alt="Desert locust photograph from Wikimedia Commons"><span>THE LOCUST</span></div>
 
 <audio id="pingSound" preload="auto"></audio>
 
@@ -1158,14 +1159,11 @@ const ROOM_CREATE_COOLDOWN_KEY = "vusChatLastRoomCreate";
 
 const MAX_MESSAGES = 200;
 const MAX_CHARS = 500;
+const PHEN_HORROR_MONOLOGUE = "The very memory of my face will cause a manifestation of my being in the future. You will be asleep in bed. I will be there, and watch over you. When you wake up, you will not be able to move any part of you. When your doctors eventually find you, they will not see me, but you will. And I'll see you too. Forever, I'll see you.";
 const PHEN_HORROR_LINES = [
-  "You should not have called me.",
-  "Phen-228 is watching this room.",
-  "Do not look behind you. It is closer now.",
-  "The signal is already inside your walls.",
-  "Your screen is not the only thing looking back."
+  PHEN_HORROR_MONOLOGUE
 ];
-const PHEN_HORROR_DURATION_MS = 15000;
+const PHEN_HORROR_DURATION_MS = 32000;
 const PHEN_HORROR_COOLDOWN_MS = 30000;
 const LOCUST_HORROR_LINES = [
   "The Locust has found your screen.",
@@ -2361,10 +2359,10 @@ function triggerPhenHorror(msg) {
 
   if (window.speechSynthesis && window.SpeechSynthesisUtterance) {
     window.speechSynthesis.cancel();
-    const voiceLine = new SpeechSynthesisUtterance(msg.horrorLine || "Phen-228 is watching.");
-    voiceLine.rate = 0.78;
-    voiceLine.pitch = 0.45;
-    voiceLine.volume = 1;
+    const voiceLine = new SpeechSynthesisUtterance(msg.horrorLine || PHEN_HORROR_MONOLOGUE);
+    voiceLine.rate = 0.72;
+    voiceLine.pitch = 0.68;
+    voiceLine.volume = 0.86;
     window.speechSynthesis.speak(voiceLine);
   }
 }
@@ -2374,16 +2372,7 @@ function triggerLocustHorror(msg) {
   document.body.classList.add("locust-horror");
   clearTimeout(locustHorrorTimer);
   locustHorrorTimer = setTimeout(() => document.body.classList.remove("locust-horror"), LOCUST_HORROR_DURATION_MS);
-  playHorrorSound("locust");
-
-  if (window.speechSynthesis && window.SpeechSynthesisUtterance) {
-    window.speechSynthesis.cancel();
-    const voiceLine = new SpeechSynthesisUtterance(msg.horrorLine || "The Locust has found your screen.");
-    voiceLine.rate = 0.62;
-    voiceLine.pitch = 0.28;
-    voiceLine.volume = 1;
-    window.speechSynthesis.speak(voiceLine);
-  }
+  playLocustGroan();
 }
 
 function playHorrorSound(kind) {
@@ -2405,6 +2394,57 @@ function playHorrorSound(kind) {
     oscillator.start();
     oscillator.stop(context.currentTime + (kind === "phen" ? 2.8 : 1.7));
     oscillator.addEventListener("ended", () => context.close());
+  } catch (e) {}
+}
+
+function playLocustGroan() {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return;
+  try {
+    const context = new AudioContextClass();
+    const now = context.currentTime;
+    const duration = 2.4;
+    const output = context.createGain();
+    const distortion = context.createWaveShaper();
+    const distortionCurve = new Float32Array(256);
+    for (let index = 0; index < distortionCurve.length; index++) {
+      const input = index * 2 / distortionCurve.length - 1;
+      distortionCurve[index] = Math.tanh(input * 5.5);
+    }
+    distortion.curve = distortionCurve;
+    distortion.oversample = "4x";
+    output.gain.setValueAtTime(0.0001, now);
+    output.gain.exponentialRampToValueAtTime(0.2, now + 0.12);
+    output.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    distortion.connect(output);
+    output.connect(context.destination);
+
+    [82, 87, 164].forEach((startFrequency, index) => {
+      const oscillator = context.createOscillator();
+      oscillator.type = index === 2 ? "square" : "sawtooth";
+      oscillator.frequency.setValueAtTime(startFrequency, now);
+      oscillator.frequency.exponentialRampToValueAtTime(startFrequency * 0.42, now + duration);
+      oscillator.detune.value = index === 1 ? -17 : index === 2 ? 11 : 0;
+      oscillator.connect(distortion);
+      oscillator.start(now);
+      oscillator.stop(now + duration);
+    });
+
+    const noiseBuffer = context.createBuffer(1, context.sampleRate * duration, context.sampleRate);
+    const noiseData = noiseBuffer.getChannelData(0);
+    for (let index = 0; index < noiseData.length; index++) noiseData[index] = Math.random() * 2 - 1;
+    const noise = context.createBufferSource();
+    const noiseFilter = context.createBiquadFilter();
+    noiseFilter.type = "bandpass";
+    noiseFilter.frequency.setValueAtTime(900, now);
+    noiseFilter.frequency.exponentialRampToValueAtTime(180, now + duration);
+    noiseFilter.Q.value = 2.5;
+    noise.buffer = noiseBuffer;
+    noise.connect(noiseFilter);
+    noiseFilter.connect(distortion);
+    noise.start(now);
+    noise.stop(now + duration);
+    setTimeout(() => context.close(), (duration + 0.2) * 1000);
   } catch (e) {}
 }
 
