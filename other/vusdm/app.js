@@ -443,7 +443,12 @@ async function toggleReaction(scopeRef, messageId, emoji) {
 
 async function markThreadRead(threadId, lastMessageId) {
   if (!currentSession || !lastMessageId) return;
-  try { await dmsRef.child(threadId).child("reads").child(currentSession.accountKey).set(lastMessageId); } catch (e) {}
+  try {
+    await dmsRef.child(threadId).child("reads").child(currentSession.accountKey).set(lastMessageId);
+    unreadThreads.delete(threadId === openThreadId ? openChatAccountKey : threadId);
+    if (currentUserData) renderFriendsList(currentUserData);
+    if (myGroupChats.length) renderGroupsList(myGroupChats);
+  } catch (e) {}
 }
 
 let currentThreadMessagesRef = null;
@@ -1063,6 +1068,7 @@ async function doLogout() {
   const accountKey = currentSession && currentSession.accountKey;
   releasePresence();
   if (accountKey) await recordLastSeen(accountKey);
+  stopUnreadWatchers();
   unwatchOwnAccount(accountKey);
   unwatchMyGroupChats();
   unwatchGroupInfo();
@@ -1218,9 +1224,77 @@ function buildAvatarWithPresence(username, accountKey, isGroup) {
 let myGroupChats = [];
 let unreadThreads = new Set();
 let threadLastReadState = {};
+const unreadWatchers = new Map();
+
+function isThreadOpen(threadKey, isGroup) {
+  return isGroup ? openChatGcId === threadKey : openChatAccountKey === threadKey;
+}
+
+function updateUnreadThread(threadKey, isGroup) {
+  const watcher = unreadWatchers.get(threadKey);
+  const latest = watcher && watcher.latest;
+  const isUnread = !!latest
+    && latest.fromAccountKey !== currentSession.accountKey
+    && (!watcher.lastReadId || latest.id > watcher.lastReadId)
+    && !isThreadOpen(threadKey, isGroup);
+  if (isUnread) unreadThreads.add(threadKey);
+  else unreadThreads.delete(threadKey);
+  if (currentUserData) renderFriendsList(currentUserData);
+  if (myGroupChats.length) renderGroupsList(myGroupChats);
+}
+
+function syncUnreadWatchers() {
+  if (!currentSession) return;
+  const desired = new Map();
+  const friends = (currentUserData && currentUserData.friends) || {};
+  Object.keys(friends).forEach(accountKey => desired.set(accountKey, { isGroup: false }));
+  myGroupChats.forEach(group => desired.set(group.gcId, { isGroup: true }));
+
+  unreadWatchers.forEach((watcher, threadKey) => {
+    if (desired.has(threadKey)) return;
+    watcher.messagesRef.off("value", watcher.onMessages);
+    watcher.readRef.off("value", watcher.onRead);
+    unreadWatchers.delete(threadKey);
+    unreadThreads.delete(threadKey);
+  });
+
+  desired.forEach(({ isGroup }, threadKey) => {
+    if (unreadWatchers.has(threadKey)) return;
+    const root = isGroup ? groupChatsRef.child(threadKey) : dmsRef.child(threadIdFor(currentSession.accountKey, threadKey));
+    const watcher = {
+      latest: null,
+      lastReadId: null,
+      messagesRef: root.child("messages").limitToLast(1),
+      readRef: root.child("reads").child(currentSession.accountKey)
+    };
+    watcher.onMessages = snap => {
+      let latest = null;
+      snap.forEach(child => { latest = { id: child.key, ...child.val() }; });
+      watcher.latest = latest;
+      updateUnreadThread(threadKey, isGroup);
+    };
+    watcher.onRead = snap => {
+      watcher.lastReadId = snap.val() || null;
+      updateUnreadThread(threadKey, isGroup);
+    };
+    unreadWatchers.set(threadKey, watcher);
+    watcher.messagesRef.on("value", watcher.onMessages);
+    watcher.readRef.on("value", watcher.onRead);
+  });
+}
+
+function stopUnreadWatchers() {
+  unreadWatchers.forEach(watcher => {
+    watcher.messagesRef.off("value", watcher.onMessages);
+    watcher.readRef.off("value", watcher.onRead);
+  });
+  unreadWatchers.clear();
+  unreadThreads.clear();
+}
 
 function renderGroupsList(groups) {
   myGroupChats = groups;
+  syncUnreadWatchers();
   $groupsList.innerHTML = "";
   $groupsEmpty.style.display = groups.length === 0 ? "block" : "none";
 
@@ -1243,6 +1317,8 @@ function renderGroupsList(groups) {
 }
 
 function renderFriendsList(userData) {
+  currentUserData = userData;
+  syncUnreadWatchers();
   const friends = (userData && userData.friends) || {};
   const entries = Object.entries(friends);
   $friendsList.innerHTML = "";
