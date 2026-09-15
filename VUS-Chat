@@ -32,6 +32,7 @@
   body.phen-horror #messages { background-image: repeating-linear-gradient(115deg, rgba(255, 30, 80, .045) 0, rgba(255, 30, 80, .045) 1px, transparent 1px, transparent 18px); }
   #phenHorrorOverlay { display: none; position: fixed; inset: 0; pointer-events: none; z-index: 35; align-items: center; justify-content: center; background: radial-gradient(circle, transparent 15%, rgba(5, 2, 7, .38) 58%, rgba(0, 0, 0, .78)); animation: phenHorrorPulse .8s ease-in-out infinite alternate; }
   body.phen-horror #phenHorrorOverlay { display: flex; }
+  #phenHorrorOverlay img, #locustHorrorOverlay img { position: absolute; width: min(52vw, 520px); height: min(68vh, 620px); object-fit: cover; opacity: .42; filter: contrast(1.35) saturate(.55) brightness(.48); mix-blend-mode: screen; border-radius: 3px; }
   #phenHorrorOverlay span { color: #ff315f; font-family: Georgia, serif; font-size: clamp(32px, 9vw, 110px); font-weight: 900; letter-spacing: .12em; text-shadow: 0 0 18px #ff174f, 0 0 60px #7f092c; transform: rotate(-4deg); }
   @keyframes phenHorrorPulse { from { opacity: .54; } to { opacity: .92; } }
   body.locust-horror #chatScreen { filter: contrast(1.25) saturate(.7); }
@@ -39,6 +40,7 @@
   body.locust-horror #locustHorrorOverlay { display: block; animation: locustGlitch .16s steps(2, end) infinite; }
   #locustHorrorOverlay::before, #locustHorrorOverlay::after { content: ""; position: absolute; inset: -8%; background: repeating-linear-gradient(0deg, transparent 0 7px, rgba(255,255,255,.1) 8px, transparent 9px); mix-blend-mode: screen; opacity: .35; }
   #locustHorrorOverlay::after { background: linear-gradient(104deg, transparent 0 47%, rgba(238, 238, 214, .9) 47.25%, transparent 47.8%), linear-gradient(76deg, transparent 0 58%, rgba(238, 238, 214, .72) 58.2%, transparent 58.7%), linear-gradient(164deg, transparent 0 31%, rgba(238, 238, 214, .65) 31.2%, transparent 31.8%), linear-gradient(28deg, transparent 0 72%, rgba(238, 238, 214, .6) 72.2%, transparent 72.8%); filter: drop-shadow(0 0 8px #e7e5c7); opacity: .9; }
+  #locustHorrorOverlay img { width: min(66vw, 680px); height: min(54vh, 500px); opacity: .5; filter: contrast(1.5) saturate(.35) brightness(.42) sepia(.25); mix-blend-mode: lighten; transform: rotate(2deg); }
   #locustHorrorOverlay span { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) skew(-8deg); color: #dedcc1; font-family: Georgia, serif; font-size: clamp(28px, 8vw, 96px); font-weight: 900; letter-spacing: .18em; text-shadow: 3px 0 #3e493d, -3px 0 #6e1717, 0 0 22px #e7e5c7; white-space: nowrap; }
   @keyframes locustGlitch { 0%, 100% { transform: translate(0); } 35% { transform: translate(-3px, 2px); } 70% { transform: translate(4px, -2px); } }
   .chat-online-dot {
@@ -988,8 +990,8 @@
   </div>
 </div>
 
-<div id="phenHorrorOverlay" aria-hidden="true"><span>PHEN-228</span></div>
-<div id="locustHorrorOverlay" aria-hidden="true"><span>THE LOCUST</span></div>
+<div id="phenHorrorOverlay" aria-hidden="true"><img src="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=85" alt="Dark forest"><span>PHEN-228</span></div>
+<div id="locustHorrorOverlay" aria-hidden="true"><img src="https://images.unsplash.com/photo-1509248961158-e54f6934749c?auto=format&fit=crop&w=1200&q=85" alt="Abandoned house"><span>THE LOCUST</span></div>
 
 <audio id="pingSound" preload="auto"></audio>
 
@@ -1159,15 +1161,18 @@ const MAX_CHARS = 500;
 const PHEN_HORROR_LINES = [
   "You should not have called me.",
   "Phen-228 is watching this room.",
-  "Do not look behind you.",
-  "The signal is already inside your walls."
+  "Do not look behind you. It is closer now.",
+  "The signal is already inside your walls.",
+  "Your screen is not the only thing looking back."
 ];
 const PHEN_HORROR_DURATION_MS = 15000;
 const PHEN_HORROR_COOLDOWN_MS = 30000;
 const LOCUST_HORROR_LINES = [
   "The Locust has found your screen.",
   "Do not let it finish breaking through.",
-  "The signal is splitting apart."
+  "The signal is splitting apart.",
+  "You can hear the swarm beneath the static.",
+  "It is moving whenever you stop watching."
 ];
 const LOCUST_HORROR_DURATION_MS = 12000;
 const LOCUST_HORROR_COOLDOWN_MS = 30000;
@@ -1221,7 +1226,7 @@ const ROLES = {
     id: "admin",
     label: "Admin",
     icon: "🛡️",
-    dbPath: "admins",
+    dbPath: "rooms/vus-hub-main/admins",
     metaPath: "adminMeta",
     webhookUrl: "",
     cooldownKey: "vusChatLastAdminRequest",
@@ -1276,7 +1281,7 @@ const ChatBackend = {
     firebase.initializeApp(FIREBASE_CONFIG);
     this._db = firebase.database();
     this._connectedRef = this._db.ref(".info/connected");
-    this._bansRef = this._db.ref("bannedUsers");
+    this._bansRef = this._db.ref("rooms/" + MAIN_ROOM_ID + "/bannedUsers");
     this._chatStateRef = this._db.ref("chatState");
     this.initRoles();
     this.bindToRoom(MAIN_ROOM_ID);
@@ -2352,6 +2357,7 @@ function triggerPhenHorror(msg) {
   document.body.classList.add("phen-horror");
   clearTimeout(phenHorrorTimer);
   phenHorrorTimer = setTimeout(() => document.body.classList.remove("phen-horror"), PHEN_HORROR_DURATION_MS);
+  playHorrorSound("phen");
 
   if (window.speechSynthesis && window.SpeechSynthesisUtterance) {
     window.speechSynthesis.cancel();
@@ -2368,6 +2374,7 @@ function triggerLocustHorror(msg) {
   document.body.classList.add("locust-horror");
   clearTimeout(locustHorrorTimer);
   locustHorrorTimer = setTimeout(() => document.body.classList.remove("locust-horror"), LOCUST_HORROR_DURATION_MS);
+  playHorrorSound("locust");
 
   if (window.speechSynthesis && window.SpeechSynthesisUtterance) {
     window.speechSynthesis.cancel();
@@ -2377,6 +2384,28 @@ function triggerLocustHorror(msg) {
     voiceLine.volume = 1;
     window.speechSynthesis.speak(voiceLine);
   }
+}
+
+function playHorrorSound(kind) {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return;
+  try {
+    const context = new AudioContextClass();
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0.0001, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(kind === "phen" ? 0.16 : 0.11, context.currentTime + 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + (kind === "phen" ? 2.8 : 1.7));
+    gain.connect(context.destination);
+
+    const oscillator = context.createOscillator();
+    oscillator.type = kind === "phen" ? "sine" : "sawtooth";
+    oscillator.frequency.setValueAtTime(kind === "phen" ? 58 : 180, context.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(kind === "phen" ? 28 : 70, context.currentTime + (kind === "phen" ? 2.8 : 1.7));
+    oscillator.connect(gain);
+    oscillator.start();
+    oscillator.stop(context.currentTime + (kind === "phen" ? 2.8 : 1.7));
+    oscillator.addEventListener("ended", () => context.close());
+  } catch (e) {}
 }
 
 // Tracks whether THIS tab has ever seen a real disconnect while it had an
