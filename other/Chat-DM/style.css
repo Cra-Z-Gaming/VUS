@@ -45,6 +45,39 @@
   #newIdReveal .id-note { font-size: 12px; color: #64748b; margin-top: 6px; line-height: 1.4; }
   #newIdReveal button { margin-top: 10px; width: 100%; padding: 9px; background: #22c55e; border: none; border-radius: 9px; color: #000; font-weight: 600; font-size: 14px; cursor: pointer; }
 
+  /* ── Ban lock screen — replaces #authFlow entirely while shown (see
+     showBanLockScreen()/showAuthFlow() in app.js, which toggle these
+     two as an either/or pair). Deliberately styled in a danger/red
+     palette distinct from the normal green auth flow so it reads
+     unmistakably as a restriction, not just another form state. ── */
+  #banLockScreen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    background: #1e293b;
+    border: 1.5px solid #7f1d1d;
+    border-radius: 12px;
+    padding: 26px 20px;
+    gap: 4px;
+  }
+  #banLockIcon { font-size: 40px; margin-bottom: 6px; }
+  #banLockTitle { font-size: 19px; font-weight: 700; color: #fca5a5; }
+  #banLockSubtitle { font-size: 13.5px; color: #94a3b8; margin-top: 4px; line-height: 1.4; }
+  #banLockCountdown {
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 26px;
+    font-weight: 700;
+    color: #fecaca;
+    background: #0f172a;
+    border: 1.5px solid #334155;
+    border-radius: 9px;
+    padding: 10px 18px;
+    margin: 14px 0 8px;
+    letter-spacing: 1px;
+  }
+  #banLockNote { font-size: 11.5px; color: #64748b; line-height: 1.4; }
+
   #appShell { display: none; width: 100%; height: 100vh; height: 100dvh; overflow: hidden; }
   body.app-mode #appShell { display: flex; }
 
@@ -430,10 +463,6 @@
   #chatRoomMessages::-webkit-scrollbar-thumb { background: #334155; border-radius: 4.5px; }
   .msg { max-width: 82%; display: flex; flex-direction: column; gap: 3px; }
   .msg.mine { align-self: flex-end; align-items: flex-end; }
-  .chat-message-content-row { display: flex; align-items: flex-end; gap: 7px; }
-  .msg.mine .chat-message-content-row { flex-direction: row-reverse; }
-  .chat-message-avatar { width: 27px; height: 27px; border-radius: 50%; background: #334155; color: #f1f5f9; display: inline-flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; font-size: 11px; font-weight: 700; }
-  .chat-message-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .msg-meta { font-size: 16.5px; color: #64748b; padding: 0 6px; }
   .msg-bubble {
     background: #1e293b;
@@ -487,6 +516,34 @@
     align-self: flex-start;
   }
   .msg.mine .mod-bubble { align-self: flex-end; }
+  .admin-bubble {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #7f1d1d;
+    border: 1.5px solid #b91c1c;
+    color: #fecaca;
+    border-radius: 10px;
+    padding: 3px 10px;
+    font-size: 14px;
+    font-weight: 700;
+    align-self: flex-start;
+  }
+  .msg.mine .admin-bubble { align-self: flex-end; }
+  .normie-bubble {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #14532d;
+    border: 1.5px solid #22c55e;
+    color: #bbf7d0;
+    border-radius: 10px;
+    padding: 3px 10px;
+    font-size: 14px;
+    font-weight: 700;
+    align-self: flex-start;
+  }
+  .msg.mine .normie-bubble { align-self: flex-end; }
   .role-bubble-row { display: flex; gap: 4px; flex-wrap: wrap; }
   .msg.mine .role-bubble-row { justify-content: flex-end; }
   #chatRoomEmptyState {
