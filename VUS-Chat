@@ -1274,6 +1274,7 @@ const ChatBackend = {
   _myRoleRefs: {},
   _rolesHeld: {},
   _recentLeaveNames: {},
+  _leaveEventsWatchRef: null,
   _timeoutsRef: null,
   _modRetimeoutRef: null,
   _commandHistoryRef: null,
@@ -1489,6 +1490,7 @@ const ChatBackend = {
     if (this._typingRef) this._typingRef.off();
     if (this._presenceRef) this._presenceRef.off();
     if (this._leaveEventsRef) this._leaveEventsRef.off();
+    this._leaveEventsWatchRef = null;
   },
 
   watchConnection(onStatus) {
@@ -1700,6 +1702,8 @@ const ChatBackend = {
   // one we actually posted, and always clean up the underlying event node
   // either way so it can never be replayed.
   watchLeaveEvents() {
+    if (this._leaveEventsWatchRef === this._leaveEventsRef) return;
+    this._leaveEventsWatchRef = this._leaveEventsRef;
     this._leaveEventsRef.on("child_added", snap => {
       const val = snap.val();
       if (!val) { snap.ref.remove(); return; }
@@ -1712,11 +1716,14 @@ const ChatBackend = {
       if (isDuplicate) return;
 
       this._recentLeaveNames[val.name] = now;
-      this._ref.push({
-        system: true,
-        text: val.name + " left",
-        ts: firebase.database.ServerValue.TIMESTAMP
-      });
+      this._presenceRef.child(this._safeKey(val.name)).get().then(presenceSnap => {
+        if (presenceSnap.exists()) return;
+        this._ref.push({
+          system: true,
+          text: val.name + " left",
+          ts: firebase.database.ServerValue.TIMESTAMP
+        });
+      }).catch(() => {});
     });
   },
 
@@ -3085,11 +3092,11 @@ async function handleModerationCommand(text) {
   let targetName;
   let durationMs = 0;
   if (command === "/kick") {
-    if (parts.length !== 2 || !currentRoomCode) {
+    if (parts.length < 2 || !currentRoomCode) {
       showComposerNotice("Use /kick name inside a private room.");
       return true;
     }
-    targetName = parts[1];
+    targetName = parts.slice(1).join(" ");
     const target = findModerationTarget(targetName);
     if (!target || !target.loginId) {
       showComposerNotice("That user must be online and logged in.");
@@ -3099,7 +3106,7 @@ async function handleModerationCommand(text) {
     showComposerNotice("Removed " + target.name + " from the room.");
     return true;
   } else if (command === "/timeout") {
-    if (parts.length !== 3) {
+    if (parts.length < 3) {
       showComposerNotice("Use /timeout time name, such as /timeout 10m alex");
       return true;
     }
@@ -3114,28 +3121,27 @@ async function handleModerationCommand(text) {
       showComposerNotice("That user must be online and logged in.");
       return true;
     }
-    await ChatBackend.setTimeout_(target.loginId, durationMs, myLoginId);
-    showComposerNotice("Timed out " + target.name + " for " + formatCountdown(durationMs) + ".");
+    openTimeoutSetModal(target, durationMs);
     return true;
   } else if (command === "/ban") {
-    if (parts.length !== 2) {
+    if (parts.length < 2) {
       showComposerNotice("Use /ban name");
       return true;
     }
-    targetName = parts[1];
+    targetName = parts.slice(1).join(" ");
   } else if (command === "/tempban") {
-    if (parts.length !== 3) {
+    if (parts.length < 3) {
       showComposerNotice("Use /tempban time name, such as /tempban 2h alex");
       return true;
     }
     durationMs = parseModerationDuration(parts[1]);
-    targetName = parts[2];
+    targetName = parts.slice(2).join(" ");
     if (!durationMs || durationMs > TIMEOUT_MAX_MS) {
       showComposerNotice("Tempban time must be between 1 minute and 30 days.");
       return true;
     }
   } else if (command === "/remove") {
-    if (parts.length !== 3) {
+    if (parts.length < 3) {
       showComposerNotice("Use /remove mod/admin username");
       return true;
     }
@@ -3154,21 +3160,17 @@ async function handleModerationCommand(text) {
       showComposerNotice("That user must be online and logged in.");
       return true;
     }
-    try {
-      await ChatBackend.removeRole(rank, target.name, target.loginId);
-      showComposerNotice("Removed " + rank + " from " + target.name + ".");
-    } catch (e) {
-      showComposerNotice("Couldn't remove " + rank + ": " + (e && e.message ? e.message : "check your connection") + ".");
-    }
+    openRemoveRoleConfirm(rank, target.name);
     return true;
   } else {
-    if (parts.length !== 3 && parts.length !== 4) {
+    if (parts.length < 3) {
       showComposerNotice("Use /grant rank username or /grant rank time username");
       return true;
     }
     const rank = parts[1].toLowerCase();
-    const hasDuration = parts.length === 4;
-    durationMs = hasDuration ? parseModerationDuration(parts[2]) : 0;
+    const parsedDuration = parts.length >= 4 ? parseModerationDuration(parts[2]) : 0;
+    const hasDuration = parsedDuration > 0;
+    durationMs = hasDuration ? parsedDuration : 0;
     targetName = hasDuration ? parts.slice(3).join(" ") : parts.slice(2).join(" ");
     if (!["mod", "admin"].includes(rank) || (hasDuration && (!durationMs || durationMs > TIMEOUT_MAX_MS))) {
       showComposerNotice("Use rank mod/admin and an optional time up to 30 days.");
@@ -4670,7 +4672,8 @@ function watchModIssuedTimeoutExpiry(modName, targetName) {
    tracks whether this open is a grant or a remove so the confirm button
    applies the right change. Kept as one modal since the two flows are
    otherwise identical (name a target, ask for a second explicit click). ── */
-let pendingModConfirmAction = null; // "grant" | "remove"
+let pendingModConfirmAction = null; // "grant" | "remove" | "remove-role"
+let pendingRemovalRank = null;
 
 function openGrantModConfirm(targetName) {
   pendingGrantModTarget = targetName;
@@ -4690,15 +4693,27 @@ function openRemoveModConfirm(targetName) {
   $grantModConfirmOverlay.style.display = "flex";
 }
 
+function openRemoveRoleConfirm(rank, targetName) {
+  pendingGrantModTarget = targetName;
+  pendingRemovalRank = rank;
+  pendingModConfirmAction = "remove-role";
+  $grantModConfirmTitle.textContent = "Remove " + rank + "?";
+  $grantModConfirmText.textContent = "Remove the " + rank + " role from " + targetName + "?";
+  $grantModConfirmBtn.textContent = "Yes, remove " + rank;
+  $grantModConfirmOverlay.style.display = "flex";
+}
+
 $grantModCancelBtn.addEventListener("click", () => {
   pendingGrantModTarget = null;
   pendingModConfirmAction = null;
+  pendingRemovalRank = null;
   $grantModConfirmOverlay.style.display = "none";
 });
 $grantModConfirmOverlay.addEventListener("click", (e) => {
   if (e.target === $grantModConfirmOverlay) {
     pendingGrantModTarget = null;
     pendingModConfirmAction = null;
+    pendingRemovalRank = null;
     $grantModConfirmOverlay.style.display = "none";
   }
 });
@@ -4715,7 +4730,7 @@ $grantModConfirmBtn.addEventListener("click", async () => {
       // authenticated actor here (crown-gated), so no code-in-the-middle
       // is needed for an owner explicitly choosing a specific person.
       await ChatBackend.grantRole("mod", target.loginId, target.name);
-    } else {
+    } else if (pendingModConfirmAction === "remove") {
       // Removes it the same direct way. Note this only clears the LIVE
       // flag at modded/{name} — it doesn't reach into that person's own
       // browser to flip their local _rolesHeld.mod, so if they were the
@@ -4724,10 +4739,13 @@ $grantModConfirmBtn.addEventListener("click", async () => {
       // work elsewhere in this app (removal is immediate, not a ban) and
       // is fine here since codes already expire quickly.
       await ChatBackend.removeRole("mod", target.name, target.loginId);
+    } else {
+      await ChatBackend.removeRole(pendingRemovalRank, target.name, target.loginId);
     }
     $grantModConfirmOverlay.style.display = "none";
     pendingGrantModTarget = null;
     pendingModConfirmAction = null;
+    pendingRemovalRank = null;
     renderOwnerMenuList();
   } catch (e) {
     showComposerNotice("Couldn't update Mod status — try again.");
