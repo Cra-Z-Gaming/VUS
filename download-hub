@@ -121,7 +121,7 @@ input:checked + .slider::before {
 <div id="hint">Enable switch to auto-open on next visit</div>
 
 <script>
-const HUB_URL = "https://raw.githubusercontent.com/REALDABEAST-VUS-ALT2/VUS/refs/heads/main/index.html";
+const HUB_URL = "https://raw.githubusercontent.com/REALDABEAST-VUSALT/VUS/refs/heads/chat-updates-pr/index.html";
 const OS_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS-OS/refs/heads/main/index.html";
 const HUB_KEY = "vus_autolaunch_hub";
 const OS_KEY = "vus_autolaunch_os";
