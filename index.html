@@ -2174,12 +2174,13 @@ let chatHtmlCache = null; // reused for the "pop out" window too, avoids a secon
 const HUB_ACCOUNT_SESSION_KEY = "vusHubAccountSession";
 const DM_DATABASE_URL = "https://vus-dm-default-rtdb.firebaseio.com";
 let chatAuthRequiresEmail = false;
+let chatAuthPendingAccount = null;
 
 function getHubAccountSession() {
   try {
     const raw = localStorage.getItem(HUB_ACCOUNT_SESSION_KEY);
     const session = raw ? JSON.parse(raw) : null;
-    return session && session.accountKey && session.username && session.id ? session : null;
+    return session && session.accountKey && session.username && session.id && session.email ? session : null;
   } catch (e) {
     return null;
   }
@@ -2229,6 +2230,7 @@ function openChatAuthPopup() {
   chatAuthEmail.value = "";
   chatAuthEmail.style.display = "none";
   chatAuthRequiresEmail = false;
+  chatAuthPendingAccount = null;
   chatAuthOverlay.classList.add("open");
   chatAuthIdentifier.focus();
 }
@@ -2242,12 +2244,13 @@ chatAuthSubmitBtn.onclick = async () => {
   chatAuthSubmitBtn.disabled = true;
   chatAuthError.textContent = "";
   try {
-    const result = await loginForChat(chatAuthIdentifier.value, chatAuthPassword.value);
+    const result = chatAuthPendingAccount || await loginForChat(chatAuthIdentifier.value, chatAuthPassword.value);
     if (!result.ok) {
       chatAuthError.textContent = result.error;
       return;
     }
     if (!result.email && !chatAuthRequiresEmail) {
+      chatAuthPendingAccount = result;
       chatAuthRequiresEmail = true;
       chatAuthEmail.style.display = "block";
       chatAuthSubmitBtn.textContent = "Associate email";
@@ -2263,6 +2266,7 @@ chatAuthSubmitBtn.onclick = async () => {
       }
       result.email = emailResult.email;
     }
+    chatAuthPendingAccount = null;
     localStorage.setItem(HUB_ACCOUNT_SESSION_KEY, JSON.stringify(result));
     closeChatAuthPopup();
     openChatSidebar();
@@ -2329,6 +2333,8 @@ function closeChatSidebar() {
 chatToggleBtn.onclick = openChatSidebar;
 chatCloseBtn.onclick = closeChatSidebar;
 chatSidebarOverlay.onclick = closeChatSidebar;
+
+if (!getHubAccountSession()) openChatAuthPopup();
 
 // "Pop out" — opens the same chat in its own free-floating browser window/tab
 // instead of the docked sidebar. Reuses the already-fetched HTML if we have
