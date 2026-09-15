@@ -1265,6 +1265,7 @@ const ChatBackend = {
   _recentLeaveNames: {},
   _timeoutsRef: null,
   _modRetimeoutRef: null,
+  _commandHistoryRef: null,
   _bansRef: null,
   _temporaryRoleTimers: {},
   _temporaryRoleWatchRefs: {},
@@ -1309,13 +1310,31 @@ const ChatBackend = {
   },
 
   async hasRole(roleId, name) {
-    if (!ROLES[roleId] || !name) return false;
+    if (!roleId || !name || !this._roleRefs[roleId]) return false;
     try {
       const snap = await this._roleRefs[roleId].child(this._safeKey(name)).get();
-      return !!snap.val();
+      const value = snap.val();
+      if (value === true) return true;
+      return !!(value && value.temporary && Number(value.expiresAt) > Date.now());
     } catch (e) {
       return false;
     }
+  },
+
+  logCommand(text) {
+    if (!this._commandHistoryRef || !text) return;
+    this._commandHistoryRef.push({
+      command: String(text).slice(0, 200),
+      actorName: myName || "Unknown",
+      actorLoginId: myLoginId ? String(myLoginId) : null,
+      ts: firebase.database.ServerValue.TIMESTAMP
+    }).catch(() => {});
+  },
+
+  async getCommandHistory(limit = 30) {
+    if (!this._commandHistoryRef) return [];
+    const snap = await this._commandHistoryRef.limitToLast(limit).get();
+    return Object.values(snap.val() || {}).reverse();
   },
 
   async setChatClosed(closed) {
@@ -1426,6 +1445,7 @@ const ChatBackend = {
     this._leaveEventsRef = this._db.ref("rooms/" + roomId + "/leaveEvents");
     this._timeoutsRef = this._db.ref("rooms/" + roomId + "/timeouts");
     this._modRetimeoutRef = this._db.ref("rooms/" + roomId + "/modRetimeoutCooldowns");
+    this._commandHistoryRef = this._db.ref("rooms/" + roomId + "/commandHistory");
   },
 
   detachAllListeners() {
@@ -1529,18 +1549,15 @@ const ChatBackend = {
     if (!loginId) return { ok: false, reason: "missing-id" };
     const ban = await this.getBan(loginId);
     if (ban) return { ok: false, reason: "banned", ban };
+
+    const presenceSnapshot = await this._presenceRef.get();
+    const presence = presenceSnapshot.val() || {};
+    const accountAlreadyOnline = Object.values(presence).some(entry =>
+      entry && String(entry.loginId || "") === String(loginId)
+    );
+    if (accountAlreadyOnline) return { ok: false, reason: "already-online" };
+
     this.releasePresence();
-    this._mySessionLockRef = this._db.ref("activeChatSessions/" + this._safeKey(String(loginId)));
-    const lockResult = await this._mySessionLockRef.transaction(current => current || {
-      loginId: String(loginId),
-      name: name,
-      joinedAt: Date.now()
-    });
-    if (!lockResult.committed || !lockResult.snapshot || lockResult.snapshot.val().name !== name) {
-      this._mySessionLockRef = null;
-      return { ok: false, reason: "already-online" };
-    }
-    this._mySessionLockRef.onDisconnect().remove();
     this._myPresenceRef = this._presenceRef.child(this._safeKey(name));
     this._silentSession = !!silent;
 
@@ -1578,8 +1595,9 @@ const ChatBackend = {
         let temporaryGrant = null;
         try {
           const snap = await roleRef.get();
-          heldOnServer = snap.val() === true;
-          temporaryGrant = await this.getTemporaryRole(role.id, loginId);
+          const roleValue = snap.val();
+          heldOnServer = roleValue === true;
+          temporaryGrant = roleValue && roleValue.temporary ? roleValue : null;
         } catch (e) {
           heldOnServer = false; // fail safe to "not held" — never invent a role from a failed read
         }
@@ -1588,12 +1606,12 @@ const ChatBackend = {
         if (temporaryActive) {
           this.scheduleTemporaryRoleExpiry(role.id, loginId, name, Number(temporaryGrant.expiresAt));
         } else if (temporaryGrant) {
-          this._db.ref("temporaryRoles/" + role.id + "/" + this._safeKey(String(loginId))).remove();
+          roleRef.remove();
         }
 
         if (this._rolesHeld[role.id] || heldOnServer || temporaryActive) {
           this._rolesHeld[role.id] = true; // sync local flag so future claimPresence calls on this tab don't need to re-check the server
-          roleRef.set(temporaryActive ? { temporary: true, loginId: String(loginId) } : true);
+          roleRef.set(temporaryActive ? temporaryGrant : true);
         } else {
           roleRef.remove();
         }
@@ -1785,15 +1803,6 @@ const ChatBackend = {
       .map(([key]) => this._presenceRef.child(key).remove()));
   },
 
-  async getTemporaryRole(roleId, loginId) {
-    try {
-      const snap = await this._db.ref("temporaryRoles/" + roleId + "/" + this._safeKey(String(loginId))).get();
-      return snap.exists() ? snap.val() : null;
-    } catch (e) {
-      return null;
-    }
-  },
-
   scheduleTemporaryRoleExpiry(roleId, loginId, roleKey, expiresAt) {
     const timerKey = roleId + ":" + loginId;
     clearTimeout(this._temporaryRoleTimers[timerKey]);
@@ -1804,9 +1813,9 @@ const ChatBackend = {
         this.scheduleTemporaryRoleExpiry(roleId, loginId, roleKey, expiresAt);
         return;
       }
-      const current = await this.getTemporaryRole(roleId, loginId);
+      const currentSnap = await this._roleRefs[roleId].child(this._safeKey(roleKey)).get();
+      const current = currentSnap.val();
       if (current && Number(current.expiresAt) <= Date.now()) {
-        await this._db.ref("temporaryRoles/" + roleId + "/" + this._safeKey(String(loginId))).remove();
         await this._roleRefs[roleId].child(this._safeKey(roleKey)).remove();
       }
       delete this._temporaryRoleTimers[timerKey];
@@ -1817,10 +1826,10 @@ const ChatBackend = {
     const watchKey = roleId + ":" + loginId;
     const oldRef = this._temporaryRoleWatchRefs[watchKey];
     if (oldRef) oldRef.off();
-    const grantRef = this._db.ref("temporaryRoles/" + roleId + "/" + this._safeKey(String(loginId)));
+    const grantRef = this._roleRefs[roleId].child(this._safeKey(roleKey));
     const handler = snap => {
       const grant = snap.val();
-      if (grant && Number(grant.expiresAt) > Date.now()) {
+      if (grant && grant.temporary && Number(grant.expiresAt) > Date.now()) {
         this.scheduleTemporaryRoleExpiry(roleId, loginId, roleKey, Number(grant.expiresAt));
         return;
       }
@@ -1838,15 +1847,15 @@ const ChatBackend = {
       throw new Error("Invalid temporary role grant");
     }
     const expiresAt = Date.now() + durationMs;
-    await this._db.ref("temporaryRoles/" + roleId + "/" + this._safeKey(String(loginId))).set({
+    const roleKey = this._safeKey(username);
+    await this._roleRefs[roleId].child(roleKey).set({
+      temporary: true,
       loginId: String(loginId),
       username: username || "Unknown",
       byLoginId: byLoginId ? String(byLoginId) : null,
       grantedAt: firebase.database.ServerValue.TIMESTAMP,
       expiresAt
     });
-    const roleKey = this._safeKey(username);
-    await this._roleRefs[roleId].child(roleKey).set({ temporary: true, loginId: String(loginId) });
     this.scheduleTemporaryRoleExpiry(roleId, loginId, username, expiresAt);
   },
 
@@ -1854,7 +1863,6 @@ const ChatBackend = {
     if (!ROLES[roleId] || roleId === "crown" || !loginId) {
       throw new Error("Invalid permanent role grant");
     }
-    await this._db.ref("temporaryRoles/" + roleId + "/" + this._safeKey(String(loginId))).remove();
     await this._roleRefs[roleId].child(this._safeKey(username)).set(true);
   },
 
@@ -2689,7 +2697,7 @@ function renderNicknamePrompt(session, message) {
       }
       await joinWithDmSession(session, name);
     } catch (e) {
-      error.textContent = "Couldn't join the chat — try again.";
+      error.textContent = e && e.message ? "Couldn't join the chat: " + e.message : "Couldn't join the chat — try again.";
     } finally {
       submit.disabled = false;
     }
@@ -2935,6 +2943,7 @@ async function handleModerationCommand(text) {
     showComposerNotice("You do not have permission to use that command.");
     return true;
   }
+  ChatBackend.logCommand(text);
 
   if (command === "/close") {
     if (!isOwner || parts.length !== 1) {
@@ -3060,6 +3069,7 @@ async function sendMessage() {
       showChatRoomComposerNotice("Only the Owner can use /horror2.");
       return;
     }
+    ChatBackend.logCommand(text);
     if (Date.now() - lastLocustHorrorAt < LOCUST_HORROR_COOLDOWN_MS) {
       showChatRoomComposerNotice("The Locust is still breaking through. Wait before calling it again.");
       return;
@@ -3080,6 +3090,7 @@ async function sendMessage() {
       showChatRoomComposerNotice("Only the Owner can use /horror.");
       return;
     }
+    ChatBackend.logCommand(text);
     if (Date.now() - lastPhenHorrorAt < PHEN_HORROR_COOLDOWN_MS) {
       showChatRoomComposerNotice("Phen-228 is still nearby. Wait before calling it again.");
       return;
@@ -4127,6 +4138,21 @@ function renderStaffCommands() {
   note.textContent = "Use the name popup while typing a command. Only online VUS DM accounts can be moderated.";
   note.style.cssText = "color:#64748b;font-size:12px;line-height:1.4;margin-top:7px";
   $ownerMenuCommands.appendChild(note);
+
+  const history = document.createElement("div");
+  history.style.cssText = "margin-top:12px;padding-top:10px;border-top:1px solid #334155";
+  history.innerHTML = "<strong style='color:#f1f5f9'>Recent commands</strong>";
+  const historyList = document.createElement("div");
+  historyList.style.cssText = "margin-top:6px;color:#94a3b8;font-size:12px;line-height:1.5";
+  historyList.textContent = "Loading…";
+  history.appendChild(historyList);
+  $ownerMenuCommands.appendChild(history);
+  ChatBackend.getCommandHistory().then(entries => {
+    historyList.textContent = entries.length
+      ? entries.map(entry => (entry.actorName || "Unknown") + ": " + entry.command).join("\n")
+      : "No commands logged in this room.";
+    historyList.style.whiteSpace = "pre-wrap";
+  }).catch(() => { historyList.textContent = "Command history unavailable."; });
 }
 
 function closeOwnerMenu() {
