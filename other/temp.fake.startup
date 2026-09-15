@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Student Portal — Sign In</title>
+
+
+<!--
+============================================================
+JOKE SITE — v3 (fake school student-portal login)
+============================================================
+This is a generic, fictional "student portal" login screen —
+not modeled on any specific real school's branding or URL.
+
+
+Nothing typed into the form is validated, stored, or sent
+anywhere. Submitting the form (with any input, or none) is
+the hidden trigger that launches the VUS index.html page,
+exactly like the previous versions of this prank.
+============================================================
+-->
+
+
+<style>
+  :root{
+    --navy: #14213d;
+    --navy-deep: #0d1730;
+    --gold: #d9a441;
+    --bg: #eef0f4;
+    --panel: #ffffff;
+    --border: #dde1e8;
+    --text: #1c2333;
+    --text-dim: #6b7280;
+    --error: #b3261e;
+    --sans: "Segoe UI", -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif;
+  }
+
+
+  * { box-sizing: border-box; }
+
+
+  body{
+    margin:0;
+    min-height:100vh;
+    background: var(--bg);
+    font-family: var(--sans);
+    color: var(--text);
+    display:flex;
+    flex-direction:column;
+  }
+
+
+  header{
+    background: var(--navy);
+    color: #fff;
+    padding: 14px 24px;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    font-size: 14px;
+    letter-spacing: 0.2px;
+  }
+  .crest{
+    width:30px; height:30px;
+    border-radius: 4px;
+    background: var(--gold);
+    display:grid;
+    place-items:center;
+    color: var(--navy-deep);
+    font-weight:700;
+    font-size: 14px;
+  }
+  header b{ font-weight:600; }
+  header .sub{ color: rgba(255,255,255,0.65); font-size:12px; margin-left:2px; }
+
+
+  main{
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding: 30px 16px;
+  }
+
+
+  .card{
+    width: 100%;
+    max-width: 380px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 34px 32px 28px;
+    box-shadow: 0 1px 2px rgba(20,33,61,0.04);
+  }
+
+
+  .card-crest{
+    width:52px; height:52px;
+    margin: 0 auto 16px;
+    border-radius: 50%;
+    background: var(--navy);
+    display:grid;
+    place-items:center;
+  }
+  .card-crest span{
+    color: var(--gold);
+    font-weight:700;
+    font-size: 20px;
+  }
+
+
+  h1{
+    font-size: 18px;
+    font-weight: 600;
+    text-align:center;
+    margin: 0 0 4px;
+  }
+  .card p.lede{
+    text-align:center;
+    color: var(--text-dim);
+    font-size: 13px;
+    margin: 0 0 26px;
+  }
+
+
+  label{
+    display:block;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+
+  .field{ margin-bottom: 16px; }
+
+
+  input[type="text"], input[type="password"]{
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--text);
+    background: #fbfcfd;
+  }
+  input:focus{
+    outline: none;
+    border-color: var(--navy);
+    box-shadow: 0 0 0 3px rgba(20,33,61,0.08);
+  }
+
+
+  .row-between{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    font-size: 12.5px;
+    margin: -4px 0 20px;
+  }
+  .row-between label.chk{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-weight: 400;
+    color: var(--text-dim);
+    margin:0;
+  }
+  .row-between a{
+    color: var(--navy);
+    text-decoration: none;
+  }
+  .row-between a:hover{ text-decoration: underline; }
+
+
+  button.signin{
+    width: 100%;
+    padding: 11px;
+    background: var(--navy);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 14.5px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  button.signin:hover{ background: var(--navy-deep); }
+
+
+  .error{
+    display:none;
+    background: rgba(179,38,30,0.08);
+    border: 1px solid rgba(179,38,30,0.25);
+    color: var(--error);
+    font-size: 12.5px;
+    padding: 9px 11px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+  }
+  .error.show{ display:block; }
+
+
+  .divider{
+    display:flex;
+    align-items:center;
+    gap: 10px;
+    color: var(--text-dim);
+    font-size: 11.5px;
+    margin: 22px 0 16px;
+  }
+  .divider::before, .divider::after{
+    content:"";
+    flex:1;
+    height:1px;
+    background: var(--border);
+  }
+
+
+  .help{
+    text-align:center;
+    font-size: 12.5px;
+    color: var(--text-dim);
+  }
+  .help a{ color: var(--navy); text-decoration:none; font-weight:600; }
+  .help a:hover{ text-decoration: underline; }
+
+
+  footer{
+    text-align:center;
+    color: var(--text-dim);
+    font-size: 11.5px;
+    padding: 16px;
+  }
+
+
+  /*
+  ============================================================
+  No special "hidden button" styling needed — the Sign In
+  button looks and behaves exactly like an ordinary login
+  submit. That's the whole joke.
+  ============================================================
+  */
+</style>
+</head>
+<body>
+
+
+<header>
+  <div class="crest">S</div>
+  <div>
+    <b>Student Portal</b>
+    <span class="sub">Single Sign-On</span>
+  </div>
+</header>
+
+
+<main>
+  <div class="card">
+    <div class="card-crest"><span>S</span></div>
+    <h1>Sign in to continue</h1>
+    <p class="lede">Use your student ID and password.</p>
+
+
+    <div class="error" id="error-box">
+      Your session expired. Please sign in again.
+    </div>
+
+
+    <form id="login-form" onsubmit="return handleSignIn(event)">
+      <div class="field">
+        <label for="uid">Student ID</label>
+        <input type="text" id="uid" name="uid" autocomplete="off" placeholder="e.g. 20481093">
+      </div>
+      <div class="field">
+        <label for="pwd">Password</label>
+        <input type="password" id="pwd" name="pwd" autocomplete="off" placeholder="••••••••">
+      </div>
+
+
+      <div class="row-between">
+        <label class="chk"><input type="checkbox" checked style="margin:0;"> Stay signed in</label>
+        <a href="#" onclick="return false;">Forgot password?</a>
+      </div>
+
+
+      <button type="submit" class="signin">Sign In</button>
+    </form>
+
+
+    <div class="divider">or</div>
+    <p class="help">Having trouble? <a href="#" onclick="return false;">Contact the help desk</a></p>
+  </div>
+</main>
+
+
+<footer>Student Portal · Single Sign-On Service</footer>
+
+
+<script>
+/*
+============================================================
+JOKE FUNCTION
+============================================================
+Nothing typed here is checked, stored, or sent anywhere.
+Submitting the form (with any input, or none at all) briefly
+shows a fake "expired session" error the first time to sell
+the illusion, then on the next attempt secretly opens VUS.
+
+
+The VUS index.html is fetched directly from GitHub and
+written into a new about:blank tab.
+============================================================
+*/
+let attempt = 0;
+
+
+function handleSignIn(e){
+  e.preventDefault();
+  attempt++;
+
+
+  if (attempt === 1) {
+    document.getElementById('error-box').classList.add('show');
+    return false;
+  }
+
+
+  openVUS();
+  return false;
+}
+
+
+async function openVUS() {
+  try {
+    const response = await fetch(
+      "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/index.html?v=" + Date.now()
+    );
+    if (!response.ok) {
+      throw new Error("Failed to load VUS: " + response.status);
+    }
+    const hubCode = await response.text();
+
+
+    const win = window.open("about:blank", "_blank");
+    if (!win) {
+      alert("Please allow popups for this site.");
+      return;
+    }
+
+
+    win.document.open();
+    win.document.write(hubCode);
+    win.document.close();
+  } catch (error) {
+    console.error("VUS failed to open:", error);
+    alert("Unable to open the requested page.");
+  }
+}
+</script>
+
+
+</body>
+</html>
+
+
+
