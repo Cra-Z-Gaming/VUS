@@ -1403,16 +1403,18 @@
 <div class="qa-overlay" id="chatAuthOverlay">
   <div class="qa-modal" style="max-width:380px;padding:24px">
     <div class="qa-header" style="padding:0 0 16px;border-bottom:1px solid var(--border)">
-      <h2 id="chatAuthTitle" style="font-size:20px">Log in to VUS</h2>
+      <h2 id="chatAuthTitle" style="font-size:20px">Log in to VUS Chat</h2>
     </div>
     <div style="display:flex;flex-direction:column;gap:12px;padding-top:18px">
-      <p id="chatAuthNote" style="color:var(--fg-muted);font-size:13px;line-height:1.5;margin:0">Log in with your VUS DM account to continue.</p>
-      <input id="chatAuthIdentifier" type="text" placeholder="Username or 6-digit ID" autocomplete="username" style="width:100%;padding:11px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--fg);font-size:14px;outline:none">
-      <input id="chatAuthPassword" type="password" placeholder="Password" autocomplete="current-password" style="width:100%;padding:11px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--fg);font-size:14px;outline:none">
+      <p id="chatAuthNote" style="color:var(--fg-muted);font-size:13px;line-height:1.5;margin:0">Enter your VUS DM account details to continue.</p>
+      <div id="chatAuthCredentials" style="display:flex;flex-direction:column;gap:12px">
+        <input id="chatAuthIdentifier" type="text" placeholder="Username or 6-digit ID" autocomplete="username" style="width:100%;padding:11px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--fg);font-size:14px;outline:none">
+        <input id="chatAuthPassword" type="password" placeholder="Password" autocomplete="current-password" style="width:100%;padding:11px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--fg);font-size:14px;outline:none">
+      </div>
       <input id="chatAuthEmail" type="email" placeholder="Email address" autocomplete="email" style="display:none;width:100%;padding:11px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--fg);font-size:14px;outline:none">
       <div id="chatAuthError" style="min-height:18px;color:#f87171;font-size:12.5px"></div>
       <div style="display:flex;gap:8px">
-        <button id="chatAuthCancelBtn" class="qa-close-btn" style="display:none;flex:1">Cancel</button>
+        <button id="chatAuthCancelBtn" class="qa-close-btn" style="flex:1">Cancel</button>
         <button id="chatAuthSubmitBtn" class="qa-action-btn" style="flex:1">Log in</button>
       </div>
     </div>
@@ -2161,6 +2163,9 @@ const chatCloseBtn = document.getElementById("chatCloseBtn");
 const chatPopoutBtn = document.getElementById("chatPopoutBtn");
 const chatSidebarFrame = document.getElementById("chatSidebarFrame");
 const chatAuthOverlay = document.getElementById("chatAuthOverlay");
+const chatAuthTitle = document.getElementById("chatAuthTitle");
+const chatAuthNote = document.getElementById("chatAuthNote");
+const chatAuthCredentials = document.getElementById("chatAuthCredentials");
 const chatAuthIdentifier = document.getElementById("chatAuthIdentifier");
 const chatAuthPassword = document.getElementById("chatAuthPassword");
 const chatAuthEmail = document.getElementById("chatAuthEmail");
@@ -2173,7 +2178,7 @@ let chatFrameLoading = false;
 let chatHtmlCache = null; // reused for the "pop out" window too, avoids a second fetch
 const HUB_ACCOUNT_SESSION_KEY = "vusHubAccountSession";
 const DM_DATABASE_URL = "https://vus-dm-default-rtdb.firebaseio.com";
-let chatAuthRequiresEmail = false;
+let chatAuthStep = "credentials";
 let chatAuthPendingAccount = null;
 
 function getHubAccountSession() {
@@ -2215,7 +2220,7 @@ async function associateChatEmail(accountKey, email) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email: emailKey })
   });
-  if (!response.ok) return { ok: false, error: "Couldn't save the email — try again." };
+  if (!response.ok) return { ok: false, error: "Could not save the email. Try again." };
   await fetch(DM_DATABASE_URL + "/emailIndex/" + encodeURIComponent(emailKey) + ".json", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -2225,12 +2230,17 @@ async function associateChatEmail(accountKey, email) {
 }
 
 function openChatAuthPopup() {
-  chatAuthError.textContent = "";
+  chatAuthStep = "credentials";
+  chatAuthPendingAccount = null;
+  chatAuthTitle.textContent = "Log in to VUS Chat";
+  chatAuthNote.textContent = "Enter your VUS DM account details to continue.";
+  chatAuthCredentials.style.display = "flex";
+  chatAuthEmail.style.display = "none";
+  chatAuthIdentifier.value = "";
   chatAuthPassword.value = "";
   chatAuthEmail.value = "";
-  chatAuthEmail.style.display = "none";
-  chatAuthRequiresEmail = false;
-  chatAuthPendingAccount = null;
+  chatAuthError.textContent = "";
+  chatAuthSubmitBtn.textContent = "Log in";
   chatAuthOverlay.classList.add("open");
   chatAuthIdentifier.focus();
 }
@@ -2244,39 +2254,55 @@ chatAuthSubmitBtn.onclick = async () => {
   chatAuthSubmitBtn.disabled = true;
   chatAuthError.textContent = "";
   try {
-    const result = chatAuthPendingAccount || await loginForChat(chatAuthIdentifier.value, chatAuthPassword.value);
-    if (!result.ok) {
-      chatAuthError.textContent = result.error;
-      return;
-    }
-    if (!result.email && !chatAuthRequiresEmail) {
+    if (chatAuthStep === "credentials") {
+      const result = await loginForChat(chatAuthIdentifier.value, chatAuthPassword.value);
+      if (!result.ok) {
+        chatAuthError.textContent = result.error;
+        return;
+      }
       chatAuthPendingAccount = result;
-      chatAuthRequiresEmail = true;
+      chatAuthStep = "email";
+      chatAuthTitle.textContent = "Confirm your email";
+      chatAuthNote.textContent = "Enter the email connected to your VUS DM account.";
+      chatAuthCredentials.style.display = "none";
       chatAuthEmail.style.display = "block";
-      chatAuthSubmitBtn.textContent = "Associate email";
-      chatAuthError.textContent = "An email is required before continuing.";
+      chatAuthSubmitBtn.textContent = "Continue";
       chatAuthEmail.focus();
       return;
     }
-    if (chatAuthRequiresEmail) {
-      const emailResult = await associateChatEmail(result.accountKey, chatAuthEmail.value);
+
+    const email = chatAuthEmail.value.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      chatAuthError.textContent = "Enter a valid email address.";
+      return;
+    }
+    if (chatAuthPendingAccount.email && chatAuthPendingAccount.email.toLowerCase() !== email) {
+      chatAuthError.textContent = "That email does not match your VUS DM account.";
+      return;
+    }
+    if (!chatAuthPendingAccount.email) {
+      const emailResult = await associateChatEmail(chatAuthPendingAccount.accountKey, email);
       if (!emailResult.ok) {
         chatAuthError.textContent = emailResult.error;
         return;
       }
-      result.email = emailResult.email;
+      chatAuthPendingAccount.email = emailResult.email;
     }
-    chatAuthPendingAccount = null;
-    localStorage.setItem(HUB_ACCOUNT_SESSION_KEY, JSON.stringify(result));
+    localStorage.setItem(HUB_ACCOUNT_SESSION_KEY, JSON.stringify(chatAuthPendingAccount));
     closeChatAuthPopup();
     openChatSidebar();
   } catch (error) {
-    chatAuthError.textContent = "Couldn't reach VUS DM — try again.";
+    chatAuthError.textContent = "Could not reach VUS DM. Try again.";
   } finally {
     chatAuthSubmitBtn.disabled = false;
   }
 };
+
 chatAuthPassword.addEventListener("keydown", event => {
+  if (event.key === "Enter") chatAuthSubmitBtn.click();
+});
+
+chatAuthEmail.addEventListener("keydown", event => {
   if (event.key === "Enter") chatAuthSubmitBtn.click();
 });
 
@@ -2334,8 +2360,6 @@ chatToggleBtn.onclick = openChatSidebar;
 chatCloseBtn.onclick = closeChatSidebar;
 chatSidebarOverlay.onclick = closeChatSidebar;
 
-if (!getHubAccountSession()) openChatAuthPopup();
-
 // "Pop out" — opens the same chat in its own free-floating browser window/tab
 // instead of the docked sidebar. Reuses the already-fetched HTML if we have
 // it cached, otherwise fetches fresh (e.g. if popped out before ever opening
@@ -2384,11 +2408,6 @@ function openChatPopout() {
 }
 
 chatPopoutBtn.onclick = openChatPopout;
-
-if (!getHubAccountSession()) {
-  openChatAuthPopup(true);
-}
-
 
 // ===================== DEV INFO (opens analytics.html) =====================
 const devInfoBtn = document.getElementById("devInfoBtn");
