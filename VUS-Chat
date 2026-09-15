@@ -25,6 +25,22 @@
     flex-shrink: 0;
   }
   .chat-header .room-name { color: #94a3b8; font-size: 18px; font-weight: 400; }
+  .you-avatar { width: 27px; height: 27px; border-radius: 50%; background: #334155; color: #f1f5f9; display: inline-flex; align-items: center; justify-content: center; overflow: hidden; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .you-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  body.phen-horror { background: #050207; }
+  body.phen-horror #chatScreen { background: radial-gradient(circle at center, rgba(84, 8, 28, .72), rgba(5, 2, 7, .98) 72%); }
+  body.phen-horror #messages { background-image: repeating-linear-gradient(115deg, rgba(255, 30, 80, .045) 0, rgba(255, 30, 80, .045) 1px, transparent 1px, transparent 18px); }
+  #phenHorrorOverlay { display: none; position: fixed; inset: 0; pointer-events: none; z-index: 35; align-items: center; justify-content: center; background: radial-gradient(circle, transparent 15%, rgba(5, 2, 7, .38) 58%, rgba(0, 0, 0, .78)); animation: phenHorrorPulse .8s ease-in-out infinite alternate; }
+  body.phen-horror #phenHorrorOverlay { display: flex; }
+  #phenHorrorOverlay span { color: #ff315f; font-family: Georgia, serif; font-size: clamp(32px, 9vw, 110px); font-weight: 900; letter-spacing: .12em; text-shadow: 0 0 18px #ff174f, 0 0 60px #7f092c; transform: rotate(-4deg); }
+  @keyframes phenHorrorPulse { from { opacity: .54; } to { opacity: .92; } }
+  body.locust-horror #chatScreen { filter: contrast(1.25) saturate(.7); }
+  #locustHorrorOverlay { display: none; position: fixed; inset: 0; pointer-events: none; z-index: 36; overflow: hidden; background: rgba(0, 0, 0, .32); }
+  body.locust-horror #locustHorrorOverlay { display: block; animation: locustGlitch .16s steps(2, end) infinite; }
+  #locustHorrorOverlay::before, #locustHorrorOverlay::after { content: ""; position: absolute; inset: -8%; background: repeating-linear-gradient(0deg, transparent 0 7px, rgba(255,255,255,.1) 8px, transparent 9px); mix-blend-mode: screen; opacity: .35; }
+  #locustHorrorOverlay::after { background: linear-gradient(104deg, transparent 0 47%, rgba(238, 238, 214, .9) 47.25%, transparent 47.8%), linear-gradient(76deg, transparent 0 58%, rgba(238, 238, 214, .72) 58.2%, transparent 58.7%), linear-gradient(164deg, transparent 0 31%, rgba(238, 238, 214, .65) 31.2%, transparent 31.8%), linear-gradient(28deg, transparent 0 72%, rgba(238, 238, 214, .6) 72.2%, transparent 72.8%); filter: drop-shadow(0 0 8px #e7e5c7); opacity: .9; }
+  #locustHorrorOverlay span { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) skew(-8deg); color: #dedcc1; font-family: Georgia, serif; font-size: clamp(28px, 8vw, 96px); font-weight: 900; letter-spacing: .18em; text-shadow: 3px 0 #3e493d, -3px 0 #6e1717, 0 0 22px #e7e5c7; white-space: nowrap; }
+  @keyframes locustGlitch { 0%, 100% { transform: translate(0); } 35% { transform: translate(-3px, 2px); } 70% { transform: translate(4px, -2px); } }
   .chat-online-dot {
     display: inline-block;
     width: 10.5px;
@@ -739,6 +755,7 @@
   <div style="justify-self:center">VUS Chat</div>
   <div style="font-size:16.5px;color:#475569;display:flex;align-items:center;gap:10px;justify-self:end">
     <button id="roomsToggleBtn">🚪 Rooms<span class="rooms-badge-dot" id="roomsBadgeDot"></span></button>
+    <span id="youAreAvatar" class="you-avatar" aria-label="Your profile picture"></span>
     <span id="youAre"></span>
     <button id="changeNameBtn" style="display:none;background:transparent;border:1.5px solid #334155;color:#64748b;font-size:15.8px;padding:4.5px 10.5px;border-radius:9px;cursor:pointer">Change name</button>
   </div>
@@ -971,6 +988,9 @@
   </div>
 </div>
 
+<div id="phenHorrorOverlay" aria-hidden="true"><span>PHEN-228</span></div>
+<div id="locustHorrorOverlay" aria-hidden="true"><span>THE LOCUST</span></div>
+
 <audio id="pingSound" preload="auto"></audio>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -1136,6 +1156,21 @@ const ROOM_CREATE_COOLDOWN_KEY = "vusChatLastRoomCreate";
 
 const MAX_MESSAGES = 200;
 const MAX_CHARS = 500;
+const PHEN_HORROR_LINES = [
+  "You should not have called me.",
+  "Phen-228 is watching this room.",
+  "Do not look behind you.",
+  "The signal is already inside your walls."
+];
+const PHEN_HORROR_DURATION_MS = 15000;
+const PHEN_HORROR_COOLDOWN_MS = 30000;
+const LOCUST_HORROR_LINES = [
+  "The Locust has found your screen.",
+  "Do not let it finish breaking through.",
+  "The signal is splitting apart."
+];
+const LOCUST_HORROR_DURATION_MS = 12000;
+const LOCUST_HORROR_COOLDOWN_MS = 30000;
 
 const PING_YOU_WEBHOOK_URL = "https://discord.com/api/webhooks/1536853718564216842/VZYgEyf5yEzMs03g-hbWIZRS90oNKrVh_LBN1eHv3ZVplCOUlKeRDTWKIAyolYjIshHa";
 const PING_YOU_COOLDOWN_MS = 30 * 1000;
@@ -1218,6 +1253,7 @@ const ChatBackend = {
   _connectedRef: null,
   _presenceRef: null,
   _myPresenceRef: null,
+  _mySessionLockRef: null,
   _myLeaveEventRef: null,
   _nameColorsRef: null,
   _atPingCooldownRef: null,
@@ -1284,6 +1320,15 @@ const ChatBackend = {
 
   async setChatClosed(closed) {
     await this._chatStateRef.child("closed").set(!!closed);
+  },
+
+  async getModMenuCode() {
+    const snap = await this._chatStateRef.child("modMenuCode").get();
+    return snap.exists() && typeof snap.val() === "string" ? snap.val() : null;
+  },
+
+  async setModMenuCode(code) {
+    await this._chatStateRef.child("modMenuCode").set(code);
   },
 
   watchChatClosed(onChange) {
@@ -1422,6 +1467,26 @@ const ChatBackend = {
     });
   },
 
+  async sendHorror(name) {
+    const line = PHEN_HORROR_LINES[Math.floor(Math.random() * PHEN_HORROR_LINES.length)];
+    return this._ref.push({
+      horror: true,
+      horrorLine: line,
+      name: name,
+      ts: firebase.database.ServerValue.TIMESTAMP
+    });
+  },
+
+  async sendHorror2(name) {
+    const line = LOCUST_HORROR_LINES[Math.floor(Math.random() * LOCUST_HORROR_LINES.length)];
+    return this._ref.push({
+      horror2: true,
+      horrorLine: line,
+      name: name,
+      ts: firebase.database.ServerValue.TIMESTAMP
+    });
+  },
+
   // ── Per-name bubble color ──
   // Was write-once; now changeable every COLOR_CHANGE_COOLDOWN_MS, enforced
   // against a server-timestamped `changedAt` so a wrong local clock can't
@@ -1465,6 +1530,17 @@ const ChatBackend = {
     const ban = await this.getBan(loginId);
     if (ban) return { ok: false, reason: "banned", ban };
     this.releasePresence();
+    this._mySessionLockRef = this._db.ref("activeChatSessions/" + this._safeKey(String(loginId)));
+    const lockResult = await this._mySessionLockRef.transaction(current => current || {
+      loginId: String(loginId),
+      name: name,
+      joinedAt: Date.now()
+    });
+    if (!lockResult.committed || !lockResult.snapshot || lockResult.snapshot.val().name !== name) {
+      this._mySessionLockRef = null;
+      return { ok: false, reason: "already-online" };
+    }
+    this._mySessionLockRef.onDisconnect().remove();
     this._myPresenceRef = this._presenceRef.child(this._safeKey(name));
     this._silentSession = !!silent;
 
@@ -1546,6 +1622,11 @@ const ChatBackend = {
       this._myPresenceRef.remove();
       this._myPresenceRef = null;
     }
+    if (this._mySessionLockRef) {
+      this._mySessionLockRef.onDisconnect().cancel();
+      this._mySessionLockRef.remove();
+      this._mySessionLockRef = null;
+    }
     this.clearAllRoles();
   },
 
@@ -1557,6 +1638,11 @@ const ChatBackend = {
     if (this._myLeaveEventRef) {
       this._myLeaveEventRef.onDisconnect().cancel();
       this._myLeaveEventRef = null;
+    }
+    if (this._mySessionLockRef) {
+      this._mySessionLockRef.onDisconnect().cancel();
+      this._mySessionLockRef.remove();
+      this._mySessionLockRef = null;
     }
   },
 
@@ -1988,8 +2074,9 @@ const RoomManager = {
     return { ok: true, newCode: safeNew };
   },
 
-  async kickFromRoom(code, targetName) {
-    await this._metaRootRef.child(this._safeCode(code)).child("kicked").child(this._safeKeyName(targetName)).set(true);
+  async kickFromRoom(code, targetLoginId) {
+    if (!targetLoginId) throw new Error("Missing login ID");
+    await this._metaRootRef.child(this._safeCode(code)).child("kicked").child(this._safeKeyName(String(targetLoginId))).set(true);
   },
 
   _safeKeyName(name) {
@@ -2041,6 +2128,7 @@ const $onlineCount = document.getElementById("onlineCount");
 const $connError   = document.getElementById("connError");
 const $composerNotice = document.getElementById("composerNotice");
 const $youAre      = document.getElementById("youAre");
+const $youAreAvatar = document.getElementById("youAreAvatar");
 const $changeNameBtn = document.getElementById("changeNameBtn");
 const $typingBar     = document.getElementById("typingBar");
 const $autoScrollBtn = document.getElementById("autoScrollBtn");
@@ -2103,6 +2191,19 @@ function esc(s = "") {
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+function renderOwnAvatar(username, avatarDataUrl) {
+  if (!$youAreAvatar) return;
+  $youAreAvatar.innerHTML = "";
+  if (avatarDataUrl) {
+    const img = document.createElement("img");
+    img.src = avatarDataUrl;
+    img.alt = "";
+    $youAreAvatar.appendChild(img);
+  } else {
+    $youAreAvatar.textContent = (username || "?").trim().slice(0, 1).toUpperCase();
+  }
+}
+
 function formatTime(ts) {
   if (!ts) return "";
   const d = new Date(ts);
@@ -2120,6 +2221,16 @@ function scrollToBottom() {
 
 function renderMessage(msg) {
   $emptyState.style.display = "none";
+
+  if (msg.horror2) {
+    triggerLocustHorror(msg);
+    return;
+  }
+
+  if (msg.horror) {
+    triggerPhenHorror(msg);
+    return;
+  }
 
   if (msg.system) {
     const sysEl = document.createElement("div");
@@ -2223,6 +2334,43 @@ function renderMessage(msg) {
   }
 }
 
+let phenHorrorTimer = null;
+let lastPhenHorrorAt = 0;
+let locustHorrorTimer = null;
+let lastLocustHorrorAt = 0;
+
+function triggerPhenHorror(msg) {
+  if (msg.ts && Date.now() - Number(msg.ts) > 60000) return;
+  document.body.classList.add("phen-horror");
+  clearTimeout(phenHorrorTimer);
+  phenHorrorTimer = setTimeout(() => document.body.classList.remove("phen-horror"), PHEN_HORROR_DURATION_MS);
+
+  if (window.speechSynthesis && window.SpeechSynthesisUtterance) {
+    window.speechSynthesis.cancel();
+    const voiceLine = new SpeechSynthesisUtterance(msg.horrorLine || "Phen-228 is watching.");
+    voiceLine.rate = 0.78;
+    voiceLine.pitch = 0.45;
+    voiceLine.volume = 1;
+    window.speechSynthesis.speak(voiceLine);
+  }
+}
+
+function triggerLocustHorror(msg) {
+  if (msg.ts && Date.now() - Number(msg.ts) > 60000) return;
+  document.body.classList.add("locust-horror");
+  clearTimeout(locustHorrorTimer);
+  locustHorrorTimer = setTimeout(() => document.body.classList.remove("locust-horror"), LOCUST_HORROR_DURATION_MS);
+
+  if (window.speechSynthesis && window.SpeechSynthesisUtterance) {
+    window.speechSynthesis.cancel();
+    const voiceLine = new SpeechSynthesisUtterance(msg.horrorLine || "The Locust has found your screen.");
+    voiceLine.rate = 0.62;
+    voiceLine.pitch = 0.28;
+    voiceLine.volume = 1;
+    window.speechSynthesis.speak(voiceLine);
+  }
+}
+
 // Tracks whether THIS tab has ever seen a real disconnect while it had an
 // active (non-spectator-only-intentional) session, so a reconnect can be
 // told apart from the very first connection at boot.
@@ -2277,6 +2425,7 @@ function forceReturnToJoinScreen(noticeText) {
   myName = "";
   myLoginId = "";
   isSpectator = false;
+  renderOwnAvatar("", null);
   $changeNameBtn.style.display = "none";
   $youAre.textContent = "";
   $chatScreen.style.display = "none";
@@ -2293,6 +2442,7 @@ function forceReturnToJoinScreen(noticeText) {
 function handleChatClosed(isClosed) {
   if (!isClosed) return;
   if (myName && $chatScreen.style.display !== "none") {
+    ChatBackend.releasePresenceSilently();
     forceReturnToJoinScreen("The Owner closed VUS Chat for everyone.");
     return;
   }
@@ -2470,6 +2620,17 @@ async function validateDmSession(session) {
   return false;
 }
 
+async function loadDmAvatar(session) {
+  for (const database of [dmAuthDb, legacyDmAuthDb]) {
+    if (!database) continue;
+    try {
+      const snapshot = await database.ref("users/" + session.accountKey + "/avatar").get();
+      if (snapshot.exists()) return snapshot.val() || null;
+    } catch (e) {}
+  }
+  return null;
+}
+
 function renderNicknamePrompt(session, message) {
   $joinCard.innerHTML = "";
 
@@ -2560,11 +2721,17 @@ async function joinWithDmSession(session, nickname) {
   if (!result.ok) {
     renderDmLoginPrompt(result.reason === "banned"
       ? "This account is banned from VUS Chat."
+      : result.reason === "already-online"
+        ? "This VUS DM account is already in VUS Chat on another tab or device."
       : "Your DM login could not be used for chat.");
     return;
   }
   myName = name;
   myLoginId = String(session.id);
+  renderOwnAvatar(name, null);
+  loadDmAvatar(session).then(avatar => {
+    if (myLoginId === String(session.id) && myName === name) renderOwnAvatar(name, avatar);
+  });
   isSpectator = false;
   watchMyBan();
   watchMyTimeout();
@@ -2760,7 +2927,7 @@ async function handleModerationCommand(text) {
   const isAdmin = isAdminHolder(myName) || await ChatBackend.hasRole("admin", myName);
   const canModerate = isOwner || isAdmin;
 
-  if (!["/ban", "/tempban", "/grant"].includes(command)) {
+  if (!["/ban", "/tempban", "/grant", "/kick", "/timeout", "/close"].includes(command)) {
     showComposerNotice("Unknown command.");
     return true;
   }
@@ -2769,9 +2936,52 @@ async function handleModerationCommand(text) {
     return true;
   }
 
+  if (command === "/close") {
+    if (!isOwner || parts.length !== 1) {
+      showComposerNotice("Only the owner can use /close.");
+      return true;
+    }
+    await ChatBackend.setChatClosed(true);
+    showComposerNotice("VUS Chat was closed for everyone.");
+    return true;
+  }
+
   let targetName;
   let durationMs = 0;
-  if (command === "/ban") {
+  if (command === "/kick") {
+    if (parts.length !== 2 || !currentRoomCode) {
+      showComposerNotice("Use /kick name inside a private room.");
+      return true;
+    }
+    targetName = parts[1];
+    const target = findModerationTarget(targetName);
+    if (!target || !target.loginId) {
+      showComposerNotice("That user must be online and logged in.");
+      return true;
+    }
+    await RoomManager.kickFromRoom(currentRoomCode, target.loginId);
+    showComposerNotice("Removed " + target.name + " from the room.");
+    return true;
+  } else if (command === "/timeout") {
+    if (parts.length !== 3) {
+      showComposerNotice("Use /timeout time name, such as /timeout 10m alex");
+      return true;
+    }
+    durationMs = parseModerationDuration(parts[1]);
+    targetName = parts.slice(2).join(" ");
+    if (!durationMs || durationMs > TIMEOUT_MAX_MS) {
+      showComposerNotice("Timeout time must be between 1 minute and 30 days.");
+      return true;
+    }
+    const target = findModerationTarget(targetName);
+    if (!target || !target.loginId) {
+      showComposerNotice("That user must be online and logged in.");
+      return true;
+    }
+    await ChatBackend.setTimeout_(target.loginId, durationMs, myLoginId);
+    showComposerNotice("Timed out " + target.name + " for " + formatCountdown(durationMs) + ".");
+    return true;
+  } else if (command === "/ban") {
     if (parts.length !== 2) {
       showComposerNotice("Use /ban name");
       return true;
@@ -2843,6 +3053,47 @@ async function handleModerationCommand(text) {
 
 async function sendMessage() {
   const text = $msgInput.value.trim();
+
+  if (text.toLowerCase() === "/horror2") {
+    const isOwner = isCrownHolder(myName) || await ChatBackend.hasRole("crown", myName);
+    if (!isOwner) {
+      showChatRoomComposerNotice("Only the Owner can use /horror2.");
+      return;
+    }
+    if (Date.now() - lastLocustHorrorAt < LOCUST_HORROR_COOLDOWN_MS) {
+      showChatRoomComposerNotice("The Locust is still breaking through. Wait before calling it again.");
+      return;
+    }
+    lastLocustHorrorAt = Date.now();
+    $msgInput.value = "";
+    updateCharCounter();
+    autosizeInput();
+    ChatBackend.sendHorror2(myName).catch(() => {
+      showChatRoomComposerNotice("The Locust signal failed to broadcast.");
+    });
+    return;
+  }
+
+  if (text.toLowerCase() === "/horror") {
+    const isOwner = isCrownHolder(myName) || await ChatBackend.hasRole("crown", myName);
+    if (!isOwner) {
+      showChatRoomComposerNotice("Only the Owner can use /horror.");
+      return;
+    }
+    if (Date.now() - lastPhenHorrorAt < PHEN_HORROR_COOLDOWN_MS) {
+      showChatRoomComposerNotice("Phen-228 is still nearby. Wait before calling it again.");
+      return;
+    }
+    lastPhenHorrorAt = Date.now();
+    $msgInput.value = "";
+    updateCharCounter();
+    autosizeInput();
+    ChatBackend.sendHorror(myName).catch(() => {
+      showChatRoomComposerNotice("The horror signal failed to broadcast.");
+    });
+    return;
+  }
+
   const mentionTarget = currentMentionTarget;
 
   // Moderation commands must run before timeout and send-cooldown guards so
@@ -3080,11 +3331,12 @@ $clearChatBtn.addEventListener("click", () => {
   $jumpToBottomBtn.style.display = "none";
 });
 
-const MOD_MENU_CODE = "2212";
+const DEFAULT_MOD_MENU_CODE = "2212";
 const DM_ID_LOOKUP_CODE = "VUSDM";
 const LEGACY_DM_ID_LOOKUP_CODE = "5216";
 let modMenuUnlocked = false;
 let imagesEnabledForMe = false;
+let modMenuCode = DEFAULT_MOD_MENU_CODE;
 
 function updateUploadButtonVisibility() {
   const visible = modMenuUnlocked && imagesEnabledForMe;
@@ -3166,8 +3418,12 @@ function renderModMenuLogin() {
   cancelBtn.className = "toolbar-btn";
   cancelBtn.style.flex = "1";
 
-  const trySubmit = () => {
-    if (input.value === MOD_MENU_CODE) {
+  const trySubmit = async () => {
+    submitBtn.disabled = true;
+    let configuredCode = modMenuCode;
+    try { configuredCode = (await ChatBackend.getModMenuCode()) || DEFAULT_MOD_MENU_CODE; } catch (e) {}
+    modMenuCode = configuredCode;
+    if (input.value === configuredCode) {
       modMenuUnlocked = true;
       updateUploadButtonVisibility();
       renderModMenu();
@@ -3178,6 +3434,7 @@ function renderModMenuLogin() {
       input.value = "";
       input.focus();
     }
+    submitBtn.disabled = false;
   };
 
   submitBtn.addEventListener("click", trySubmit);
@@ -3250,6 +3507,52 @@ async function renderModMenu() {
   title.textContent = "Customize your bubble";
   title.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:10px";
   $globalClearPanel.appendChild(title);
+
+  const codeTitle = document.createElement("div");
+  codeTitle.textContent = "Change unlock code";
+  codeTitle.style.cssText = "color:#f1f5f9;font-weight:600;margin:12px 0 5px";
+  $globalClearPanel.appendChild(codeTitle);
+
+  const codeRow = document.createElement("div");
+  codeRow.style.cssText = "display:flex;gap:6px;margin-bottom:4px";
+  const codeInput = document.createElement("input");
+  codeInput.type = "password";
+  codeInput.inputMode = "text";
+  codeInput.placeholder = "New code";
+  codeInput.maxLength = 24;
+  codeInput.value = modMenuCode;
+  codeInput.style.cssText = "flex:1;min-width:0;padding:7px 9px;background:#0f172a;border:1.5px solid #334155;border-radius:7px;color:#f1f5f9;font-size:13px;outline:none";
+  const saveCodeBtn = document.createElement("button");
+  saveCodeBtn.textContent = "Save";
+  saveCodeBtn.className = "toolbar-btn";
+  saveCodeBtn.style.cssText = "padding:6px 10px";
+  const codeError = document.createElement("div");
+  codeError.style.cssText = "color:#f87171;font-size:11.5px;min-height:16px;margin-bottom:6px";
+  saveCodeBtn.addEventListener("click", async () => {
+    const newCode = codeInput.value.trim();
+    if (!/^[a-zA-Z0-9]{4,24}$/.test(newCode)) {
+      codeError.textContent = "Use 4-24 letters or numbers.";
+      return;
+    }
+    saveCodeBtn.disabled = true;
+    codeError.textContent = "";
+    try {
+      await ChatBackend.setModMenuCode(newCode);
+      modMenuCode = newCode;
+      codeInput.value = newCode;
+      codeError.style.color = "#4ade80";
+      codeError.textContent = "Unlock code updated.";
+    } catch (e) {
+      codeError.style.color = "#f87171";
+      codeError.textContent = "Couldn't save the new code.";
+    } finally {
+      saveCodeBtn.disabled = false;
+    }
+  });
+  codeRow.appendChild(codeInput);
+  codeRow.appendChild(saveCodeBtn);
+  $globalClearPanel.appendChild(codeRow);
+  $globalClearPanel.appendChild(codeError);
 
   const loading = document.createElement("div");
   loading.textContent = "Loading…";
@@ -3801,6 +4104,10 @@ function renderStaffCommands() {
   const list = document.createElement("div");
   list.style.cssText = "display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:6px 14px;padding:10px;background:#0f172a;border:1px solid #334155;border-radius:9px";
   const commands = [
+    ["/horror2", "Broadcast the Locust screen-break effect.", isOwner],
+    ["/kick username", "Remove a user from the current private room.", isOwner || isAdmin],
+    ["/timeout time username", "Temporarily mute a user, for example 10m.", isOwner || isAdmin],
+    ["/close", "Remove everyone from VUS Chat.", isOwner],
     ["/ban username", "Permanently ban a logged-in user.", isOwner || isAdmin],
     ["/tempban time username", "Temporarily ban a user, for example 2h.", isOwner || isAdmin],
     ["/grant mod [time] username", "Give permanent or temporary Mod status.", isOwner || isAdmin],
@@ -5047,8 +5354,8 @@ function onRoomMetaUpdate(meta) {
 
   currentRoomMeta = meta;
 
-  const myKey = ChatBackend._safeKey(myName);
-  if (meta.kicked && meta.kicked[myKey]) {
+  if (meta.kicked && meta.kicked[ChatBackend._safeKey(String(myLoginId))]) {
+    ChatBackend.releasePresenceSilently();
     showComposerNotice("You were removed from this room.");
     switchToMainRoom();
     return;
@@ -5181,9 +5488,9 @@ $roomCodeSaveBtn.addEventListener("click", async () => {
 
 function renderRoomMembersList(meta) {
   $roomMembersList.innerHTML = "";
-  const names = latestPresenceList.map(e => e.name).sort((a, b) => a.localeCompare(b));
+  const members = latestPresenceList.filter(e => e.loginId).sort((a, b) => a.name.localeCompare(b.name));
 
-  if (names.length === 0) {
+  if (members.length === 0) {
     const empty = document.createElement("div");
     empty.className = "rooms-empty";
     empty.textContent = "No one else here yet.";
@@ -5191,7 +5498,8 @@ function renderRoomMembersList(meta) {
     return;
   }
 
-  names.forEach(name => {
+  members.forEach(member => {
+    const name = member.name;
     const row = document.createElement("div");
     row.className = "room-member-row";
 
@@ -5218,7 +5526,7 @@ function renderRoomMembersList(meta) {
       kickBtn.className = "kick";
       kickBtn.textContent = "Kick";
       kickBtn.addEventListener("click", () => {
-        pendingKickTarget = name;
+        pendingKickTarget = member;
         $kickConfirmText.textContent = "Remove " + name + " from this room? They can rejoin if they still have access.";
         $kickConfirmOverlay.style.display = "flex";
       });
@@ -5240,7 +5548,7 @@ $kickConfirmBtn.addEventListener("click", async () => {
   if (!pendingKickTarget || !currentRoomCode) return;
   $kickConfirmBtn.disabled = true;
   try {
-    await RoomManager.kickFromRoom(currentRoomCode, pendingKickTarget);
+    await RoomManager.kickFromRoom(currentRoomCode, pendingKickTarget.loginId);
   } catch (e) {
     showComposerNotice("Couldn't kick — try again.");
   } finally {
