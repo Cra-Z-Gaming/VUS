@@ -4543,6 +4543,7 @@ function openTimeoutSetModal(target, initialDurationMs = 0) {
 
   $timeoutSetErr.textContent = "";
   $timeoutSetOverlay.classList.add("show");
+  $timeoutSetOverlay.style.display = "flex";
   $timeoutMinutesInput.focus();
 }
 
@@ -4555,6 +4556,7 @@ function openTemporaryModSetModal(target) {
   $timeoutSetNote.textContent = "Max 30 days.";
   $timeoutSetErr.textContent = "";
   $timeoutSetConfirmBtn.textContent = "Grant Temp Mod";
+  $timeoutSetOverlay.classList.add("show");
   $timeoutSetOverlay.style.display = "flex";
   $timeoutMinutesInput.focus();
 }
@@ -4563,12 +4565,14 @@ $timeoutSetCancelBtn.addEventListener("click", () => {
   pendingTimeoutTarget = null;
   pendingTemporaryModTarget = null;
   $timeoutSetOverlay.classList.remove("show");
+  $timeoutSetOverlay.style.display = "none";
 });
 $timeoutSetOverlay.addEventListener("click", (e) => {
   if (e.target === $timeoutSetOverlay) {
     pendingTimeoutTarget = null;
     pendingTemporaryModTarget = null;
     $timeoutSetOverlay.classList.remove("show");
+    $timeoutSetOverlay.style.display = "none";
   }
 });
 
@@ -4683,6 +4687,7 @@ function openGrantModConfirm(targetName) {
   $grantModConfirmTitle.textContent = "🧩 Grant Mod?";
   $grantModConfirmText.textContent = "Give " + targetName + " the 🧩 Mod tag? This is a second confirmation step so a misclick can't hand it out by accident.";
   $grantModConfirmBtn.textContent = "Yes, grant Mod";
+  $grantModConfirmOverlay.classList.add("show");
   $grantModConfirmOverlay.style.display = "flex";
 }
 
@@ -4692,6 +4697,7 @@ function openRemoveModConfirm(targetName) {
   $grantModConfirmTitle.textContent = "🧩 Remove Mod?";
   $grantModConfirmText.textContent = "Remove the 🧩 Mod tag from " + targetName + "? This is a second confirmation step so a misclick can't take it away by accident.";
   $grantModConfirmBtn.textContent = "Yes, remove Mod";
+  $grantModConfirmOverlay.classList.add("show");
   $grantModConfirmOverlay.style.display = "flex";
 }
 
@@ -4703,6 +4709,7 @@ function openRemoveRoleConfirm(rank, targetName) {
   $grantModConfirmText.textContent = "Remove the " + rank + " role from " + targetName + "?";
   $grantModConfirmBtn.textContent = "Yes, remove " + rank;
   $grantModConfirmOverlay.classList.add("show");
+  $grantModConfirmOverlay.style.display = "flex";
 }
 
 $grantModCancelBtn.addEventListener("click", () => {
@@ -4710,6 +4717,7 @@ $grantModCancelBtn.addEventListener("click", () => {
   pendingModConfirmAction = null;
   pendingRemovalRank = null;
   $grantModConfirmOverlay.classList.remove("show");
+  $grantModConfirmOverlay.style.display = "none";
 });
 $grantModConfirmOverlay.addEventListener("click", (e) => {
   if (e.target === $grantModConfirmOverlay) {
@@ -4717,6 +4725,7 @@ $grantModConfirmOverlay.addEventListener("click", (e) => {
     pendingModConfirmAction = null;
     pendingRemovalRank = null;
     $grantModConfirmOverlay.classList.remove("show");
+    $grantModConfirmOverlay.style.display = "none";
   }
 });
 
@@ -4745,6 +4754,7 @@ $grantModConfirmBtn.addEventListener("click", async () => {
       await ChatBackend.removeRole(pendingRemovalRank, target.name, target.loginId);
     }
     $grantModConfirmOverlay.classList.remove("show");
+    $grantModConfirmOverlay.style.display = "none";
     pendingGrantModTarget = null;
     pendingModConfirmAction = null;
     pendingRemovalRank = null;
