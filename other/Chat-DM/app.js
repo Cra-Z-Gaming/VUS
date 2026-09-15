@@ -26,6 +26,7 @@ let db = null;
 let usersRef = null, usernameIndexRef = null, idIndexRef = null;
 let presenceRef = null, connectedRef = null, myPresenceRef = null;
 let dmsRef = null, groupChatsRef = null;
+let bansRef = null;
 
 function initFirebase() {
   firebase.initializeApp(FIREBASE_CONFIG);
@@ -37,6 +38,7 @@ function initFirebase() {
   connectedRef = db.ref(".info/connected");
   dmsRef = db.ref("dms");
   groupChatsRef = db.ref("groupChats");
+  bansRef = db.ref("bans");
 }
 
 function normalizeUsernameKey(username) { return username.trim().toLowerCase(); }
@@ -113,7 +115,125 @@ async function login(identifier, password) {
 
   const account = accountSnap.val();
   if (!account || account.password !== password) return { ok: false, error: "Incorrect password." };
+
+  // Ban check happens AFTER password verification (so a wrong password
+  // still just says "Incorrect password" rather than leaking ban status
+  // to someone who doesn't actually know the account's password) but
+  // BEFORE a session is granted — a banned account never gets past this
+  // point into claimPresence/currentSession, no matter how the caller
+  // handles the result.
+  const banStatus = await getBanStatus(accountKey);
+  if (banStatus.banned) {
+    return { ok: false, banned: true, expiresAt: banStatus.expiresAt, accountKey, username: account.username };
+  }
+
   return { ok: true, accountKey, username: account.username, id: account.id };
+}
+
+/* ══════════════════════════════════════════════════════════
+   BAN read/write helpers — see the BANS comment block near
+   BAN_MAX_DAYS above for the full design rationale. All keyed by
+   accountKey; a stale/expired record is left for the next read to
+   naturally treat as "not banned" rather than actively cleaned up
+   here, matching the same pattern the timeout system already uses.
+   ══════════════════════════════════════════════════════════ */
+async function getBanStatus(accountKey) {
+  try {
+    const snap = await bansRef.child(accountKey).get();
+    const val = snap.val();
+    if (!val || !val.expiresAt) return { banned: false };
+    const now = Date.now();
+    if (now >= val.expiresAt) return { banned: false };
+    return { banned: true, expiresAt: val.expiresAt, by: val.by || null };
+  } catch (e) {
+    // Fail OPEN on a read error here would let a banned person back in
+    // during a network hiccup; fail CLOSED would lock out an innocent
+    // person on the same hiccup. Neither is clearly safer for a chat
+    // app of this size, so this matches the rest of the codebase's
+    // existing pattern (e.g. getTimeoutRemainingMs) of failing toward
+    // "not restricted" on read errors, since availability problems here
+    // are far more common than ban-evasion attempts timed to a Firebase
+    // outage.
+    return { banned: false };
+  }
+}
+
+async function setBan(accountKey, durationMs, byAccountKey) {
+  const cappedMs = Math.min(Math.max(0, durationMs), BAN_MAX_MS);
+  if (cappedMs <= 0) return { ok: false, error: "Enter a duration greater than 0." };
+  try {
+    await bansRef.child(accountKey).set({
+      expiresAt: Date.now() + cappedMs,
+      by: byAccountKey || null
+    });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: "Couldn't set ban — try again." };
+  }
+}
+
+async function clearBan(accountKey) {
+  try {
+    await bansRef.child(accountKey).remove();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: "Couldn't clear ban — try again." };
+  }
+}
+
+// Live subscription for the CURRENTLY SIGNED IN account's own ban status
+// — so an Admin/Owner banning someone already mid-session kicks them
+// back to the lock screen immediately, not just on their next login
+// attempt. Returns an unsubscribe function, matching ChatBackend's
+// watchTimeout pattern elsewhere in this file.
+function watchOwnBanStatus(accountKey, onBanned) {
+  const ref = bansRef.child(accountKey);
+  ref.on("value", snap => {
+    const val = snap.val();
+    if (!val || !val.expiresAt) return;
+    if (Date.now() >= val.expiresAt) return;
+    onBanned({ expiresAt: val.expiresAt, by: val.by || null });
+  });
+  return () => ref.off("value");
+}
+
+let unwatchOwnBan = null;
+
+// Wires watchOwnBanStatus to the actual "kick the person out" behavior:
+// a ban applied while already signed in tears down the session exactly
+// like a manual logout would (presence, chat room state, DM listeners)
+// and swaps straight to the lock screen instead of the login form,
+// since re-entering credentials would be pointless — they're still
+// banned. Called from both places a session gets established (live
+// login and page-reload session restore) so it's active no matter how
+// someone arrived at a signed-in state.
+function startWatchingOwnBan(accountKey) {
+  stopWatchingOwnBan();
+  unwatchOwnBan = watchOwnBanStatus(accountKey, (banResult) => {
+    forceLogoutForBan(banResult);
+  });
+}
+function stopWatchingOwnBan() {
+  if (unwatchOwnBan) { unwatchOwnBan(); unwatchOwnBan = null; }
+}
+
+async function forceLogoutForBan(banResult) {
+  const accountKey = currentSession && currentSession.accountKey;
+  stopWatchingOwnBan();
+  releasePresence();
+  if (accountKey) await recordLastSeen(accountKey);
+  unwatchOwnAccount(accountKey);
+  unwatchMyGroupChats();
+  unwatchGroupInfo();
+  clearPendingImage();
+  closeOpenChat();
+  closeModal();
+  closeProfilePopover();
+  if (typeof exitChatRoom === "function") exitChatRoom();
+  otherAvatarCache = {};
+  currentSession = null;
+  clearSession();
+  showBanLockScreen(banResult);
 }
 
 function saveSession(accountKey, username, id) {
@@ -713,6 +833,11 @@ function formatLastSeen(ts) {
 const $authFlow = document.getElementById("authFlow");
 const $appShell = document.getElementById("appShell");
 
+const $banLockScreen = document.getElementById("banLockScreen");
+const $banLockTitle = document.getElementById("banLockTitle");
+const $banLockSubtitle = document.getElementById("banLockSubtitle");
+const $banLockCountdown = document.getElementById("banLockCountdown");
+
 const $rail = document.getElementById("rail");
 const $railAvatarBtn = document.getElementById("railAvatarBtn");
 const $railSettingsBtn = document.getElementById("railSettingsBtn");
@@ -1063,6 +1188,7 @@ $railSettingsBtn.addEventListener("click", () => { if (currentSession) openSetti
 
 async function doLogout() {
   const accountKey = currentSession && currentSession.accountKey;
+  stopWatchingOwnBan();
   releasePresence();
   if (accountKey) await recordLastSeen(accountKey);
   unwatchOwnAccount(accountKey);
@@ -1444,7 +1570,52 @@ function showLoggedInState(session) {
 }
 function showAuthFlow() {
   document.body.classList.remove("app-mode");
+  $banLockScreen.style.display = "none";
   $authFlow.style.display = "block";
+}
+
+let banCountdownTimer = null;
+
+// Shown both when login() itself detects an active ban (banResult has
+// accountKey/username but never a session — see the auth submit
+// handler) and when a currently signed-in session's OWN ban status
+// changes live via watchOwnBanStatus (banResult there is the same
+// {expiresAt, by} shape, no accountKey/username needed since the
+// person is already looking at their own screen).
+function showBanLockScreen(banResult) {
+  document.body.classList.remove("app-mode");
+  $authFlow.style.display = "none";
+  $banLockScreen.style.display = "flex";
+
+  clearInterval(banCountdownTimer);
+  const tick = () => {
+    const remainingMs = banResult.expiresAt - Date.now();
+    if (remainingMs <= 0) {
+      clearInterval(banCountdownTimer);
+      // Ban has expired while this screen was open — return to the
+      // normal login flow automatically rather than leaving the
+      // countdown frozen at 00:00:00 with no way forward.
+      $loginIdentifier.value = "";
+      $loginPassword.value = "";
+      showAuthFlow();
+      setMode("login");
+      return;
+    }
+    $banLockCountdown.textContent = formatBanCountdown(remainingMs);
+  };
+  tick();
+  banCountdownTimer = setInterval(tick, 1000);
+}
+
+function formatBanCountdown(ms) {
+  const totalSecs = Math.max(0, Math.floor(ms / 1000));
+  const days = Math.floor(totalSecs / 86400);
+  const hours = Math.floor((totalSecs % 86400) / 3600);
+  const mins = Math.floor((totalSecs % 3600) / 60);
+  const secs = totalSecs % 60;
+  const pad = n => String(n).padStart(2, "0");
+  if (days > 0) return days + "d " + pad(hours) + ":" + pad(mins) + ":" + pad(secs);
+  return pad(hours) + ":" + pad(mins) + ":" + pad(secs);
 }
 
 $newIdContinueBtn.addEventListener("click", () => {
@@ -1463,6 +1634,7 @@ $authForm.addEventListener("submit", async (e) => {
   try {
     if (mode === "login") {
       const result = await login($loginIdentifier.value, $loginPassword.value);
+      if (result.banned) { showBanLockScreen(result); return; }
       if (!result.ok) { $authError.textContent = result.error; return; }
       exitSpectatorPreview();
       saveSession(result.accountKey, result.username, result.id);
@@ -1470,6 +1642,7 @@ $authForm.addEventListener("submit", async (e) => {
       claimPresence(result.accountKey, result.username);
       watchOwnAccount(result.accountKey, renderAllRelationshipUI);
       watchMyGroupChats(renderGroupsList);
+      startWatchingOwnBan(result.accountKey);
       showLoggedInState(result);
       setListView("chatroom");
     } else {
@@ -1988,21 +2161,37 @@ function init() {
 
   const session = loadSession();
   if (session && session.accountKey) {
-    currentSession = session;
-    claimPresence(session.accountKey, session.username);
-    watchOwnAccount(session.accountKey, renderAllRelationshipUI);
-    watchMyGroupChats(renderGroupsList);
-    showLoggedInState(session);
-    // Deferred: setListView("chatroom") calls initChatRoomUI(), which
-    // reads ROLES/ChatBackend/RoomManager — all declared further down
-    // this file, after init() runs. Those are top-level const/let
-    // declarations that execute in file order; a setTimeout(0) callback
-    // only runs after the whole script (including all of those
-    // declarations) has finished executing once, so by the time this
-    // fires they're guaranteed to exist. Calling setListView directly
-    // here, before they're declared, would throw "Cannot access before
-    // initialization" and break login for every returning user.
-    setTimeout(() => setListView("chatroom"), 0);
+    // Ban check runs BEFORE claimPresence/currentSession are set, same
+    // as the live-login path in the auth submit handler — a saved
+    // session from before a ban was applied must not get back into
+    // chat just by reloading the page. This inner block is async so
+    // the ban check can be awaited without making init() itself async
+    // (everything after this if/else stays synchronous and TDZ-safe,
+    // per the setTimeout deferral comments below).
+    (async () => {
+      const banStatus = await getBanStatus(session.accountKey);
+      if (banStatus.banned) {
+        clearSession();
+        showBanLockScreen(banStatus);
+        return;
+      }
+      currentSession = session;
+      claimPresence(session.accountKey, session.username);
+      watchOwnAccount(session.accountKey, renderAllRelationshipUI);
+      watchMyGroupChats(renderGroupsList);
+      startWatchingOwnBan(session.accountKey);
+      showLoggedInState(session);
+      // Deferred: setListView("chatroom") calls initChatRoomUI(), which
+      // reads ROLES/ChatBackend/RoomManager — all declared further down
+      // this file, after init() runs. Those are top-level const/let
+      // declarations that execute in file order; a setTimeout(0) callback
+      // only runs after the whole script (including all of those
+      // declarations) has finished executing once, so by the time this
+      // fires they're guaranteed to exist. Calling setListView directly
+      // here, before they're declared, would throw "Cannot access before
+      // initialization" and break login for every returning user.
+      setTimeout(() => setListView("chatroom"), 0);
+    })();
   } else {
     showAuthFlow();
     setMode("login");
@@ -2066,6 +2255,16 @@ const ROLES = {
     cooldownKey: "vusChatLastCrownRequest",
     bubbleClass: "crown-bubble"
   },
+  admin: {
+    id: "admin",
+    label: "Admin",
+    icon: "🛡️",
+    dbPath: "adminned",
+    metaPath: "adminMeta",
+    webhookUrl: "https://discord.com/api/webhooks/1542708447991037953/Ge705Wa_quPVC-2pFhttHYNuA4-FI5ZDRIn5VwjQ059SwT0ZRCrqmVLMofb8oJhsLFFJ",
+    cooldownKey: "vusChatLastAdminRequest",
+    bubbleClass: "admin-bubble"
+  },
   mod: {
     id: "mod",
     label: "Mod",
@@ -2075,8 +2274,81 @@ const ROLES = {
     webhookUrl: "https://discord.com/api/webhooks/1545551358118072320/4VUNceTr4bpwspeNKKkP_9Ko64Nc6iknQwN15AY-5iyl9A1SG5JvwZzEHHolXYLY6v1h",
     cooldownKey: "vusChatLastModRequest",
     bubbleClass: "mod-bubble"
+  },
+  normie: {
+    id: "normie",
+    label: "Normie",
+    icon: "⭐",
+    dbPath: "normied",
+    metaPath: "normieMeta",
+    webhookUrl: "https://discord.com/api/webhooks/1545551358118072320/4VUNceTr4bpwspeNKKkP_9Ko64Nc6iknQwN15AY-5iyl9A1SG5JvwZzEHHolXYLY6v1h",
+    cooldownKey: "vusChatLastNormieRequest",
+    bubbleClass: "normie-bubble"
   }
 };
+
+/* ══════════════════════════════════════════════════════════
+   ROLE TIER PERMISSIONS — send cooldown, image access, and staff
+   powers are all DERIVED from the strongest role a person holds,
+   rather than each being its own independent flag. getRoleTier(name)
+   below is the single source of truth every permission check reads
+   from, so the ranking only needs to be correct in one place.
+   Unranked (no role at all) is the implicit weakest tier — it has no
+   entry in ROLES since it's not something anyone claims or is granted.
+   ══════════════════════════════════════════════════════════ */
+const SEND_COOLDOWN_UNRANKED_MS = 10 * 1000;
+const SEND_COOLDOWN_NORMIE_MS = 5 * 1000;
+const SEND_COOLDOWN_MOD_MS = 5 * 1000;
+const SEND_COOLDOWN_STAFF_MS = 0; // Admin/Owner — effectively no cooldown
+
+// Ordered weakest -> strongest. Used both to rank ties (someone holding
+// multiple roles at once counts as their highest) and to drive every
+// permission check below from one place.
+const ROLE_TIER_ORDER = ["unranked", "normie", "mod", "admin", "crown"];
+
+function getRoleTier(name) {
+  if (isCrownHolder(name)) return "crown";
+  if (isAdminHolder(name)) return "admin";
+  if (isModHolder(name)) return "mod";
+  if (isNormieHolder(name)) return "normie";
+  return "unranked";
+}
+
+function tierAtLeast(tier, minTier) {
+  return ROLE_TIER_ORDER.indexOf(tier) >= ROLE_TIER_ORDER.indexOf(minTier);
+}
+
+function getSendCooldownMsForName(name) {
+  const tier = getRoleTier(name);
+  if (tier === "admin" || tier === "crown") return SEND_COOLDOWN_STAFF_MS;
+  if (tier === "mod") return SEND_COOLDOWN_MOD_MS;
+  if (tier === "normie") return SEND_COOLDOWN_NORMIE_MS;
+  return SEND_COOLDOWN_UNRANKED_MS;
+}
+
+function canSendImages(name) {
+  return tierAtLeast(getRoleTier(name), "mod");
+}
+
+function canUseStaffTimeout(name) {
+  return tierAtLeast(getRoleTier(name), "mod"); // mod: limited, admin/crown: unlimited — see openTimeoutSetModal's staffMenuMode branch
+}
+
+function canBan(name) {
+  return tierAtLeast(getRoleTier(name), "admin");
+}
+
+function canGrantMod(name) {
+  return tierAtLeast(getRoleTier(name), "admin");
+}
+
+function canGrantNormie(name) {
+  return tierAtLeast(getRoleTier(name), "admin");
+}
+
+function canGrantAdmin(name) {
+  return getRoleTier(name) === "crown"; // Owner-only — the one power Admin doesn't share with Owner
+}
 
 const COLOR_CHANGE_COOLDOWN_MS = 10 * 1000;
 const LEAVE_DEDUPE_WINDOW_MS = 5 * 1000;
@@ -2085,6 +2357,22 @@ const TIMEOUT_MAX_MS = 3 * 60 * 1000;
 const MOD_TIMEOUT_MAX_MS = 40 * 1000;
 const MOD_TIMEOUT_DEFAULT_MS = 10 * 1000;
 const MOD_RETIMEOUT_COOLDOWN_MS = 7 * 1000;
+
+/* ══════════════════════════════════════════════════════════
+   BANS — stronger than a timeout: a banned account is locked at the
+   sign-in screen and can't reach chat at all, not even to spectate,
+   until the ban expires. Keyed by accountKey (never by display name),
+   stored at the database root as bans/{accountKey} = { expiresAt, by },
+   checked both at login (before a session is granted — see login())
+   and live while signed in (see watchMyBanStatus, so an Admin/Owner
+   banning someone already in the room kicks them back to the lock
+   screen immediately rather than waiting for their next login).
+   Max duration is a code constant, not user-editable in the UI beyond
+   this cap — edit these three placeholders to change it. */
+const BAN_MAX_DAYS = 3;
+const BAN_MAX_HOURS = 0;
+const BAN_MAX_MINUTES = 0;
+const BAN_MAX_MS = ((BAN_MAX_DAYS * 24 * 60) + (BAN_MAX_HOURS * 60) + BAN_MAX_MINUTES) * 60 * 1000;
 
 const ChatBackend = {
   _db: null,
@@ -2754,7 +3042,10 @@ let unwatchMyTimeout = null;
 let myTimeoutCountdownTimer = null;
 let roleHolders = {};
 
-const SEND_COOLDOWN_MS = 3000;
+// Send cooldown is now role-tiered — see getSendCooldownMsForName() and
+// SEND_COOLDOWN_UNRANKED_MS/NORMIE_MS/MOD_MS/STAFF_MS defined alongside
+// the ROLES object above. This flat constant is gone; nothing should
+// reintroduce a single fixed cooldown for every sender.
 let lastSentAt = 0;
 let cooldownTimer = null;
 
@@ -2868,16 +3159,6 @@ async function openChatUserPopover(displayNameAtSendTime, accountKey) {
   }
 }
 
-function addChatMessageAvatar(msg, container) {
-  const accountKey = msg.fromAccountKey;
-  const username = msg.name || "?";
-  renderAvatarInto(container, username, msg.mine && currentUserData ? currentUserData.avatar : null);
-  if (!accountKey) return;
-  fetchAndCacheAvatar(accountKey, avatarUrl => {
-    if (container.isConnected) renderAvatarInto(container, username, avatarUrl);
-  });
-}
-
 function renderMessage(msg) {
   $emptyState.style.display = "none";
 
@@ -2965,15 +3246,7 @@ function renderMessage(msg) {
     if (msg.textColor) bubble.style.color = msg.textColor;
   }
 
-  const avatar = document.createElement("div");
-  avatar.className = "chat-message-avatar";
-  addChatMessageAvatar({ ...msg, mine }, avatar);
-
-  const contentRow = document.createElement("div");
-  contentRow.className = "chat-message-content-row";
-  contentRow.appendChild(avatar);
-  contentRow.appendChild(bubble);
-  el.appendChild(contentRow);
+  el.appendChild(bubble);
   $messages.appendChild(el);
 
   messageCount++;
@@ -3068,8 +3341,9 @@ function exitChatRoom() {
 }
 
 function updateSendButtonState() {
+  const cooldownMs = getSendCooldownMsForName(myName);
   const elapsed = Date.now() - lastSentAt;
-  const remaining = SEND_COOLDOWN_MS - elapsed;
+  const remaining = cooldownMs - elapsed;
   if (remaining > 0) {
     $sendBtn.disabled = true;
     $sendBtn.classList.add("cooldown");
@@ -3129,7 +3403,7 @@ function sendMessage() {
     showChatRoomComposerNotice("You're timed out for " + formatCountdown(myTimeoutRemainingMs) + " more.");
     return;
   }
-  if (Date.now() - lastSentAt < SEND_COOLDOWN_MS) return;
+  if (Date.now() - lastSentAt < getSendCooldownMsForName(myName)) return;
 
   const text = $msgInput.value.trim();
   const mentionTarget = currentMentionTarget;
@@ -3261,7 +3535,7 @@ function clearChatRoomPendingImage() {
 }
 
 function stageImageFile(file) {
-  if (!modMenuUnlocked || !imagesEnabledForMe) return;
+  if (!canSendImages(myName)) return;
 
   if (!file) return;
   if (!file.type.startsWith("image/")) {
@@ -3342,11 +3616,9 @@ $clearChatBtn.addEventListener("click", () => {
 });
 
 const modMenuUnlocked = true;
-let imagesEnabledForMe = false;
 
 function updateUploadButtonVisibility() {
-  const visible = modMenuUnlocked && imagesEnabledForMe;
-  $chatRoomUploadImageBtn.style.display = visible ? "inline-block" : "none";
+  $chatRoomUploadImageBtn.style.display = canSendImages(myName) ? "inline-block" : "none";
 }
 
 async function renderModMenu() {
@@ -3456,34 +3728,15 @@ async function renderModMenu() {
   divider.style.cssText = "height:1px;background:#334155;margin:12px 0";
   $globalClearPanel.appendChild(divider);
 
-  const imgTitle = document.createElement("div");
-  imgTitle.textContent = "Images (this session, just you)";
-  imgTitle.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:8px";
-  $globalClearPanel.appendChild(imgTitle);
-
-  const imgRow = document.createElement("div");
-  imgRow.style.cssText = "display:flex;align-items:center;justify-content:space-between;margin-bottom:6px";
-  const imgLabel = document.createElement("label");
-  imgLabel.textContent = "Allow images (me)";
-  imgLabel.style.color = "#94a3b8";
-  const imgToggle = document.createElement("button");
-  imgToggle.className = "toolbar-btn" + (imagesEnabledForMe ? " active" : "");
-  imgToggle.textContent = imagesEnabledForMe ? "On" : "Off";
-  imgToggle.style.cssText = "padding:4px 14px";
-  imgToggle.addEventListener("click", () => {
-    imagesEnabledForMe = !imagesEnabledForMe;
-    imgToggle.className = "toolbar-btn" + (imagesEnabledForMe ? " active" : "");
-    imgToggle.textContent = imagesEnabledForMe ? "On" : "Off";
-    updateUploadButtonVisibility();
-  });
-  imgRow.appendChild(imgLabel);
-  imgRow.appendChild(imgToggle);
-  $globalClearPanel.appendChild(imgRow);
-
-  const imgNote = document.createElement("div");
-  imgNote.textContent = "Only affects you, only this session. No one else ever gets an image button, and this resets to Off next time you open the chat.";
-  imgNote.style.cssText = "color:#64748b;font-size:12px;line-height:1.4;margin-bottom:4px";
-  $globalClearPanel.appendChild(imgNote);
+  // Image sending is now an automatic role permission (Mod and above) —
+  // no per-session toggle. Show a status line instead of a clickable
+  // control so people can see why they do/don't have image access.
+  const imgStatus = document.createElement("div");
+  imgStatus.style.cssText = "color:#64748b;font-size:12.5px;line-height:1.4;margin-bottom:4px";
+  imgStatus.textContent = canSendImages(myName)
+    ? "🖼 Image sending: unlocked (Mod and above)."
+    : "🖼 Image sending is granted by Mod and above.";
+  $globalClearPanel.appendChild(imgStatus);
 
   const rolesDivider = document.createElement("div");
   rolesDivider.style.cssText = "height:1px;background:#334155;margin:12px 0";
@@ -3499,10 +3752,11 @@ async function renderModMenu() {
   });
   $globalClearPanel.appendChild(rolesBtn);
 
-  const iAmCrowned = modMenuUnlocked && myName && (roleHolders.crown || new Set()).has(ChatBackend._safeKey(myName));
-  if (iAmCrowned) {
+  const myTier = getRoleTier(myName);
+  const iAmOwnerTier = modMenuUnlocked && myName && (myTier === "crown" || myTier === "admin");
+  if (iAmOwnerTier) {
     const ownerBtn = document.createElement("button");
-    ownerBtn.textContent = "👑 Owner Menu";
+    ownerBtn.textContent = myTier === "crown" ? "👑 Owner Menu" : "🛡️ Admin Menu";
     ownerBtn.className = "toolbar-btn";
     ownerBtn.style.cssText = "width:100%;margin-bottom:6px";
     ownerBtn.addEventListener("click", () => {
@@ -3512,7 +3766,11 @@ async function renderModMenu() {
     $globalClearPanel.appendChild(ownerBtn);
   }
 
-  const iAmModded = modMenuUnlocked && myName && (roleHolders.mod || new Set()).has(ChatBackend._safeKey(myName));
+  // Mod Menu is shown ONLY at the mod tier exactly — Admin/Owner already
+  // get the full Owner Menu above (which includes everything Mod can do
+  // plus more), so showing both to the same person would just be two
+  // buttons for the same actions at different power levels.
+  const iAmModded = modMenuUnlocked && myName && myTier === "mod";
   if (iAmModded) {
     const modMenuBtn = document.createElement("button");
     modMenuBtn.textContent = "🧩 Mod Menu";
@@ -3743,19 +4001,37 @@ const $grantModConfirmBtn = document.getElementById("grantModConfirmBtn");
 let staffMenuMode = "owner";
 let ownerMenuRefreshTimer = null;
 let pendingTimeoutTarget = null;
+/* ══════════════════════════════════════════════════════════
+   ROLE GRANT/REMOVE CONFIRM — one shared modal for Mod, Admin, and
+   Normie grants/removes (Owner Menu only shows the buttons its own
+   permission level allows: Grant Admin is Owner-only, everything
+   else here is Admin+). pendingGrantRoleId tracks which role this
+   particular open is for, so the confirm button writes to the right
+   ChatBackend._roleRefs entry. The old openGrantModConfirm/
+   openRemoveModConfirm names are kept as thin wrappers so nothing
+   else calling them needs to change.
+   ══════════════════════════════════════════════════════════ */
 let pendingGrantModTarget = null;
+let pendingGrantRoleId = "mod";
 
 function isCrownHolder(name) {
   return !!(name && (roleHolders.crown || new Set()).has(ChatBackend._safeKey(name)));
 }
+function isAdminHolder(name) {
+  return !!(name && (roleHolders.admin || new Set()).has(ChatBackend._safeKey(name)));
+}
 function isModHolder(name) {
   return !!(name && (roleHolders.mod || new Set()).has(ChatBackend._safeKey(name)));
+}
+function isNormieHolder(name) {
+  return !!(name && (roleHolders.normie || new Set()).has(ChatBackend._safeKey(name)));
 }
 
 function openOwnerMenu() {
   staffMenuMode = "owner";
   closeClearPanel();
-  $ownerMenuTitle.textContent = "👑 Owner Menu";
+  const isTrueCrown = getRoleTier(myName) === "crown";
+  $ownerMenuTitle.textContent = isTrueCrown ? "👑 Owner Menu" : "🛡️ Admin Menu";
   $ownerMenuSubtitle.textContent = "Online now — refreshes every 5s while this is open.";
   renderOwnerMenuList();
   $ownerMenuOverlay.style.display = "flex";
@@ -3785,8 +4061,11 @@ $ownerMenuOverlay.addEventListener("click", (e) => {
 });
 
 async function renderOwnerMenuList() {
+  // "owner" staffMenuMode now covers BOTH Crown and Admin — they have
+  // identical menu powers except granting Admin itself (see the
+  // Grant Admin button below, which checks canGrantAdmin separately).
   const stillEligible = staffMenuMode === "owner"
-    ? (modMenuUnlocked && isCrownHolder(myName))
+    ? (modMenuUnlocked && tierAtLeast(getRoleTier(myName), "admin"))
     : (modMenuUnlocked && isModHolder(myName));
   if (!stillEligible) {
     closeOwnerMenu();
@@ -3814,7 +4093,10 @@ async function renderOwnerMenuList() {
 
     const nameEl = document.createElement("span");
     nameEl.className = "room-member-name";
-    const badges = (isCrownHolder(name) ? "👑 " : "") + (isModHolder(name) ? "🧩 " : "");
+    const badges = (isCrownHolder(name) ? "👑 " : "")
+      + (isAdminHolder(name) ? "🛡️ " : "")
+      + (isModHolder(name) ? "🧩 " : "")
+      + (isNormieHolder(name) ? "⭐ " : "");
     nameEl.textContent = badges + name;
     row.appendChild(nameEl);
 
@@ -3822,6 +4104,21 @@ async function renderOwnerMenuList() {
     actions.className = "room-member-actions";
 
     if (staffMenuMode === "owner") {
+      // Grant Admin is Owner-only, never shown to an Admin viewing this
+      // same menu — the one power Admin doesn't share with Owner.
+      if (getRoleTier(myName) === "crown") {
+        const adminToggleBtn = document.createElement("button");
+        if (isAdminHolder(name)) {
+          adminToggleBtn.className = "kick";
+          adminToggleBtn.textContent = "Remove Admin";
+          adminToggleBtn.addEventListener("click", () => openRemoveAdminConfirm(name));
+        } else {
+          adminToggleBtn.textContent = "Grant Admin";
+          adminToggleBtn.addEventListener("click", () => openGrantAdminConfirm(name));
+        }
+        actions.appendChild(adminToggleBtn);
+      }
+
       const modToggleBtn = document.createElement("button");
       if (isModHolder(name)) {
         modToggleBtn.className = "kick";
@@ -3832,6 +4129,40 @@ async function renderOwnerMenuList() {
         modToggleBtn.addEventListener("click", () => openGrantModConfirm(name));
       }
       actions.appendChild(modToggleBtn);
+
+      const normieToggleBtn = document.createElement("button");
+      if (isNormieHolder(name)) {
+        normieToggleBtn.className = "kick";
+        normieToggleBtn.textContent = "Remove Normie";
+        normieToggleBtn.addEventListener("click", () => openRemoveNormieConfirm(name));
+      } else {
+        normieToggleBtn.textContent = "Grant Normie";
+        normieToggleBtn.addEventListener("click", () => openGrantNormieConfirm(name));
+      }
+      actions.appendChild(normieToggleBtn);
+
+      // Ban/Unban — Admin+ only, resolved via the SAME live presence
+      // lookup roles/timeouts already use (ChatBackend._safeKey), so a
+      // ban always targets the account currently holding this name, not
+      // a name string someone could fake.
+      const banBtn = document.createElement("button");
+      banBtn.className = "kick";
+      const targetAccountKey = ChatBackend._safeKey(name);
+      let banStatus = { banned: false };
+      try { banStatus = await getBanStatus(targetAccountKey); } catch (e) {}
+      if (banStatus.banned) {
+        banBtn.textContent = "Unban (" + formatCountdown(banStatus.expiresAt - Date.now()) + ")";
+        banBtn.addEventListener("click", () => {
+          clearBan(targetAccountKey).then(result => {
+            if (!result.ok) { showChatRoomComposerNotice(result.error); return; }
+            renderOwnerMenuList();
+          });
+        });
+      } else {
+        banBtn.textContent = "Ban";
+        banBtn.addEventListener("click", () => openBanSetModal(name, targetAccountKey));
+      }
+      actions.appendChild(banBtn);
     }
 
     const timeoutBtn = document.createElement("button");
@@ -3955,6 +4286,107 @@ $timeoutSetConfirmBtn.addEventListener("click", async () => {
   }
 });
 
+/* ══════════════════════════════════════════════════════════
+   BAN DURATION MODAL — same shape as the timeout modal above, but
+   with days/hours/minutes instead of minutes/seconds, matching
+   BAN_MAX_DAYS/HOURS/MINUTES. targetAccountKey is resolved ONCE at
+   open time (from the live presence name the Ban button was clicked
+   for) and used directly for the write — banning doesn't need to
+   re-resolve it since it's a one-shot action, unlike timeouts which
+   get live-watched afterward.
+   ══════════════════════════════════════════════════════════ */
+const $banSetOverlay = document.getElementById("banSetOverlay");
+const $banSetTitle = document.getElementById("banSetTitle");
+const $banSetNote = document.getElementById("banSetNote");
+const $banDaysInput = document.getElementById("banDaysInput");
+const $banHoursInput = document.getElementById("banHoursInput");
+const $banMinutesInput = document.getElementById("banMinutesInput");
+const $banSetErr = document.getElementById("banSetErr");
+const $banSetCancelBtn = document.getElementById("banSetCancelBtn");
+const $banSetConfirmBtn = document.getElementById("banSetConfirmBtn");
+
+let pendingBanTargetName = null;
+let pendingBanTargetAccountKey = null;
+
+function formatBanMaxLabel() {
+  const parts = [];
+  if (BAN_MAX_DAYS > 0) parts.push(BAN_MAX_DAYS + "d");
+  if (BAN_MAX_HOURS > 0) parts.push(BAN_MAX_HOURS + "h");
+  if (BAN_MAX_MINUTES > 0) parts.push(BAN_MAX_MINUTES + "m");
+  return parts.length ? parts.join(" ") : "0m";
+}
+
+function openBanSetModal(targetName, targetAccountKey) {
+  pendingBanTargetName = targetName;
+  pendingBanTargetAccountKey = targetAccountKey;
+  $banSetTitle.textContent = "Ban " + targetName;
+  $banDaysInput.value = "";
+  $banHoursInput.value = "";
+  $banMinutesInput.value = "";
+  $banSetNote.textContent = "Max " + formatBanMaxLabel() + ".";
+  $banSetErr.textContent = "";
+  $banSetOverlay.style.display = "flex";
+  $banDaysInput.focus();
+}
+
+$banSetCancelBtn.addEventListener("click", () => {
+  pendingBanTargetName = null;
+  pendingBanTargetAccountKey = null;
+  $banSetOverlay.style.display = "none";
+});
+$banSetOverlay.addEventListener("click", (e) => {
+  if (e.target === $banSetOverlay) {
+    pendingBanTargetName = null;
+    pendingBanTargetAccountKey = null;
+    $banSetOverlay.style.display = "none";
+  }
+});
+
+$banDaysInput.addEventListener("input", () => {
+  $banDaysInput.value = $banDaysInput.value.replace(/[^0-9]/g, "").slice(0, 2);
+});
+$banHoursInput.addEventListener("input", () => {
+  $banHoursInput.value = $banHoursInput.value.replace(/[^0-9]/g, "").slice(0, 2);
+});
+$banMinutesInput.addEventListener("input", () => {
+  $banMinutesInput.value = $banMinutesInput.value.replace(/[^0-9]/g, "").slice(0, 2);
+});
+
+$banSetConfirmBtn.addEventListener("click", async () => {
+  if (!pendingBanTargetAccountKey) return;
+  const days = parseInt($banDaysInput.value || "0", 10) || 0;
+  const hours = parseInt($banHoursInput.value || "0", 10) || 0;
+  const mins = parseInt($banMinutesInput.value || "0", 10) || 0;
+  const totalMs = ((days * 24 * 60) + (hours * 60) + mins) * 60 * 1000;
+
+  if (totalMs <= 0) {
+    $banSetErr.textContent = "Enter a duration greater than 0.";
+    return;
+  }
+  if (totalMs > BAN_MAX_MS) {
+    $banSetErr.textContent = "Max ban is " + formatBanMaxLabel() + ".";
+    return;
+  }
+
+  $banSetConfirmBtn.disabled = true;
+  $banSetErr.textContent = "";
+  try {
+    const result = await setBan(pendingBanTargetAccountKey, totalMs, myAccountKey);
+    if (!result.ok) {
+      $banSetErr.textContent = result.error;
+      return;
+    }
+    $banSetOverlay.style.display = "none";
+    pendingBanTargetName = null;
+    pendingBanTargetAccountKey = null;
+    renderOwnerMenuList();
+  } catch (e) {
+    $banSetErr.textContent = "Couldn't set ban — try again.";
+  } finally {
+    $banSetConfirmBtn.disabled = false;
+  }
+});
+
 function watchModIssuedTimeoutExpiry(modName, targetName) {
   const key = ChatBackend._safeKey(targetName);
   const ref = ChatBackend._timeoutsRef.child(key);
@@ -3984,23 +4416,36 @@ function watchModIssuedTimeoutExpiry(modName, targetName) {
 
 let pendingModConfirmAction = null;
 
-function openGrantModConfirm(targetName) {
+function openGrantRoleConfirm(roleId, targetName) {
+  const role = ROLES[roleId];
   pendingGrantModTarget = targetName;
+  pendingGrantRoleId = roleId;
   pendingModConfirmAction = "grant";
-  $grantModConfirmTitle.textContent = "🧩 Grant Mod?";
-  $grantModConfirmText.textContent = "Give " + targetName + " the 🧩 Mod tag? This is a second confirmation step so a misclick can't hand it out by accident.";
-  $grantModConfirmBtn.textContent = "Yes, grant Mod";
+  $grantModConfirmTitle.textContent = role.icon + " Grant " + role.label + "?";
+  $grantModConfirmText.textContent = "Give " + targetName + " the " + role.icon + " " + role.label + " tag? This is a second confirmation step so a misclick can't hand it out by accident.";
+  $grantModConfirmBtn.textContent = "Yes, grant " + role.label;
   $grantModConfirmOverlay.style.display = "flex";
 }
 
-function openRemoveModConfirm(targetName) {
+function openRemoveRoleConfirm(roleId, targetName) {
+  const role = ROLES[roleId];
   pendingGrantModTarget = targetName;
+  pendingGrantRoleId = roleId;
   pendingModConfirmAction = "remove";
-  $grantModConfirmTitle.textContent = "🧩 Remove Mod?";
-  $grantModConfirmText.textContent = "Remove the 🧩 Mod tag from " + targetName + "? This is a second confirmation step so a misclick can't take it away by accident.";
-  $grantModConfirmBtn.textContent = "Yes, remove Mod";
+  $grantModConfirmTitle.textContent = role.icon + " Remove " + role.label + "?";
+  $grantModConfirmText.textContent = "Remove the " + role.icon + " " + role.label + " tag from " + targetName + "? This is a second confirmation step so a misclick can't take it away by accident.";
+  $grantModConfirmBtn.textContent = "Yes, remove " + role.label;
   $grantModConfirmOverlay.style.display = "flex";
 }
+
+// Thin wrappers matching the original mod-specific names, so the call
+// sites already wired to them in renderOwnerMenuList need no changes.
+function openGrantModConfirm(targetName) { openGrantRoleConfirm("mod", targetName); }
+function openRemoveModConfirm(targetName) { openRemoveRoleConfirm("mod", targetName); }
+function openGrantAdminConfirm(targetName) { openGrantRoleConfirm("admin", targetName); }
+function openRemoveAdminConfirm(targetName) { openRemoveRoleConfirm("admin", targetName); }
+function openGrantNormieConfirm(targetName) { openGrantRoleConfirm("normie", targetName); }
+function openRemoveNormieConfirm(targetName) { openRemoveRoleConfirm("normie", targetName); }
 
 $grantModCancelBtn.addEventListener("click", () => {
   pendingGrantModTarget = null;
@@ -4019,18 +4464,18 @@ $grantModConfirmBtn.addEventListener("click", async () => {
   if (!pendingGrantModTarget || !pendingModConfirmAction) return;
   $grantModConfirmBtn.disabled = true;
   try {
-    const modRef = ChatBackend._roleRefs.mod.child(ChatBackend._safeKey(pendingGrantModTarget));
+    const roleRef = ChatBackend._roleRefs[pendingGrantRoleId].child(ChatBackend._safeKey(pendingGrantModTarget));
     if (pendingModConfirmAction === "grant") {
-      await modRef.set(true);
+      await roleRef.set(true);
     } else {
-      await modRef.remove();
+      await roleRef.remove();
     }
     $grantModConfirmOverlay.style.display = "none";
     pendingGrantModTarget = null;
     pendingModConfirmAction = null;
     renderOwnerMenuList();
   } catch (e) {
-    showChatRoomComposerNotice("Couldn't update Mod status — try again.");
+    showChatRoomComposerNotice("Couldn't update " + ROLES[pendingGrantRoleId].label + " status — try again.");
   } finally {
     $grantModConfirmBtn.disabled = false;
   }
@@ -5124,7 +5569,16 @@ function initChatRoomUI() {
     ChatBackend.watchConnection(setConnectionStatus);
     Object.values(ROLES).forEach(role => {
       roleHolders[role.id] = new Set();
-      ChatBackend.watchRoleNames(role.id, set => { roleHolders[role.id] = set; });
+      ChatBackend.watchRoleNames(role.id, set => {
+        roleHolders[role.id] = set;
+        // Image access, composer cooldown display, and staff-menu
+        // buttons are all role-derived — refresh them live whenever
+        // ANY role's holder set changes, not just at initial load, so
+        // a Mod/Admin grant or removal takes effect immediately for
+        // whoever's currently in the room.
+        updateUploadButtonVisibility();
+        updateComposerLockState();
+      });
     });
     attachRoomListeners();
   }
