@@ -2868,6 +2868,16 @@ async function openChatUserPopover(displayNameAtSendTime, accountKey) {
   }
 }
 
+function addChatMessageAvatar(msg, container) {
+  const accountKey = msg.fromAccountKey;
+  const username = msg.name || "?";
+  renderAvatarInto(container, username, msg.mine && currentUserData ? currentUserData.avatar : null);
+  if (!accountKey) return;
+  fetchAndCacheAvatar(accountKey, avatarUrl => {
+    if (container.isConnected) renderAvatarInto(container, username, avatarUrl);
+  });
+}
+
 function renderMessage(msg) {
   $emptyState.style.display = "none";
 
@@ -2955,7 +2965,15 @@ function renderMessage(msg) {
     if (msg.textColor) bubble.style.color = msg.textColor;
   }
 
-  el.appendChild(bubble);
+  const avatar = document.createElement("div");
+  avatar.className = "chat-message-avatar";
+  addChatMessageAvatar({ ...msg, mine }, avatar);
+
+  const contentRow = document.createElement("div");
+  contentRow.className = "chat-message-content-row";
+  contentRow.appendChild(avatar);
+  contentRow.appendChild(bubble);
+  el.appendChild(contentRow);
   $messages.appendChild(el);
 
   messageCount++;

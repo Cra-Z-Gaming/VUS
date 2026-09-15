@@ -27,23 +27,6 @@
   .chat-header .room-name { color: #94a3b8; font-size: 18px; font-weight: 400; }
   .you-avatar { width: 27px; height: 27px; border-radius: 50%; background: #334155; color: #f1f5f9; display: inline-flex; align-items: center; justify-content: center; overflow: hidden; font-size: 13px; font-weight: 700; flex-shrink: 0; }
   .you-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  body.phen-horror { background: #050207; }
-  body.phen-horror #chatScreen { background: radial-gradient(circle at center, rgba(84, 8, 28, .72), rgba(5, 2, 7, .98) 72%); }
-  body.phen-horror #messages { background-image: repeating-linear-gradient(115deg, rgba(255, 30, 80, .045) 0, rgba(255, 30, 80, .045) 1px, transparent 1px, transparent 18px); }
-  #phenHorrorOverlay { display: none; position: fixed; inset: 0; pointer-events: none; z-index: 35; align-items: center; justify-content: center; background: radial-gradient(circle, transparent 15%, rgba(5, 2, 7, .38) 58%, rgba(0, 0, 0, .78)); animation: phenHorrorPulse .8s ease-in-out infinite alternate; }
-  body.phen-horror #phenHorrorOverlay { display: flex; }
-  #phenHorrorOverlay img, #locustHorrorOverlay img { position: absolute; width: min(52vw, 520px); height: min(68vh, 620px); object-fit: cover; opacity: .42; filter: contrast(1.35) saturate(.55) brightness(.48); mix-blend-mode: screen; border-radius: 3px; }
-  #phenHorrorOverlay span { color: #ff315f; font-family: Georgia, serif; font-size: clamp(32px, 9vw, 110px); font-weight: 900; letter-spacing: .12em; text-shadow: 0 0 18px #ff174f, 0 0 60px #7f092c; transform: rotate(-4deg); }
-  .phen-horror-quote { position: absolute; left: 50%; bottom: 8vh; width: min(88vw, 760px); transform: translateX(-50%); color: #f8d7df; font-family: Georgia, serif; font-size: clamp(14px, 1.8vw, 22px); line-height: 1.45; text-align: center; text-shadow: 0 2px 14px #000, 0 0 28px #7f092c; opacity: .94; }
-  @keyframes phenHorrorPulse { from { opacity: .54; } to { opacity: .92; } }
-  body.locust-horror #chatScreen { filter: contrast(1.25) saturate(.7); }
-  #locustHorrorOverlay { display: none; position: fixed; inset: 0; pointer-events: none; z-index: 36; overflow: hidden; background: rgba(0, 0, 0, .32); }
-  body.locust-horror #locustHorrorOverlay { display: block; animation: locustGlitch .16s steps(2, end) infinite; }
-  #locustHorrorOverlay::before, #locustHorrorOverlay::after { content: ""; position: absolute; inset: -8%; background: repeating-linear-gradient(0deg, transparent 0 7px, rgba(255,255,255,.1) 8px, transparent 9px); mix-blend-mode: screen; opacity: .35; }
-  #locustHorrorOverlay::after { background: linear-gradient(104deg, transparent 0 47%, rgba(238, 238, 214, .9) 47.25%, transparent 47.8%), linear-gradient(76deg, transparent 0 58%, rgba(238, 238, 214, .72) 58.2%, transparent 58.7%), linear-gradient(164deg, transparent 0 31%, rgba(238, 238, 214, .65) 31.2%, transparent 31.8%), linear-gradient(28deg, transparent 0 72%, rgba(238, 238, 214, .6) 72.2%, transparent 72.8%); filter: drop-shadow(0 0 8px #e7e5c7); opacity: .9; }
-  #locustHorrorOverlay img { width: min(66vw, 680px); height: min(54vh, 500px); opacity: .5; filter: contrast(1.5) saturate(.35) brightness(.42) sepia(.25); mix-blend-mode: lighten; transform: rotate(2deg); }
-  #locustHorrorOverlay span { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) skew(-8deg); color: #dedcc1; font-family: Georgia, serif; font-size: clamp(28px, 8vw, 96px); font-weight: 900; letter-spacing: .18em; text-shadow: 3px 0 #3e493d, -3px 0 #6e1717, 0 0 22px #e7e5c7; white-space: nowrap; }
-  @keyframes locustGlitch { 0%, 100% { transform: translate(0); } 35% { transform: translate(-3px, 2px); } 70% { transform: translate(4px, -2px); } }
   .chat-online-dot {
     display: inline-block;
     width: 10.5px;
@@ -991,9 +974,6 @@
   </div>
 </div>
 
-<div id="phenHorrorOverlay" aria-hidden="true"><img src="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=85" alt="Dark forest"><span>PHEN-228</span><p class="phen-horror-quote">The very memory of my face will cause a manifestation of my being in the future. You will be asleep in bed. I will be there, and watch over you. When you wake up, you will not be able to move any part of you. When your doctors eventually find you, they will not see me, but you will. And I'll see you too. Forever, I'll see you.</p></div>
-<div id="locustHorrorOverlay" aria-hidden="true"><img src="https://upload.wikimedia.org/wikipedia/commons/6/63/Desert_locust_-_W%C3%BCstenheuschrecke_-_Criquet_p%C3%A8lerin_-_Schistocerca_gregaria.jpg" alt="Desert locust photograph from Wikimedia Commons"><span>THE LOCUST</span></div>
-
 <audio id="pingSound" preload="auto"></audio>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -1159,22 +1139,6 @@ const ROOM_CREATE_COOLDOWN_KEY = "vusChatLastRoomCreate";
 
 const MAX_MESSAGES = 200;
 const MAX_CHARS = 500;
-const PHEN_HORROR_MONOLOGUE = "The very memory of my face will cause a manifestation of my being in the future. You will be asleep in bed. I will be there, and watch over you. When you wake up, you will not be able to move any part of you. When your doctors eventually find you, they will not see me, but you will. And I'll see you too. Forever, I'll see you.";
-const PHEN_HORROR_LINES = [
-  PHEN_HORROR_MONOLOGUE
-];
-const PHEN_HORROR_DURATION_MS = 32000;
-const PHEN_HORROR_COOLDOWN_MS = 30000;
-const LOCUST_HORROR_LINES = [
-  "The Locust has found your screen.",
-  "Do not let it finish breaking through.",
-  "The signal is splitting apart.",
-  "You can hear the swarm beneath the static.",
-  "It is moving whenever you stop watching."
-];
-const LOCUST_HORROR_DURATION_MS = 12000;
-const LOCUST_HORROR_COOLDOWN_MS = 30000;
-
 const PING_YOU_WEBHOOK_URL = "https://discord.com/api/webhooks/1536853718564216842/VZYgEyf5yEzMs03g-hbWIZRS90oNKrVh_LBN1eHv3ZVplCOUlKeRDTWKIAyolYjIshHa";
 const PING_YOU_COOLDOWN_MS = 30 * 1000;
 const PING_YOU_STORAGE_KEY = "vusChatLastPingYou";
@@ -1229,6 +1193,16 @@ const ROLES = {
     webhookUrl: "",
     cooldownKey: "vusChatLastAdminRequest",
     bubbleClass: "admin-bubble"
+  },
+  coowner: {
+    id: "coowner",
+    label: "Co-owner",
+    icon: "💎",
+    dbPath: "rooms/vus-hub-main/coOwners",
+    metaPath: "coownerMeta",
+    webhookUrl: "",
+    cooldownKey: "vusChatLastCoownerRequest",
+    bubbleClass: "coowner-bubble"
   }
 };
 
@@ -1247,6 +1221,8 @@ const TIMEOUT_MAX_MS = 30 * 24 * 60 * 60 * 1000; // 30-day cap for owners
 const MOD_TIMEOUT_MAX_MS = 60 * 60 * 1000; // 1-hour cap for mods
 const MOD_TIMEOUT_DEFAULT_MS = 10 * 60 * 1000; // prefilled duration when a mod opens the timeout modal
 const MOD_RETIMEOUT_COOLDOWN_MS = 7 * 1000; // a mod must wait this long after setting OR clearing a timeout before re-timing-out the SAME target
+const ROLE_MESSAGE_COOLDOWNS_MS = { unranked: 5000, normie: 3000, mod: 2000, admin: 1500, coowner: 1000, crown: 500 };
+const ROLE_IMAGE_COOLDOWNS_MS = { unranked: 0, normie: 0, mod: 5000, admin: 3000, coowner: 2000, crown: 1000 };
 
 const ChatBackend = {
   _db: null,
@@ -1270,6 +1246,7 @@ const ChatBackend = {
   _modRetimeoutRef: null,
   _commandHistoryRef: null,
   _bansRef: null,
+  _imageAccessRef: null,
   _temporaryRoleTimers: {},
   _temporaryRoleWatchRefs: {},
   _chatStateRef: null,
@@ -1280,6 +1257,7 @@ const ChatBackend = {
     this._db = firebase.database();
     this._connectedRef = this._db.ref(".info/connected");
     this._bansRef = this._db.ref("rooms/" + MAIN_ROOM_ID + "/bannedUsers");
+    this._imageAccessRef = this._db.ref("rooms/" + MAIN_ROOM_ID + "/imageAccess");
     this._chatStateRef = this._db.ref("chatState");
     this.initRoles();
     this.bindToRoom(MAIN_ROOM_ID);
@@ -1338,6 +1316,17 @@ const ChatBackend = {
     if (!this._commandHistoryRef) return [];
     const snap = await this._commandHistoryRef.limitToLast(limit).get();
     return Object.values(snap.val() || {}).reverse();
+  },
+
+  async getImageAccess(loginId) {
+    if (!loginId || !this._imageAccessRef) return false;
+    const snapshot = await this._imageAccessRef.child(this._safeKey(String(loginId))).get();
+    return snapshot.val() === true;
+  },
+
+  async setImageAccess(loginId, enabled) {
+    if (!loginId || !this._imageAccessRef) throw new Error("Missing login ID");
+    await this._imageAccessRef.child(this._safeKey(String(loginId))).set(!!enabled);
   },
 
   async setChatClosed(closed) {
@@ -1487,26 +1476,6 @@ const ChatBackend = {
       ts: firebase.database.ServerValue.TIMESTAMP,
       ...(mention ? { mention: mention.name } : {}),
       ...(color ? { bubble: color.bubble, textColor: color.text } : {})
-    });
-  },
-
-  async sendHorror(name) {
-    const line = PHEN_HORROR_LINES[Math.floor(Math.random() * PHEN_HORROR_LINES.length)];
-    return this._ref.push({
-      horror: true,
-      horrorLine: line,
-      name: name,
-      ts: firebase.database.ServerValue.TIMESTAMP
-    });
-  },
-
-  async sendHorror2(name) {
-    const line = LOCUST_HORROR_LINES[Math.floor(Math.random() * LOCUST_HORROR_LINES.length)];
-    return this._ref.push({
-      horror2: true,
-      horrorLine: line,
-      name: name,
-      ts: firebase.database.ServerValue.TIMESTAMP
     });
   },
 
@@ -1869,9 +1838,32 @@ const ChatBackend = {
     await this._roleRefs[roleId].child(this._safeKey(username)).set(true);
   },
 
-  async unbanUser(loginId) {
-    if (!loginId) throw new Error("Missing login ID");
-    await this._bansRef.child(this._safeKey(String(loginId))).remove();
+  async removeRole(roleId, username, loginId) {
+    if (!ROLES[roleId] || roleId === "crown" || !username) {
+      throw new Error("Invalid role removal");
+    }
+    if (loginId) clearTimeout(this._temporaryRoleTimers[roleId + ":" + loginId]);
+    await this._roleRefs[roleId].child(this._safeKey(username)).remove();
+  },
+
+  async unbanUser(identifier) {
+    const clean = String(identifier || "").trim();
+    if (!clean) throw new Error("Missing username or login ID");
+
+    let loginId = clean;
+    if (!/^\d{6}$/.test(clean)) {
+      const snapshot = await this._bansRef.get();
+      const bans = snapshot.val() || {};
+      const wanted = clean.toLowerCase();
+      const match = Object.values(bans).find(entry =>
+        entry && String(entry.username || "").trim().toLowerCase() === wanted
+      );
+      if (!match || !match.loginId) throw new Error("No ban found for that username");
+      loginId = String(match.loginId);
+    }
+
+    await this._bansRef.child(this._safeKey(loginId)).remove();
+    return loginId;
   },
 
   watchBan(loginId, onChange) {
@@ -2233,16 +2225,6 @@ function scrollToBottom() {
 function renderMessage(msg) {
   $emptyState.style.display = "none";
 
-  if (msg.horror2) {
-    triggerLocustHorror(msg);
-    return;
-  }
-
-  if (msg.horror) {
-    triggerPhenHorror(msg);
-    return;
-  }
-
   if (msg.system) {
     const sysEl = document.createElement("div");
     sysEl.className = "msg system";
@@ -2343,109 +2325,6 @@ function renderMessage(msg) {
   if (msg.mention && msg.mention === myName && msg.name !== myName) {
     triggerIncomingPing(msg.name, msg.text);
   }
-}
-
-let phenHorrorTimer = null;
-let lastPhenHorrorAt = 0;
-let locustHorrorTimer = null;
-let lastLocustHorrorAt = 0;
-
-function triggerPhenHorror(msg) {
-  if (msg.ts && Date.now() - Number(msg.ts) > 60000) return;
-  document.body.classList.add("phen-horror");
-  clearTimeout(phenHorrorTimer);
-  phenHorrorTimer = setTimeout(() => document.body.classList.remove("phen-horror"), PHEN_HORROR_DURATION_MS);
-  playHorrorSound("phen");
-
-  if (window.speechSynthesis && window.SpeechSynthesisUtterance) {
-    window.speechSynthesis.cancel();
-    const voiceLine = new SpeechSynthesisUtterance(msg.horrorLine || PHEN_HORROR_MONOLOGUE);
-    voiceLine.rate = 0.72;
-    voiceLine.pitch = 0.68;
-    voiceLine.volume = 0.86;
-    window.speechSynthesis.speak(voiceLine);
-  }
-}
-
-function triggerLocustHorror(msg) {
-  if (msg.ts && Date.now() - Number(msg.ts) > 60000) return;
-  document.body.classList.add("locust-horror");
-  clearTimeout(locustHorrorTimer);
-  locustHorrorTimer = setTimeout(() => document.body.classList.remove("locust-horror"), LOCUST_HORROR_DURATION_MS);
-  playLocustGroan();
-}
-
-function playHorrorSound(kind) {
-  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextClass) return;
-  try {
-    const context = new AudioContextClass();
-    const gain = context.createGain();
-    gain.gain.setValueAtTime(0.0001, context.currentTime);
-    gain.gain.exponentialRampToValueAtTime(kind === "phen" ? 0.16 : 0.11, context.currentTime + 0.08);
-    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + (kind === "phen" ? 2.8 : 1.7));
-    gain.connect(context.destination);
-
-    const oscillator = context.createOscillator();
-    oscillator.type = kind === "phen" ? "sine" : "sawtooth";
-    oscillator.frequency.setValueAtTime(kind === "phen" ? 58 : 180, context.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(kind === "phen" ? 28 : 70, context.currentTime + (kind === "phen" ? 2.8 : 1.7));
-    oscillator.connect(gain);
-    oscillator.start();
-    oscillator.stop(context.currentTime + (kind === "phen" ? 2.8 : 1.7));
-    oscillator.addEventListener("ended", () => context.close());
-  } catch (e) {}
-}
-
-function playLocustGroan() {
-  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextClass) return;
-  try {
-    const context = new AudioContextClass();
-    const now = context.currentTime;
-    const duration = 2.4;
-    const output = context.createGain();
-    const distortion = context.createWaveShaper();
-    const distortionCurve = new Float32Array(256);
-    for (let index = 0; index < distortionCurve.length; index++) {
-      const input = index * 2 / distortionCurve.length - 1;
-      distortionCurve[index] = Math.tanh(input * 5.5);
-    }
-    distortion.curve = distortionCurve;
-    distortion.oversample = "4x";
-    output.gain.setValueAtTime(0.0001, now);
-    output.gain.exponentialRampToValueAtTime(0.2, now + 0.12);
-    output.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-    distortion.connect(output);
-    output.connect(context.destination);
-
-    [82, 87, 164].forEach((startFrequency, index) => {
-      const oscillator = context.createOscillator();
-      oscillator.type = index === 2 ? "square" : "sawtooth";
-      oscillator.frequency.setValueAtTime(startFrequency, now);
-      oscillator.frequency.exponentialRampToValueAtTime(startFrequency * 0.42, now + duration);
-      oscillator.detune.value = index === 1 ? -17 : index === 2 ? 11 : 0;
-      oscillator.connect(distortion);
-      oscillator.start(now);
-      oscillator.stop(now + duration);
-    });
-
-    const noiseBuffer = context.createBuffer(1, context.sampleRate * duration, context.sampleRate);
-    const noiseData = noiseBuffer.getChannelData(0);
-    for (let index = 0; index < noiseData.length; index++) noiseData[index] = Math.random() * 2 - 1;
-    const noise = context.createBufferSource();
-    const noiseFilter = context.createBiquadFilter();
-    noiseFilter.type = "bandpass";
-    noiseFilter.frequency.setValueAtTime(900, now);
-    noiseFilter.frequency.exponentialRampToValueAtTime(180, now + duration);
-    noiseFilter.Q.value = 2.5;
-    noise.buffer = noiseBuffer;
-    noise.connect(noiseFilter);
-    noiseFilter.connect(distortion);
-    noise.start(now);
-    noise.stop(now + duration);
-    setTimeout(() => context.close(), (duration + 0.2) * 1000);
-  } catch (e) {}
 }
 
 // Tracks whether THIS tab has ever seen a real disconnect while it had an
@@ -2805,6 +2684,8 @@ async function joinWithDmSession(session, nickname) {
   }
   myName = name;
   myLoginId = String(session.id);
+  imagesEnabledForMe = await ChatBackend.getImageAccess(myLoginId);
+  updateUploadButtonVisibility();
   renderOwnAvatar(name, null);
   loadDmAvatar(session).then(avatar => {
     if (myLoginId === String(session.id) && myName === name) renderOwnAvatar(name, avatar);
@@ -3004,7 +2885,7 @@ async function handleModerationCommand(text) {
   const isAdmin = isAdminHolder(myName) || await ChatBackend.hasRole("admin", myName);
   const canModerate = isOwner || isAdmin;
 
-  if (!["/ban", "/tempban", "/grant", "/kick", "/timeout", "/close"].includes(command)) {
+  if (!["/ban", "/tempban", "/unban", "/grant", "/remove", "/kick", "/timeout", "/close"].includes(command)) {
     showComposerNotice("Unknown command.");
     return true;
   }
@@ -3021,6 +2902,24 @@ async function handleModerationCommand(text) {
     }
     await ChatBackend.setChatClosed(true);
     showComposerNotice("VUS Chat was closed for everyone.");
+    return true;
+  }
+
+  if (command === "/unban") {
+    if (!isOwner) {
+      showComposerNotice("Only the owner can use /unban.");
+      return true;
+    }
+    if (parts.length !== 2) {
+      showComposerNotice("Use /unban username or /unban loginID");
+      return true;
+    }
+    try {
+      const loginId = await ChatBackend.unbanUser(parts[1]);
+      showComposerNotice("Unbanned login ID #" + loginId + ".");
+    } catch (e) {
+      showComposerNotice("Couldn't unban that user: " + (e && e.message ? e.message : "check your connection") + ".");
+    }
     return true;
   }
 
@@ -3076,6 +2975,33 @@ async function handleModerationCommand(text) {
       showComposerNotice("Tempban time must be between 1 minute and 30 days.");
       return true;
     }
+  } else if (command === "/remove") {
+    if (parts.length !== 3) {
+      showComposerNotice("Use /remove mod/admin username");
+      return true;
+    }
+    const rank = parts[1].toLowerCase();
+    targetName = parts.slice(2).join(" ");
+    if (!["mod", "admin"].includes(rank)) {
+      showComposerNotice("Rank must be mod or admin.");
+      return true;
+    }
+    if (rank === "admin" && !isOwner) {
+      showComposerNotice("Only the owner can remove Admin.");
+      return true;
+    }
+    const target = findModerationTarget(targetName);
+    if (!target || !target.loginId) {
+      showComposerNotice("That user must be online and logged in.");
+      return true;
+    }
+    try {
+      await ChatBackend.removeRole(rank, target.name, target.loginId);
+      showComposerNotice("Removed " + rank + " from " + target.name + ".");
+    } catch (e) {
+      showComposerNotice("Couldn't remove " + rank + ": " + (e && e.message ? e.message : "check your connection") + ".");
+    }
+    return true;
   } else {
     if (parts.length !== 3 && parts.length !== 4) {
       showComposerNotice("Use /grant rank username or /grant rank time username");
@@ -3131,48 +3057,6 @@ async function handleModerationCommand(text) {
 
 async function sendMessage() {
   const text = $msgInput.value.trim();
-
-  if (text.toLowerCase() === "/horror2") {
-    const isOwner = isCrownHolder(myName) || await ChatBackend.hasRole("crown", myName);
-    if (!isOwner) {
-      showChatRoomComposerNotice("Only the Owner can use /horror2.");
-      return;
-    }
-    ChatBackend.logCommand(text);
-    if (Date.now() - lastLocustHorrorAt < LOCUST_HORROR_COOLDOWN_MS) {
-      showChatRoomComposerNotice("The Locust is still breaking through. Wait before calling it again.");
-      return;
-    }
-    lastLocustHorrorAt = Date.now();
-    $msgInput.value = "";
-    updateCharCounter();
-    autosizeInput();
-    ChatBackend.sendHorror2(myName).catch(() => {
-      showChatRoomComposerNotice("The Locust signal failed to broadcast.");
-    });
-    return;
-  }
-
-  if (text.toLowerCase() === "/horror") {
-    const isOwner = isCrownHolder(myName) || await ChatBackend.hasRole("crown", myName);
-    if (!isOwner) {
-      showChatRoomComposerNotice("Only the Owner can use /horror.");
-      return;
-    }
-    ChatBackend.logCommand(text);
-    if (Date.now() - lastPhenHorrorAt < PHEN_HORROR_COOLDOWN_MS) {
-      showChatRoomComposerNotice("Phen-228 is still nearby. Wait before calling it again.");
-      return;
-    }
-    lastPhenHorrorAt = Date.now();
-    $msgInput.value = "";
-    updateCharCounter();
-    autosizeInput();
-    ChatBackend.sendHorror(myName).catch(() => {
-      showChatRoomComposerNotice("The horror signal failed to broadcast.");
-    });
-    return;
-  }
 
   const mentionTarget = currentMentionTarget;
 
@@ -3852,7 +3736,7 @@ function openModMenu() {
    ══════════════════════════════════════════════════════════ */
 function openRolesMenu() {
   $rolesMenuList.innerHTML = "";
-  Object.values(ROLES).filter(role => role.id !== "admin").forEach(role => {
+  Object.values(ROLES).filter(role => !["unranked", "normie"].includes(role.id)).forEach(role => {
     const btn = document.createElement("button");
     btn.className = "role-menu-option";
     btn.innerHTML = `<span><span class="role-menu-icon">${role.icon}</span> ${esc(role.label)}</span><span style="color:#64748b;font-size:12px">Claim →</span>`;
@@ -4184,14 +4068,15 @@ function renderStaffCommands() {
   const list = document.createElement("div");
   list.style.cssText = "display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:6px 14px;padding:10px;background:#0f172a;border:1px solid #334155;border-radius:9px";
   const commands = [
-    ["/horror2", "Broadcast the Locust screen-break effect.", isOwner],
     ["/kick username", "Remove a user from the current private room.", isOwner || isAdmin],
     ["/timeout time username", "Temporarily mute a user, for example 10m.", isOwner || isAdmin],
     ["/close", "Remove everyone from VUS Chat.", isOwner],
     ["/ban username", "Permanently ban a logged-in user.", isOwner || isAdmin],
     ["/tempban time username", "Temporarily ban a user, for example 2h.", isOwner || isAdmin],
+    ["/unban username", "Remove a ban by username or 6-digit login ID.", isOwner],
     ["/grant mod [time] username", "Give permanent or temporary Mod status.", isOwner || isAdmin],
     ["/grant admin [time] username", "Give permanent or temporary Admin status.", isOwner],
+    ["/remove rank username", "Remove Mod or Admin status.", isOwner || isAdmin],
     ["/timeout", "Use the Timeout button beside a user.", !isOwner && !isAdmin]
   ];
   commands.forEach(([command, description, visible]) => {
@@ -4274,15 +4159,15 @@ async function renderOwnerMenuList() {
     const unbanBtn = document.createElement("button");
     unbanBtn.className = "toolbar-btn";
     unbanBtn.style.cssText = "width:100%;margin-bottom:10px";
-    unbanBtn.textContent = "Unban login ID";
+    unbanBtn.textContent = "Unban username or ID";
     unbanBtn.addEventListener("click", async () => {
-      const loginId = prompt("Enter the banned login ID:");
-      if (!loginId || !/^\d{6}$/.test(loginId.trim())) return;
+      const identifier = prompt("Enter the banned username or 6-digit login ID:");
+      if (!identifier || !identifier.trim()) return;
       try {
-        await ChatBackend.unbanUser(loginId.trim());
-        showComposerNotice("Login ID #" + loginId.trim() + " unbanned.");
+        const loginId = await ChatBackend.unbanUser(identifier);
+        showComposerNotice("Unbanned login ID #" + loginId + ".");
       } catch (e) {
-        showComposerNotice("Couldn't unban that login ID — try again.");
+        showComposerNotice("Couldn't unban that user: " + (e && e.message ? e.message : "check your connection") + ".");
       }
     });
     $ownerMenuList.appendChild(unbanBtn);
