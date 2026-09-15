@@ -37,7 +37,7 @@ then just click the button and it should show my Hub and YT. theres also other t
 
 SUPER SIMPLE "HOW TO BUILD"
 
-copy code from [STARTER BUTTON](https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/STARTER%20BUTTON) then paste into a code viewer.
+copy code from [STARTER BUTTON](https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/start-button) then paste into a code viewer.
 
 
 CODE VIEWER LINKS
