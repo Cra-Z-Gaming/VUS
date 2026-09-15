@@ -189,6 +189,11 @@
           <div class="auth-hint">Letters, numbers, underscores. Must be unique.</div>
         </div>
         <div class="auth-field">
+          <label for="signupEmail">Email</label>
+          <input type="email" id="signupEmail" placeholder="you@example.com" autocomplete="email" required>
+          <div class="auth-hint">One account per email address.</div>
+        </div>
+        <div class="auth-field">
           <label for="signupPassword">Password</label>
           <input type="password" id="signupPassword" placeholder="Choose a password" autocomplete="new-password">
         </div>

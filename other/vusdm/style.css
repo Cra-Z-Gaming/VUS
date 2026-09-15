@@ -225,6 +225,8 @@
   .chat-msg.theirs { align-self: flex-start; align-items: flex-start; }
   .chat-msg-bubble-row { display: flex; align-items: center; gap: 6px; }
   .chat-msg.mine .chat-msg-bubble-row { flex-direction: row-reverse; }
+  .chat-msg-avatar { width: 26px; height: 26px; border-radius: 50%; background: #334155; color: #cbd5e1; display: inline-flex; align-items: center; justify-content: center; overflow: hidden; flex: 0 0 26px; font-size: 10px; font-weight: 700; }
+  .chat-msg-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .chat-msg-bubble {
     background: #1e293b; border-radius: 3px 12px 12px 12px; padding: 9px 13px;
     font-size: 13.5px; line-height: 1.4; word-break: break-word; white-space: pre-wrap;
@@ -328,7 +330,7 @@
   #modalOverlay.show { display: flex; }
   .modal-box { background: #1e293b; border: 1.5px solid #334155; border-radius: 10px; padding: 18px; width: 100%; max-width: 320px; max-height: 80vh; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
   .modal-box h3 { font-size: 15px; font-weight: 600; }
-  .modal-box input[type="text"], .modal-box input[type="password"] {
+  .modal-box input[type="text"], .modal-box input[type="password"], .modal-box input[type="email"] {
     width: 100%; padding: 8px 11px; background: #0f172a; border: 1.5px solid #334155; border-radius: 5px;
     color: #f1f5f9; font-size: 13.5px; outline: none;
   }
@@ -337,6 +339,9 @@
   .modal-actions { display: flex; align-items: center; gap: 14px; margin-top: 4px; }
   .modal-actions button.primary-btn { flex: 1; padding: 8px; border-radius: 5px; font-size: 12.5px; font-weight: 700; cursor: pointer; border: none; background: #22c55e; color: #052e16; }
   .modal-actions button.primary-btn:hover { background: #4ade80; }
+  .modal-primary { padding: 8px 12px; border: none; border-radius: 5px; background: #22c55e; color: #052e16; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+  .modal-primary:hover { background: #4ade80; }
+  .modal-primary:disabled { opacity: .5; cursor: not-allowed; }
   .modal-actions .plain-link { font-size: 12.5px; color: #64748b; cursor: pointer; background: none; border: none; }
   .modal-actions .plain-link:hover { color: #cbd5e1; }
   .modal-actions .danger-link { font-size: 12.5px; color: #f87171; cursor: pointer; background: none; border: none; }
