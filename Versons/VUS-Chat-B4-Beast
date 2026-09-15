@@ -1,0 +1,4430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VUS Chat</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: #0f172a;
+    color: #f1f5f9;
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+  }
+  .chat-header {
+    padding: 18px 21px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 24px;
+    font-weight: 500;
+    border-bottom: 1.5px solid #1f2937;
+    flex-shrink: 0;
+  }
+  .chat-header .room-name { color: #94a3b8; font-size: 18px; font-weight: 400; }
+  .chat-online-dot {
+    display: inline-block;
+    width: 10.5px;
+    height: 10.5px;
+    border-radius: 50%;
+    background: #22c55e;
+    margin-right: 7.5px;
+  }
+  .chat-online-dot.offline { background: #ef4444; }
+  #joinScreen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  #joinCard {
+    width: 100%;
+    max-width: 280px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  #joinScreen h2 { font-size: 19px; font-weight: 500; margin-bottom: 2px; text-align: center; }
+  #joinScreen p { font-size: 13.5px; color: #94a3b8; text-align: center; margin-bottom: 4px; line-height: 1.4; }
+  #nameInput {
+    width: 100%;
+    padding: 10px 13px;
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 9px;
+    color: #f1f5f9;
+    font-size: 15px;
+    outline: none;
+  }
+  #nameInput:focus { border-color: #22c55e; }
+  #joinBtn {
+    width: 100%;
+    padding: 10px 13px;
+    background: #22c55e;
+    border: none;
+    border-radius: 9px;
+    color: #000;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  #joinBtn:hover { background: #4ade80; }
+  #joinBtn:disabled { opacity: .5; cursor: not-allowed; }
+  #joinError { font-size: 13px; color: #ef4444; min-height: 18px; }
+  .join-secondary-btn {
+    width: 100%;
+    padding: 9px 13px;
+    background: transparent;
+    border: 1.5px solid #334155;
+    border-radius: 9px;
+    color: #94a3b8;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .join-secondary-btn:hover { color: #f1f5f9; border-color: #475569; }
+  .join-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    color: #475569;
+    font-size: 12px;
+  }
+  .join-divider::before, .join-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: #334155;
+  }
+  #chatScreen { display: none; flex: 1; flex-direction: column; min-height: 0; }
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 21px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  #messages::-webkit-scrollbar { width: 7.5px; }
+  #messages::-webkit-scrollbar-thumb { background: #334155; border-radius: 4.5px; }
+  .msg { max-width: 82%; display: flex; flex-direction: column; gap: 3px; }
+  .msg.mine { align-self: flex-end; align-items: flex-end; }
+  .msg-meta { font-size: 16.5px; color: #64748b; padding: 0 6px; }
+  .msg-bubble {
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 15px;
+    padding: 12px 16.5px;
+    font-size: 20.2px;
+    line-height: 1.4;
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+  .msg.mine .msg-bubble { background: #14532d; border-color: #166534; }
+  .msg.system { align-self: center; max-width: 100%; }
+  .msg.system .msg-bubble {
+    background: transparent;
+    border: none;
+    color: #64748b;
+    font-size: 17.2px;
+    font-style: italic;
+    padding: 3px;
+  }
+  .msg-bubble .mention-chip-inline {
+    color: #4ade80;
+    font-weight: 700;
+  }
+  .crown-bubble {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #78350f;
+    border: 1.5px solid #b45309;
+    color: #fde68a;
+    border-radius: 10px;
+    padding: 3px 10px;
+    font-size: 14px;
+    font-weight: 700;
+    align-self: flex-start;
+  }
+  .msg.mine .crown-bubble { align-self: flex-end; }
+  .mod-bubble {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #1e3a5f;
+    border: 1.5px solid #2563eb;
+    color: #93c5fd;
+    border-radius: 10px;
+    padding: 3px 10px;
+    font-size: 14px;
+    font-weight: 700;
+    align-self: flex-start;
+  }
+  .msg.mine .mod-bubble { align-self: flex-end; }
+  .role-bubble-row { display: flex; gap: 4px; flex-wrap: wrap; }
+  .msg.mine .role-bubble-row { justify-content: flex-end; }
+  #emptyState {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #475569;
+    font-size: 19.5px;
+    text-align: center;
+    padding: 30px;
+  }
+  #toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 9px;
+    padding: 9px 21px;
+    border-top: 1.5px solid #1f2937;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .toolbar-btn {
+    background: transparent;
+    border: 1.5px solid #334155;
+    color: #94a3b8;
+    font-size: 15.8px;
+    padding: 6px 12px;
+    border-radius: 9px;
+    cursor: pointer;
+  }
+  .toolbar-btn:hover { color: #f1f5f9; border-color: #475569; }
+  .toolbar-btn.active {
+    background: rgba(34,197,94,.12);
+    border-color: #22c55e;
+    color: #4ade80;
+  }
+  #jumpToBottomBtn {
+    display: none;
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    color: #f1f5f9;
+    font-size: 15.8px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    align-self: center;
+    margin: 0 auto 6px auto;
+  }
+  #jumpToBottomBtn:hover { border-color: #475569; }
+  #pingYouBtn {
+    background: transparent;
+    border: 1.5px solid #f59e0b;
+    color: #f59e0b;
+  }
+  #pingYouBtn:hover { background: rgba(245,158,11,.12); }
+  #pingYouBtn:disabled { opacity: .5; cursor: not-allowed; border-color: #334155; color: #64748b; background: transparent; }
+  #pingYouPanel {
+    display: none;
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    margin-bottom: 8px;
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 10px;
+    padding: 12px;
+    width: 260px;
+    z-index: 20;
+  }
+  #pingYouPanel textarea {
+    width: 100%;
+    padding: 8px 10px;
+    background: #0f172a;
+    border: 1.5px solid #334155;
+    border-radius: 8px;
+    color: #f1f5f9;
+    font-size: 14px;
+    font-family: inherit;
+    resize: none;
+    outline: none;
+    margin-bottom: 8px;
+    max-height: 80px;
+  }
+  #pingYouPanel textarea:focus { border-color: #22c55e; }
+  #composer {
+    display: flex;
+    gap: 12px;
+    padding: 15px 18px;
+    border-top: 1.5px solid #1f2937;
+    flex-shrink: 0;
+    align-items: flex-end;
+    position: relative;
+  }
+  #composerInputWrap {
+    flex: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 12px;
+  }
+  #composerInputWrap:focus-within { border-color: #22c55e; }
+  #mentionChip {
+    display: none;
+    align-items: center;
+    gap: 4px;
+    background: rgba(34,197,94,.15);
+    border: 1.5px solid #22c55e;
+    color: #4ade80;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  #mentionChip:hover { background: rgba(34,197,94,.25); }
+  #msgInput {
+    padding: 7.5px 4px;
+    background: transparent;
+    border: none;
+    color: #f1f5f9;
+    font-size: 20.2px;
+    outline: none;
+    resize: none;
+    max-height: 135px;
+    font-family: inherit;
+    flex: 1;
+    min-width: 120px;
+  }
+  #charCounter {
+    font-size: 14.5px;
+    color: #64748b;
+  }
+  #charCounter.warn { color: #f59e0b; }
+  #charCounter.limit { color: #ef4444; }
+  #sendBtn {
+    padding: 0 24px;
+    height: 51px;
+    background: #22c55e;
+    border: none;
+    border-radius: 12px;
+    color: #000;
+    font-weight: 600;
+    font-size: 19.5px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  #sendBtn:hover { background: #4ade80; }
+  #sendBtn:disabled { opacity: .5; cursor: not-allowed; }
+  #mentionDropdown {
+    display: none;
+    position: absolute;
+    bottom: 100%;
+    left: 18px;
+    margin-bottom: 8px;
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 10px;
+    padding: 6px;
+    width: 220px;
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: 25;
+  }
+  .mention-option {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    color: #f1f5f9;
+    font-size: 15px;
+    padding: 8px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  .mention-option:hover { background: rgba(255,255,255,.06); }
+  .mention-empty {
+    color: #64748b;
+    font-size: 13.5px;
+    padding: 8px 10px;
+  }
+  #connError {
+    display: none;
+    padding: 12px 21px;
+    background: rgba(239,68,68,.1);
+    border-top: 1.5px solid rgba(239,68,68,.3);
+    color: #ef4444;
+    font-size: 17.2px;
+    flex-shrink: 0;
+  }
+  #composerNotice {
+    display: none;
+    padding: 8px 21px;
+    background: rgba(245,158,11,.1);
+    border-top: 1.5px solid rgba(245,158,11,.3);
+    color: #f59e0b;
+    font-size: 14.5px;
+    flex-shrink: 0;
+  }
+  #changeNameBtn:hover { color: #f1f5f9 !important; border-color: #475569 !important; }
+  #sendBtn.cooldown { background: #334155; color: #64748b; cursor: not-allowed; }
+  #pingToast {
+    display: none;
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e293b;
+    border: 1.5px solid #22c55e;
+    border-radius: 12px;
+    padding: 12px 18px;
+    max-width: 320px;
+    z-index: 200;
+    box-shadow: 0 8px 32px rgba(0,0,0,.4);
+  }
+  #pingToast .ping-toast-title { color: #4ade80; font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+  #pingToast .ping-toast-body { color: #f1f5f9; font-size: 14px; line-height: 1.4; }
+  #roomsToggleBtn {
+    background: transparent;
+    border: 1.5px solid #334155;
+    color: #94a3b8;
+    font-size: 14.5px;
+    padding: 5px 11px;
+    border-radius: 9px;
+    cursor: pointer;
+    position: relative;
+  }
+  #roomsToggleBtn:hover { color: #f1f5f9; border-color: #475569; }
+  #roomsToggleBtn .rooms-badge-dot {
+    display: none;
+    position: absolute;
+    top: -3px; right: -3px;
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: #ef4444;
+    border: 1.5px solid #0f172a;
+  }
+  #roomsSidebarOverlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.5);
+    z-index: 140;
+  }
+  #roomsSidebar {
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    width: 300px;
+    max-width: 88vw;
+    background: #111827;
+    border-left: 1.5px solid #1f2937;
+    z-index: 141;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -16px 0 48px rgba(0,0,0,.4);
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+  }
+  #roomsSidebar.open {
+    transform: translateX(0);
+  }
+  #roomsSidebarHeader {
+    padding: 16px 18px;
+    border-bottom: 1.5px solid #1f2937;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  #roomsSidebarHeader h3 { font-size: 16.5px; font-weight: 600; }
+  #roomsSidebarClose {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 22px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px 8px;
+  }
+  #roomsSidebarClose:hover { color: #f1f5f9; }
+  #roomsSidebarBody {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 16px;
+  }
+  .rooms-section-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: #64748b;
+    font-weight: 700;
+    margin: 14px 0 8px 0;
+  }
+  .rooms-section-title:first-child { margin-top: 0; }
+  .room-card {
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 11px;
+    padding: 11px 13px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    position: relative;
+  }
+  .room-card:hover { border-color: #475569; }
+  .room-card.active { border-color: #22c55e; background: rgba(34,197,94,.08); }
+  .room-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .room-card-name {
+    font-size: 14.5px;
+    font-weight: 600;
+    color: #f1f5f9;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .room-card-code {
+    font-size: 11.5px;
+    color: #64748b;
+    font-family: monospace;
+    margin-top: 2px;
+  }
+  .room-card-timer {
+    font-size: 12px;
+    font-family: monospace;
+    color: #94a3b8;
+    flex-shrink: 0;
+  }
+  .room-card-timer.urgent { color: #f59e0b; font-weight: 700; }
+  .room-card-close {
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: transparent;
+    border: none;
+    color: #64748b;
+    font-size: 15px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+  .room-card-close:hover { background: rgba(255,255,255,.08); color: #f1f5f9; }
+  .room-card-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #ef4444;
+    margin-left: 4px;
+    flex-shrink: 0;
+  }
+  .room-card-pinned {
+    font-size: 10.5px;
+    color: #4ade80;
+    background: rgba(34,197,94,.12);
+    border-radius: 5px;
+    padding: 1px 6px;
+    margin-left: 6px;
+  }
+  .rooms-empty {
+    color: #64748b;
+    font-size: 13px;
+    padding: 6px 2px 14px 2px;
+    line-height: 1.5;
+  }
+  #roomsSidebarFooter {
+    padding: 14px 16px;
+    border-top: 1.5px solid #1f2937;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  #joinByCodeInput {
+    padding: 8px 11px;
+    background: #0f172a;
+    border: 1.5px solid #334155;
+    border-radius: 9px;
+    color: #f1f5f9;
+    font-size: 14px;
+    outline: none;
+    text-transform: uppercase;
+  }
+  #joinByCodeInput:focus { border-color: #22c55e; }
+  .rooms-footer-row { display: flex; gap: 8px; }
+  .rooms-footer-row button { flex: 1; }
+  #createRoomBtn, #joinByCodeBtn {
+    padding: 9px 12px;
+    background: #22c55e;
+    border: none;
+    border-radius: 9px;
+    color: #000;
+    font-weight: 600;
+    font-size: 13.5px;
+    cursor: pointer;
+  }
+  #createRoomBtn:hover, #joinByCodeBtn:hover { background: #4ade80; }
+  #createRoomBtn:disabled, #joinByCodeBtn:disabled { opacity: .5; cursor: not-allowed; }
+  #roomsFooterMsg { font-size: 12.5px; color: #94a3b8; min-height: 16px; }
+  #roomsFooterMsg.err { color: #ef4444; }
+  #roomTopBar {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 21px;
+    background: rgba(34,197,94,.06);
+    border-bottom: 1.5px solid #1f2937;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  #roomTopBarLeft { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  #roomTopBarName { font-size: 15px; font-weight: 600; color: #f1f5f9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #roomTopBarCode { font-size: 12.5px; color: #64748b; font-family: monospace; }
+  #roomTopBarTimer { font-size: 13.5px; font-family: monospace; color: #94a3b8; flex-shrink: 0; }
+  #roomTopBarTimer.urgent { color: #f59e0b; font-weight: 700; }
+  #roomTopBarActions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .room-top-btn {
+    background: transparent;
+    border: 1.5px solid #334155;
+    color: #94a3b8;
+    font-size: 13px;
+    padding: 5px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .room-top-btn:hover { color: #f1f5f9; border-color: #475569; }
+  .room-top-btn.leave { border-color: #7f1d1d; color: #f87171; }
+  .room-top-btn.leave:hover { background: rgba(239,68,68,.1); }
+  .chat-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.55);
+    z-index: 180;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .chat-modal {
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 14px;
+    padding: 20px;
+    width: 100%;
+    max-width: 320px;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+  .chat-modal h3 { font-size: 16.5px; font-weight: 700; margin-bottom: 10px; }
+  .chat-modal p { font-size: 14px; color: #94a3b8; line-height: 1.5; margin-bottom: 12px; }
+  .chat-modal input[type="text"] {
+    width: 100%;
+    padding: 8px 11px;
+    background: #0f172a;
+    border: 1.5px solid #334155;
+    border-radius: 9px;
+    color: #f1f5f9;
+    font-size: 14px;
+    outline: none;
+    margin-bottom: 10px;
+  }
+  .chat-modal input[type="text"]:focus { border-color: #22c55e; }
+  .chat-modal label { display: block; font-size: 12.5px; color: #94a3b8; margin-bottom: 4px; }
+  .chat-modal-row { display: flex; gap: 8px; margin-top: 6px; }
+  .chat-modal-row button { flex: 1; padding: 9px; border-radius: 9px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; }
+  .chat-modal-btn-primary { background: #22c55e; color: #000; }
+  .chat-modal-btn-primary:hover { background: #4ade80; }
+  .chat-modal-btn-secondary { background: #334155; color: #f1f5f9; }
+  .chat-modal-btn-secondary:hover { background: #475569; }
+  .chat-modal-btn-danger { background: #7f1d1d; color: #fca5a5; }
+  .chat-modal-btn-danger:hover { background: #991b1b; }
+  .chat-modal-err { color: #ef4444; font-size: 13px; min-height: 16px; margin-top: 4px; }
+  .chat-modal-toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .chat-modal-toggle-row label { margin-bottom: 0; color: #f1f5f9; font-size: 14px; }
+  .room-member-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 7px 2px;
+    border-bottom: 1px solid #273549;
+    font-size: 13.5px;
+  }
+  .room-member-row:last-child { border-bottom: none; }
+  .room-member-name { display: flex; align-items: center; gap: 5px; color: #f1f5f9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .room-member-actions { display: flex; gap: 5px; flex-shrink: 0; }
+  .room-member-actions button {
+    background: transparent;
+    border: 1.5px solid #334155;
+    color: #94a3b8;
+    font-size: 11.5px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .room-member-actions button:hover { color: #f1f5f9; border-color: #475569; }
+  .room-member-actions button.kick { border-color: #7f1d1d; color: #f87171; }
+  .room-member-actions button.kick:hover { background: rgba(239,68,68,.1); }
+  .role-menu-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    text-align: left;
+    background: #0f172a;
+    border: 1.5px solid #334155;
+    color: #f1f5f9;
+    font-size: 14.5px;
+    padding: 10px 13px;
+    border-radius: 9px;
+    cursor: pointer;
+    margin-bottom: 8px;
+  }
+  .role-menu-option:hover { border-color: #475569; }
+  .role-menu-option .role-menu-icon { font-size: 17px; }
+</style>
+</head>
+<body>
+
+<div class="chat-header" style="position:relative;display:grid;grid-template-columns:1fr auto 1fr;align-items:center">
+  <div style="position:relative;justify-self:start;display:flex;align-items:center;gap:6px">
+    <span id="onlineDot" class="chat-online-dot offline" style="cursor:pointer;display:inline-block;padding:10px;margin:-10px;vertical-align:middle"></span>
+    <span id="onlineCount" style="font-size:14.5px;color:#64748b;margin-left:8px;cursor:pointer"></span>
+    <div id="globalClearPanel" style="display:none;position:absolute;top:28px;left:-10px;background:#1e293b;border:1.5px solid #334155;border-radius:10px;padding:12px;z-index:10;width:240px;font-size:15px;font-weight:400"></div>
+    <div id="onlineListPanel" style="display:none;position:absolute;top:28px;left:-10px;background:#1e293b;border:1.5px solid #334155;border-radius:10px;padding:12px;z-index:10;width:220px;font-size:14px;font-weight:400;max-height:280px;overflow-y:auto"></div>
+  </div>
+  <div style="justify-self:center">VUS Chat</div>
+  <div style="font-size:16.5px;color:#475569;display:flex;align-items:center;gap:10px;justify-self:end">
+    <button id="roomsToggleBtn">🚪 Rooms<span class="rooms-badge-dot" id="roomsBadgeDot"></span></button>
+    <span id="youAre"></span>
+    <button id="changeNameBtn" style="display:none;background:transparent;border:1.5px solid #334155;color:#64748b;font-size:15.8px;padding:4.5px 10.5px;border-radius:9px;cursor:pointer">Change name</button>
+  </div>
+</div>
+
+<div id="connError"></div>
+<div id="composerNotice"></div>
+
+<div id="pingToast">
+  <div class="ping-toast-title" id="pingToastTitle">You were pinged</div>
+  <div class="ping-toast-body" id="pingToastBody"></div>
+</div>
+
+<div id="roomsSidebarOverlay"></div>
+<div id="roomsSidebar">
+  <div id="roomsSidebarHeader">
+    <h3>Rooms</h3>
+    <button id="roomsSidebarClose" aria-label="Close">&times;</button>
+  </div>
+  <div id="roomsSidebarBody"></div>
+  <div id="roomsSidebarFooter">
+    <div id="roomsFooterMsg"></div>
+    <input id="joinByCodeInput" type="text" placeholder="Enter room code…" maxlength="20">
+    <div class="rooms-footer-row">
+      <button id="joinByCodeBtn">Join by Code</button>
+      <button id="createRoomBtn">+ New Room</button>
+    </div>
+  </div>
+</div>
+
+<div id="roomTopBar">
+  <div id="roomTopBarLeft">
+    <span id="roomTopBarName"></span>
+    <span id="roomTopBarCode"></span>
+  </div>
+  <span id="roomTopBarTimer"></span>
+  <div id="roomTopBarActions">
+    <button class="room-top-btn" id="roomSettingsBtn" style="display:none">⚙ Settings</button>
+    <button class="room-top-btn leave" id="roomLeaveBtn">Leave</button>
+  </div>
+</div>
+
+<div class="chat-modal-overlay" id="createRoomOverlay">
+  <div class="chat-modal">
+    <h3>Create a Room</h3>
+    <label for="createRoomNameInput">Room name (optional)</label>
+    <input type="text" id="createRoomNameInput" maxlength="30" placeholder="e.g. Movie Night">
+    <div class="chat-modal-err" id="createRoomErr"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="createRoomCancelBtn">Cancel</button>
+      <button class="chat-modal-btn-primary" id="createRoomConfirmBtn">Create</button>
+    </div>
+  </div>
+</div>
+
+<div class="chat-modal-overlay" id="roomSettingsOverlay">
+  <div class="chat-modal" style="max-width:340px">
+    <h3>Room Settings</h3>
+    <div class="chat-modal-toggle-row">
+      <label>Public room</label>
+      <button class="room-top-btn" id="roomPublicToggleBtn">Off</button>
+    </div>
+    <label for="roomCodeInput">Room code (max 20 chars)</label>
+    <input type="text" id="roomCodeInput" maxlength="20">
+    <div class="chat-modal-err" id="roomCodeErr"></div>
+    <div class="chat-modal-row" style="margin-bottom:14px">
+      <button class="chat-modal-btn-secondary" id="roomCodeSaveBtn" style="flex:none;padding:7px 14px;font-size:13px">Save Code</button>
+    </div>
+    <label>Members</label>
+    <div id="roomMembersList" style="margin-bottom:8px"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="roomSettingsCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="chat-modal-overlay" id="extendRoomOverlay">
+  <div class="chat-modal">
+    <h3>⏳ Room expiring soon</h3>
+    <p id="extendRoomText">This room closes in under a minute.</p>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="extendRoomDismissBtn">Dismiss</button>
+      <button class="chat-modal-btn-primary" id="extendRoomConfirmBtn">+10 minutes</button>
+    </div>
+  </div>
+</div>
+
+<div class="chat-modal-overlay" id="transferOfferOverlay">
+  <div class="chat-modal">
+    <h3>👑 Ownership offer</h3>
+    <p id="transferOfferText"></p>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="transferDeclineBtn">Decline</button>
+      <button class="chat-modal-btn-primary" id="transferAcceptBtn">Accept</button>
+    </div>
+  </div>
+</div>
+
+<div class="chat-modal-overlay" id="kickConfirmOverlay">
+  <div class="chat-modal">
+    <h3>Kick member?</h3>
+    <p id="kickConfirmText"></p>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="kickCancelBtn">Cancel</button>
+      <button class="chat-modal-btn-danger" id="kickConfirmBtn">Kick</button>
+    </div>
+  </div>
+</div>
+
+<!-- Roles dropdown modal: opened from the status dot, centered like Room
+     Settings. Lists claimable roles; picking one opens the claim modal. -->
+<div class="chat-modal-overlay" id="rolesMenuOverlay">
+  <div class="chat-modal">
+    <h3>Claim a role</h3>
+    <div id="rolesMenuList"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="rolesMenuCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Role claim modal: shared UI for any role in ROLES, rendered dynamically
+     by renderRoleClaimModal() depending on which role was picked above. -->
+<div class="chat-modal-overlay" id="roleClaimOverlay">
+  <div class="chat-modal">
+    <h3 id="roleClaimTitle">Claim role</h3>
+    <div id="roleClaimBody"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="roleClaimBackBtn">Back</button>
+      <button class="chat-modal-btn-secondary" id="roleClaimCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Owner Menu: crown-holders only (and only once the mod-menu code has
+     been entered this session). Lists everyone online, refreshed every 5s
+     while open, with Timeout / Grant Mod actions per person. -->
+<div class="chat-modal-overlay" id="ownerMenuOverlay">
+  <div class="chat-modal" style="max-width:340px">
+    <h3 id="ownerMenuTitle">👑 Owner Menu</h3>
+    <p id="ownerMenuSubtitle" style="margin-bottom:8px">Online now — refreshes every 5s while this is open.</p>
+    <div id="ownerMenuList" style="margin-bottom:8px"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="ownerMenuCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Timeout duration modal: minutes + seconds. Cap/note text set dynamically
+     (3:00 for owners, 0:40 for mods) by openTimeoutSetModal. -->
+<div class="chat-modal-overlay" id="timeoutSetOverlay">
+  <div class="chat-modal">
+    <h3 id="timeoutSetTitle">Timeout</h3>
+    <label>Duration</label>
+    <div style="display:flex;gap:8px;margin-bottom:6px">
+      <input type="text" id="timeoutMinutesInput" inputmode="numeric" pattern="[0-9]*" maxlength="1" placeholder="Min" style="width:100%;padding:8px 11px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none;text-align:center">
+      <input type="text" id="timeoutSecondsInput" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="Sec" style="width:100%;padding:8px 11px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none;text-align:center">
+    </div>
+    <div id="timeoutSetNote" style="color:#64748b;font-size:12.5px;margin-bottom:8px">Max 3:00.</div>
+    <div class="chat-modal-err" id="timeoutSetErr"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="timeoutSetCancelBtn">Cancel</button>
+      <button class="chat-modal-btn-danger" id="timeoutSetConfirmBtn">Timeout</button>
+    </div>
+  </div>
+</div>
+
+<!-- Grant-mod double-confirm: a plain click-through, no typing required,
+     but a second explicit step so a misclick can't hand out the tag. -->
+<div class="chat-modal-overlay" id="grantModConfirmOverlay">
+  <div class="chat-modal">
+    <h3 id="grantModConfirmTitle">🧩 Grant Mod?</h3>
+    <p id="grantModConfirmText"></p>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="grantModCancelBtn">Cancel</button>
+      <button class="chat-modal-btn-primary" id="grantModConfirmBtn">Yes, grant Mod</button>
+    </div>
+  </div>
+</div>
+
+<div id="joinScreen">
+  <div id="joinCard"></div>
+</div>
+
+<div id="chatScreen">
+  <div id="messages"></div>
+  <div id="emptyState" style="display:none">No messages yet — say hi!</div>
+  <button id="jumpToBottomBtn">↓ Jump to latest</button>
+  <div id="typingBar" style="display:none;padding:6px 21px;font-size:17.2px;color:#64748b;font-style:italic;flex-shrink:0"></div>
+  <div id="pendingImageBar" style="display:none;padding:10px 21px;border-top:1.5px solid #1f2937;align-items:center;gap:12px;flex-shrink:0">
+    <img id="pendingImagePreview" style="max-height:60px;max-width:90px;border-radius:8px;object-fit:cover;display:block">
+    <span style="flex:1;font-size:14.5px;color:#94a3b8">Image ready — click Send to post it</span>
+    <button id="cancelPendingImageBtn" class="toolbar-btn">Cancel</button>
+  </div>
+  <div id="toolbar">
+    <button id="uploadImageBtn" class="toolbar-btn" style="display:none">📎 Image</button>
+    <input id="imageFileInput" type="file" accept="image/*" style="display:none">
+    <span id="charCounter">500</span>
+    <div style="flex:1"></div>
+    <div style="position:relative">
+      <button id="pingYouBtn" class="toolbar-btn" title="Send a Discord ping to the site owner">🔔 Ping Devs</button>
+      <div id="pingYouPanel">
+        <textarea id="pingYouNote" rows="2" maxlength="200" placeholder="Optional note (max 200 chars)…"></textarea>
+        <button id="pingYouSend" class="toolbar-btn active" style="width:100%">Send Ping</button>
+      </div>
+    </div>
+    <button id="autoScrollBtn" class="toolbar-btn active">Auto Scroll: On</button>
+    <button id="clearChatBtn" class="toolbar-btn">Clear Chat</button>
+  </div>
+  <div id="composer">
+    <div id="mentionDropdown"></div>
+    <div id="composerInputWrap">
+      <button id="mentionChip" type="button"></button>
+      <textarea id="msgInput" rows="1" placeholder="Type a message… (@ to mention someone)" maxlength="500"></textarea>
+    </div>
+    <button id="sendBtn">Send</button>
+  </div>
+</div>
+
+<audio id="pingSound" preload="auto"></audio>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDxMfGQ_xk-au8YgOvaFO2R9LxAe-pa9Rg",
+  authDomain: "vus-chat.firebaseapp.com",
+  databaseURL: "https://vus-chat-default-rtdb.firebaseio.com",
+  projectId: "vus-chat",
+  storageBucket: "vus-chat.firebasestorage.app",
+  messagingSenderId: "134456894391",
+  appId: "1:134456894391:web:bdf28487bf2b2eae593e32"
+};
+
+const MAIN_ROOM_ID = "vus-hub-main";
+
+const ROOM_DURATION_MS = 15 * 60 * 1000;
+const ROOM_WARNING_MS = 60 * 1000;
+const ROOM_EXTEND_MS = 10 * 60 * 1000;
+const ROOM_CREATE_COOLDOWN_MS = 60 * 1000;
+const ROOM_CODE_DEFAULT_LENGTH = 4;
+const ROOM_CODE_MAX_LENGTH = 20;
+const ROOM_NAME_MAX_LENGTH = 30;
+const ROOM_CREATE_COOLDOWN_KEY = "vusChatLastRoomCreate";
+
+const MAX_MESSAGES = 200;
+const MAX_CHARS = 500;
+
+const PING_YOU_WEBHOOK_URL = "https://discord.com/api/webhooks/1536853718564216842/VZYgEyf5yEzMs03g-hbWIZRS90oNKrVh_LBN1eHv3ZVplCOUlKeRDTWKIAyolYjIshHa";
+const PING_YOU_COOLDOWN_MS = 30 * 1000;
+const PING_YOU_STORAGE_KEY = "vusChatLastPingYou";
+
+const AT_PING_COOLDOWN_MS = 30 * 1000;
+
+const PING_SOUND_URL = "https://github.com/Cra-Z-Gaming/VUS/raw/refs/heads/main/ping.mp3";
+
+/* ══════════════════════════════════════════════════════════
+   ROLES (Owner/Crown + Mod)
+   Both roles work identically under the hood — a global code system,
+   redeemed via the roles menu. Code defaults to "0000" (always inert).
+   Requesting a code posts it to that role's private Discord webhook, and
+   the code stays valid for ROLE_CODE_LIFESPAN_MS. Redemption is MULTI-USE
+   within that window by design — see redeemRoleCode() below.
+   A role PERSISTS across renames and room switches (both re-run
+   claimPresence, which carries every held role forward via _rolesHeld)
+   but is cleared by clearRole(roleId) on silent leave, normal leave, and
+   real disconnect — so it never survives actually leaving.
+   ROLES is the single place to add more roles later — the menu, claim
+   modal, message badges, and backend paths all read from this list. */
+const ROLE_CODE_LIFESPAN_MS = 30 * 1000;
+const ROLE_REQUEST_COOLDOWN_MS = 30 * 1000;
+
+const ROLES = {
+  crown: {
+    id: "crown",
+    label: "Owner",
+    icon: "👑",
+    dbPath: "crowned",
+    metaPath: "crownMeta",
+    webhookUrl: "https://discord.com/api/webhooks/1542708447991037953/Ge705Wa_quPVC-2pFhttHYNuA4-FI5ZDRIn5VwjQ059SwT0ZRCrqmVLMofb8oJhsLFFJ",
+    cooldownKey: "vusChatLastCrownRequest",
+    bubbleClass: "crown-bubble"
+  },
+  mod: {
+    id: "mod",
+    label: "Mod",
+    icon: "🧩",
+    dbPath: "modded",
+    metaPath: "modMeta",
+    webhookUrl: "https://discord.com/api/webhooks/1545551358118072320/4VUNceTr4bpwspeNKKkP_9Ko64Nc6iknQwN15AY-5iyl9A1SG5JvwZzEHHolXYLY6v1h",
+    cooldownKey: "vusChatLastModRequest",
+    bubbleClass: "mod-bubble"
+  }
+};
+
+/* Bubble color: was write-once, now changeable every 10s. */
+const COLOR_CHANGE_COOLDOWN_MS = 10 * 1000;
+
+/* How close together two leave-events for the same name must be to be
+   treated as one stray burst instead of two genuine separate leaves —
+   fixes repeated "X left / X left / X left" spam caused by duplicate
+   onDisconnect writes (multiple tabs under the same name, or reconnect
+   churn on a flaky connection). */
+const LEAVE_DEDUPE_WINDOW_MS = 5 * 1000;
+
+/* ── Timeouts (Owner Menu / Mod Menu) ── */
+const TIMEOUT_MAX_MS = 3 * 60 * 1000; // 3:00 cap for owners
+const MOD_TIMEOUT_MAX_MS = 40 * 1000; // 0:40 cap for mods — a deliberately smaller power than owners get
+const MOD_TIMEOUT_DEFAULT_MS = 10 * 1000; // prefilled duration when a mod opens the timeout modal
+const MOD_RETIMEOUT_COOLDOWN_MS = 7 * 1000; // a mod must wait this long after setting OR clearing a timeout before re-timing-out the SAME target
+
+const ChatBackend = {
+  _db: null,
+  _ref: null,
+  _typingRef: null,
+  _myTypingRef: null,
+  _connectedRef: null,
+  _presenceRef: null,
+  _myPresenceRef: null,
+  _myLeaveEventRef: null,
+  _nameColorsRef: null,
+  _atPingCooldownRef: null,
+  _leaveEventsRef: null,
+  _roleRefs: {},
+  _roleMetaRefs: {},
+  _myRoleRefs: {},
+  _rolesHeld: {},
+  _recentLeaveNames: {},
+  _timeoutsRef: null,
+  _modRetimeoutRef: null,
+  currentRoomId: null,
+
+  init() {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    this._db = firebase.database();
+    this._connectedRef = this._db.ref(".info/connected");
+    this.initRoles();
+    this.bindToRoom(MAIN_ROOM_ID);
+  },
+
+  initRoles() {
+    Object.values(ROLES).forEach(role => {
+      this._roleRefs[role.id] = this._db.ref(role.dbPath);
+      this._roleMetaRefs[role.id] = this._db.ref(role.metaPath);
+      this._rolesHeld[role.id] = false;
+    });
+  },
+
+  async _serverOffset() {
+    try {
+      const snap = await this._db.ref(".info/serverTimeOffset").once("value");
+      return snap.val() || 0;
+    } catch (e) {
+      return 0;
+    }
+  },
+  async _serverNow() {
+    return Date.now() + (await this._serverOffset());
+  },
+
+  watchRoleNames(roleId, onChange) {
+    this._roleRefs[roleId].on("value", snap => {
+      const val = snap.val() || {};
+      onChange(new Set(Object.keys(val)));
+    });
+  },
+
+  _randomRoleCode() {
+    const chars = "0123456789";
+    let out = "";
+    do {
+      out = "";
+      for (let i = 0; i < 4; i++) out += chars[Math.floor(Math.random() * chars.length)];
+    } while (out === "0000");
+    return out;
+  },
+
+  async generateRoleCode(roleId) {
+    const role = ROLES[roleId];
+    const code = this._randomRoleCode();
+    const serverNow = await this._serverNow();
+    const expiresAt = serverNow + ROLE_CODE_LIFESPAN_MS;
+    await this._roleMetaRefs[roleId].set({ code, expiresAt });
+    let webhookOk = false;
+    try {
+      const res = await fetch(role.webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: role.icon + " " + role.label + " code: **" + code + "** (expires in " + Math.round(ROLE_CODE_LIFESPAN_MS / 1000) + "s)" })
+      });
+      webhookOk = res.ok;
+    } catch (e) {
+      webhookOk = false;
+    }
+    return { code, webhookOk };
+  },
+
+  // Plain read + compare (not a transaction) — nothing is consumed, since
+  // a code stays valid for ROLE_CODE_LIFESPAN_MS and anyone who has it can
+  // redeem it during that window, each redeemer getting their own copy of
+  // the role. Deliberate, matching the prior crown behavior.
+  async redeemRoleCode(roleId, inputCode) {
+    const clean = (inputCode || "").trim().toUpperCase();
+    if (!clean || clean === "0000") return { ok: false, reason: "none" };
+
+    let current;
+    try {
+      const snap = await this._roleMetaRefs[roleId].get();
+      current = snap.val();
+    } catch (e) {
+      return { ok: false, reason: "wrong" };
+    }
+
+    if (!current || !current.code || current.code === "0000" || current.code !== clean) {
+      return { ok: false, reason: "wrong" };
+    }
+
+    const serverNow = await this._serverNow();
+    if (!current.expiresAt || serverNow > current.expiresAt) {
+      return { ok: false, reason: "expired" };
+    }
+
+    if (this._myRoleRefs[roleId]) {
+      await this._myRoleRefs[roleId].set(true);
+      this._rolesHeld[roleId] = true;
+    }
+    return { ok: true };
+  },
+
+  async getRoleMeta(roleId) {
+    try {
+      const snap = await this._roleMetaRefs[roleId].get();
+      return snap.val();
+    } catch (e) {
+      return null;
+    }
+  },
+
+  bindToRoom(roomId) {
+    if (this.currentRoomId === roomId) return;
+
+    if (this.currentRoomId) {
+      this.releasePresence();
+      this.clearTyping();
+      this.detachAllListeners();
+    }
+
+    this.currentRoomId = roomId;
+    this._ref = this._db.ref("rooms/" + roomId + "/messages");
+    this._typingRef = this._db.ref("rooms/" + roomId + "/typing");
+    this._presenceRef = this._db.ref("rooms/" + roomId + "/presence");
+    this._nameColorsRef = this._db.ref("rooms/" + roomId + "/nameColors");
+    this._atPingCooldownRef = this._db.ref("rooms/" + roomId + "/atPingCooldowns");
+    this._leaveEventsRef = this._db.ref("rooms/" + roomId + "/leaveEvents");
+    this._timeoutsRef = this._db.ref("rooms/" + roomId + "/timeouts");
+    this._modRetimeoutRef = this._db.ref("rooms/" + roomId + "/modRetimeoutCooldowns");
+  },
+
+  detachAllListeners() {
+    if (this._ref) this._ref.off();
+    if (this._typingRef) this._typingRef.off();
+    if (this._presenceRef) this._presenceRef.off();
+    if (this._leaveEventsRef) this._leaveEventsRef.off();
+  },
+
+  watchConnection(onStatus) {
+    this._connectedRef.on("value", snap => onStatus(snap.val() === true));
+  },
+
+  watchMessages(onMessage) {
+    this._ref.limitToLast(MAX_MESSAGES).on("child_added", snap => {
+      onMessage({ id: snap.key, ...snap.val() });
+    });
+  },
+
+  async sendImage(name, dataUrl) {
+    const color = await this.getNameColor(name);
+    return this._ref.push({
+      name: name,
+      imageData: dataUrl,
+      ts: firebase.database.ServerValue.TIMESTAMP,
+      ...(color ? { bubble: color.bubble, textColor: color.text } : {})
+    });
+  },
+
+  async send(name, text, mention) {
+    const color = await this.getNameColor(name);
+    return this._ref.push({
+      name: name,
+      text: text,
+      ts: firebase.database.ServerValue.TIMESTAMP,
+      ...(mention ? { mention: mention.name } : {}),
+      ...(color ? { bubble: color.bubble, textColor: color.text } : {})
+    });
+  },
+
+  // ── Per-name bubble color ──
+  // Was write-once; now changeable every COLOR_CHANGE_COOLDOWN_MS, enforced
+  // against a server-timestamped `changedAt` so a wrong local clock can't
+  // be used to bypass the cooldown.
+  async getNameColor(name) {
+    const snap = await this._nameColorsRef.child(this._safeKey(name)).get();
+    return snap.exists() ? snap.val() : null;
+  },
+
+  async claimColor(name, bubble, text) {
+    const key = this._safeKey(name);
+    const ref = this._nameColorsRef.child(key);
+    const existing = await ref.get();
+    if (existing.exists()) {
+      const val = existing.val();
+      const serverNow = await this._serverNow();
+      const changedAt = val && val.changedAt ? val.changedAt : 0;
+      const elapsed = serverNow - changedAt;
+      if (elapsed < COLOR_CHANGE_COOLDOWN_MS) {
+        return { ok: false, reason: "cooldown", remainingMs: COLOR_CHANGE_COOLDOWN_MS - elapsed };
+      }
+    }
+    await ref.set({ bubble, text, changedAt: firebase.database.ServerValue.TIMESTAMP });
+    return { ok: true };
+  },
+
+  async isNameTaken(name) {
+    const snap = await this._presenceRef.get();
+    const val = snap.val() || {};
+    const key = this._safeKey(name);
+    return Object.prototype.hasOwnProperty.call(val, key);
+  },
+
+  // NOTE: this is now async (it wasn't before) — see the role-sync section
+  // below for why. All existing call sites already just call it without
+  // awaiting the result, which is fine: everything it does is fire off
+  // Firebase writes that resolve on their own, nothing here needs the
+  // caller to wait.
+  async claimPresence(name, silent) {
+    this.releasePresence();
+    this._myPresenceRef = this._presenceRef.child(this._safeKey(name));
+    this._silentSession = !!silent;
+
+    const leaveEventRef = this._leaveEventsRef.push();
+    if (!this._silentSession) {
+      leaveEventRef.onDisconnect().set({ name, ts: firebase.database.ServerValue.TIMESTAMP });
+    }
+    this._myLeaveEventRef = leaveEventRef;
+
+    this._myPresenceRef.onDisconnect().remove();
+    this._myPresenceRef.set({ joinedAt: firebase.database.ServerValue.TIMESTAMP });
+
+    const roleKey = this._safeKey(name);
+    for (const role of Object.values(ROLES)) {
+      const roleRef = this._roleRefs[role.id].child(roleKey);
+      const sameRoleTarget = this._myRoleRefs[role.id] && this._myRoleRefs[role.id].key === roleKey;
+
+      if (!sameRoleTarget) {
+        const oldRef = this._myRoleRefs[role.id];
+        if (oldRef) {
+          oldRef.onDisconnect().cancel();
+          oldRef.remove();
+        }
+        this._myRoleRefs[role.id] = roleRef;
+
+        // A role can now be granted directly by an owner (Owner Menu →
+        // Grant Mod) without this client ever redeeming a code, so
+        // _rolesHeld alone is no longer the full picture of what this name
+        // actually holds — it only tracks roles *this tab* obtained via
+        // redeemRoleCode(). Check the server's current value too, and treat
+        // either source as "held," so a directly-granted role survives the
+        // holder's own reconnects/renames/room-switches instead of being
+        // wiped by the unconditional roleRef.remove() this used to do.
+        let heldOnServer = false;
+        try {
+          const snap = await roleRef.get();
+          heldOnServer = snap.val() === true;
+        } catch (e) {
+          heldOnServer = false; // fail safe to "not held" — never invent a role from a failed read
+        }
+
+        if (this._rolesHeld[role.id] || heldOnServer) {
+          this._rolesHeld[role.id] = true; // sync local flag so future claimPresence calls on this tab don't need to re-check the server
+          roleRef.set(true);
+        } else {
+          roleRef.remove();
+        }
+        roleRef.onDisconnect().remove();
+      }
+    }
+
+    if (!this._silentSession) {
+      this._ref.push({
+        system: true,
+        text: name + " joined",
+        ts: firebase.database.ServerValue.TIMESTAMP
+      });
+    }
+  },
+
+  releasePresenceSilently() {
+    if (this._myLeaveEventRef) {
+      this._myLeaveEventRef.onDisconnect().cancel();
+      this._myLeaveEventRef = null;
+    }
+    if (this._myPresenceRef) {
+      this._myPresenceRef.onDisconnect().cancel();
+      this._myPresenceRef.remove();
+      this._myPresenceRef = null;
+    }
+    this.clearAllRoles();
+  },
+
+  releasePresence() {
+    if (this._myPresenceRef) {
+      this._myPresenceRef.remove();
+      this._myPresenceRef = null;
+    }
+    if (this._myLeaveEventRef) {
+      this._myLeaveEventRef.onDisconnect().cancel();
+      this._myLeaveEventRef = null;
+    }
+  },
+
+  clearRole(roleId) {
+    const ref = this._myRoleRefs[roleId];
+    if (ref) {
+      ref.onDisconnect().cancel();
+      ref.remove();
+      this._myRoleRefs[roleId] = null;
+    }
+    this._rolesHeld[roleId] = false;
+  },
+
+  clearAllRoles() {
+    Object.keys(ROLES).forEach(roleId => this.clearRole(roleId));
+  },
+
+  // Leave-event de-duplication: multiple queued onDisconnect writes can
+  // fire in a burst for the same name (duplicate tabs under the same name,
+  // or reconnect churn each registering their own leave event) — that used
+  // to post "X left" once per stray event. Now we collapse any leave events
+  // for the same name arriving within LEAVE_DEDUPE_WINDOW_MS of the last
+  // one we actually posted, and always clean up the underlying event node
+  // either way so it can never be replayed.
+  watchLeaveEvents() {
+    this._leaveEventsRef.on("child_added", snap => {
+      const val = snap.val();
+      if (!val) { snap.ref.remove(); return; }
+
+      const now = Date.now();
+      const lastPosted = this._recentLeaveNames[val.name] || 0;
+      const isDuplicate = (now - lastPosted) < LEAVE_DEDUPE_WINDOW_MS;
+
+      snap.ref.remove();
+      if (isDuplicate) return;
+
+      this._recentLeaveNames[val.name] = now;
+      this._ref.push({
+        system: true,
+        text: val.name + " left",
+        ts: firebase.database.ServerValue.TIMESTAMP
+      });
+    });
+  },
+
+  watchPresenceCount(onCount) {
+    this._presenceRef.on("value", snap => {
+      const val = snap.val() || {};
+      onCount(Object.keys(val).length);
+    });
+  },
+
+  watchPresenceList(onList) {
+    this._presenceRef.on("value", snap => {
+      const val = snap.val() || {};
+      const list = Object.entries(val).map(([key, v]) => ({
+        name: key,
+        joinedAt: (v && typeof v === "object") ? (v.joinedAt || null) : null
+      }));
+      onList(list);
+    });
+  },
+
+  setTyping(name) {
+    if (!this._myTypingRef) {
+      this._myTypingRef = this._typingRef.child(this._safeKey(name));
+      this._myTypingRef.onDisconnect().remove();
+    }
+    this._myTypingRef.set({ name: name, ts: firebase.database.ServerValue.TIMESTAMP });
+  },
+
+  clearTyping() {
+    if (this._myTypingRef) this._myTypingRef.remove();
+    this._myTypingRef = null;
+  },
+
+  watchTyping(onChange, excludeNameFn) {
+    this._typingRef.on("value", snap => {
+      const val = snap.val() || {};
+      const currentExclude = excludeNameFn();
+      const entries = Object.values(val)
+        .filter(e => e && e.name !== currentExclude)
+        .sort((a, b) => (a.ts || 0) - (b.ts || 0))
+        .map(e => e.name);
+      onChange(entries);
+    });
+  },
+
+  async tryStartAtPingCooldown(targetName) {
+    const key = this._safeKey(targetName);
+    const ref = this._atPingCooldownRef.child(key);
+    const now = Date.now();
+    let resultRemainingMs = 0;
+    const txResult = await ref.transaction(current => {
+      if (current && typeof current === "number" && (now - current) < AT_PING_COOLDOWN_MS) {
+        return;
+      }
+      return now;
+    });
+    if (!txResult.committed) {
+      const snap = await ref.get();
+      const existing = snap.val();
+      const elapsed = existing ? (now - existing) : AT_PING_COOLDOWN_MS;
+      resultRemainingMs = Math.max(0, AT_PING_COOLDOWN_MS - elapsed);
+      return { ok: false, remainingMs: resultRemainingMs };
+    }
+    return { ok: true };
+  },
+
+  // ── Timeouts (Owner Menu / Mod Menu) ──
+  // Stored per-room at rooms/{roomId}/timeouts/{safeName} = { expiresAt, by }.
+  // expiresAt is anchored to SERVER time (see _serverNow) so a timed-out
+  // person can't dodge it by winding back their local clock, and an
+  // owner's/mod's timeout of someone in one room has no effect in another
+  // room (matches how presence/roles-in-room are already scoped — only
+  // ROLES like crown/mod are global, timeouts are not). `by` records who
+  // set it (safe-keyed), so clearTimeout_ can enforce "only the mod who
+  // set it can clear it early" for mod-issued timeouts — see
+  // canClearTimeout below.
+  async setTimeout_(targetName, durationMs, byName) {
+    const serverNow = await this._serverNow();
+    await this._timeoutsRef.child(this._safeKey(targetName)).set({
+      expiresAt: serverNow + durationMs,
+      by: byName ? this._safeKey(byName) : null
+    });
+  },
+
+  // Unconditional clear — used by the Owner Menu (crown can always clear
+  // any timeout) and internally once ownership of a clear request has
+  // already been checked (see canClearTimeout).
+  async clearTimeout_(targetName) {
+    await this._timeoutsRef.child(this._safeKey(targetName)).remove();
+  },
+
+  // Returns { by } for the current timeout on targetName, or null if none
+  // is active. Used to decide whether the requesting mod is the one who
+  // set it, per "only the mod who set it can clear it early."
+  async getTimeoutSetBy(targetName) {
+    try {
+      const snap = await this._timeoutsRef.child(this._safeKey(targetName)).get();
+      const val = snap.val();
+      return (val && val.by) ? val.by : null;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  // Returns remaining ms if targetName is currently timed out in this
+  // room, or 0 if not (including if the record is stale/expired — a
+  // stale record is left for the next read/write to clean up rather than
+  // deleted here, to keep this a plain read with no side effects).
+  async getTimeoutRemainingMs(targetName) {
+    try {
+      const snap = await this._timeoutsRef.child(this._safeKey(targetName)).get();
+      const val = snap.val();
+      if (!val || !val.expiresAt) return 0;
+      const serverNow = await this._serverNow();
+      return Math.max(0, val.expiresAt - serverNow);
+    } catch (e) {
+      return 0;
+    }
+  },
+
+  // Live subscription: onChange(remainingMs) fires whenever targetName's
+  // timeout record changes. Used to keep the composer lock in sync without
+  // polling, for whoever is currently timed out.
+  watchTimeout(targetName, onChange) {
+    const ref = this._timeoutsRef.child(this._safeKey(targetName));
+    ref.on("value", async snap => {
+      const val = snap.val();
+      if (!val || !val.expiresAt) { onChange(0); return; }
+      const serverNow = await this._serverNow();
+      onChange(Math.max(0, val.expiresAt - serverNow));
+    });
+    return () => ref.off("value");
+  },
+
+  // ── Mod re-timeout cooldown ──
+  // A mod who just set OR cleared a timeout on a given target must wait
+  // MOD_RETIMEOUT_COOLDOWN_MS before they can time that same target out
+  // again. Stored server-side (per room, per mod, per target) so it can't
+  // be dodged by clearing localStorage the way the code-request cooldowns
+  // are — this one's meant to actually hold. Anchored to server time like
+  // everything else here.
+  async startModRetimeoutCooldown(modName, targetName) {
+    const key = this._safeKey(modName) + "__" + this._safeKey(targetName);
+    const serverNow = await this._serverNow();
+    await this._modRetimeoutRef.child(key).set(serverNow);
+  },
+
+  async getModRetimeoutRemainingMs(modName, targetName) {
+    try {
+      const key = this._safeKey(modName) + "__" + this._safeKey(targetName);
+      const snap = await this._modRetimeoutRef.child(key).get();
+      const startedAt = snap.val();
+      if (!startedAt) return 0;
+      const serverNow = await this._serverNow();
+      const elapsed = serverNow - startedAt;
+      return Math.max(0, MOD_RETIMEOUT_COOLDOWN_MS - elapsed);
+    } catch (e) {
+      return 0;
+    }
+  },
+
+  _safeKey(name) {
+    return name.replace(/[.#$\[\]/]/g, "_");
+  }
+};
+
+const RoomManager = {
+  _db: null,
+  _metaRootRef: null,
+  _publicListRef: null,
+
+  init(db) {
+    this._db = db;
+    this._metaRootRef = db.ref("roomsMeta");
+  },
+
+  _safeCode(code) {
+    return String(code).replace(/[.#$\[\]/]/g, "_");
+  },
+
+  _randomCode(length) {
+    const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+    let out = "";
+    for (let i = 0; i < length; i++) {
+      out += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return out;
+  },
+
+  async _isCodeTaken(code) {
+    const snap = await this._metaRootRef.child(this._safeCode(code)).get();
+    return snap.exists();
+  },
+
+  async _generateUniqueCode() {
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const candidate = this._randomCode(ROOM_CODE_DEFAULT_LENGTH);
+      if (!(await this._isCodeTaken(candidate))) return candidate;
+    }
+    return this._randomCode(ROOM_CODE_DEFAULT_LENGTH + 2);
+  },
+
+  async createRoom(ownerName, roomName) {
+    const code = await this._generateUniqueCode();
+    const now = Date.now();
+    const meta = {
+      name: (roomName || "").trim().slice(0, ROOM_NAME_MAX_LENGTH) || null,
+      ownerName: ownerName,
+      isPublic: false,
+      createdAt: firebase.database.ServerValue.TIMESTAMP,
+      expiresAt: now + ROOM_DURATION_MS,
+      kicked: {}
+    };
+    await this._metaRootRef.child(this._safeCode(code)).set(meta);
+    return { code };
+  },
+
+  async getRoomMeta(code) {
+    const snap = await this._metaRootRef.child(this._safeCode(code)).get();
+    return snap.exists() ? { code, ...snap.val() } : null;
+  },
+
+  watchRoomMeta(code, callback) {
+    const ref = this._metaRootRef.child(this._safeCode(code));
+    const unsubscribe = ref.on("value", snap => {
+      callback(snap.exists() ? { code, ...snap.val() } : null);
+    });
+    return () => ref.off("value", unsubscribe);
+  },
+
+  watchPublicRooms(callback) {
+    const unsubscribe = this._metaRootRef.on("value", snap => {
+      const val = snap.val() || {};
+      const now = Date.now();
+      const list = Object.entries(val)
+        .filter(([code, meta]) => meta && meta.isPublic)
+        .map(([code, meta]) => ({ code, ...meta }));
+      callback(list);
+    });
+    return () => this._metaRootRef.off("value", unsubscribe);
+  },
+
+  async setPublic(code, isPublic) {
+    await this._metaRootRef.child(this._safeCode(code)).child("isPublic").set(!!isPublic);
+  },
+
+  async extendRoom(code) {
+    const ref = this._metaRootRef.child(this._safeCode(code)).child("expiresAt");
+    await ref.transaction(current => (current || Date.now()) + ROOM_EXTEND_MS);
+  },
+
+  async changeCode(oldCode, newCode, ownerName) {
+    const safeNew = this._safeCode(newCode.trim().slice(0, ROOM_CODE_MAX_LENGTH));
+    if (!safeNew) return { ok: false, reason: "empty" };
+    if (safeNew === this._safeCode(oldCode)) return { ok: false, reason: "same" };
+
+    const taken = await this._isCodeTaken(safeNew);
+    if (taken) return { ok: false, reason: "taken" };
+
+    const oldRef = this._metaRootRef.child(this._safeCode(oldCode));
+    const snap = await oldRef.get();
+    if (!snap.exists()) return { ok: false, reason: "gone" };
+    const meta = snap.val();
+    if (meta.ownerName !== ownerName) return { ok: false, reason: "not-owner" };
+
+    await this._metaRootRef.child(safeNew).set(meta);
+    await oldRef.remove();
+    return { ok: true, newCode: safeNew };
+  },
+
+  async kickFromRoom(code, targetName) {
+    await this._metaRootRef.child(this._safeCode(code)).child("kicked").child(this._safeKeyName(targetName)).set(true);
+  },
+
+  _safeKeyName(name) {
+    return name.replace(/[.#$\[\]/]/g, "_");
+  },
+
+  async offerTransfer(code, fromName, toName) {
+    await this._metaRootRef.child(this._safeCode(code)).child("transferOffer").set({ fromName, toName });
+  },
+
+  async cancelTransferOffer(code) {
+    await this._metaRootRef.child(this._safeCode(code)).child("transferOffer").remove();
+  },
+
+  async acceptTransfer(code, newOwnerName) {
+    await this._metaRootRef.child(this._safeCode(code)).update({
+      ownerName: newOwnerName,
+      transferOffer: null
+    });
+  },
+
+  async declineTransfer(code) {
+    await this._metaRootRef.child(this._safeCode(code)).child("transferOffer").remove();
+  },
+
+  async forceTransferOwnership(code, newOwnerName) {
+    await this._metaRootRef.child(this._safeCode(code)).update({
+      ownerName: newOwnerName,
+      transferOffer: null
+    });
+  },
+
+  async deleteRoom(code) {
+    const safe = this._safeCode(code);
+    await this._metaRootRef.child(safe).remove();
+    await this._db.ref("rooms/" + safe).remove();
+  }
+};
+
+const $joinScreen  = document.getElementById("joinScreen");
+const $joinCard    = document.getElementById("joinCard");
+const $chatScreen  = document.getElementById("chatScreen");
+const $messages    = document.getElementById("messages");
+const $emptyState  = document.getElementById("emptyState");
+const $msgInput    = document.getElementById("msgInput");
+const $sendBtn     = document.getElementById("sendBtn");
+const $onlineDot   = document.getElementById("onlineDot");
+const $onlineCount = document.getElementById("onlineCount");
+const $connError   = document.getElementById("connError");
+const $composerNotice = document.getElementById("composerNotice");
+const $youAre      = document.getElementById("youAre");
+const $changeNameBtn = document.getElementById("changeNameBtn");
+const $typingBar     = document.getElementById("typingBar");
+const $autoScrollBtn = document.getElementById("autoScrollBtn");
+const $clearChatBtn  = document.getElementById("clearChatBtn");
+const $uploadImageBtn = document.getElementById("uploadImageBtn");
+const $imageFileInput = document.getElementById("imageFileInput");
+const $jumpToBottomBtn = document.getElementById("jumpToBottomBtn");
+const $charCounter    = document.getElementById("charCounter");
+const $globalClearPanel = document.getElementById("globalClearPanel");
+const $onlineListPanel = document.getElementById("onlineListPanel");
+const $pendingImageBar = document.getElementById("pendingImageBar");
+const $pendingImagePreview = document.getElementById("pendingImagePreview");
+const $cancelPendingImageBtn = document.getElementById("cancelPendingImageBtn");
+const $pingYouBtn = document.getElementById("pingYouBtn");
+const $pingYouPanel = document.getElementById("pingYouPanel");
+const $pingYouNote = document.getElementById("pingYouNote");
+const $pingYouSend = document.getElementById("pingYouSend");
+const $mentionChip = document.getElementById("mentionChip");
+const $mentionDropdown = document.getElementById("mentionDropdown");
+const $composerInputWrap = document.getElementById("composerInputWrap");
+const $pingToast = document.getElementById("pingToast");
+const $pingToastTitle = document.getElementById("pingToastTitle");
+const $pingToastBody = document.getElementById("pingToastBody");
+const $pingSound = document.getElementById("pingSound");
+
+const $rolesMenuOverlay = document.getElementById("rolesMenuOverlay");
+const $rolesMenuList = document.getElementById("rolesMenuList");
+const $rolesMenuCloseBtn = document.getElementById("rolesMenuCloseBtn");
+const $roleClaimOverlay = document.getElementById("roleClaimOverlay");
+const $roleClaimTitle = document.getElementById("roleClaimTitle");
+const $roleClaimBody = document.getElementById("roleClaimBody");
+const $roleClaimBackBtn = document.getElementById("roleClaimBackBtn");
+const $roleClaimCloseBtn = document.getElementById("roleClaimCloseBtn");
+
+let myName = "";
+let messageCount = 0;
+let autoScroll = true;
+let isSpectator = false;
+let myTimeoutRemainingMs = 0; // live, kept in sync by watchMyTimeout()
+let unwatchMyTimeout = null;
+let myTimeoutCountdownTimer = null;
+let roleHolders = {};
+
+const NAME_STORAGE_KEY = "vusChatName";
+const HUB_DISPLAY_NAME_KEY = "vus_hub_display_name";
+
+const SEND_COOLDOWN_MS = 3000;
+let lastSentAt = 0;
+let cooldownTimer = null;
+
+let isCurrentlyTyping = false;
+let typingStopTimer = null;
+
+function esc(s = "") {
+  return String(s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function formatTime(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function isNearBottom() {
+  return $messages.scrollHeight - $messages.scrollTop - $messages.clientHeight < 120;
+}
+
+function scrollToBottom() {
+  requestAnimationFrame(() => { $messages.scrollTop = $messages.scrollHeight; });
+  $jumpToBottomBtn.style.display = "none";
+}
+
+function renderMessage(msg) {
+  $emptyState.style.display = "none";
+
+  if (msg.system) {
+    const sysEl = document.createElement("div");
+    sysEl.className = "msg system";
+    const sysBubble = document.createElement("div");
+    sysBubble.className = "msg-bubble";
+    sysBubble.textContent = msg.text;
+    sysEl.appendChild(sysBubble);
+    $messages.appendChild(sysEl);
+    messageCount++;
+    if (autoScroll) scrollToBottom();
+
+    // If the chat just posted a "left" message for the name THIS tab is
+    // currently using, our presence is already gone server-side (someone/
+    // something else triggered it — a stray duplicate session, a kick,
+    // etc). Don't let this tab keep acting like it's still joined — drop
+    // it back to "Continue as X?" so rejoining is deliberate.
+    if (myName && msg.text === myName + " left" && $chatScreen.style.display !== "none") {
+      forceReturnToJoinScreen("You were disconnected from the chat.");
+    }
+    return;
+  }
+
+  const mine = msg.name === myName;
+  const el = document.createElement("div");
+  el.className = "msg" + (mine ? " mine" : "");
+
+  const meta = document.createElement("div");
+  meta.className = "msg-meta";
+  meta.textContent = (mine ? "You" : esc(msg.name)) + (msg.ts ? " · " + formatTime(msg.ts) : "");
+  el.appendChild(meta);
+
+  // Role bubbles: one small bubble per role, ABOVE the message bubble, only
+  // for senders who hold that role RIGHT NOW (live presence-based, so it
+  // always reflects current status, not what was true at send time).
+  const safeName = ChatBackend._safeKey(msg.name);
+  const heldRoles = Object.values(ROLES).filter(role => (roleHolders[role.id] || new Set()).has(safeName));
+  if (heldRoles.length > 0) {
+    const row = document.createElement("div");
+    row.className = "role-bubble-row";
+    heldRoles.forEach(role => {
+      const bubble = document.createElement("div");
+      bubble.className = role.bubbleClass;
+      bubble.textContent = role.icon;
+      row.appendChild(bubble);
+    });
+    el.appendChild(row);
+  }
+
+  const bubble = document.createElement("div");
+  bubble.className = "msg-bubble";
+
+  if (msg.imageData) {
+    const link = document.createElement("a");
+    link.href = msg.imageData;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    const img = document.createElement("img");
+    img.src = msg.imageData;
+    img.alt = "Shared image";
+    img.style.cssText = "max-width:100%;max-height:280px;border-radius:10px;display:block";
+    link.appendChild(img);
+    bubble.appendChild(link);
+    bubble.style.padding = "6px";
+  } else if (msg.mention) {
+    const chip = document.createElement("span");
+    chip.className = "mention-chip-inline";
+    chip.textContent = "@" + msg.mention;
+    bubble.appendChild(chip);
+    if (msg.text) {
+      bubble.appendChild(document.createTextNode(" " + msg.text));
+    }
+  } else {
+    bubble.textContent = msg.text;
+  }
+
+  if (!msg.imageData) {
+    if (msg.bubble) bubble.style.background = msg.bubble;
+    if (msg.textColor) bubble.style.color = msg.textColor;
+  }
+
+  el.appendChild(bubble);
+  $messages.appendChild(el);
+
+  messageCount++;
+  while (messageCount > MAX_MESSAGES) {
+    const first = $messages.querySelector(".msg");
+    if (!first) break;
+    first.remove();
+    messageCount--;
+  }
+
+  if (autoScroll && (isNearBottom() || mine)) {
+    scrollToBottom();
+  } else if (!isNearBottom()) {
+    $jumpToBottomBtn.style.display = "block";
+  }
+
+  if (msg.mention && msg.mention === myName && msg.name !== myName) {
+    triggerIncomingPing(msg.name, msg.text);
+  }
+}
+
+// Tracks whether THIS tab has ever seen a real disconnect while it had an
+// active (non-spectator-only-intentional) session, so a reconnect can be
+// told apart from the very first connection at boot.
+let hadConnectionDrop = false;
+
+function setConnectionStatus(isOnline) {
+  $onlineDot.className = "chat-online-dot" + (isOnline ? "" : " offline");
+  if (isOnline) {
+    $connError.style.display = "none";
+
+    // If we're reconnecting after a real drop while we had a name/session,
+    // the server-side onDisconnect hook already wiped our presence (and
+    // posted "X left" for us) while we were gone — from everyone else's
+    // point of view we already left. Don't let the tab keep pretending
+    // it's still in that session: force it back to the "Continue as X?"
+    // screen so re-joining is a deliberate action, not automatic.
+    if (hadConnectionDrop && myName && $chatScreen.style.display !== "none") {
+      hadConnectionDrop = false;
+      forceReturnToJoinScreen("Connection dropped — you were disconnected from the chat.");
+    } else {
+      hadConnectionDrop = false;
+    }
+  } else {
+    hadConnectionDrop = true;
+    $connError.textContent = "Disconnected — trying to reconnect…";
+    $connError.style.display = "block";
+  }
+}
+
+// Drops the client-side view of the current session and returns to the
+// join screen's "Continue as X?" prompt, without touching the person's
+// saved name in localStorage — used both for real disconnects (see
+// setConnectionStatus above) and for detecting our own "left" system
+// message coming back from the server (see watchLeaveEvents' onSelfLeft
+// hook wired up in attachRoomListeners).
+function forceReturnToJoinScreen(noticeText) {
+  stopTyping();
+  clearPendingImage();
+  closeClearPanel();
+  closeOnlineListPanel();
+  closePingYouPanel();
+  closeMentionDropdown();
+
+  // Presence/typing/roles for this session are already gone server-side
+  // (that's what triggered this in the first place) — just clear local
+  // refs so a subsequent join starts clean instead of trying to release
+  // something that no longer exists.
+  ChatBackend._myPresenceRef = null;
+  ChatBackend._myLeaveEventRef = null;
+  ChatBackend._myTypingRef = null;
+
+  const returningName = myName;
+  myName = "";
+  isSpectator = false;
+  $changeNameBtn.style.display = "none";
+  $youAre.textContent = "";
+  $chatScreen.style.display = "none";
+  $joinScreen.style.display = "flex";
+
+  if (returningName) {
+    renderJoinReturning(returningName);
+  } else {
+    const savedName = localStorage.getItem(NAME_STORAGE_KEY);
+    if (savedName) {
+      renderJoinReturning(savedName);
+    } else {
+      renderJoinNameEntry(false);
+    }
+  }
+
+  if (noticeText) {
+    const errEl = document.getElementById("joinError");
+    if (errEl) errEl.textContent = noticeText;
+  }
+}
+
+function randomGuestName() {
+  const n = Math.floor(Math.random() * 999) + 1;
+  return "Guest " + n;
+}
+
+function randomSpectatorName() {
+  const n = Math.floor(Math.random() * 999) + 1;
+  return "Spectator #" + n;
+}
+
+function isSpectatorName(name) {
+  return /spectator/i.test(name || "");
+}
+
+async function attemptJoin(rawName, isRename, errEl, submitBtn, joinSilently) {
+  const name = rawName.trim().replace(/ {2,}/g, " ");
+  if (!name) {
+    errEl.textContent = "Enter a name to continue.";
+    return;
+  }
+  if (name.length > 24) {
+    errEl.textContent = "Name is too long (max 24 characters).";
+    return;
+  }
+
+  if (isRename && name === myName) {
+    $chatScreen.style.display = "flex";
+    $joinScreen.style.display = "none";
+    return;
+  }
+
+  if (submitBtn) submitBtn.disabled = true;
+  errEl.textContent = "";
+  try {
+    const taken = await ChatBackend.isNameTaken(name);
+    if (taken) {
+      errEl.textContent = "That name is already used.";
+      if (submitBtn) submitBtn.disabled = false;
+      return;
+    }
+  } catch (e) {
+    errEl.textContent = "Couldn't check name availability — try again.";
+    if (submitBtn) submitBtn.disabled = false;
+    return;
+  }
+  if (submitBtn) submitBtn.disabled = false;
+
+  if (isRename && isCurrentlyTyping) {
+    ChatBackend.clearTyping();
+    isCurrentlyTyping = false;
+  }
+  ChatBackend._myTypingRef = null;
+
+  myName = name;
+  isSpectator = !!joinSilently;
+  localStorage.setItem(NAME_STORAGE_KEY, name);
+  ChatBackend.claimPresence(myName, isSpectator);
+  watchMyTimeout();
+  requestNotificationPermissionIfNeeded();
+  $youAre.textContent = "You: " + name + (isSpectator ? " (spectating)" : "");
+  $changeNameBtn.style.display = "inline-block";
+  $joinScreen.style.display = "none";
+  $chatScreen.style.display = "flex";
+  updateComposerLockState();
+  if (!isSpectatorName(myName)) $msgInput.focus();
+  scrollToBottom();
+}
+
+function getHubDisplayNamePlaceholder() {
+  try {
+    const name = localStorage.getItem(HUB_DISPLAY_NAME_KEY);
+    return (name && name.trim()) ? name.trim() : "";
+  } catch (e) {
+    return "";
+  }
+}
+
+function renderJoinReturning(savedName) {
+  $joinCard.innerHTML = "";
+
+  const h2 = document.createElement("h2");
+  h2.textContent = "Welcome back";
+  const p = document.createElement("p");
+  p.textContent = "Continue as \u201c" + savedName + "\u201d?";
+
+  const errEl = document.createElement("div");
+  errEl.id = "joinError";
+
+  const yesBtn = document.createElement("button");
+  yesBtn.id = "joinBtn";
+  yesBtn.textContent = "Continue as " + savedName;
+  yesBtn.addEventListener("click", () => attemptJoin(savedName, false, errEl, yesBtn));
+
+  const noBtn = document.createElement("button");
+  noBtn.className = "join-secondary-btn";
+  noBtn.textContent = "No, use a different name";
+  noBtn.addEventListener("click", () => renderJoinNameEntry());
+
+  $joinCard.appendChild(h2);
+  $joinCard.appendChild(p);
+  $joinCard.appendChild(yesBtn);
+  $joinCard.appendChild(noBtn);
+  $joinCard.appendChild(errEl);
+}
+
+function renderJoinNameEntry(isRename) {
+  $joinCard.innerHTML = "";
+
+  const h2 = document.createElement("h2");
+  h2.textContent = isRename ? "Change your name" : "Join the chat";
+  const p = document.createElement("p");
+  p.textContent = "Pick a display name. Anyone here can see your messages in real time.";
+
+  const input = document.createElement("input");
+  input.id = "nameInput";
+  input.type = "text";
+  input.placeholder = getHubDisplayNamePlaceholder() || "Your name…";
+  input.maxLength = 24;
+  input.autocomplete = "off";
+  if (isRename) input.value = myName;
+
+  const errEl = document.createElement("div");
+  errEl.id = "joinError";
+
+  const joinBtn = document.createElement("button");
+  joinBtn.id = "joinBtn";
+  joinBtn.textContent = isRename ? "Save" : "Join Chat";
+
+  const submit = () => attemptJoin(input.value, !!isRename, errEl, joinBtn);
+  joinBtn.addEventListener("click", submit);
+  input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
+
+  $joinCard.appendChild(h2);
+  $joinCard.appendChild(p);
+  $joinCard.appendChild(input);
+  $joinCard.appendChild(errEl);
+  $joinCard.appendChild(joinBtn);
+
+  if (!isRename) {
+    const divider = document.createElement("div");
+    divider.className = "join-divider";
+    divider.textContent = "or";
+
+    const guestBtn = document.createElement("button");
+    guestBtn.className = "join-secondary-btn";
+    guestBtn.textContent = "Join as Guest";
+    guestBtn.addEventListener("click", () => {
+      const guestName = randomGuestName();
+      input.value = guestName;
+      submit();
+    });
+
+    $joinCard.appendChild(divider);
+    $joinCard.appendChild(guestBtn);
+  }
+
+  input.focus();
+  if (isRename) input.select();
+}
+
+function openChangeName() {
+  $chatScreen.style.display = "none";
+  $joinScreen.style.display = "flex";
+  renderJoinNameEntry(true);
+}
+
+function updateSendButtonState() {
+  const elapsed = Date.now() - lastSentAt;
+  const remaining = SEND_COOLDOWN_MS - elapsed;
+  if (remaining > 0) {
+    $sendBtn.disabled = true;
+    $sendBtn.classList.add("cooldown");
+    $sendBtn.textContent = Math.ceil(remaining / 1000) + "s";
+    clearTimeout(cooldownTimer);
+    cooldownTimer = setTimeout(updateSendButtonState, 250);
+  } else {
+    $sendBtn.disabled = false;
+    $sendBtn.classList.remove("cooldown");
+    $sendBtn.textContent = "Send";
+  }
+}
+
+function updateComposerLockState() {
+  if (isSpectatorName(myName)) {
+    $msgInput.disabled = true;
+    $msgInput.placeholder = "Rename to chat — you're spectating";
+    $sendBtn.disabled = false;
+    $sendBtn.classList.remove("cooldown");
+    $sendBtn.textContent = "Rename to chat";
+  } else if (myTimeoutRemainingMs > 0) {
+    $msgInput.disabled = true;
+    $msgInput.placeholder = "Timed out — try again in " + formatCountdown(myTimeoutRemainingMs);
+    $sendBtn.disabled = true;
+    $sendBtn.classList.add("cooldown");
+    $sendBtn.textContent = formatCountdown(myTimeoutRemainingMs);
+  } else {
+    $msgInput.disabled = false;
+    $msgInput.placeholder = "Type a message… (@ to mention someone)";
+    updateSendButtonState();
+  }
+}
+
+// Live-watches this browser's OWN timeout status in the current room so the
+// composer locks/unlocks the moment an owner issues or a timeout expires,
+// without the person needing to send a message to find out. Re-subscribes
+// whenever we (re)claim presence under a name or switch rooms — see the
+// call sites in attemptJoin / joinAsSpectatorAuto / joinRoomByCode /
+// switchToMainRoom.
+function watchMyTimeout() {
+  if (unwatchMyTimeout) { unwatchMyTimeout(); unwatchMyTimeout = null; }
+  clearInterval(myTimeoutCountdownTimer);
+  if (!myName || isSpectatorName(myName)) { myTimeoutRemainingMs = 0; return; }
+
+  unwatchMyTimeout = ChatBackend.watchTimeout(myName, (remainingMs) => {
+    myTimeoutRemainingMs = remainingMs;
+    updateComposerLockState();
+    clearInterval(myTimeoutCountdownTimer);
+    if (remainingMs > 0) {
+      myTimeoutCountdownTimer = setInterval(() => {
+        myTimeoutRemainingMs = Math.max(0, myTimeoutRemainingMs - 1000);
+        updateComposerLockState();
+        if (myTimeoutRemainingMs <= 0) clearInterval(myTimeoutCountdownTimer);
+      }, 1000);
+    }
+  });
+}
+
+function sendMessage() {
+  if (isSpectatorName(myName)) {
+    openChangeName();
+    return;
+  }
+  if (myTimeoutRemainingMs > 0) {
+    showComposerNotice("You're timed out for " + formatCountdown(myTimeoutRemainingMs) + " more.");
+    return;
+  }
+  if (Date.now() - lastSentAt < SEND_COOLDOWN_MS) return;
+
+  const text = $msgInput.value.trim();
+  const mentionTarget = currentMentionTarget;
+
+  if (pendingImageDataUrl) {
+    const imageToSend = pendingImageDataUrl;
+    clearPendingImage();
+
+    lastSentAt = Date.now();
+    updateSendButtonState();
+    stopTyping();
+
+    ChatBackend.sendImage(myName, imageToSend)
+      .then(() => {
+        if (text) {
+          return ChatBackend.send(myName, text);
+        }
+      })
+      .then(() => {
+        $msgInput.value = "";
+        autosizeInput();
+        updateCharCounter();
+        autoScroll = true;
+        setAutoScrollUI();
+      })
+      .catch(() => {
+        $connError.textContent = "Image failed to send — check your connection.";
+        $connError.style.display = "block";
+      })
+      .finally(() => { $msgInput.focus(); });
+    return;
+  }
+
+  if (!text && !mentionTarget) return;
+
+  if (mentionTarget) {
+    $sendBtn.disabled = true;
+    ChatBackend.tryStartAtPingCooldown(mentionTarget).then(result => {
+      $sendBtn.disabled = false;
+      if (!result.ok) {
+        const secs = Math.ceil(result.remainingMs / 1000);
+        showComposerNotice(mentionTarget + " was just pinged — wait " + secs + "s before pinging them again.");
+        return;
+      }
+      finalizeSend(text, { name: mentionTarget });
+    }).catch(() => {
+      $sendBtn.disabled = false;
+      showComposerNotice("Couldn't check ping cooldown — try again.");
+    });
+    return;
+  }
+
+  finalizeSend(text, null);
+}
+
+function finalizeSend(text, mention) {
+  lastSentAt = Date.now();
+  updateSendButtonState();
+  stopTyping();
+
+  ChatBackend.send(myName, text, mention)
+    .then(() => {
+      $msgInput.value = "";
+      clearMention();
+      autosizeInput();
+      updateCharCounter();
+      autoScroll = true;
+      setAutoScrollUI();
+    })
+    .catch(() => {
+      $connError.textContent = "Message failed to send — check your connection.";
+      $connError.style.display = "block";
+    })
+    .finally(() => { $msgInput.focus(); });
+}
+
+let composerNoticeTimer = null;
+function showComposerNotice(text) {
+  $composerNotice.textContent = text;
+  $composerNotice.style.display = "block";
+  clearTimeout(composerNoticeTimer);
+  composerNoticeTimer = setTimeout(() => {
+    $composerNotice.style.display = "none";
+  }, 4000);
+}
+
+function autosizeInput() {
+  $msgInput.style.height = "auto";
+  $msgInput.style.height = Math.min($msgInput.scrollHeight, 135) + "px";
+}
+
+const MAX_IMAGE_SOURCE_BYTES = 15 * 1024 * 1024;
+const IMAGE_MAX_DIMENSION = 1000;
+const IMAGE_JPEG_QUALITY = 0.7;
+
+function compressImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Couldn't read file"));
+    reader.onload = () => {
+      img.onerror = () => reject(new Error("Couldn't decode image"));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > IMAGE_MAX_DIMENSION || height > IMAGE_MAX_DIMENSION) {
+          const scale = IMAGE_MAX_DIMENSION / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", IMAGE_JPEG_QUALITY));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+let pendingImageDataUrl = null;
+
+function clearPendingImage() {
+  pendingImageDataUrl = null;
+  $pendingImageBar.style.display = "none";
+  $pendingImagePreview.src = "";
+}
+
+function stageImageFile(file) {
+  if (!modMenuUnlocked || !imagesEnabledForMe) return;
+
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    $connError.textContent = "That file isn't an image.";
+    $connError.style.display = "block";
+    return;
+  }
+  if (file.size > MAX_IMAGE_SOURCE_BYTES) {
+    $connError.textContent = "Image is too large.";
+    $connError.style.display = "block";
+    return;
+  }
+
+  $uploadImageBtn.disabled = true;
+  $uploadImageBtn.textContent = "Processing…";
+
+  compressImageFile(file)
+    .then(dataUrl => {
+      pendingImageDataUrl = dataUrl;
+      $pendingImagePreview.src = dataUrl;
+      $pendingImageBar.style.display = "flex";
+    })
+    .catch(() => {
+      $connError.textContent = "Couldn't process that image — try another.";
+      $connError.style.display = "block";
+    })
+    .finally(() => {
+      $uploadImageBtn.disabled = false;
+      $uploadImageBtn.textContent = "📎 Image";
+      $imageFileInput.value = "";
+    });
+}
+
+$cancelPendingImageBtn.addEventListener("click", clearPendingImage);
+
+$uploadImageBtn.addEventListener("click", () => {
+  if (!modMenuUnlocked) return;
+  $imageFileInput.click();
+});
+$imageFileInput.addEventListener("change", () => {
+  const file = $imageFileInput.files[0];
+  stageImageFile(file);
+});
+
+function updateCharCounter() {
+  const remaining = MAX_CHARS - $msgInput.value.length;
+  $charCounter.textContent = remaining;
+  $charCounter.classList.toggle("warn", remaining <= 50 && remaining > 10);
+  $charCounter.classList.toggle("limit", remaining <= 10);
+}
+
+function setAutoScrollUI() {
+  $autoScrollBtn.textContent = "Auto Scroll: " + (autoScroll ? "On" : "Off");
+  $autoScrollBtn.classList.toggle("active", autoScroll);
+  if (autoScroll) scrollToBottom();
+}
+
+$autoScrollBtn.addEventListener("click", () => {
+  autoScroll = !autoScroll;
+  setAutoScrollUI();
+});
+
+$messages.addEventListener("scroll", () => {
+  if (isNearBottom()) {
+    $jumpToBottomBtn.style.display = "none";
+  }
+});
+
+$jumpToBottomBtn.addEventListener("click", () => {
+  scrollToBottom();
+});
+
+$clearChatBtn.addEventListener("click", () => {
+  $messages.innerHTML = "";
+  messageCount = 0;
+  $emptyState.style.display = "flex";
+  $jumpToBottomBtn.style.display = "none";
+});
+
+const MOD_MENU_CODE = "2212";
+let modMenuUnlocked = false;
+let imagesEnabledForMe = false;
+
+function updateUploadButtonVisibility() {
+  const visible = modMenuUnlocked && imagesEnabledForMe;
+  $uploadImageBtn.style.display = visible ? "inline-block" : "none";
+}
+
+function leaveSilently() {
+  ChatBackend.releasePresenceSilently();
+  stopTyping();
+  clearPendingImage();
+  myName = "";
+  isSpectator = false;
+  $changeNameBtn.style.display = "none";
+  $youAre.textContent = "";
+  closeClearPanel();
+  $chatScreen.style.display = "none";
+  $joinScreen.style.display = "flex";
+  const savedName = localStorage.getItem(NAME_STORAGE_KEY);
+  if (savedName) {
+    renderJoinReturning(savedName);
+  } else {
+    renderJoinNameEntry(false);
+  }
+}
+
+function renderPreCodeActions(container) {
+  if (!myName) {
+    const specBtn = document.createElement("button");
+    specBtn.textContent = "Join as Spectator";
+    specBtn.className = "toolbar-btn";
+    specBtn.style.cssText = "width:100%;margin-bottom:8px";
+    specBtn.addEventListener("click", () => {
+      closeClearPanel();
+      joinAsSpectatorAuto();
+    });
+    container.appendChild(specBtn);
+  } else {
+    const leaveBtn = document.createElement("button");
+    leaveBtn.textContent = "Leave Silently";
+    leaveBtn.className = "toolbar-btn";
+    leaveBtn.style.cssText = "width:100%;margin-bottom:8px";
+    leaveBtn.addEventListener("click", leaveSilently);
+    container.appendChild(leaveBtn);
+  }
+
+  const divider = document.createElement("div");
+  divider.style.cssText = "height:1px;background:#334155;margin:2px 0 10px 0";
+  container.appendChild(divider);
+}
+
+async function joinAsSpectatorAuto() {
+  let name = randomSpectatorName();
+  for (let attempt = 0; attempt < 8; attempt++) {
+    try {
+      const taken = await ChatBackend.isNameTaken(name);
+      if (!taken) break;
+    } catch (e) { break; }
+    name = randomSpectatorName();
+  }
+
+  myName = name;
+  isSpectator = true;
+  ChatBackend.claimPresence(myName, true);
+  watchMyTimeout();
+  requestNotificationPermissionIfNeeded();
+  $youAre.textContent = "You: " + name;
+  $changeNameBtn.style.display = "inline-block";
+  $joinScreen.style.display = "none";
+  $chatScreen.style.display = "flex";
+  updateComposerLockState();
+  scrollToBottom();
+}
+
+function renderModMenuLogin() {
+  $globalClearPanel.innerHTML = "";
+
+  renderPreCodeActions($globalClearPanel);
+
+  const label = document.createElement("div");
+  label.textContent = "Enter code:";
+  label.style.marginBottom = "6px";
+  label.style.color = "#94a3b8";
+
+  const input = document.createElement("input");
+  input.type = "password";
+  input.inputMode = "numeric";
+  input.style.cssText = "width:100%;padding:8px 10px;background:#0f172a;border:1.5px solid #334155;border-radius:8px;color:#f1f5f9;font-size:15px;outline:none;margin-bottom:8px";
+
+  const err = document.createElement("div");
+  err.style.cssText = "color:#ef4444;font-size:13.5px;min-height:18px;margin-bottom:4px";
+
+  const row = document.createElement("div");
+  row.style.cssText = "display:flex;gap:6px";
+
+  const submitBtn = document.createElement("button");
+  submitBtn.textContent = "Submit";
+  submitBtn.className = "toolbar-btn";
+  submitBtn.style.flex = "1";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.className = "toolbar-btn";
+  cancelBtn.style.flex = "1";
+
+  const trySubmit = () => {
+    if (input.value === MOD_MENU_CODE) {
+      modMenuUnlocked = true;
+      updateUploadButtonVisibility();
+      renderModMenu();
+    } else {
+      err.textContent = "Incorrect code.";
+      input.value = "";
+      input.focus();
+    }
+  };
+
+  submitBtn.addEventListener("click", trySubmit);
+  input.addEventListener("keydown", e => { if (e.key === "Enter") trySubmit(); });
+  cancelBtn.addEventListener("click", closeClearPanel);
+
+  row.appendChild(submitBtn);
+  row.appendChild(cancelBtn);
+  $globalClearPanel.appendChild(label);
+  $globalClearPanel.appendChild(input);
+  $globalClearPanel.appendChild(err);
+  $globalClearPanel.appendChild(row);
+  input.focus();
+}
+
+async function renderModMenu() {
+  $globalClearPanel.innerHTML = "";
+  $globalClearPanel.style.width = "260px";
+
+  renderPreCodeActions($globalClearPanel);
+
+  const title = document.createElement("div");
+  title.textContent = "Customize your bubble";
+  title.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:10px";
+  $globalClearPanel.appendChild(title);
+
+  const loading = document.createElement("div");
+  loading.textContent = "Loading…";
+  loading.style.cssText = "color:#64748b;font-size:14px";
+  $globalClearPanel.appendChild(loading);
+
+  let existing = null;
+  try {
+    existing = myName ? await ChatBackend.getNameColor(myName) : null;
+  } catch (e) { /* treat as no existing color if the check fails */ }
+
+  loading.remove();
+
+  let pendingBubble = (existing && existing.bubble) || "#14532d";
+  let pendingText = (existing && existing.text) || "#f1f5f9";
+
+  const previewWrap = document.createElement("div");
+  previewWrap.style.cssText = "margin-bottom:10px";
+  const previewLabel = document.createElement("div");
+  previewLabel.textContent = "Preview";
+  previewLabel.style.cssText = "color:#94a3b8;font-size:13px;margin-bottom:4px";
+  const previewBubble = document.createElement("div");
+  previewBubble.className = "msg-bubble";
+  previewBubble.textContent = "Example message text";
+  previewBubble.style.cssText = `background:${pendingBubble};color:${pendingText};font-size:16px;padding:10px 14px;display:inline-block;max-width:100%;`;
+  previewWrap.appendChild(previewLabel);
+  previewWrap.appendChild(previewBubble);
+  $globalClearPanel.appendChild(previewWrap);
+
+  const makeColorRow = (labelText, currentValue, onChange) => {
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "display:flex;align-items:center;justify-content:space-between;margin-bottom:8px";
+    const lbl = document.createElement("label");
+    lbl.textContent = labelText;
+    lbl.style.color = "#94a3b8";
+    const colorInput = document.createElement("input");
+    colorInput.type = "color";
+    colorInput.value = currentValue;
+    colorInput.style.cssText = "width:36px;height:28px;border:none;background:none;cursor:pointer;padding:0";
+    colorInput.addEventListener("input", () => onChange(colorInput.value));
+    wrap.appendChild(lbl);
+    wrap.appendChild(colorInput);
+    return wrap;
+  };
+
+  $globalClearPanel.appendChild(
+    makeColorRow("Bubble color", pendingBubble, (val) => {
+      pendingBubble = val;
+      previewBubble.style.background = val;
+    })
+  );
+  $globalClearPanel.appendChild(
+    makeColorRow("Text color", pendingText, (val) => {
+      pendingText = val;
+      previewBubble.style.color = val;
+    })
+  );
+
+  const note = document.createElement("div");
+  note.textContent = "Note: color can be changed again every " + Math.round(COLOR_CHANGE_COOLDOWN_MS / 1000) + " seconds.";
+  note.style.cssText = "color:#64748b;font-size:12.5px;margin-bottom:10px;line-height:1.4";
+  $globalClearPanel.appendChild(note);
+
+  const confirmErr = document.createElement("div");
+  confirmErr.style.cssText = "color:#ef4444;font-size:13px;min-height:16px;margin-bottom:4px";
+  $globalClearPanel.appendChild(confirmErr);
+
+  const confirmBtn = document.createElement("button");
+  confirmBtn.textContent = "Confirm";
+  confirmBtn.className = "toolbar-btn";
+  confirmBtn.style.cssText = "width:100%;margin-top:4px";
+  confirmBtn.addEventListener("click", async () => {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "Saving…";
+    try {
+      const result = await ChatBackend.claimColor(myName, pendingBubble, pendingText);
+      if (result.ok) {
+        renderModMenu();
+      } else if (result.reason === "cooldown") {
+        const secs = Math.ceil(result.remainingMs / 1000);
+        confirmErr.textContent = "Wait " + secs + "s before changing your color again.";
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = "Confirm";
+      } else {
+        confirmErr.textContent = "Couldn't save — try again.";
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = "Confirm";
+      }
+    } catch (e) {
+      confirmErr.textContent = "Couldn't save — try again.";
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "Confirm";
+    }
+  });
+  $globalClearPanel.appendChild(confirmBtn);
+
+  const divider = document.createElement("div");
+  divider.style.cssText = "height:1px;background:#334155;margin:12px 0";
+  $globalClearPanel.appendChild(divider);
+
+  const imgTitle = document.createElement("div");
+  imgTitle.textContent = "Images (this session, just you)";
+  imgTitle.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:8px";
+  $globalClearPanel.appendChild(imgTitle);
+
+  const imgRow = document.createElement("div");
+  imgRow.style.cssText = "display:flex;align-items:center;justify-content:space-between;margin-bottom:6px";
+  const imgLabel = document.createElement("label");
+  imgLabel.textContent = "Allow images (me)";
+  imgLabel.style.color = "#94a3b8";
+  const imgToggle = document.createElement("button");
+  imgToggle.className = "toolbar-btn" + (imagesEnabledForMe ? " active" : "");
+  imgToggle.textContent = imagesEnabledForMe ? "On" : "Off";
+  imgToggle.style.cssText = "padding:4px 14px";
+  imgToggle.addEventListener("click", () => {
+    imagesEnabledForMe = !imagesEnabledForMe;
+    imgToggle.className = "toolbar-btn" + (imagesEnabledForMe ? " active" : "");
+    imgToggle.textContent = imagesEnabledForMe ? "On" : "Off";
+    updateUploadButtonVisibility();
+  });
+  imgRow.appendChild(imgLabel);
+  imgRow.appendChild(imgToggle);
+  $globalClearPanel.appendChild(imgRow);
+
+  const imgNote = document.createElement("div");
+  imgNote.textContent = "Only affects you, only this session. No one else ever gets an image button, and this resets to Off next time you open the chat.";
+  imgNote.style.cssText = "color:#64748b;font-size:12px;line-height:1.4;margin-bottom:4px";
+  $globalClearPanel.appendChild(imgNote);
+
+  const rolesDivider = document.createElement("div");
+  rolesDivider.style.cssText = "height:1px;background:#334155;margin:12px 0";
+  $globalClearPanel.appendChild(rolesDivider);
+
+  const rolesBtn = document.createElement("button");
+  rolesBtn.textContent = "🎖 Claim a role";
+  rolesBtn.className = "toolbar-btn";
+  rolesBtn.style.cssText = "width:100%;margin-bottom:6px";
+  rolesBtn.addEventListener("click", () => {
+    closeClearPanel();
+    openRolesMenu();
+  });
+  $globalClearPanel.appendChild(rolesBtn);
+
+  // Owner Menu button: only shown when this browser both has the mod-menu
+  // code unlocked AND the current name currently holds the crown, live —
+  // checked fresh here (not cached) so it disappears the moment the crown
+  // is lost (e.g. cleared on disconnect) without needing the panel reopened.
+  const iAmCrowned = modMenuUnlocked && myName && (roleHolders.crown || new Set()).has(ChatBackend._safeKey(myName));
+  if (iAmCrowned) {
+    const ownerBtn = document.createElement("button");
+    ownerBtn.textContent = "👑 Owner Menu";
+    ownerBtn.className = "toolbar-btn";
+    ownerBtn.style.cssText = "width:100%;margin-bottom:6px";
+    ownerBtn.addEventListener("click", () => {
+      closeClearPanel();
+      openOwnerMenu();
+    });
+    $globalClearPanel.appendChild(ownerBtn);
+  }
+
+  // Mod Menu button: shown when mod-menu code is unlocked AND the current
+  // name holds the mod role, live. A crown-holder who is ALSO modded would
+  // see both buttons — that's fine, each opens its own scoped menu.
+  const iAmModded = modMenuUnlocked && myName && (roleHolders.mod || new Set()).has(ChatBackend._safeKey(myName));
+  if (iAmModded) {
+    const modMenuBtn = document.createElement("button");
+    modMenuBtn.textContent = "🧩 Mod Menu";
+    modMenuBtn.className = "toolbar-btn";
+    modMenuBtn.style.cssText = "width:100%;margin-bottom:6px";
+    modMenuBtn.addEventListener("click", () => {
+      closeClearPanel();
+      openModMenuStaff();
+    });
+    $globalClearPanel.appendChild(modMenuBtn);
+  }
+
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "Close";
+  closeBtn.className = "toolbar-btn";
+  closeBtn.style.cssText = "width:100%;margin-top:6px";
+  closeBtn.addEventListener("click", closeClearPanel);
+  $globalClearPanel.appendChild(closeBtn);
+}
+
+function closeClearPanel() {
+  $globalClearPanel.style.display = "none";
+  if (!modMenuUnlocked) $globalClearPanel.innerHTML = "";
+}
+
+function openModMenu() {
+  closeOnlineListPanel();
+  $globalClearPanel.style.display = "block";
+  if (modMenuUnlocked) {
+    renderModMenu();
+  } else {
+    renderModMenuLogin();
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   ROLES MENU (centered modal, like Room Settings) — opened from
+   "🎖 Claim a role" inside the mod menu popover. Lists every role
+   in ROLES; picking one opens the shared role-claim modal.
+   ══════════════════════════════════════════════════════════ */
+function openRolesMenu() {
+  $rolesMenuList.innerHTML = "";
+  Object.values(ROLES).forEach(role => {
+    const btn = document.createElement("button");
+    btn.className = "role-menu-option";
+    btn.innerHTML = `<span><span class="role-menu-icon">${role.icon}</span> ${esc(role.label)}</span><span style="color:#64748b;font-size:12px">Claim →</span>`;
+    btn.addEventListener("click", () => {
+      $rolesMenuOverlay.style.display = "none";
+      openRoleClaimModal(role.id);
+    });
+    $rolesMenuList.appendChild(btn);
+  });
+  $rolesMenuOverlay.style.display = "flex";
+}
+
+$rolesMenuCloseBtn.addEventListener("click", () => {
+  $rolesMenuOverlay.style.display = "none";
+});
+$rolesMenuOverlay.addEventListener("click", (e) => {
+  if (e.target === $rolesMenuOverlay) $rolesMenuOverlay.style.display = "none";
+});
+
+/* ══════════════════════════════════════════════════════════
+   ROLE CLAIM MODAL (centered) — shared UI for any role in ROLES.
+   Replaces the old crown-only section that used to live inside the
+   top-left popover; the logic (request code / redeem code) is
+   unchanged, just generalized to whichever roleId was picked in the
+   roles menu, and moved into its own centered modal.
+   ══════════════════════════════════════════════════════════ */
+let activeRoleClaimId = null;
+let roleClaimStatusTimer = null;
+
+function roleRequestCooldownRemainingMs(role) {
+  try {
+    const last = parseInt(localStorage.getItem(role.cooldownKey) || "0", 10);
+    return Math.max(0, ROLE_REQUEST_COOLDOWN_MS - (Date.now() - last));
+  } catch (e) { return 0; }
+}
+
+function openRoleClaimModal(roleId) {
+  activeRoleClaimId = roleId;
+  renderRoleClaimModal(roleId);
+  $roleClaimOverlay.style.display = "flex";
+}
+
+function renderRoleClaimModal(roleId) {
+  const role = ROLES[roleId];
+  clearInterval(roleClaimStatusTimer);
+  $roleClaimTitle.textContent = role.icon + " " + role.label + " role";
+  $roleClaimBody.innerHTML = "";
+
+  const reqBtn = document.createElement("button");
+  reqBtn.className = "toolbar-btn";
+  reqBtn.style.cssText = "width:100%;margin-bottom:10px";
+
+  function updateReqBtnState() {
+    const remaining = roleRequestCooldownRemainingMs(role);
+    if (remaining > 0) {
+      reqBtn.disabled = true;
+      reqBtn.textContent = "Wait " + Math.ceil(remaining / 1000) + "s";
+      setTimeout(updateReqBtnState, 500);
+    } else {
+      reqBtn.disabled = false;
+      reqBtn.textContent = "Request " + role.label + " Code";
+    }
+  }
+  updateReqBtnState();
+
+  reqBtn.addEventListener("click", async () => {
+    if (roleRequestCooldownRemainingMs(role) > 0) return;
+    try { localStorage.setItem(role.cooldownKey, String(Date.now())); } catch (e) {}
+    updateReqBtnState();
+    reqBtn.textContent = "Sending…";
+    try {
+      const result = await ChatBackend.generateRoleCode(role.id);
+      reqBtn.textContent = result.webhookOk ? "Sent to Discord ✓" : "Saved, but Discord post failed";
+      refreshRoleClaimStatus(role);
+    } catch (e) {
+      reqBtn.textContent = "Failed — try again";
+    }
+  });
+  $roleClaimBody.appendChild(reqBtn);
+
+  const statusEl = document.createElement("div");
+  statusEl.style.cssText = "font-family:monospace;font-size:13px;color:#94a3b8;margin-bottom:8px;min-height:16px";
+  $roleClaimBody.appendChild(statusEl);
+
+  async function refreshRoleClaimStatus(role) {
+    clearInterval(roleClaimStatusTimer);
+    try {
+      const current = await ChatBackend.getRoleMeta(role.id);
+      if (!current || !current.code || current.code === "0000") {
+        statusEl.textContent = "No active code right now.";
+        return;
+      }
+      const offset = await ChatBackend._serverOffset();
+      const tick = () => {
+        const remaining = current.expiresAt - (Date.now() + offset);
+        if (remaining <= 0) {
+          statusEl.textContent = "The last code has expired.";
+          clearInterval(roleClaimStatusTimer);
+          return;
+        }
+        statusEl.textContent = "A code is active on Discord — expires in " + Math.ceil(remaining / 1000) + "s";
+      };
+      tick();
+      roleClaimStatusTimer = setInterval(tick, 1000);
+    } catch (e) {
+      statusEl.textContent = "Couldn't check code status.";
+    }
+  }
+  refreshRoleClaimStatus(role);
+
+  const codeInput = document.createElement("input");
+  codeInput.type = "text";
+  codeInput.inputMode = "numeric";
+  codeInput.pattern = "[0-9]*";
+  codeInput.maxLength = 4;
+  codeInput.placeholder = "Enter " + role.label.toLowerCase() + " code…";
+  codeInput.style.cssText = "width:100%;padding:8px 10px;background:#0f172a;border:1.5px solid #334155;border-radius:8px;color:#f1f5f9;font-size:14px;outline:none;margin-bottom:6px";
+  $roleClaimBody.appendChild(codeInput);
+
+  const claimErr = document.createElement("div");
+  claimErr.style.cssText = "color:#ef4444;font-size:12.5px;min-height:16px;margin-bottom:4px";
+  $roleClaimBody.appendChild(claimErr);
+
+  let submitInFlight = false;
+
+  const submitBtn = document.createElement("button");
+  submitBtn.textContent = "Claim " + role.label;
+  submitBtn.className = "toolbar-btn";
+  submitBtn.style.cssText = "width:100%";
+  submitBtn.addEventListener("click", async () => {
+    if (submitInFlight) return;
+    if (!myName) { claimErr.style.color = "#ef4444"; claimErr.textContent = "Join with a name first."; return; }
+    submitInFlight = true;
+    submitBtn.disabled = true;
+    claimErr.textContent = "";
+    try {
+      const result = await ChatBackend.redeemRoleCode(role.id, codeInput.value);
+      if (result.ok) {
+        claimErr.style.color = "#4ade80";
+        claimErr.textContent = role.icon + " " + role.label + " claimed!";
+        codeInput.value = "";
+      } else {
+        claimErr.style.color = "#ef4444";
+        const reasonText = {
+          none: "Enter a code first.",
+          wrong: "That's not the current code — check Discord for the latest one.",
+          expired: "That code expired — request a new one."
+        };
+        claimErr.textContent = reasonText[result.reason] || "Invalid code.";
+      }
+      refreshRoleClaimStatus(role);
+    } catch (e) {
+      claimErr.style.color = "#ef4444";
+      claimErr.textContent = "Couldn't check code — try again.";
+    } finally {
+      submitBtn.disabled = false;
+      submitInFlight = false;
+    }
+  });
+  $roleClaimBody.appendChild(submitBtn);
+}
+
+$roleClaimBackBtn.addEventListener("click", () => {
+  $roleClaimOverlay.style.display = "none";
+  clearInterval(roleClaimStatusTimer);
+  openRolesMenu();
+});
+$roleClaimCloseBtn.addEventListener("click", () => {
+  $roleClaimOverlay.style.display = "none";
+  clearInterval(roleClaimStatusTimer);
+});
+$roleClaimOverlay.addEventListener("click", (e) => {
+  if (e.target === $roleClaimOverlay) {
+    $roleClaimOverlay.style.display = "none";
+    clearInterval(roleClaimStatusTimer);
+  }
+});
+
+/* ══════════════════════════════════════════════════════════
+   STAFF MENU — one shared modal backing both the crown-only Owner Menu
+   (full power: any duration up to 3:00, Grant/Remove Mod, clear anyone's
+   timeout) and the mod-only Mod Menu (limited: timeout only, capped at
+   0:40, defaults to 0:10, can only clear a timeout THEY set, and must
+   wait MOD_RETIMEOUT_COOLDOWN_MS after setting/clearing before re-timing
+   the same target out). `staffMenuMode` tracks which one is currently
+   open so the shared rendering/submit logic can branch on it without
+   duplicating the list/refresh machinery twice.
+   Reuses latestPresenceList (already kept live by attachRoomListeners)
+   rather than opening a second presence subscription — the 5s timer here
+   just re-renders from whatever that list currently holds, plus a fresh
+   per-person timeout-remaining read so stale timeouts don't linger in the
+   list display.
+   ══════════════════════════════════════════════════════════ */
+const $ownerMenuOverlay = document.getElementById("ownerMenuOverlay");
+const $ownerMenuTitle = document.getElementById("ownerMenuTitle");
+const $ownerMenuSubtitle = document.getElementById("ownerMenuSubtitle");
+const $ownerMenuList = document.getElementById("ownerMenuList");
+const $ownerMenuCloseBtn = document.getElementById("ownerMenuCloseBtn");
+
+const $timeoutSetOverlay = document.getElementById("timeoutSetOverlay");
+const $timeoutSetTitle = document.getElementById("timeoutSetTitle");
+const $timeoutSetNote = document.getElementById("timeoutSetNote");
+const $timeoutMinutesInput = document.getElementById("timeoutMinutesInput");
+const $timeoutSecondsInput = document.getElementById("timeoutSecondsInput");
+const $timeoutSetErr = document.getElementById("timeoutSetErr");
+const $timeoutSetCancelBtn = document.getElementById("timeoutSetCancelBtn");
+const $timeoutSetConfirmBtn = document.getElementById("timeoutSetConfirmBtn");
+
+const $grantModConfirmOverlay = document.getElementById("grantModConfirmOverlay");
+const $grantModConfirmText = document.getElementById("grantModConfirmText");
+const $grantModConfirmTitle = document.getElementById("grantModConfirmTitle");
+const $grantModCancelBtn = document.getElementById("grantModCancelBtn");
+const $grantModConfirmBtn = document.getElementById("grantModConfirmBtn");
+
+let staffMenuMode = "owner"; // "owner" | "mod" — which gate/limits currently apply
+let ownerMenuRefreshTimer = null;
+let pendingTimeoutTarget = null;
+let pendingGrantModTarget = null;
+
+function isCrownHolder(name) {
+  return !!(name && (roleHolders.crown || new Set()).has(ChatBackend._safeKey(name)));
+}
+function isModHolder(name) {
+  return !!(name && (roleHolders.mod || new Set()).has(ChatBackend._safeKey(name)));
+}
+
+function openOwnerMenu() {
+  staffMenuMode = "owner";
+  closeClearPanel();
+  $ownerMenuTitle.textContent = "👑 Owner Menu";
+  $ownerMenuSubtitle.textContent = "Online now — refreshes every 5s while this is open.";
+  renderOwnerMenuList();
+  $ownerMenuOverlay.style.display = "flex";
+  clearInterval(ownerMenuRefreshTimer);
+  ownerMenuRefreshTimer = setInterval(renderOwnerMenuList, 5000);
+}
+
+// Mod Menu: same modal, same list/refresh machinery, far fewer buttons per
+// row (see renderOwnerMenuList's staffMenuMode branch below) — mods only
+// ever see a Timeout button, capped smaller, with their own re-timeout
+// cooldown and "only I can clear my own" restriction enforced there.
+function openModMenuStaff() {
+  staffMenuMode = "mod";
+  closeClearPanel();
+  $ownerMenuTitle.textContent = "🧩 Mod Menu";
+  $ownerMenuSubtitle.textContent = "Online now — refreshes every 5s while this is open. Timeouts only, up to 0:40.";
+  renderOwnerMenuList();
+  $ownerMenuOverlay.style.display = "flex";
+  clearInterval(ownerMenuRefreshTimer);
+  ownerMenuRefreshTimer = setInterval(renderOwnerMenuList, 5000);
+}
+
+function closeOwnerMenu() {
+  $ownerMenuOverlay.style.display = "none";
+  clearInterval(ownerMenuRefreshTimer);
+}
+
+$ownerMenuCloseBtn.addEventListener("click", closeOwnerMenu);
+$ownerMenuOverlay.addEventListener("click", (e) => {
+  if (e.target === $ownerMenuOverlay) closeOwnerMenu();
+});
+
+async function renderOwnerMenuList() {
+  // Re-check the relevant gate every refresh too — if the role backing
+  // whichever menu is open gets lost while it's open (timeout, disconnect,
+  // another owner revokes it, etc.) the menu should close itself rather
+  // than keep offering actions the person no longer has.
+  const stillEligible = staffMenuMode === "owner"
+    ? (modMenuUnlocked && isCrownHolder(myName))
+    : (modMenuUnlocked && isModHolder(myName));
+  if (!stillEligible) {
+    closeOwnerMenu();
+    return;
+  }
+
+  $ownerMenuList.innerHTML = "";
+
+  const others = latestPresenceList
+    .map(e => e.name)
+    .filter(name => name !== myName)
+    .sort((a, b) => a.localeCompare(b));
+
+  if (others.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "rooms-empty";
+    empty.textContent = "No one else online right now.";
+    $ownerMenuList.appendChild(empty);
+    return;
+  }
+
+  for (const name of others) {
+    const row = document.createElement("div");
+    row.className = "room-member-row";
+
+    const nameEl = document.createElement("span");
+    nameEl.className = "room-member-name";
+    const badges = (isCrownHolder(name) ? "👑 " : "") + (isModHolder(name) ? "🧩 " : "");
+    nameEl.textContent = badges + name;
+    row.appendChild(nameEl);
+
+    const actions = document.createElement("div");
+    actions.className = "room-member-actions";
+
+    // Grant/Remove Mod: owner-only power, never shown in the mod menu.
+    if (staffMenuMode === "owner") {
+      const modToggleBtn = document.createElement("button");
+      if (isModHolder(name)) {
+        modToggleBtn.className = "kick";
+        modToggleBtn.textContent = "Remove Mod";
+        modToggleBtn.addEventListener("click", () => openRemoveModConfirm(name));
+      } else {
+        modToggleBtn.textContent = "Grant Mod";
+        modToggleBtn.addEventListener("click", () => openGrantModConfirm(name));
+      }
+      actions.appendChild(modToggleBtn);
+    }
+
+    const timeoutBtn = document.createElement("button");
+    timeoutBtn.className = "kick";
+    let remainingMs = 0;
+    let setBy = null;
+    try {
+      remainingMs = await ChatBackend.getTimeoutRemainingMs(name);
+      if (remainingMs > 0) setBy = await ChatBackend.getTimeoutSetBy(name);
+    } catch (e) {}
+
+    if (remainingMs > 0) {
+      timeoutBtn.textContent = "Timed out (" + formatCountdown(remainingMs) + ")";
+      // Owners can always clear any timeout. Mods can only clear a timeout
+      // THEY personally set — per "only the mod who set it can clear it
+      // early." A mod looking at a timeout someone else (owner or another
+      // mod) set just sees the countdown with no click action.
+      const canClear = staffMenuMode === "owner" || (staffMenuMode === "mod" && setBy === ChatBackend._safeKey(myName));
+      if (canClear) {
+        timeoutBtn.addEventListener("click", () => {
+          ChatBackend.clearTimeout_(name).then(async () => {
+            if (staffMenuMode === "mod") {
+              // Belt-and-suspenders: watchModIssuedTimeoutExpiry (started
+              // when this timeout was set) already starts the cooldown the
+              // moment this remove() fires. This second call is a no-op
+              // duplicate write in the normal case, and only matters if
+              // that watcher somehow isn't still attached (e.g. a page
+              // reload happened between setting and clearing).
+              await ChatBackend.startModRetimeoutCooldown(myName, name).catch(() => {});
+            }
+            renderOwnerMenuList();
+          }).catch(() => {
+            showComposerNotice("Couldn't clear timeout — try again.");
+          });
+        });
+        timeoutBtn.title = "Click to clear this timeout early";
+      } else {
+        timeoutBtn.disabled = true;
+        timeoutBtn.title = "Only the mod who set this can clear it early";
+      }
+    } else {
+      let cooldownMs = 0;
+      if (staffMenuMode === "mod") {
+        try { cooldownMs = await ChatBackend.getModRetimeoutRemainingMs(myName, name); } catch (e) {}
+      }
+      if (cooldownMs > 0) {
+        timeoutBtn.textContent = "Wait " + Math.ceil(cooldownMs / 1000) + "s";
+        timeoutBtn.disabled = true;
+        timeoutBtn.title = "Re-timeout cooldown for this person";
+      } else {
+        timeoutBtn.textContent = "Timeout";
+        timeoutBtn.addEventListener("click", () => openTimeoutSetModal(name));
+      }
+    }
+    actions.appendChild(timeoutBtn);
+
+    row.appendChild(actions);
+    $ownerMenuList.appendChild(row);
+  }
+}
+
+/* ── Timeout duration modal — shared by both menus, limits/defaults set
+   by openTimeoutSetModal based on staffMenuMode. ── */
+function openTimeoutSetModal(targetName) {
+  pendingTimeoutTarget = targetName;
+  $timeoutSetTitle.textContent = "Timeout " + targetName;
+
+  if (staffMenuMode === "mod") {
+    const defaultSecs = MOD_TIMEOUT_DEFAULT_MS / 1000;
+    $timeoutMinutesInput.value = String(Math.floor(defaultSecs / 60));
+    $timeoutSecondsInput.value = String(defaultSecs % 60);
+    $timeoutSetNote.textContent = "Max " + Math.round(MOD_TIMEOUT_MAX_MS / 1000) + " seconds.";
+  } else {
+    $timeoutMinutesInput.value = "";
+    $timeoutSecondsInput.value = "";
+    $timeoutSetNote.textContent = "Max 3:00.";
+  }
+
+  $timeoutSetErr.textContent = "";
+  $timeoutSetOverlay.style.display = "flex";
+  $timeoutMinutesInput.focus();
+}
+
+$timeoutSetCancelBtn.addEventListener("click", () => {
+  pendingTimeoutTarget = null;
+  $timeoutSetOverlay.style.display = "none";
+});
+$timeoutSetOverlay.addEventListener("click", (e) => {
+  if (e.target === $timeoutSetOverlay) {
+    pendingTimeoutTarget = null;
+    $timeoutSetOverlay.style.display = "none";
+  }
+});
+
+// Digit-only guards on the two duration fields — minutes capped to a
+// single digit (0-3) and seconds to two digits (0-59) at the input level,
+// with the real 3:00 ceiling enforced on submit below regardless of what
+// slips through here.
+$timeoutMinutesInput.addEventListener("input", () => {
+  $timeoutMinutesInput.value = $timeoutMinutesInput.value.replace(/[^0-9]/g, "").slice(0, 1);
+});
+$timeoutSecondsInput.addEventListener("input", () => {
+  $timeoutSecondsInput.value = $timeoutSecondsInput.value.replace(/[^0-9]/g, "").slice(0, 2);
+});
+
+$timeoutSetConfirmBtn.addEventListener("click", async () => {
+  if (!pendingTimeoutTarget) return;
+  const mins = parseInt($timeoutMinutesInput.value || "0", 10) || 0;
+  const secs = parseInt($timeoutSecondsInput.value || "0", 10) || 0;
+  const totalMs = (mins * 60 + secs) * 1000;
+  const cap = staffMenuMode === "mod" ? MOD_TIMEOUT_MAX_MS : TIMEOUT_MAX_MS;
+  const capLabel = staffMenuMode === "mod" ? "40 seconds" : "3:00";
+
+  if (totalMs <= 0) {
+    $timeoutSetErr.textContent = "Enter a duration greater than 0.";
+    return;
+  }
+  if (totalMs > cap) {
+    $timeoutSetErr.textContent = "Max timeout is " + capLabel + ".";
+    return;
+  }
+
+  $timeoutSetConfirmBtn.disabled = true;
+  $timeoutSetErr.textContent = "";
+  try {
+    await ChatBackend.setTimeout_(pendingTimeoutTarget, totalMs, myName);
+    // NOTE: the re-timeout cooldown is deliberately NOT started here. It
+    // should apply AFTER the timeout ends (naturally or via early clear),
+    // not from the moment it's set — starting it here would let most of
+    // the 7s tick away underneath a long timeout instead of coming after
+    // it. See watchModIssuedTimeoutExpiry for where it actually starts.
+    if (staffMenuMode === "mod") {
+      watchModIssuedTimeoutExpiry(myName, pendingTimeoutTarget);
+    }
+    $timeoutSetOverlay.style.display = "none";
+    pendingTimeoutTarget = null;
+    renderOwnerMenuList();
+  } catch (e) {
+    $timeoutSetErr.textContent = "Couldn't set timeout — try again.";
+  } finally {
+    $timeoutSetConfirmBtn.disabled = false;
+  }
+});
+
+// Watches a mod-issued timeout on targetName and starts that mod's
+// re-timeout cooldown against targetName the moment it actually ends —
+// either by running out naturally, or by being cleared early (which also
+// calls startModRetimeoutCooldown directly in the "clear" click handler in
+// renderOwnerMenuList; that early-clear path additionally removes the
+// Firebase record, which this watcher treats the same as natural expiry).
+// Firebase's "value" listener only fires on writes, not on the passage of
+// time, so a plain listener would never notice a record that simply goes
+// stale — this pairs the listener with a timer set for exactly when
+// expiresAt is reached, and re-arms that timer if the record changes
+// (e.g. an owner extends/replaces it) before then.
+function watchModIssuedTimeoutExpiry(modName, targetName) {
+  const key = ChatBackend._safeKey(targetName);
+  const ref = ChatBackend._timeoutsRef.child(key);
+  let expiryTimer = null;
+  let done = false;
+
+  const finish = async () => {
+    if (done) return;
+    done = true;
+    clearTimeout(expiryTimer);
+    ref.off("value", handler);
+    await ChatBackend.startModRetimeoutCooldown(modName, targetName).catch(() => {});
+    if ($ownerMenuOverlay.style.display === "flex") renderOwnerMenuList();
+  };
+
+  const handler = ref.on("value", async snap => {
+    if (done) return;
+    const val = snap.val();
+    clearTimeout(expiryTimer);
+    if (!val || !val.expiresAt) { finish(); return; }
+    const serverNow = await ChatBackend._serverNow();
+    const remaining = val.expiresAt - serverNow;
+    if (remaining <= 0) { finish(); return; }
+    expiryTimer = setTimeout(finish, remaining);
+  });
+}
+
+/* ── Grant/Remove-mod double confirm — shares one overlay, `pendingModConfirmAction`
+   tracks whether this open is a grant or a remove so the confirm button
+   applies the right change. Kept as one modal since the two flows are
+   otherwise identical (name a target, ask for a second explicit click). ── */
+let pendingModConfirmAction = null; // "grant" | "remove"
+
+function openGrantModConfirm(targetName) {
+  pendingGrantModTarget = targetName;
+  pendingModConfirmAction = "grant";
+  $grantModConfirmTitle.textContent = "🧩 Grant Mod?";
+  $grantModConfirmText.textContent = "Give " + targetName + " the 🧩 Mod tag? This is a second confirmation step so a misclick can't hand it out by accident.";
+  $grantModConfirmBtn.textContent = "Yes, grant Mod";
+  $grantModConfirmOverlay.style.display = "flex";
+}
+
+function openRemoveModConfirm(targetName) {
+  pendingGrantModTarget = targetName;
+  pendingModConfirmAction = "remove";
+  $grantModConfirmTitle.textContent = "🧩 Remove Mod?";
+  $grantModConfirmText.textContent = "Remove the 🧩 Mod tag from " + targetName + "? This is a second confirmation step so a misclick can't take it away by accident.";
+  $grantModConfirmBtn.textContent = "Yes, remove Mod";
+  $grantModConfirmOverlay.style.display = "flex";
+}
+
+$grantModCancelBtn.addEventListener("click", () => {
+  pendingGrantModTarget = null;
+  pendingModConfirmAction = null;
+  $grantModConfirmOverlay.style.display = "none";
+});
+$grantModConfirmOverlay.addEventListener("click", (e) => {
+  if (e.target === $grantModConfirmOverlay) {
+    pendingGrantModTarget = null;
+    pendingModConfirmAction = null;
+    $grantModConfirmOverlay.style.display = "none";
+  }
+});
+
+$grantModConfirmBtn.addEventListener("click", async () => {
+  if (!pendingGrantModTarget || !pendingModConfirmAction) return;
+  $grantModConfirmBtn.disabled = true;
+  try {
+    const modRef = ChatBackend._roleRefs.mod.child(ChatBackend._safeKey(pendingGrantModTarget));
+    if (pendingModConfirmAction === "grant") {
+      // Grants mod directly via the same DB path redeemRoleCode() writes
+      // to, rather than going through a code — the owner is already an
+      // authenticated actor here (crown-gated), so no code-in-the-middle
+      // is needed for an owner explicitly choosing a specific person.
+      await modRef.set(true);
+    } else {
+      // Removes it the same direct way. Note this only clears the LIVE
+      // flag at modded/{name} — it doesn't reach into that person's own
+      // browser to flip their local _rolesHeld.mod, so if they were the
+      // one who originally redeemed a code for it, redeeming that same
+      // (still-live) code again would restore it. That mirrors how kicks
+      // work elsewhere in this app (removal is immediate, not a ban) and
+      // is fine here since codes already expire quickly.
+      await modRef.remove();
+    }
+    $grantModConfirmOverlay.style.display = "none";
+    pendingGrantModTarget = null;
+    pendingModConfirmAction = null;
+    renderOwnerMenuList();
+  } catch (e) {
+    showComposerNotice("Couldn't update Mod status — try again.");
+  } finally {
+    $grantModConfirmBtn.disabled = false;
+  }
+});
+
+let latestPresenceList = [];
+let onlineListRefreshTimer = null;
+
+function formatElapsed(joinedAt) {
+  if (!joinedAt) return "just now";
+  const secs = Math.max(0, Math.floor((Date.now() - joinedAt) / 1000));
+  if (secs < 60) return "just now";
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return mins + "m";
+  const hrs = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return hrs + "h" + (remMins ? " " + remMins + "m" : "");
+}
+
+function renderOnlineListPanel() {
+  $onlineListPanel.innerHTML = "";
+
+  const title = document.createElement("div");
+  title.textContent = "Online now";
+  title.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:8px";
+  $onlineListPanel.appendChild(title);
+
+  if (latestPresenceList.length === 0) {
+    const empty = document.createElement("div");
+    empty.textContent = "No one online.";
+    empty.style.cssText = "color:#64748b;font-size:13.5px";
+    $onlineListPanel.appendChild(empty);
+    return;
+  }
+
+  const sorted = [...latestPresenceList].sort((a, b) => (a.joinedAt || Date.now()) - (b.joinedAt || Date.now()));
+
+  sorted.forEach(entry => {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px solid #273549;font-size:13.5px";
+    const nameEl = document.createElement("span");
+    const safeName = ChatBackend._safeKey(entry.name);
+    const icons = Object.values(ROLES).filter(role => (roleHolders[role.id] || new Set()).has(safeName)).map(role => role.icon).join(" ");
+    nameEl.textContent = (icons ? icons + " " : "") + entry.name;
+    nameEl.style.cssText = "color:#f1f5f9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+    const timeEl = document.createElement("span");
+    timeEl.textContent = formatElapsed(entry.joinedAt);
+    timeEl.style.cssText = "color:#64748b;flex-shrink:0";
+    row.appendChild(nameEl);
+    row.appendChild(timeEl);
+    $onlineListPanel.appendChild(row);
+  });
+}
+
+function closeOnlineListPanel() {
+  $onlineListPanel.style.display = "none";
+  clearInterval(onlineListRefreshTimer);
+}
+
+function openOnlineListPanel() {
+  closeClearPanel();
+  $onlineListPanel.style.display = "block";
+  renderOnlineListPanel();
+  clearInterval(onlineListRefreshTimer);
+  onlineListRefreshTimer = setInterval(renderOnlineListPanel, 30000);
+}
+
+$onlineCount.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const isOpen = $onlineListPanel.style.display === "block";
+  if (isOpen) {
+    closeOnlineListPanel();
+  } else {
+    openOnlineListPanel();
+  }
+});
+
+document.addEventListener("click", (e) => {
+  if ($onlineListPanel.style.display === "block" && !$onlineListPanel.contains(e.target) && e.target !== $onlineCount) {
+    closeOnlineListPanel();
+  }
+});
+
+$onlineDot.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const isOpen = $globalClearPanel.style.display === "block";
+  if (isOpen) {
+    closeClearPanel();
+  } else {
+    openModMenu();
+  }
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key !== ".") return;
+  if (!modMenuUnlocked) return;
+  const active = document.activeElement;
+  const isTypingSomewhere = active && (active.tagName === "TEXTAREA" || active.tagName === "INPUT");
+  if (isTypingSomewhere) return;
+  const isOpen = $globalClearPanel.style.display === "block";
+  if (isOpen) {
+    closeClearPanel();
+  } else {
+    openModMenu();
+  }
+});
+
+document.addEventListener("click", (e) => {
+  if (!modMenuUnlocked && $globalClearPanel.style.display === "block" && !$globalClearPanel.contains(e.target)) {
+    closeClearPanel();
+  }
+});
+
+function handleTypingActivity() {
+  const hasText = $msgInput.value.trim().length > 0;
+  clearTimeout(typingStopTimer);
+
+  if (hasText) {
+    if (!isCurrentlyTyping) {
+      isCurrentlyTyping = true;
+      ChatBackend.setTyping(myName);
+    } else {
+      ChatBackend.setTyping(myName);
+    }
+    typingStopTimer = setTimeout(stopTyping, 2000);
+  } else {
+    stopTyping();
+  }
+}
+
+function stopTyping() {
+  clearTimeout(typingStopTimer);
+  if (isCurrentlyTyping) {
+    isCurrentlyTyping = false;
+    ChatBackend.clearTyping();
+  }
+}
+
+function renderTyping(names) {
+  if (names.length === 0) {
+    $typingBar.style.display = "none";
+    return;
+  }
+  const shown = names.slice(0, 3);
+  const extra = names.length - shown.length;
+  let text = shown.map(esc).join(", ");
+  if (extra > 0) text += `, +${extra} more`;
+  text += (names.length === 1 ? " is typing…" : " are typing…");
+  $typingBar.textContent = text;
+  $typingBar.style.display = "block";
+}
+
+function getPingYouRemainingMs() {
+  try {
+    const last = parseInt(localStorage.getItem(PING_YOU_STORAGE_KEY) || "0", 10);
+    const elapsed = Date.now() - last;
+    return Math.max(0, PING_YOU_COOLDOWN_MS - elapsed);
+  } catch (e) {
+    return 0;
+  }
+}
+
+function updatePingYouButtonState() {
+  const remaining = getPingYouRemainingMs();
+  if (remaining > 0) {
+    $pingYouBtn.disabled = true;
+    $pingYouBtn.textContent = "🔔 " + Math.ceil(remaining / 1000) + "s";
+    setTimeout(updatePingYouButtonState, 500);
+  } else {
+    $pingYouBtn.disabled = false;
+    $pingYouBtn.textContent = "🔔 Ping Devs";
+  }
+}
+
+function closePingYouPanel() {
+  $pingYouPanel.style.display = "none";
+}
+
+$pingYouBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if ($pingYouBtn.disabled) return;
+  const isOpen = $pingYouPanel.style.display === "block";
+  if (isOpen) {
+    closePingYouPanel();
+  } else {
+    closeClearPanel();
+    closeOnlineListPanel();
+    $pingYouPanel.style.display = "block";
+    $pingYouNote.value = "";
+    $pingYouNote.focus();
+  }
+});
+
+document.addEventListener("click", (e) => {
+  if ($pingYouPanel.style.display === "block" && !$pingYouPanel.contains(e.target) && e.target !== $pingYouBtn) {
+    closePingYouPanel();
+  }
+});
+
+$pingYouSend.addEventListener("click", () => {
+  if (getPingYouRemainingMs() > 0) return;
+
+  const note = $pingYouNote.value.trim().slice(0, 200);
+
+  $pingYouSend.disabled = true;
+  $pingYouSend.textContent = "Sending…";
+
+  const content = buildPingYouWebhookContent(note);
+
+  fetch(PING_YOU_WEBHOOK_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content })
+  })
+    .then(() => {
+      try { localStorage.setItem(PING_YOU_STORAGE_KEY, String(Date.now())); } catch (e) {}
+      closePingYouPanel();
+      updatePingYouButtonState();
+    })
+    .catch(() => {
+      showComposerNotice("Ping failed to send — check your connection.");
+    })
+    .finally(() => {
+      $pingYouSend.disabled = false;
+      $pingYouSend.textContent = "Send Ping";
+    });
+});
+
+let currentMentionTarget = null;
+let mentionDropdownOpen = false;
+let mentionTriggerCharIndex = -1;
+
+function clearMention() {
+  currentMentionTarget = null;
+  $mentionChip.style.display = "none";
+  $mentionChip.textContent = "";
+}
+
+function setMention(name) {
+  currentMentionTarget = name;
+  $mentionChip.textContent = "@" + name;
+  $mentionChip.style.display = "inline-flex";
+}
+
+function closeMentionDropdown() {
+  mentionDropdownOpen = false;
+  $mentionDropdown.style.display = "none";
+  $mentionDropdown.innerHTML = "";
+}
+
+function renderMentionDropdown() {
+  $mentionDropdown.innerHTML = "";
+
+  const candidates = latestPresenceList
+    .map(e => e.name)
+    .filter(name => name !== myName && !isSpectatorName(name))
+    .sort((a, b) => a.localeCompare(b));
+
+  if (candidates.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "mention-empty";
+    empty.textContent = "No one else online to mention.";
+    $mentionDropdown.appendChild(empty);
+    return;
+  }
+
+  candidates.forEach(name => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "mention-option";
+    btn.textContent = name;
+    btn.addEventListener("click", () => {
+      setMention(name);
+      if (mentionTriggerCharIndex >= 0) {
+        const before = $msgInput.value.slice(0, mentionTriggerCharIndex);
+        const after = $msgInput.value.slice($msgInput.selectionStart);
+        $msgInput.value = before + after;
+        $msgInput.selectionStart = $msgInput.selectionEnd = before.length;
+      }
+      closeMentionDropdown();
+      $msgInput.focus();
+      updateCharCounter();
+    });
+    $mentionDropdown.appendChild(btn);
+  });
+}
+
+function openMentionDropdown(triggerIndex) {
+  mentionTriggerCharIndex = triggerIndex;
+  mentionDropdownOpen = true;
+  $mentionDropdown.style.display = "block";
+  renderMentionDropdown();
+}
+
+function refreshMentionDropdownIfOpen() {
+  if (mentionDropdownOpen) renderMentionDropdown();
+}
+
+$mentionChip.addEventListener("click", (e) => {
+  e.stopPropagation();
+  openMentionDropdown(-1);
+});
+
+document.addEventListener("click", (e) => {
+  if (mentionDropdownOpen && !$mentionDropdown.contains(e.target) && e.target !== $mentionChip) {
+    closeMentionDropdown();
+  }
+});
+
+function handleMentionTrigger() {
+  const cursor = $msgInput.selectionStart;
+  const charBeforeCursor = $msgInput.value.slice(cursor - 1, cursor);
+  if (charBeforeCursor === "@") {
+    openMentionDropdown(cursor - 1);
+  }
+}
+
+let pingSoundReady = false;
+
+function preloadPingSound() {
+  $pingSound.src = PING_SOUND_URL;
+
+  $pingSound.addEventListener("canplaythrough", () => {
+    pingSoundReady = true;
+    console.log("Ping sound loaded!");
+  }, { once: true });
+
+  $pingSound.addEventListener("error", () => {
+    console.error("Ping sound failed to load:", $pingSound.error);
+  }, { once: true });
+
+  $pingSound.load();
+}
+
+function requestNotificationPermissionIfNeeded() {
+  if (!("Notification" in window)) return;
+  if (Notification.permission === "default") {
+    Notification.requestPermission().catch(() => {});
+  }
+}
+
+function showPingToast(fromName, note) {
+  $pingToastBody.textContent = fromName + (note ? ": " + note : " pinged you.");
+  $pingToast.style.display = "block";
+  clearTimeout(showPingToast._timer);
+  showPingToast._timer = setTimeout(() => {
+    $pingToast.style.display = "none";
+  }, 5000);
+}
+
+function triggerIncomingPing(fromName, note) {
+  if (pingSoundReady) {
+    try {
+      $pingSound.currentTime = 0;
+      $pingSound.play().catch(() => {});
+    } catch (e) {}
+  }
+
+  showPingToast(fromName, note);
+
+  if ("Notification" in window && Notification.permission === "granted") {
+    try {
+      new Notification(fromName + " pinged you in VUS Chat", {
+        body: note || "Tap to open the chat.",
+        tag: "vus-chat-ping"
+      });
+    } catch (e) {}
+  }
+}
+
+const $roomsToggleBtn = document.getElementById("roomsToggleBtn");
+const $roomsBadgeDot = document.getElementById("roomsBadgeDot");
+const $roomsSidebarOverlay = document.getElementById("roomsSidebarOverlay");
+const $roomsSidebar = document.getElementById("roomsSidebar");
+const $roomsSidebarClose = document.getElementById("roomsSidebarClose");
+const $roomsSidebarBody = document.getElementById("roomsSidebarBody");
+const $roomsFooterMsg = document.getElementById("roomsFooterMsg");
+const $joinByCodeInput = document.getElementById("joinByCodeInput");
+const $joinByCodeBtn = document.getElementById("joinByCodeBtn");
+const $createRoomBtn = document.getElementById("createRoomBtn");
+
+const $roomTopBar = document.getElementById("roomTopBar");
+const $roomTopBarName = document.getElementById("roomTopBarName");
+const $roomTopBarCode = document.getElementById("roomTopBarCode");
+const $roomTopBarTimer = document.getElementById("roomTopBarTimer");
+const $roomSettingsBtn = document.getElementById("roomSettingsBtn");
+const $roomLeaveBtn = document.getElementById("roomLeaveBtn");
+
+const $createRoomOverlay = document.getElementById("createRoomOverlay");
+const $createRoomNameInput = document.getElementById("createRoomNameInput");
+const $createRoomErr = document.getElementById("createRoomErr");
+const $createRoomCancelBtn = document.getElementById("createRoomCancelBtn");
+const $createRoomConfirmBtn = document.getElementById("createRoomConfirmBtn");
+
+const $roomSettingsOverlay = document.getElementById("roomSettingsOverlay");
+const $roomPublicToggleBtn = document.getElementById("roomPublicToggleBtn");
+const $roomCodeInput = document.getElementById("roomCodeInput");
+const $roomCodeErr = document.getElementById("roomCodeErr");
+const $roomCodeSaveBtn = document.getElementById("roomCodeSaveBtn");
+const $roomMembersList = document.getElementById("roomMembersList");
+const $roomSettingsCloseBtn = document.getElementById("roomSettingsCloseBtn");
+
+const $extendRoomOverlay = document.getElementById("extendRoomOverlay");
+const $extendRoomText = document.getElementById("extendRoomText");
+const $extendRoomDismissBtn = document.getElementById("extendRoomDismissBtn");
+const $extendRoomConfirmBtn = document.getElementById("extendRoomConfirmBtn");
+
+const $transferOfferOverlay = document.getElementById("transferOfferOverlay");
+const $transferOfferText = document.getElementById("transferOfferText");
+const $transferDeclineBtn = document.getElementById("transferDeclineBtn");
+const $transferAcceptBtn = document.getElementById("transferAcceptBtn");
+
+const $kickConfirmOverlay = document.getElementById("kickConfirmOverlay");
+const $kickConfirmText = document.getElementById("kickConfirmText");
+const $kickCancelBtn = document.getElementById("kickCancelBtn");
+const $kickConfirmBtn = document.getElementById("kickConfirmBtn");
+
+const JOINED_ROOMS_STORAGE_KEY = "vusChatJoinedRooms";
+const ROOM_PING_BADGE_KEY = "vusChatRoomPingBadges";
+
+let currentRoomCode = null;
+let currentRoomMeta = null;
+let unsubscribeRoomMeta = null;
+let publicRoomsList = [];
+let joinedPrivateRoomCodes = new Set();
+let roomPingBadges = new Set();
+let extendPromptShownForCode = null;
+let pendingKickTarget = null;
+let sidebarCountdownTimer = null;
+let topBarCountdownTimer = null;
+
+function loadJoinedRoomsFromStorage() {
+  try {
+    const raw = localStorage.getItem(JOINED_ROOMS_STORAGE_KEY);
+    joinedPrivateRoomCodes = new Set(raw ? JSON.parse(raw) : []);
+  } catch (e) {
+    joinedPrivateRoomCodes = new Set();
+  }
+}
+
+function saveJoinedRoomsToStorage() {
+  try {
+    localStorage.setItem(JOINED_ROOMS_STORAGE_KEY, JSON.stringify([...joinedPrivateRoomCodes]));
+  } catch (e) {}
+}
+
+function loadPingBadgesFromStorage() {
+  try {
+    const raw = localStorage.getItem(ROOM_PING_BADGE_KEY);
+    roomPingBadges = new Set(raw ? JSON.parse(raw) : []);
+  } catch (e) {
+    roomPingBadges = new Set();
+  }
+}
+
+function savePingBadgesToStorage() {
+  try {
+    localStorage.setItem(ROOM_PING_BADGE_KEY, JSON.stringify([...roomPingBadges]));
+  } catch (e) {}
+}
+
+function updateRoomsHeaderBadge() {
+  $roomsBadgeDot.style.display = roomPingBadges.size > 0 ? "block" : "none";
+}
+
+function restoreSidebarRoomList() {
+  loadJoinedRoomsFromStorage();
+  loadPingBadgesFromStorage();
+  updateRoomsHeaderBadge();
+}
+
+function watchPublicRoomsList() {
+  RoomManager.watchPublicRooms(list => {
+    publicRoomsList = list;
+    if ($roomsSidebar.classList.contains("open")) renderRoomsSidebar();
+  });
+}
+
+function formatCountdown(msRemaining) {
+  const totalSecs = Math.max(0, Math.ceil(msRemaining / 1000));
+  const mins = Math.floor(totalSecs / 60);
+  const secs = totalSecs % 60;
+  return mins + ":" + String(secs).padStart(2, "0");
+}
+
+function openRoomsSidebar() {
+  $roomsSidebarOverlay.style.display = "block";
+  $roomsSidebar.classList.add("open");
+  $roomsSidebarOverlay.style.display = "block";
+  renderRoomsSidebar();
+  clearInterval(sidebarCountdownTimer);
+  sidebarCountdownTimer = setInterval(renderRoomsSidebar, 1000);
+}
+
+function closeRoomsSidebar() {
+  $roomsSidebarOverlay.style.display = "none";
+  $roomsSidebar.classList.remove("open");
+  clearInterval(sidebarCountdownTimer);
+  $roomsFooterMsg.textContent = "";
+  $roomsFooterMsg.classList.remove("err");
+}
+
+$roomsToggleBtn.addEventListener("click", () => {
+  const isOpen = $roomsSidebar.classList.contains("open");
+  if (isOpen) closeRoomsSidebar(); else openRoomsSidebar();
+});
+$roomsSidebarClose.addEventListener("click", closeRoomsSidebar);
+$roomsSidebarOverlay.addEventListener("click", closeRoomsSidebar);
+
+async function renderRoomsSidebar() {
+  $roomsSidebarBody.innerHTML = "";
+
+  const mainTitle = document.createElement("div");
+  mainTitle.className = "rooms-section-title";
+  mainTitle.textContent = "Pinned";
+  $roomsSidebarBody.appendChild(mainTitle);
+  $roomsSidebarBody.appendChild(buildMainRoomCard());
+
+  const joinedTitle = document.createElement("div");
+  joinedTitle.className = "rooms-section-title";
+  joinedTitle.textContent = "Joined Rooms";
+  $roomsSidebarBody.appendChild(joinedTitle);
+
+  const joinedCodes = [...joinedPrivateRoomCodes];
+  if (joinedCodes.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "rooms-empty";
+    empty.textContent = "Rooms you join by code stay here until you remove them.";
+    $roomsSidebarBody.appendChild(empty);
+  } else {
+    for (const code of joinedCodes) {
+      const meta = await RoomManager.getRoomMeta(code);
+      if (!meta) {
+        joinedPrivateRoomCodes.delete(code);
+        saveJoinedRoomsToStorage();
+        continue;
+      }
+      if (meta.isPublic) continue;
+      $roomsSidebarBody.appendChild(buildRoomCard(meta, true));
+    }
+  }
+
+  const publicTitle = document.createElement("div");
+  publicTitle.className = "rooms-section-title";
+  publicTitle.textContent = "Chat Rooms";
+  $roomsSidebarBody.appendChild(publicTitle);
+
+  if (publicRoomsList.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "rooms-empty";
+    empty.textContent = "No public rooms right now.";
+    $roomsSidebarBody.appendChild(empty);
+  } else {
+    publicRoomsList
+      .slice()
+      .sort((a, b) => (a.expiresAt || 0) - (b.expiresAt || 0))
+      .forEach(meta => {
+        $roomsSidebarBody.appendChild(buildRoomCard(meta, false));
+      });
+  }
+}
+
+function buildMainRoomCard() {
+  const card = document.createElement("div");
+  card.className = "room-card" + (currentRoomCode === null ? " active" : "");
+  card.innerHTML = `
+    <div class="room-card-top">
+      <span class="room-card-name">VUS Chat <span class="room-card-pinned">Main</span></span>
+    </div>
+  `;
+  card.addEventListener("click", () => {
+    closeRoomsSidebar();
+    switchToMainRoom();
+  });
+  return card;
+}
+
+function buildRoomCard(meta, closable) {
+  const card = document.createElement("div");
+  card.className = "room-card" + (currentRoomCode === meta.code ? " active" : "");
+
+  const hasPing = roomPingBadges.has(meta.code);
+  const remaining = (meta.expiresAt || 0) - Date.now();
+  const urgent = remaining < ROOM_WARNING_MS;
+
+  const displayName = meta.name || ("Room " + meta.code);
+
+  card.innerHTML = `
+    <div class="room-card-top">
+      <span class="room-card-name">${esc(displayName)}${hasPing ? '<span class="room-card-dot"></span>' : ""}</span>
+      <span class="room-card-timer${urgent ? " urgent" : ""}">${formatCountdown(remaining)}</span>
+    </div>
+    <div class="room-card-code">Code: ${esc(meta.code)}${meta.isPublic ? " · Public" : ""}</div>
+  `;
+
+  card.addEventListener("click", () => {
+    closeRoomsSidebar();
+    joinRoomByCode(meta.code);
+  });
+
+  if (closable) {
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "room-card-close";
+    closeBtn.textContent = "×";
+    closeBtn.title = "Remove from your list";
+    closeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      joinedPrivateRoomCodes.delete(meta.code);
+      saveJoinedRoomsToStorage();
+      roomPingBadges.delete(meta.code);
+      savePingBadgesToStorage();
+      updateRoomsHeaderBadge();
+      renderRoomsSidebar();
+    });
+    card.appendChild(closeBtn);
+  }
+
+  return card;
+}
+
+function getRoomCreateCooldownRemainingMs() {
+  try {
+    const last = parseInt(localStorage.getItem(ROOM_CREATE_COOLDOWN_KEY) || "0", 10);
+    return Math.max(0, ROOM_CREATE_COOLDOWN_MS - (Date.now() - last));
+  } catch (e) {
+    return 0;
+  }
+}
+
+$createRoomBtn.addEventListener("click", () => {
+  if (!myName || isSpectatorName(myName)) {
+    $roomsFooterMsg.textContent = "Join the chat with a real name first.";
+    $roomsFooterMsg.classList.add("err");
+    return;
+  }
+  const remaining = getRoomCreateCooldownRemainingMs();
+  if (remaining > 0) {
+    $roomsFooterMsg.textContent = "Wait " + Math.ceil(remaining / 1000) + "s before creating another room.";
+    $roomsFooterMsg.classList.add("err");
+    return;
+  }
+  $createRoomNameInput.value = "";
+  $createRoomErr.textContent = "";
+  $createRoomOverlay.style.display = "flex";
+  $createRoomNameInput.focus();
+});
+
+$createRoomCancelBtn.addEventListener("click", () => {
+  $createRoomOverlay.style.display = "none";
+});
+
+$createRoomConfirmBtn.addEventListener("click", async () => {
+  $createRoomConfirmBtn.disabled = true;
+  $createRoomErr.textContent = "";
+  try {
+    const { code } = await RoomManager.createRoom(myName, $createRoomNameInput.value);
+    try { localStorage.setItem(ROOM_CREATE_COOLDOWN_KEY, String(Date.now())); } catch (e) {}
+    joinedPrivateRoomCodes.add(code);
+    saveJoinedRoomsToStorage();
+    $createRoomOverlay.style.display = "none";
+    closeRoomsSidebar();
+    await joinRoomByCode(code);
+  } catch (e) {
+    $createRoomErr.textContent = "Couldn't create room — try again.";
+  } finally {
+    $createRoomConfirmBtn.disabled = false;
+  }
+});
+
+$joinByCodeBtn.addEventListener("click", async () => {
+  const code = $joinByCodeInput.value.trim().toUpperCase();
+  if (!code) return;
+  $roomsFooterMsg.textContent = "";
+  $roomsFooterMsg.classList.remove("err");
+
+  const meta = await RoomManager.getRoomMeta(code);
+  if (!meta) {
+    $roomsFooterMsg.textContent = "No room found with that code.";
+    $roomsFooterMsg.classList.add("err");
+    return;
+  }
+
+  joinedPrivateRoomCodes.add(code);
+  saveJoinedRoomsToStorage();
+  $joinByCodeInput.value = "";
+  closeRoomsSidebar();
+  await joinRoomByCode(code);
+});
+
+$joinByCodeInput.addEventListener("keydown", e => {
+  if (e.key === "Enter") $joinByCodeBtn.click();
+});
+
+async function joinRoomByCode(code) {
+  if (!myName) return;
+  if (currentRoomCode === code) return;
+
+  const meta = await RoomManager.getRoomMeta(code);
+  if (!meta) {
+    showComposerNotice("That room no longer exists.");
+    return;
+  }
+
+  if (roomPingBadges.has(code)) {
+    roomPingBadges.delete(code);
+    savePingBadgesToStorage();
+    updateRoomsHeaderBadge();
+  }
+
+  teardownCurrentRoomMetaWatch();
+  currentRoomCode = code;
+  ChatBackend.bindToRoom(code);
+  ChatBackend.claimPresence(myName, isSpectator);
+  watchMyTimeout();
+  attachRoomListeners();
+
+  $messages.innerHTML = "";
+  messageCount = 0;
+  $emptyState.style.display = "flex";
+
+  $roomTopBar.style.display = "flex";
+  unsubscribeRoomMeta = RoomManager.watchRoomMeta(code, onRoomMetaUpdate);
+}
+
+function switchToMainRoom() {
+  if (currentRoomCode === null) return;
+
+  teardownCurrentRoomMetaWatch();
+  currentRoomCode = null;
+  currentRoomMeta = null;
+  ChatBackend.bindToRoom(MAIN_ROOM_ID);
+  if (myName) ChatBackend.claimPresence(myName, isSpectator);
+  watchMyTimeout();
+  attachRoomListeners();
+
+  $messages.innerHTML = "";
+  messageCount = 0;
+  $emptyState.style.display = "flex";
+
+  $roomTopBar.style.display = "none";
+  clearInterval(topBarCountdownTimer);
+  extendPromptShownForCode = null;
+}
+
+function teardownCurrentRoomMetaWatch() {
+  if (unsubscribeRoomMeta) { unsubscribeRoomMeta(); unsubscribeRoomMeta = null; }
+  clearInterval(topBarCountdownTimer);
+}
+
+$roomLeaveBtn.addEventListener("click", () => {
+  switchToMainRoom();
+});
+
+function onRoomMetaUpdate(meta) {
+  if (!meta) {
+    showComposerNotice("This room has closed.");
+    switchToMainRoom();
+    return;
+  }
+
+  currentRoomMeta = meta;
+
+  const myKey = ChatBackend._safeKey(myName);
+  if (meta.kicked && meta.kicked[myKey]) {
+    showComposerNotice("You were removed from this room.");
+    switchToMainRoom();
+    return;
+  }
+
+  const isOwner = meta.ownerName === myName;
+  const displayName = meta.name || ("Room " + meta.code);
+  $roomTopBarName.innerHTML = (isOwner ? "👑 " : "") + esc(displayName);
+  $roomTopBarCode.textContent = "Code: " + meta.code + (meta.isPublic ? " · Public" : " · Private");
+  $roomSettingsBtn.style.display = isOwner ? "inline-block" : "none";
+
+  clearInterval(topBarCountdownTimer);
+  topBarCountdownTimer = setInterval(() => updateRoomCountdownUI(meta), 1000);
+  updateRoomCountdownUI(meta);
+
+  if (meta.transferOffer && meta.transferOffer.toName === myName) {
+    showTransferOfferModal(meta);
+  } else if ($transferOfferOverlay.style.display === "flex") {
+    $transferOfferOverlay.style.display = "none";
+  }
+
+  if ($roomSettingsOverlay.style.display === "flex" && isOwner) {
+    renderRoomMembersList(meta);
+  }
+
+  if ($roomSettingsOverlay.style.display === "flex") {
+    $roomPublicToggleBtn.textContent = meta.isPublic ? "On" : "Off";
+    $roomPublicToggleBtn.classList.toggle("active", meta.isPublic);
+  }
+}
+
+function updateRoomCountdownUI(meta) {
+  const remaining = (meta.expiresAt || 0) - Date.now();
+
+  if (remaining <= 0) {
+    RoomManager.deleteRoom(meta.code).catch(() => {});
+    return;
+  }
+
+  const urgent = remaining < ROOM_WARNING_MS;
+  $roomTopBarTimer.textContent = formatCountdown(remaining);
+  $roomTopBarTimer.classList.toggle("urgent", urgent);
+
+  if (urgent && extendPromptShownForCode !== meta.code) {
+    extendPromptShownForCode = meta.code;
+    showExtendPrompt(meta);
+  }
+}
+
+function showExtendPrompt(meta) {
+  const displayName = meta.name || ("Room " + meta.code);
+  $extendRoomText.textContent = "\u201c" + displayName + "\u201d closes in under a minute. Add 10 more minutes?";
+  $extendRoomOverlay.style.display = "flex";
+}
+
+$extendRoomDismissBtn.addEventListener("click", () => {
+  $extendRoomOverlay.style.display = "none";
+});
+
+$extendRoomConfirmBtn.addEventListener("click", async () => {
+  if (!currentRoomCode) return;
+  $extendRoomConfirmBtn.disabled = true;
+  try {
+    await RoomManager.extendRoom(currentRoomCode);
+    extendPromptShownForCode = null;
+  } catch (e) {
+    showComposerNotice("Couldn't extend the room — try again.");
+  } finally {
+    $extendRoomConfirmBtn.disabled = false;
+    $extendRoomOverlay.style.display = "none";
+  }
+});
+
+$roomSettingsBtn.addEventListener("click", () => {
+  if (!currentRoomMeta) return;
+  $roomPublicToggleBtn.textContent = currentRoomMeta.isPublic ? "On" : "Off";
+  $roomPublicToggleBtn.classList.toggle("active", currentRoomMeta.isPublic);
+  $roomCodeInput.value = currentRoomMeta.code;
+  $roomCodeErr.textContent = "";
+  renderRoomMembersList(currentRoomMeta);
+  $roomSettingsOverlay.style.display = "flex";
+});
+
+$roomSettingsCloseBtn.addEventListener("click", () => {
+  $roomSettingsOverlay.style.display = "none";
+});
+
+$roomPublicToggleBtn.addEventListener("click", async () => {
+  if (!currentRoomCode || !currentRoomMeta) return;
+  const newState = !currentRoomMeta.isPublic;
+  $roomPublicToggleBtn.disabled = true;
+  try {
+    await RoomManager.setPublic(currentRoomCode, newState);
+  } finally {
+    $roomPublicToggleBtn.disabled = false;
+  }
+});
+
+$roomCodeSaveBtn.addEventListener("click", async () => {
+  if (!currentRoomCode) return;
+  const newCode = $roomCodeInput.value.trim().toUpperCase();
+  $roomCodeErr.textContent = "";
+  $roomCodeSaveBtn.disabled = true;
+  try {
+    const result = await RoomManager.changeCode(currentRoomCode, newCode, myName);
+    if (!result.ok) {
+      const messages = {
+        empty: "Enter a code.",
+        same: "That's already the current code.",
+        taken: "That code is already in use.",
+        gone: "This room no longer exists.",
+        "not-owner": "Only the room owner can change the code."
+      };
+      $roomCodeErr.textContent = messages[result.reason] || "Couldn't change the code.";
+      return;
+    }
+    joinedPrivateRoomCodes.delete(currentRoomCode);
+    joinedPrivateRoomCodes.add(result.newCode);
+    saveJoinedRoomsToStorage();
+    const targetCode = result.newCode;
+    $roomSettingsOverlay.style.display = "none";
+    currentRoomCode = null;
+    await joinRoomByCode(targetCode);
+  } catch (e) {
+    $roomCodeErr.textContent = "Couldn't change the code — try again.";
+  } finally {
+    $roomCodeSaveBtn.disabled = false;
+  }
+});
+
+function renderRoomMembersList(meta) {
+  $roomMembersList.innerHTML = "";
+  const names = latestPresenceList.map(e => e.name).sort((a, b) => a.localeCompare(b));
+
+  if (names.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "rooms-empty";
+    empty.textContent = "No one else here yet.";
+    $roomMembersList.appendChild(empty);
+    return;
+  }
+
+  names.forEach(name => {
+    const row = document.createElement("div");
+    row.className = "room-member-row";
+
+    const isOwnerRow = name === meta.ownerName;
+    const nameEl = document.createElement("span");
+    nameEl.className = "room-member-name";
+    nameEl.textContent = (isOwnerRow ? "👑 " : "") + name + (name === myName ? " (you)" : "");
+    row.appendChild(nameEl);
+
+    if (name !== myName) {
+      const actions = document.createElement("div");
+      actions.className = "room-member-actions";
+
+      const transferBtn = document.createElement("button");
+      transferBtn.textContent = "Make owner";
+      transferBtn.addEventListener("click", () => {
+        RoomManager.offerTransfer(currentRoomCode, myName, name).catch(() => {
+          showComposerNotice("Couldn't send transfer offer — try again.");
+        });
+      });
+      actions.appendChild(transferBtn);
+
+      const kickBtn = document.createElement("button");
+      kickBtn.className = "kick";
+      kickBtn.textContent = "Kick";
+      kickBtn.addEventListener("click", () => {
+        pendingKickTarget = name;
+        $kickConfirmText.textContent = "Remove " + name + " from this room? They can rejoin if they still have access.";
+        $kickConfirmOverlay.style.display = "flex";
+      });
+      actions.appendChild(kickBtn);
+
+      row.appendChild(actions);
+    }
+
+    $roomMembersList.appendChild(row);
+  });
+}
+
+$kickCancelBtn.addEventListener("click", () => {
+  pendingKickTarget = null;
+  $kickConfirmOverlay.style.display = "none";
+});
+
+$kickConfirmBtn.addEventListener("click", async () => {
+  if (!pendingKickTarget || !currentRoomCode) return;
+  $kickConfirmBtn.disabled = true;
+  try {
+    await RoomManager.kickFromRoom(currentRoomCode, pendingKickTarget);
+  } catch (e) {
+    showComposerNotice("Couldn't kick — try again.");
+  } finally {
+    $kickConfirmBtn.disabled = false;
+    $kickConfirmOverlay.style.display = "none";
+    pendingKickTarget = null;
+  }
+});
+
+function showTransferOfferModal(meta) {
+  $transferOfferText.textContent = meta.transferOffer.fromName + " wants to make you the owner of \u201c" + (meta.name || ("Room " + meta.code)) + "\u201d.";
+  $transferOfferOverlay.style.display = "flex";
+}
+
+$transferAcceptBtn.addEventListener("click", async () => {
+  if (!currentRoomCode) return;
+  $transferAcceptBtn.disabled = true;
+  try {
+    await RoomManager.acceptTransfer(currentRoomCode, myName);
+  } finally {
+    $transferAcceptBtn.disabled = false;
+    $transferOfferOverlay.style.display = "none";
+  }
+});
+
+$transferDeclineBtn.addEventListener("click", async () => {
+  if (!currentRoomCode) return;
+  $transferDeclineBtn.disabled = true;
+  try {
+    await RoomManager.declineTransfer(currentRoomCode);
+  } finally {
+    $transferDeclineBtn.disabled = false;
+    $transferOfferOverlay.style.display = "none";
+  }
+});
+
+function checkSoleSurvivorAutoOwnership(presenceList) {
+  if (!currentRoomCode || !currentRoomMeta) return;
+  const namesPresent = presenceList.map(e => e.name);
+  const ownerStillPresent = namesPresent.includes(currentRoomMeta.ownerName);
+  if (ownerStillPresent) return;
+  if (namesPresent.length !== 1) return;
+  const soleSurvivor = namesPresent[0];
+  if (soleSurvivor !== myName) return;
+  RoomManager.forceTransferOwnership(currentRoomCode, myName).catch(() => {});
+}
+
+function buildPingYouWebhookContent(note) {
+  const senderName = myName || "Someone";
+  if (currentRoomCode && currentRoomMeta) {
+    const roomLabel = (currentRoomMeta.name || "Room") + " (" + currentRoomCode + ")";
+    return "🔔 **" + senderName + "** pinged from **" + roomLabel + "**" + (note ? ": " + note : " (no note)");
+  }
+  return "🔔 **" + senderName + "** pinged" + (note ? ": " + note : " (no note)");
+}
+
+$changeNameBtn.addEventListener("click", openChangeName);
+
+$sendBtn.addEventListener("click", sendMessage);
+$msgInput.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+$msgInput.addEventListener("input", () => {
+  autosizeInput();
+  handleTypingActivity();
+  updateCharCounter();
+  handleMentionTrigger();
+});
+
+$msgInput.addEventListener("paste", (e) => {
+  if (!modMenuUnlocked || !imagesEnabledForMe) return;
+
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+
+  let imageFile = null;
+  for (const item of items) {
+    if (item.type && item.type.startsWith("image/")) {
+      imageFile = item.getAsFile();
+      break;
+    }
+  }
+  if (!imageFile) return;
+
+  e.preventDefault();
+  stageImageFile(imageFile);
+});
+
+function attachRoomListeners() {
+  ChatBackend.watchPresenceCount(count => {
+    $onlineCount.textContent = count + " online";
+  });
+  ChatBackend.watchPresenceList(list => {
+    latestPresenceList = list;
+    if ($onlineListPanel.style.display === "block") renderOnlineListPanel();
+    refreshMentionDropdownIfOpen();
+    checkSoleSurvivorAutoOwnership(list);
+  });
+  ChatBackend.watchMessages(renderMessage);
+  ChatBackend.watchLeaveEvents();
+  ChatBackend.watchTyping(renderTyping, () => myName);
+}
+
+function init() {
+  const usingPlaceholderConfig = FIREBASE_CONFIG.apiKey === "PASTE_YOUR_API_KEY_HERE";
+  if (usingPlaceholderConfig) {
+    $joinCard.innerHTML = `
+      <h2>Chat not set up yet</h2>
+      <p>
+        This chat needs a free Firebase project connected before it'll work.
+        Open this file's code and fill in FIREBASE_CONFIG near the bottom —
+        instructions are in the comment right above it.
+      </p>
+    `;
+    return;
+  }
+
+  try {
+    ChatBackend.init();
+    RoomManager.init(ChatBackend._db);
+  } catch (e) {
+    $joinCard.innerHTML = `<h2>Couldn't connect</h2><p>${esc(e.message || "Unknown error")}</p>`;
+    return;
+  }
+
+  const savedName = localStorage.getItem(NAME_STORAGE_KEY);
+  if (savedName) {
+    renderJoinReturning(savedName);
+  } else {
+    renderJoinNameEntry(false);
+  }
+
+  ChatBackend.watchConnection(setConnectionStatus);
+  Object.values(ROLES).forEach(role => {
+    roleHolders[role.id] = new Set();
+    ChatBackend.watchRoleNames(role.id, set => { roleHolders[role.id] = set; });
+  });
+  attachRoomListeners();
+  watchPublicRoomsList();
+  restoreSidebarRoomList();
+
+  updateUploadButtonVisibility();
+  updatePingYouButtonState();
+  preloadPingSound();
+
+  $emptyState.style.display = "flex";
+  updateCharCounter();
+
+  window.addEventListener("beforeunload", () => {
+    stopTyping();
+    ChatBackend.releasePresence();
+    ChatBackend.clearAllRoles();
+  });
+}
+
+init();
+</script>
+</body>
+</html>
