@@ -653,6 +653,7 @@
     justify-content: center;
     padding: 20px;
   }
+  .chat-modal-overlay.show { display: flex; }
   .chat-modal {
     background: #1e293b;
     border: 1.5px solid #334155;
@@ -4522,25 +4523,26 @@ async function renderOwnerMenuList() {
 
 /* ── Timeout duration modal — shared by both menus, limits/defaults set
    by openTimeoutSetModal based on staffMenuMode. ── */
-function openTimeoutSetModal(target) {
+function openTimeoutSetModal(target, initialDurationMs = 0) {
   pendingTimeoutTarget = target;
   pendingTemporaryModTarget = null;
   $timeoutSetConfirmBtn.textContent = "Timeout";
   $timeoutSetTitle.textContent = "Timeout " + target.name + " (#" + target.loginId + ")";
 
   if (staffMenuMode === "mod") {
-    const defaultSecs = MOD_TIMEOUT_DEFAULT_MS / 1000;
+    const defaultSecs = (initialDurationMs || MOD_TIMEOUT_DEFAULT_MS) / 1000;
     $timeoutMinutesInput.value = String(Math.floor(defaultSecs / 60));
     $timeoutSecondsInput.value = String(defaultSecs % 60);
     $timeoutSetNote.textContent = "Max 1 hour.";
   } else {
-    $timeoutMinutesInput.value = "";
-    $timeoutSecondsInput.value = "";
+    const initialSecs = (initialDurationMs || 0) / 1000;
+    $timeoutMinutesInput.value = initialSecs ? String(Math.floor(initialSecs / 60)) : "";
+    $timeoutSecondsInput.value = initialSecs ? String(initialSecs % 60) : "";
     $timeoutSetNote.textContent = "Max 30 days.";
   }
 
   $timeoutSetErr.textContent = "";
-  $timeoutSetOverlay.style.display = "flex";
+  $timeoutSetOverlay.classList.add("show");
   $timeoutMinutesInput.focus();
 }
 
@@ -4560,13 +4562,13 @@ function openTemporaryModSetModal(target) {
 $timeoutSetCancelBtn.addEventListener("click", () => {
   pendingTimeoutTarget = null;
   pendingTemporaryModTarget = null;
-  $timeoutSetOverlay.style.display = "none";
+  $timeoutSetOverlay.classList.remove("show");
 });
 $timeoutSetOverlay.addEventListener("click", (e) => {
   if (e.target === $timeoutSetOverlay) {
     pendingTimeoutTarget = null;
     pendingTemporaryModTarget = null;
-    $timeoutSetOverlay.style.display = "none";
+    $timeoutSetOverlay.classList.remove("show");
   }
 });
 
@@ -4700,21 +4702,21 @@ function openRemoveRoleConfirm(rank, targetName) {
   $grantModConfirmTitle.textContent = "Remove " + rank + "?";
   $grantModConfirmText.textContent = "Remove the " + rank + " role from " + targetName + "?";
   $grantModConfirmBtn.textContent = "Yes, remove " + rank;
-  $grantModConfirmOverlay.style.display = "flex";
+  $grantModConfirmOverlay.classList.add("show");
 }
 
 $grantModCancelBtn.addEventListener("click", () => {
   pendingGrantModTarget = null;
   pendingModConfirmAction = null;
   pendingRemovalRank = null;
-  $grantModConfirmOverlay.style.display = "none";
+  $grantModConfirmOverlay.classList.remove("show");
 });
 $grantModConfirmOverlay.addEventListener("click", (e) => {
   if (e.target === $grantModConfirmOverlay) {
     pendingGrantModTarget = null;
     pendingModConfirmAction = null;
     pendingRemovalRank = null;
-    $grantModConfirmOverlay.style.display = "none";
+    $grantModConfirmOverlay.classList.remove("show");
   }
 });
 
@@ -4742,7 +4744,7 @@ $grantModConfirmBtn.addEventListener("click", async () => {
     } else {
       await ChatBackend.removeRole(pendingRemovalRank, target.name, target.loginId);
     }
-    $grantModConfirmOverlay.style.display = "none";
+    $grantModConfirmOverlay.classList.remove("show");
     pendingGrantModTarget = null;
     pendingModConfirmAction = null;
     pendingRemovalRank = null;
