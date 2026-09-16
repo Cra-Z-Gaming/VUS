@@ -70,6 +70,12 @@ body {
 }
 .reset-timer.due { color: #ff5c7a; border-color: #ff5c7a; }
 
+.total-count {
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
 .sort-select {
   background: #1f1f1f;
   color: var(--text);
@@ -142,10 +148,32 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 30px 70px;
+  padding: 30px 70px 30px 90px;
 }
 
-.empty-state { color: var(--text-dim); font-size: 16px; }
+.empty-state, .end-page, .loading-state {
+  color: var(--text-dim);
+  font-size: 15px;
+  text-align: center;
+  line-height: 1.7;
+}
+.state-icon {
+  font-size: 32px;
+  color: var(--border);
+  margin-bottom: 10px;
+}
+.loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  margin: 0 auto 12px;
+  /* One deliberate exception to "no animations": a spinner communicates
+     "still working" in a way static text can't, and it's a single
+     lightweight CSS transform — not a layout-affecting animation. */
+  animation: spin 0.9s linear infinite;
+}
 
 /* ---------- Post card ---------- */
 .post-card {
@@ -248,25 +276,30 @@ body {
 .like-btn:hover { border-color: var(--accent); }
 .like-btn.liked { color: #ff5c7a; border-color: #ff5c7a; }
 
-/* ---------- Nav buttons ---------- */
-.nav-btn {
+/* ---------- Nav buttons (stacked pair, left side, vertically centered) ---------- */
+.nav-stack {
   position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 5;
+}
+.nav-btn {
   background: rgba(255,255,255,0.06);
   border: 1px solid var(--border);
   color: var(--text);
-  width: 44px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 15px;
   cursor: pointer;
-  z-index: 5;
 }
-.nav-btn:hover { background: rgba(255,255,255,0.14); }
+.nav-btn:hover { background: rgba(255,255,255,0.14); border-color: var(--accent); }
 .nav-btn:disabled { opacity: 0.25; cursor: default; }
-.nav-up { top: 8px; }
-.nav-down { bottom: 8px; }
+.nav-btn:disabled:hover { border-color: var(--border); }
 
 .post-counter {
   position: absolute;
@@ -362,15 +395,29 @@ body {
   gap: 8px;
   padding: 12px 16px;
   border-top: 1px solid var(--border);
+  align-items: center;
+}
+.comment-input-wrap {
+  flex: 1;
+  position: relative;
 }
 #comment-input {
-  flex: 1;
-  padding: 9px 10px;
+  width: 100%;
+  padding: 9px 50px 9px 10px;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: #1f1f1f;
   color: var(--text);
   font-size: 13px;
+}
+.char-counter-inline {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  color: var(--text-dim);
+  pointer-events: none;
 }
 .comment-form button {
   background: var(--accent);
@@ -404,6 +451,17 @@ body {
   overflow-y: auto;
 }
 .modal-box h2 { margin-bottom: 16px; }
+
+.unsaved-warning {
+  background: rgba(255,92,122,0.12);
+  border: 1px solid #ff5c7a;
+  color: #ff8a9e;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  margin-bottom: 12px;
+}
+
 .modal-box input[type="text"],
 .modal-box textarea {
   width: 100%;
@@ -414,9 +472,17 @@ body {
   color: var(--text);
   font-family: inherit;
   font-size: 14px;
-  margin-bottom: 12px;
+  margin-bottom: 4px;
 }
 .modal-box textarea { min-height: 80px; resize: vertical; }
+
+.char-counter {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: right;
+  margin-bottom: 10px;
+}
+.char-counter.near-limit { color: #ffb84d; }
 
 .file-label {
   display: block;
@@ -485,6 +551,21 @@ body {
 }
 .fullscreen-close:hover { background: rgba(255,255,255,0.2); }
 
+/* ---------- Toast ---------- */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1f1f1f;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  z-index: 300;
+}
+
 /* ---------- Responsive ---------- */
 @media (max-width: 900px) {
   .viewer { margin-right: 0; }
@@ -498,5 +579,8 @@ body {
     border-top: 1px solid var(--border);
   }
   .post-card { flex-direction: column; }
+  .post-stage { padding: 20px 20px 20px 60px; }
+  .nav-stack { left: 8px; }
+  .topbar { flex-wrap: wrap; row-gap: 8px; }
   html, body { overflow: auto; }
 }

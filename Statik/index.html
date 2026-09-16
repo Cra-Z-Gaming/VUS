@@ -24,24 +24,34 @@
     </label>
     <button id="refresh-btn" title="Refresh">⟳</button>
     <div id="reset-timer" class="reset-timer"></div>
+    <div id="total-count" class="total-count"></div>
     <button id="new-post-btn">＋ New Post</button>
   </header>
 
   <!-- ===== MAIN VIEWER ===== -->
   <main id="viewer" class="viewer">
-    <button id="prev-btn" class="nav-btn nav-up" title="Previous (↑)">▲</button>
+    <div id="nav-stack" class="nav-stack">
+      <button id="prev-btn" class="nav-btn nav-up" title="Previous (↑)">▲</button>
+      <button id="next-btn" class="nav-btn nav-down" title="Next (↓)">▼</button>
+    </div>
 
     <div id="post-stage" class="post-stage">
-      <p id="empty-state" class="empty-state hidden">No posts yet. Be the first.</p>
+      <div id="loading-state" class="loading-state">
+        <div class="loading-spinner"></div>
+        <p>Connecting...</p>
+      </div>
+      <div id="empty-state" class="empty-state hidden">
+        <div class="state-icon">◌</div>
+        <p>No posts yet. Be the first.</p>
+      </div>
       <div id="end-page" class="end-page hidden">
+        <div class="state-icon">✓</div>
         <p>You have viewed all posts.</p>
         <p>Post something to keep the site going.</p>
         <button id="end-page-refresh-btn">↻ Refresh</button>
       </div>
       <!-- Active post card gets rendered here -->
     </div>
-
-    <button id="next-btn" class="nav-btn nav-down" title="Next (↓)">▼</button>
 
     <div id="post-counter" class="post-counter"></div>
   </main>
@@ -54,7 +64,10 @@
     </div>
     <div id="comments-list" class="comments-list"></div>
     <form id="comment-form" class="comment-form">
-      <input type="text" id="comment-input" placeholder="Add a comment..." maxlength="500" required>
+      <div class="comment-input-wrap">
+        <input type="text" id="comment-input" placeholder="Add a comment..." maxlength="500" required>
+        <span class="char-counter-inline" id="comment-counter">0/500</span>
+      </div>
       <button type="submit">Post</button>
     </form>
   </aside>
@@ -64,8 +77,15 @@
     <div class="modal-box">
       <h2>New Post</h2>
 
+      <div id="unsaved-warning" class="unsaved-warning hidden">
+        You have unsaved text. Click Cancel again to discard it.
+      </div>
+
       <input type="text" id="title-input" placeholder="Title" maxlength="100" required>
+      <div class="char-counter" id="title-counter">0/100</div>
+
       <textarea id="desc-input" placeholder="Description (optional)" maxlength="1000"></textarea>
+      <div class="char-counter" id="desc-counter">0/1000</div>
 
       <label class="file-label">
         <input type="file" id="file-input" accept="image/*">
@@ -80,6 +100,9 @@
       <p id="post-status"></p>
     </div>
   </div>
+
+  <!-- ===== TOAST ===== -->
+  <div id="toast" class="toast hidden"></div>
 
   <!-- ===== FULLSCREEN IMAGE VIEW ===== -->
   <div id="fullscreen-overlay" class="fullscreen-overlay hidden">

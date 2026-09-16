@@ -93,6 +93,7 @@ db.ref('meta/resetGen').on('value', (snapshot) => {
 const searchInput = document.getElementById('search-input');
 const newPostBtn = document.getElementById('new-post-btn');
 const postStage = document.getElementById('post-stage');
+const loadingState = document.getElementById('loading-state');
 const emptyState = document.getElementById('empty-state');
 const endPage = document.getElementById('end-page');
 const endPageRefreshBtn = document.getElementById('end-page-refresh-btn');
@@ -103,15 +104,21 @@ const prevBtn = document.getElementById('prev-btn');
 const nextBtn = document.getElementById('next-btn');
 const postCounter = document.getElementById('post-counter');
 const resetTimerEl = document.getElementById('reset-timer');
+const totalCountEl = document.getElementById('total-count');
+const toastEl = document.getElementById('toast');
 
 const commentsList = document.getElementById('comments-list');
 const commentsCount = document.getElementById('comments-count');
 const commentForm = document.getElementById('comment-form');
 const commentInput = document.getElementById('comment-input');
+const commentCounter = document.getElementById('comment-counter');
 
 const postModal = document.getElementById('post-modal');
+const unsavedWarning = document.getElementById('unsaved-warning');
 const titleInput = document.getElementById('title-input');
+const titleCounter = document.getElementById('title-counter');
 const descInput = document.getElementById('desc-input');
+const descCounter = document.getElementById('desc-counter');
 const fileInput = document.getElementById('file-input');
 const fileLabelText = document.getElementById('file-label-text');
 const previewImg = document.getElementById('preview-img');
@@ -137,17 +144,26 @@ let postsAdvancedSinceShuffle = 0; // counter to trigger a reshuffle every 5 pos
 
 // ===== Load posts (real-time) =====
 // Stored at /posts/{postId} = { authorName, title, description, imageData, likes: {uid: true}, createdAt }
+let hasLoadedOnce = false;
 db.ref('posts').orderByChild('createdAt').limitToLast(200)
   .on('value', (snapshot) => {
     const val = snapshot.val() || {};
     allPosts = Object.keys(val)
       .map(id => ({ id, ...val[id] }))
       .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)); // newest first
+
+    if (!hasLoadedOnce) {
+      hasLoadedOnce = true;
+      loadingState.classList.add('hidden');
+    }
+    totalCountEl.textContent = allPosts.length === 1 ? '1 post' : `${allPosts.length} posts`;
+
     rebuildVisiblePosts();
   }, (err) => {
     console.error(err);
-    emptyState.textContent = 'Could not load posts.';
+    loadingState.classList.add('hidden');
     emptyState.classList.remove('hidden');
+    emptyState.querySelector('p').textContent = 'Could not load posts.';
   });
 
 function shuffleArray(arr) {
@@ -558,11 +574,27 @@ function showCommentCooldownMessage(seconds) {
 }
 
 // ===== New Post modal =====
-newPostBtn.addEventListener('click', () => postModal.classList.remove('hidden'));
-cancelPostBtn.addEventListener('click', closePostModal);
+newPostBtn.addEventListener('click', () => {
+  postModal.classList.remove('hidden');
+  unsavedWarning.classList.add('hidden');
+});
+
+let cancelArmed = false; // requires a second click to discard if there's unsaved text
+
+cancelPostBtn.addEventListener('click', () => {
+  const hasUnsaved = titleInput.value.trim() || descInput.value.trim() || selectedImageDataUrl;
+  if (hasUnsaved && !cancelArmed) {
+    unsavedWarning.classList.remove('hidden');
+    cancelArmed = true;
+    return;
+  }
+  closePostModal();
+});
 
 function closePostModal() {
   postModal.classList.add('hidden');
+  unsavedWarning.classList.add('hidden');
+  cancelArmed = false;
   titleInput.value = '';
   descInput.value = '';
   fileInput.value = '';
@@ -570,6 +602,33 @@ function closePostModal() {
   previewImg.classList.add('hidden');
   postStatus.textContent = '';
   selectedImageDataUrl = null;
+  updateCharCounter(titleInput, titleCounter, 100);
+  updateCharCounter(descInput, descCounter, 1000);
+}
+
+function updateCharCounter(inputEl, counterEl, max) {
+  const len = inputEl.value.length;
+  counterEl.textContent = `${len}/${max}`;
+  counterEl.classList.toggle('near-limit', len >= max * 0.9);
+}
+titleInput.addEventListener('input', () => {
+  updateCharCounter(titleInput, titleCounter, 100);
+  cancelArmed = false;
+  unsavedWarning.classList.add('hidden');
+});
+descInput.addEventListener('input', () => {
+  updateCharCounter(descInput, descCounter, 1000);
+  cancelArmed = false;
+  unsavedWarning.classList.add('hidden');
+});
+
+commentInput.addEventListener('input', () => updateCharCounter(commentInput, commentCounter, 500));
+
+function showToast(message) {
+  toastEl.textContent = message;
+  toastEl.classList.remove('hidden');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => toastEl.classList.add('hidden'), 2500);
 }
 
 // Resize + compress the image client-side, then convert to a JPEG data URL.
@@ -667,6 +726,7 @@ submitPostBtn.addEventListener('click', async () => {
 
     lastPostTime = Date.now();
     closePostModal();
+    showToast('Posted!');
     // The .on('value') listener will pick up this new post and call
     // rebuildVisiblePosts automatically — no need to force currentIndex
     // here, since in shuffle/oldest mode "jump to index 0" wouldn't
