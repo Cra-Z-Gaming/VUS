@@ -26,6 +26,7 @@
     <div id="reset-timer" class="reset-timer"></div>
     <div id="total-count" class="total-count"></div>
     <button id="new-post-btn">＋ New Post</button>
+    <button id="dev-panel-btn" title="Dev panel — reported posts">⚠️</button>
   </header>
 
   <!-- ===== MAIN VIEWER ===== -->
@@ -103,6 +104,19 @@
 
   <!-- ===== TOAST ===== -->
   <div id="toast" class="toast hidden"></div>
+
+  <!-- ===== DEV PANEL (reported posts, view-only) ===== -->
+  <div id="dev-panel-modal" class="modal hidden">
+    <div class="modal-box dev-panel-box">
+      <div class="dev-panel-header">
+        <h2>⚠️ Reported Posts</h2>
+        <button id="dev-panel-close-btn" type="button">✕</button>
+      </div>
+      <p class="dev-panel-note">View-only — no actions happen here. Copy an ID and delete it from the Firebase console.</p>
+      <div id="dev-panel-list" class="dev-panel-list"></div>
+      <p id="dev-panel-empty" class="dev-panel-empty hidden">No reported posts.</p>
+    </div>
+  </div>
 
   <!-- ===== FULLSCREEN IMAGE VIEW ===== -->
   <div id="fullscreen-overlay" class="fullscreen-overlay hidden">

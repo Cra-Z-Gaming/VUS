@@ -51,6 +51,49 @@ function getSessionUid() {
 }
 const SESSION_UID = getSessionUid();
 
+// ===== Own posts tracking (for the 60s self-delete window) =====
+// sessionStorage only — "same account as post" has no real meaning without
+// auth, so this is scoped to "same browser session that made the post",
+// matching how the Anonymous # tag already works. Stored as
+// { postId: createdAtMs } so we can check elapsed time without re-reading
+// the post itself.
+const OWN_POSTS_KEY = 'statik_own_posts';
+const DELETE_WINDOW_MS = 60 * 1000;
+
+function getOwnPostsMap() {
+  try {
+    return JSON.parse(sessionStorage.getItem(OWN_POSTS_KEY) || '{}');
+  } catch (e) {
+    return {};
+  }
+}
+function markOwnPost(postId, createdAtMs) {
+  const map = getOwnPostsMap();
+  map[postId] = createdAtMs;
+  sessionStorage.setItem(OWN_POSTS_KEY, JSON.stringify(map));
+}
+function isOwnPostDeletable(postId) {
+  const map = getOwnPostsMap();
+  const createdAt = map[postId];
+  if (!createdAt) return false;
+  return (Date.now() - createdAt) < DELETE_WINDOW_MS;
+}
+
+// ===== Reported posts tracking (dedupe — one report per session per post) =====
+const REPORTED_KEY = 'statik_reported_posts';
+function getReportedSet() {
+  try {
+    return JSON.parse(sessionStorage.getItem(REPORTED_KEY) || '{}');
+  } catch (e) {
+    return {};
+  }
+}
+function markReported(postId) {
+  const set = getReportedSet();
+  set[postId] = true;
+  sessionStorage.setItem(REPORTED_KEY, JSON.stringify(set));
+}
+
 // ===== Viewed posts tracking (localStorage, persists across visits) =====
 // Stored as a plain object { postId: true } under one key, since
 // localStorage has no native set type. This lets "Skip viewed" filter
@@ -129,6 +172,12 @@ const postStatus = document.getElementById('post-status');
 const fullscreenOverlay = document.getElementById('fullscreen-overlay');
 const fullscreenImg = document.getElementById('fullscreen-img');
 const fullscreenCloseBtn = document.getElementById('fullscreen-close-btn');
+
+const devPanelBtn = document.getElementById('dev-panel-btn');
+const devPanelModal = document.getElementById('dev-panel-modal');
+const devPanelCloseBtn = document.getElementById('dev-panel-close-btn');
+const devPanelList = document.getElementById('dev-panel-list');
+const devPanelEmpty = document.getElementById('dev-panel-empty');
 
 // ===== State =====
 let allPosts = [];      // full loaded post list from DB (unfiltered), newest first
@@ -267,6 +316,20 @@ function updateResetTimerDisplay() {
 }
 setInterval(updateResetTimerDisplay, 60 * 1000); // refresh display every minute
 
+// Re-render the current post once the 60s delete window closes, so the
+// Delete button disappears on its own rather than staying visible until
+// the next navigation. Checked frequently but only triggers a re-render
+// when the button is actually showing, so it's cheap the rest of the time.
+setInterval(() => {
+  if (visiblePosts.length === 0) return;
+  const post = visiblePosts[currentIndex];
+  if (!post) return;
+  const hasDeleteBtn = !!document.getElementById('post-delete-btn');
+  if (hasDeleteBtn && !isOwnPostDeletable(post.id)) {
+    renderCurrentPost();
+  }
+}, 5000);
+
 // ===== Navigation =====
 prevBtn.addEventListener('click', () => goTo(currentIndex - 1));
 nextBtn.addEventListener('click', () => goTo(currentIndex + 1));
@@ -341,6 +404,10 @@ function renderCurrentPost() {
   const liked = !!likesObj[SESSION_UID];
   const time = post.createdAt ? new Date(post.createdAt).toLocaleString() : 'just now';
 
+  const reportCount = post.reports || 0;
+  const alreadyReported = !!getReportedSet()[post.id];
+  const canDelete = isOwnPostDeletable(post.id);
+
   const mediaHtml = post.imageData
     ? `<img src="${post.imageData}" alt="">
        <button class="expand-btn" id="expand-btn">⛶ Fullscreen</button>`
@@ -360,6 +427,10 @@ function renderCurrentPost() {
         <button class="like-btn ${liked ? 'liked' : ''}" id="post-like-btn">
           ${liked ? '♥' : '♡'} <span id="post-like-count">${likeCount}</span>
         </button>
+        <button class="report-btn ${alreadyReported ? 'reported' : ''}" id="post-report-btn" ${alreadyReported ? 'disabled' : ''}>
+          🚩 ${reportCount > 0 ? reportCount : ''}
+        </button>
+        ${canDelete ? `<button class="delete-own-btn" id="post-delete-btn">Delete</button>` : ''}
       </div>
     </div>
   `;
@@ -374,6 +445,19 @@ function renderCurrentPost() {
     togglePostLike(post.id, liked);
   });
 
+  card.querySelector('#post-report-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    reportPost(post.id);
+  });
+
+  const deleteBtn = card.querySelector('#post-delete-btn');
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteOwnPost(post.id);
+    });
+  }
+
   loadComments(post.id);
 }
 
@@ -381,6 +465,34 @@ async function togglePostLike(postId, currentlyLiked) {
   const ref = db.ref(`posts/${postId}/likes/${SESSION_UID}`);
   if (currentlyLiked) await ref.remove();
   else await ref.set(true);
+}
+
+async function reportPost(postId) {
+  if (getReportedSet()[postId]) return; // already reported this session
+  markReported(postId);
+  const ref = db.ref(`posts/${postId}/reports`);
+  await ref.transaction((current) => (current || 0) + 1);
+  showToast('Reported. Thanks for flagging it.');
+  renderCurrentPost(); // refresh button state
+}
+
+async function deleteOwnPost(postId) {
+  if (!isOwnPostDeletable(postId)) {
+    showToast('Delete window has expired.');
+    renderCurrentPost();
+    return;
+  }
+  const sure = confirm('Delete this post? This cannot be undone.');
+  if (!sure) return;
+
+  try {
+    await db.ref(`posts/${postId}`).remove();
+    showToast('Post deleted.');
+    // The .on('value') listener will pick up the removal and re-render.
+  } catch (err) {
+    console.error(err);
+    showToast('Could not delete — try again.');
+  }
 }
 
 // ===== Fullscreen image view =====
@@ -399,6 +511,61 @@ fullscreenOverlay.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !fullscreenOverlay.classList.contains('hidden')) closeFullscreen();
 });
+
+// ===== Dev panel (reported posts, view-only) =====
+// Open to anyone who clicks it — report counts aren't sensitive, and no
+// action can be taken from here. Actual deletion happens manually in the
+// Firebase console; this just makes it fast to find which post ID to
+// search for there.
+devPanelBtn.addEventListener('click', () => {
+  renderDevPanel();
+  devPanelModal.classList.remove('hidden');
+});
+devPanelCloseBtn.addEventListener('click', () => devPanelModal.classList.add('hidden'));
+devPanelModal.addEventListener('click', (e) => {
+  if (e.target === devPanelModal) devPanelModal.classList.add('hidden');
+});
+
+function renderDevPanel() {
+  const reported = allPosts
+    .filter(p => (p.reports || 0) > 0)
+    .sort((a, b) => (b.reports || 0) - (a.reports || 0));
+
+  devPanelList.innerHTML = '';
+  devPanelEmpty.classList.toggle('hidden', reported.length > 0);
+
+  reported.forEach(post => {
+    const item = document.createElement('div');
+    item.className = 'dev-panel-item';
+    item.innerHTML = `
+      <div class="dev-panel-item-top">
+        <span class="dev-panel-item-title">${escapeHtml(post.title || '(untitled)')}</span>
+        <span class="dev-panel-item-reports">🚩 ${post.reports}</span>
+      </div>
+      <div class="dev-panel-id-row">
+        <span class="dev-panel-id">${escapeHtml(post.id)}</span>
+        <button class="dev-panel-copy-btn" type="button">Copy</button>
+      </div>
+    `;
+    const copyBtn = item.querySelector('.dev-panel-copy-btn');
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(post.id);
+        copyBtn.textContent = 'Copied';
+        copyBtn.classList.add('copied');
+        setTimeout(() => {
+          copyBtn.textContent = 'Copy';
+          copyBtn.classList.remove('copied');
+        }, 1500);
+      } catch (err) {
+        // Clipboard API can fail without HTTPS or user permission —
+        // the ID is still visible/selectable in the box either way.
+        copyBtn.textContent = 'Select ID';
+      }
+    });
+    devPanelList.appendChild(item);
+  });
+}
 
 // ===== Comments =====
 // Stored at /posts/{postId}/comments/{commentId} = { authorName, text, likes: {uid:true}, createdAt }
@@ -744,7 +911,7 @@ submitPostBtn.addEventListener('click', async () => {
   postStatus.textContent = 'Posting...';
 
   try {
-    await db.ref('posts').push({
+    const newRef = await db.ref('posts').push({
       authorName: MY_NAME,
       title,
       description,
@@ -752,6 +919,8 @@ submitPostBtn.addEventListener('click', async () => {
       likes: {},
       createdAt: firebase.database.ServerValue.TIMESTAMP
     });
+
+    markOwnPost(newRef.key, Date.now());
 
     lastPostTime = Date.now();
     closePostModal();

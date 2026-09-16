@@ -60,6 +60,19 @@ body {
 }
 #new-post-btn:hover { opacity: 0.9; }
 
+#dev-panel-btn {
+  background: #1f1f1f;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  width: 34px;
+  height: 34px;
+  font-size: 15px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+#dev-panel-btn:hover { border-color: #ffb84d; }
+
 .reset-timer {
   font-size: 12px;
   color: var(--text-dim);
@@ -275,6 +288,30 @@ body {
 }
 .like-btn:hover { border-color: var(--accent); }
 .like-btn.liked { color: #ff5c7a; border-color: #ff5c7a; }
+
+.report-btn {
+  background: #1f1f1f;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 20px;
+  padding: 7px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.report-btn:hover { border-color: #ffb84d; color: #ffb84d; }
+.report-btn.reported { color: #ffb84d; border-color: #ffb84d; }
+.report-btn:disabled { opacity: 0.5; cursor: default; }
+
+.delete-own-btn {
+  background: none;
+  border: 1px solid #ff5c7a;
+  color: #ff5c7a;
+  border-radius: 20px;
+  padding: 7px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.delete-own-btn:hover { background: rgba(255,92,122,0.12); }
 
 /* ---------- Nav buttons (stacked pair, left side, vertically centered) ---------- */
 .nav-stack {
@@ -550,6 +587,71 @@ body {
   z-index: 201;
 }
 .fullscreen-close:hover { background: rgba(255,255,255,0.2); }
+
+/* ---------- Dev panel ---------- */
+.dev-panel-box { width: 480px; }
+.dev-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.dev-panel-header h2 { margin: 0; }
+.dev-panel-header button {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 16px;
+  cursor: pointer;
+}
+.dev-panel-header button:hover { color: var(--text); }
+.dev-panel-note { font-size: 12px; color: var(--text-dim); margin-bottom: 16px; }
+.dev-panel-list { display: flex; flex-direction: column; gap: 10px; max-height: 50vh; overflow-y: auto; }
+.dev-panel-empty { color: var(--text-dim); font-size: 13px; text-align: center; padding: 20px 0; }
+
+.dev-panel-item {
+  background: #1f1f1f;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.dev-panel-item-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.dev-panel-item-title { font-size: 13px; font-weight: 600; word-break: break-word; flex: 1; margin-right: 10px; }
+.dev-panel-item-reports { font-size: 11px; color: #ffb84d; white-space: nowrap; }
+.dev-panel-id-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.dev-panel-id {
+  flex: 1;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: #141414;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 8px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.dev-panel-copy-btn {
+  background: #2a2a2a;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.dev-panel-copy-btn:hover { border-color: var(--accent); }
+.dev-panel-copy-btn.copied { color: #4dff9a; border-color: #4dff9a; }
 
 /* ---------- Toast ---------- */
 .toast {
