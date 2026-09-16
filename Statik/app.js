@@ -631,17 +631,14 @@ function showToast(message) {
   showToast._t = setTimeout(() => toastEl.classList.add('hidden'), 2500);
 }
 
-// Resize + compress the image client-side, then convert to a JPEG data URL.
-// This keeps what we store in Realtime Database (base64, no Storage/Blaze
-// needed) reasonably small — full camera photos would otherwise burn
-// through the 1GB free quota fast.
-fileInput.addEventListener('change', () => {
-  const file = fileInput.files[0];
-  if (!file) return;
-
+// Resize + compress an image file client-side, then convert to a JPEG data
+// URL. This keeps what we store in Realtime Database (base64, no Storage/
+// Blaze needed) reasonably small — full camera photos would otherwise burn
+// through the 1GB free quota fast. Shared by the file input and clipboard
+// paste, since both start from a File/Blob and need identical handling.
+function processImageFile(file, sourceLabel) {
   if (!file.type.startsWith('image/')) {
     postStatus.textContent = 'Please choose an image file.';
-    fileInput.value = '';
     return;
   }
 
@@ -650,7 +647,6 @@ fileInput.addEventListener('change', () => {
     const ratio = img.width / img.height;
     if (ratio < MIN_ASPECT || ratio > MAX_ASPECT) {
       postStatus.textContent = `Image aspect ratio too extreme. Please crop it closer to square/standard proportions.`;
-      fileInput.value = '';
       previewImg.classList.add('hidden');
       return;
     }
@@ -678,22 +674,55 @@ fileInput.addEventListener('change', () => {
     const approxBytes = Math.round((dataUrl.length * 3) / 4);
     if (approxBytes > 2 * 1024 * 1024) {
       postStatus.textContent = 'Image is still too large after compression — try a smaller or simpler image.';
-      fileInput.value = '';
       previewImg.classList.add('hidden');
       return;
     }
 
     postStatus.textContent = '';
     selectedImageDataUrl = dataUrl;
-    fileLabelText.textContent = file.name;
+    fileLabelText.textContent = sourceLabel || file.name || 'Pasted image';
     previewImg.src = dataUrl;
     previewImg.classList.remove('hidden');
   };
   img.onerror = () => {
     postStatus.textContent = 'Could not read that image.';
-    fileInput.value = '';
   };
   img.src = URL.createObjectURL(file);
+}
+
+fileInput.addEventListener('change', () => {
+  const file = fileInput.files[0];
+  if (!file) return;
+  processImageFile(file);
+});
+
+// ===== Clipboard paste-to-attach =====
+// Pasting an image (Ctrl/Cmd+V) anywhere on the page attaches it as the
+// post image — opens the New Post modal automatically if it wasn't already
+// open, so a paste never gets silently lost.
+document.addEventListener('paste', (e) => {
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+
+  let imageFile = null;
+  for (const item of items) {
+    if (item.type && item.type.startsWith('image/')) {
+      imageFile = item.getAsFile();
+      break;
+    }
+  }
+  if (!imageFile) return; // no image in clipboard — let normal paste behavior continue
+
+  e.preventDefault();
+
+  const wasClosed = postModal.classList.contains('hidden');
+  if (wasClosed) {
+    postModal.classList.remove('hidden');
+    unsavedWarning.classList.add('hidden');
+  }
+
+  processImageFile(imageFile, 'Pasted image');
+  if (wasClosed) showToast('Image pasted — finish your post');
 });
 
 submitPostBtn.addEventListener('click', async () => {
