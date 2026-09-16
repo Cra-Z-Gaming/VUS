@@ -51,11 +51,54 @@ function getSessionUid() {
 }
 const SESSION_UID = getSessionUid();
 
+// ===== Viewed posts tracking (localStorage, persists across visits) =====
+// Stored as a plain object { postId: true } under one key, since
+// localStorage has no native set type. This lets "Skip viewed" filter
+// posts out across browser restarts, not just the current session.
+//
+// admin-reset.html can only wipe the database, not every visitor's
+// localStorage directly. To work around that, it bumps /meta/resetGen
+// (a counter) whenever it wipes posts. Each client compares that value
+// against what it last saw locally — if it's newer, the local viewed-list
+// (which refers to now-deleted posts anyway) gets cleared automatically.
+const VIEWED_KEY = 'statik_viewed_posts';
+const RESET_GEN_KEY = 'statik_last_reset_gen';
+
+function getViewedSet() {
+  try {
+    return JSON.parse(localStorage.getItem(VIEWED_KEY) || '{}');
+  } catch (e) {
+    return {};
+  }
+}
+function markViewed(postId) {
+  const viewed = getViewedSet();
+  if (viewed[postId]) return;
+  viewed[postId] = true;
+  localStorage.setItem(VIEWED_KEY, JSON.stringify(viewed));
+}
+function clearViewedIfResetHappened(currentGen) {
+  if (currentGen == null) return;
+  const lastSeenGen = parseInt(localStorage.getItem(RESET_GEN_KEY) || '0', 10);
+  if (currentGen > lastSeenGen) {
+    localStorage.removeItem(VIEWED_KEY);
+    localStorage.setItem(RESET_GEN_KEY, String(currentGen));
+  }
+}
+db.ref('meta/resetGen').on('value', (snapshot) => {
+  clearViewedIfResetHappened(snapshot.val());
+});
+
 // ===== DOM refs =====
 const searchInput = document.getElementById('search-input');
 const newPostBtn = document.getElementById('new-post-btn');
 const postStage = document.getElementById('post-stage');
 const emptyState = document.getElementById('empty-state');
+const endPage = document.getElementById('end-page');
+const endPageRefreshBtn = document.getElementById('end-page-refresh-btn');
+const refreshBtn = document.getElementById('refresh-btn');
+const sortSelect = document.getElementById('sort-select');
+const skipViewedCheckbox = document.getElementById('skip-viewed-checkbox');
 const prevBtn = document.getElementById('prev-btn');
 const nextBtn = document.getElementById('next-btn');
 const postCounter = document.getElementById('post-counter');
@@ -81,13 +124,16 @@ const fullscreenImg = document.getElementById('fullscreen-img');
 const fullscreenCloseBtn = document.getElementById('fullscreen-close-btn');
 
 // ===== State =====
-let allPosts = [];      // full loaded post list (unfiltered), newest first
-let visiblePosts = [];  // after search filter applied
+let allPosts = [];      // full loaded post list from DB (unfiltered), newest first
+let visiblePosts = [];  // after search + sort + skip-viewed applied
 let currentIndex = 0;
 let selectedImageDataUrl = null; // base64 data URL, after compression
 let commentsRef = null;
 let commentsHandler = null;
 let repliesUnsubs = []; // list of {ref, handler} to detach when switching posts
+
+let shuffleOrder = [];      // array of post ids in current shuffle order
+let postsAdvancedSinceShuffle = 0; // counter to trigger a reshuffle every 5 posts
 
 // ===== Load posts (real-time) =====
 // Stored at /posts/{postId} = { authorName, title, description, imageData, likes: {uid: true}, createdAt }
@@ -97,27 +143,84 @@ db.ref('posts').orderByChild('createdAt').limitToLast(200)
     allPosts = Object.keys(val)
       .map(id => ({ id, ...val[id] }))
       .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)); // newest first
-    applySearchFilter();
+    rebuildVisiblePosts();
   }, (err) => {
     console.error(err);
     emptyState.textContent = 'Could not load posts.';
     emptyState.classList.remove('hidden');
   });
 
-function applySearchFilter() {
-  const q = searchInput.value.trim().toLowerCase();
-  visiblePosts = q
-    ? allPosts.filter(p => (p.title || '').toLowerCase().includes(q))
-    : allPosts;
+function shuffleArray(arr) {
+  const copy = arr.slice();
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
 
-  if (currentIndex >= visiblePosts.length) currentIndex = Math.max(0, visiblePosts.length - 1);
+// Rebuilds visiblePosts from allPosts, applying search text, sort mode,
+// and the skip-viewed filter, then re-renders the current position.
+// Called on: initial load, search input, sort mode change, skip-viewed
+// toggle, and manual refresh.
+function rebuildVisiblePosts({ resetIndex = false, forceReshuffle = false } = {}) {
+  const q = searchInput.value.trim().toLowerCase();
+  let base = q
+    ? allPosts.filter(p => (p.title || '').toLowerCase().includes(q))
+    : allPosts.slice();
+
+  if (skipViewedCheckbox.checked) {
+    const viewed = getViewedSet();
+    base = base.filter(p => !viewed[p.id]);
+  }
+
+  const mode = sortSelect.value;
+  if (mode === 'newest') {
+    base.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  } else if (mode === 'oldest') {
+    base.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  } else if (mode === 'shuffle') {
+    // Re-shuffle either on demand, or every 5 posts advanced, so newly
+    // uploaded posts eventually enter the rotation without a full reload.
+    if (forceReshuffle || shuffleOrder.length === 0 || postsAdvancedSinceShuffle >= 5) {
+      shuffleOrder = shuffleArray(base.map(p => p.id));
+      postsAdvancedSinceShuffle = 0;
+    } else {
+      // Between reshuffles, append any brand-new post ids (not yet in the
+      // shuffle order) to the end, so they're reachable without waiting.
+      const knownIds = new Set(shuffleOrder);
+      const newIds = base.map(p => p.id).filter(id => !knownIds.has(id));
+      shuffleOrder = shuffleOrder.concat(newIds);
+    }
+    const byId = {};
+    base.forEach(p => { byId[p.id] = p; });
+    // Drop any shuffled ids that no longer exist in base (deleted, or
+    // filtered out by search/skip-viewed since the last shuffle).
+    base = shuffleOrder.map(id => byId[id]).filter(Boolean);
+  }
+
+  visiblePosts = base;
+
+  if (resetIndex || currentIndex >= visiblePosts.length) currentIndex = 0;
   renderCurrentPost();
 }
 
-searchInput.addEventListener('input', () => {
-  currentIndex = 0;
-  applySearchFilter();
-});
+searchInput.addEventListener('input', () => rebuildVisiblePosts({ resetIndex: true }));
+sortSelect.addEventListener('change', () => rebuildVisiblePosts({ resetIndex: true, forceReshuffle: true }));
+skipViewedCheckbox.addEventListener('change', () => rebuildVisiblePosts({ resetIndex: true }));
+
+function doRefresh(btnEl) {
+  if (btnEl) {
+    btnEl.classList.add('spinning');
+    setTimeout(() => btnEl.classList.remove('spinning'), 600);
+  }
+  // Data is already live via the .on('value') listener above, so there's
+  // nothing stale to refetch — this re-runs filtering/sort/shuffle and
+  // re-renders, which is what "stuck on the end page" actually needs.
+  rebuildVisiblePosts({ resetIndex: true, forceReshuffle: true });
+}
+refreshBtn.addEventListener('click', () => doRefresh(refreshBtn));
+endPageRefreshBtn.addEventListener('click', () => doRefresh(refreshBtn));
 
 // ===== Reset countdown timer =====
 // Stored at /meta/nextReset = timestamp (ms). Shared across everyone.
@@ -169,15 +272,35 @@ document.getElementById('viewer').addEventListener('wheel', (e) => {
 function goTo(index) {
   if (index < 0 || index >= visiblePosts.length) return;
   currentIndex = index;
+
+  if (sortSelect.value === 'shuffle') {
+    postsAdvancedSinceShuffle++;
+    if (postsAdvancedSinceShuffle >= 5) {
+      // Trigger a reshuffle on the *next* render pass rather than mutating
+      // visiblePosts mid-navigation, which would shift currentIndex under us.
+      rebuildVisiblePosts({ forceReshuffle: true });
+      return;
+    }
+  }
+
   renderCurrentPost();
 }
 
 // ===== Render the current post =====
 function renderCurrentPost() {
-  postStage.innerHTML = '';
+  const existingCard = postStage.querySelector('.post-card');
+  if (existingCard) existingCard.remove();
+  endPage.classList.add('hidden');
+  emptyState.classList.add('hidden');
 
   if (visiblePosts.length === 0) {
-    emptyState.classList.remove('hidden');
+    if (allPosts.length === 0) {
+      // Truly no posts exist anywhere
+      emptyState.classList.remove('hidden');
+    } else {
+      // Posts exist, but filters (search / skip-viewed) hid them all
+      endPage.classList.remove('hidden');
+    }
     postCounter.textContent = '';
     prevBtn.disabled = true;
     nextBtn.disabled = true;
@@ -186,9 +309,10 @@ function renderCurrentPost() {
     detachComments();
     return;
   }
-  emptyState.classList.add('hidden');
 
   const post = visiblePosts[currentIndex];
+  markViewed(post.id);
+
   postCounter.textContent = `${currentIndex + 1} / ${visiblePosts.length}`;
   prevBtn.disabled = currentIndex === 0;
   nextBtn.disabled = currentIndex === visiblePosts.length - 1;
@@ -543,7 +667,10 @@ submitPostBtn.addEventListener('click', async () => {
 
     lastPostTime = Date.now();
     closePostModal();
-    currentIndex = 0; // jump to newest
+    // The .on('value') listener will pick up this new post and call
+    // rebuildVisiblePosts automatically — no need to force currentIndex
+    // here, since in shuffle/oldest mode "jump to index 0" wouldn't
+    // reliably land on the post we just made anyway.
   } catch (err) {
     console.error(err);
     postStatus.textContent = 'Post failed. Try again.';

@@ -13,6 +13,16 @@
     <div class="search-wrap">
       <input type="text" id="search-input" placeholder="Search titles...">
     </div>
+    <select id="sort-select" class="sort-select">
+      <option value="shuffle">Shuffle</option>
+      <option value="newest">Newest</option>
+      <option value="oldest">Oldest</option>
+    </select>
+    <label class="skip-viewed-label">
+      <input type="checkbox" id="skip-viewed-checkbox">
+      Skip viewed
+    </label>
+    <button id="refresh-btn" title="Refresh">⟳</button>
     <div id="reset-timer" class="reset-timer"></div>
     <button id="new-post-btn">＋ New Post</button>
   </header>
@@ -23,6 +33,11 @@
 
     <div id="post-stage" class="post-stage">
       <p id="empty-state" class="empty-state hidden">No posts yet. Be the first.</p>
+      <div id="end-page" class="end-page hidden">
+        <p>You have viewed all posts.</p>
+        <p>Post something to keep the site going.</p>
+        <button id="end-page-refresh-btn">↻ Refresh</button>
+      </div>
       <!-- Active post card gets rendered here -->
     </div>
 
