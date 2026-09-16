@@ -2711,25 +2711,7 @@ loadApps().then(() => {
 </script>
 </body>
 </html>
-        hubs: data.hubs || [],
-        tools: data.tools || [],
-        links: data.links || []
-      };
-      qaEntries = data.qa || [];
-    })
-    .catch(() => {
-      showToast("Failed to load app list", "err");
-      apps = { home: [], apps: [], hubs: [], tools: [], links: [] };
-      qaEntries = [];
-    });
-}
 
-loadApps().then(() => {
-  buildTabs();
-  requestAnimationFrame(() => updateIndicator());
-  render();
-});
-</script>
 
 <!-- Firebase connection + online presence tracking (runs globally, all tabs) -->
 <script>
