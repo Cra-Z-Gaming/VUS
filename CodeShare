@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Code Share</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 900px;
+      margin: 30px auto;
+      padding: 0 15px;
+      background: #111;
+      color: #eee;
+    }
+
+    h1, h2 {
+      margin-bottom: 10px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 400px;
+      resize: vertical;
+      background: #1b1b1b;
+      color: #eee;
+      border: 1px solid #444;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 14px;
+      border-radius: 6px;
+    }
+
+    input, select, button {
+      padding: 10px;
+      margin: 5px 0;
+      border-radius: 5px;
+      border: 1px solid #444;
+    }
+
+    input, select {
+      background: #1b1b1b;
+      color: white;
+      width: 100%;
+    }
+
+    button {
+      cursor: pointer;
+      background: #333;
+      color: white;
+      width: auto;
+    }
+
+    button:hover:not(:disabled) {
+      background: #444;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .section {
+      margin-bottom: 35px;
+    }
+
+    .row {
+      margin: 10px 0;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .result {
+      background: #1b1b1b;
+      border: 1px solid #444;
+      padding: 15px;
+      border-radius: 6px;
+      margin-top: 15px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .share-id {
+      font-family: monospace;
+      font-size: 20px;
+      letter-spacing: 2px;
+    }
+
+    .status {
+      margin-top: 10px;
+      color: #aaa;
+      min-height: 20px;
+    }
+
+    .status.error { color: #ff6b6b; }
+    .status.success { color: #6bcB77; }
+
+    .warning {
+      color: #ffb347;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+
+    .meta {
+      font-size: 12px;
+      color: #888;
+      margin-top: 6px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .countdown {
+      font-family: monospace;
+      color: #ffb347;
+    }
+
+    .countdown.urgent {
+      color: #ff6b6b;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>Code Share</h1>
+
+  <!-- UPLOAD -->
+  <div class="section">
+    <h2>Share Code</h2>
+
+    <textarea
+      id="codeInput"
+      placeholder="Paste your code here..."
+    ></textarea>
+    <div class="meta" id="charCount">0 characters</div>
+
+    <div class="row">
+      <label for="privacy">Privacy:</label>
+
+      <select id="privacy">
+        <option value="public">Public</option>
+        <option value="protected">Password protected</option>
+      </select>
+    </div>
+
+    <div class="row hidden" id="passwordRow">
+      <label for="passwordInput">4-digit password:</label>
+
+      <input
+        id="passwordInput"
+        type="password"
+        inputmode="numeric"
+        maxlength="4"
+        placeholder="1234"
+      >
+      <div class="warning">Note: a 4-digit code is weak protection (only 10,000 combinations). Don't use this for anything actually sensitive.</div>
+    </div>
+
+    <button id="uploadButton">Share Code</button>
+
+    <div id="uploadStatus" class="status"></div>
+
+    <div id="uploadResult" class="result hidden">
+      <div>Share ID:</div>
+      <div id="newShareId" class="share-id"></div>
+
+      <br>
+
+      <div id="newSharePassword"></div>
+
+      <br>
+
+      <div>Expires in 3 hours.</div>
+
+      <div class="btn-row">
+        <button id="copyLinkButton">Copy Share Link</button>
+        <button id="copyIdButton">Copy ID</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- RETRIEVE -->
+  <div class="section">
+    <h2>Retrieve Code</h2>
+
+    <div class="row">
+      <label for="shareIdInput">Share ID:</label>
+
+      <input
+        id="shareIdInput"
+        maxlength="6"
+        placeholder="ABC123"
+      >
+    </div>
+
+    <div class="row">
+      <label for="retrievePassword">Password:</label>
+
+      <input
+        id="retrievePassword"
+        type="password"
+        inputmode="numeric"
+        maxlength="4"
+        placeholder="Leave blank if public"
+      >
+    </div>
+
+    <button id="retrieveButton">Get Code</button>
+
+    <div id="retrieveStatus" class="status"></div>
+
+    <div id="codeResult" class="hidden">
+      <br>
+      <div class="meta">Expires in: <span id="expiryCountdown" class="countdown"></span></div>
+
+      <textarea id="retrievedCode" readonly></textarea>
+
+      <div class="btn-row">
+        <button id="copyButton">Copy Code</button>
+        <button id="downloadButton">Download</button>
+        <button id="deleteButton">Delete Share</button>
+      </div>
+    </div>
+  </div>
+
+
+  <script type="module">
+
+    import { initializeApp }
+      from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
+
+    import {
+      getDatabase,
+      ref,
+      set,
+      get,
+      remove
+    }
+      from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
+
+
+    // ============================================================
+    // FIREBASE CONFIG
+    // ============================================================
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBlfI1YDXg8hdoEAqcFKIdzmYJy-EZ8C8",
+      authDomain: "large-code.firebaseapp.com",
+      databaseURL: "https://large-code-default-rtdb.firebaseio.com/",
+      projectId: "large-code",
+      storageBucket: "large-code.firebasestorage.app",
+      messagingSenderId: "394088772356",
+      appId: "1:394088772356:web:a829fc27fb5ee57fae1651"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const MAX_CODE_LENGTH = 200000; // ~200KB, keep RTDB writes sane
+    const SHARE_DURATION_MS = 3 * 60 * 60 * 1000;
+
+    // ============================================================
+    // ELEMENTS
+    // ============================================================
+
+    const codeInput = document.getElementById("codeInput");
+    const charCount = document.getElementById("charCount");
+    const privacy = document.getElementById("privacy");
+    const passwordRow = document.getElementById("passwordRow");
+    const passwordInput = document.getElementById("passwordInput");
+    const uploadButton = document.getElementById("uploadButton");
+    const uploadStatus = document.getElementById("uploadStatus");
+    const uploadResult = document.getElementById("uploadResult");
+    const newShareId = document.getElementById("newShareId");
+    const newSharePassword = document.getElementById("newSharePassword");
+    const copyLinkButton = document.getElementById("copyLinkButton");
+    const copyIdButton = document.getElementById("copyIdButton");
+
+    const shareIdInput = document.getElementById("shareIdInput");
+    const retrievePassword = document.getElementById("retrievePassword");
+    const retrieveButton = document.getElementById("retrieveButton");
+    const retrieveStatus = document.getElementById("retrieveStatus");
+    const codeResult = document.getElementById("codeResult");
+    const retrievedCode = document.getElementById("retrievedCode");
+    const expiryCountdown = document.getElementById("expiryCountdown");
+    const copyButton = document.getElementById("copyButton");
+    const downloadButton = document.getElementById("downloadButton");
+    const deleteButton = document.getElementById("deleteButton");
+
+    let countdownInterval = null;
+
+    // ============================================================
+    // HELPERS
+    // ============================================================
+
+    function setStatus(el, message, type = "") {
+      el.textContent = message;
+      el.className = "status" + (type ? " " + type : "");
+    }
+
+    async function sha256Hex(text) {
+      const data = new TextEncoder().encode(text);
+      const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+      return Array.from(new Uint8Array(hashBuffer))
+        .map(b => b.toString(16).padStart(2, "0"))
+        .join("");
+    }
+
+    function generateShareId() {
+      const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+      let result = "";
+      for (let i = 0; i < 6; i++) {
+        result += characters.charAt(Math.floor(Math.random() * characters.length));
+      }
+      return result;
+    }
+
+    function formatCountdown(ms) {
+      if (ms <= 0) return "expired";
+      const totalSeconds = Math.floor(ms / 1000);
+      const h = Math.floor(totalSeconds / 3600);
+      const m = Math.floor((totalSeconds % 3600) / 60);
+      const s = totalSeconds % 60;
+      return `${h}h ${m}m ${s}s`;
+    }
+
+    function startCountdown(expiresAt) {
+      if (countdownInterval) clearInterval(countdownInterval);
+
+      const tick = () => {
+        const remaining = expiresAt - Date.now();
+        expiryCountdown.textContent = formatCountdown(remaining);
+        expiryCountdown.classList.toggle("urgent", remaining < 10 * 60 * 1000);
+        if (remaining <= 0) {
+          clearInterval(countdownInterval);
+          setStatus(retrieveStatus, "This share just expired.", "error");
+        }
+      };
+
+      tick();
+      countdownInterval = setInterval(tick, 1000);
+    }
+
+    // ============================================================
+    // CHAR COUNT
+    // ============================================================
+
+    codeInput.addEventListener("input", () => {
+      const len = codeInput.value.length;
+      charCount.textContent = `${len.toLocaleString()} characters` +
+        (len > MAX_CODE_LENGTH ? ` — exceeds ${MAX_CODE_LENGTH.toLocaleString()} limit` : "");
+      charCount.style.color = len > MAX_CODE_LENGTH ? "#ff6b6b" : "#888";
+    });
+
+    // ============================================================
+    // PRIVACY UI
+    // ============================================================
+
+    privacy.addEventListener("change", () => {
+      if (privacy.value === "protected") {
+        passwordRow.classList.remove("hidden");
+      } else {
+        passwordRow.classList.add("hidden");
+        passwordInput.value = "";
+      }
+    });
+
+    // Only allow digits in password fields
+    for (const el of [passwordInput, retrievePassword]) {
+      el.addEventListener("input", () => {
+        el.value = el.value.replace(/\D/g, "").slice(0, 4);
+      });
+    }
+
+    // Auto-uppercase and strip invalid chars from share ID
+    shareIdInput.addEventListener("input", () => {
+      shareIdInput.value = shareIdInput.value
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, "")
+        .slice(0, 6);
+    });
+
+    // ============================================================
+    // UPLOAD
+    // ============================================================
+
+    async function handleUpload() {
+      const code = codeInput.value;
+
+      if (!code) {
+        setStatus(uploadStatus, "Paste some code first.", "error");
+        return;
+      }
+
+      if (code.length > MAX_CODE_LENGTH) {
+        setStatus(uploadStatus, `Code is too long (max ${MAX_CODE_LENGTH.toLocaleString()} characters).`, "error");
+        return;
+      }
+
+      let passwordHash = "";
+      if (privacy.value === "protected") {
+        const password = passwordInput.value;
+        if (!/^\d{4}$/.test(password)) {
+          setStatus(uploadStatus, "Password must be exactly 4 digits.", "error");
+          return;
+        }
+        passwordHash = await sha256Hex(password);
+      }
+
+      uploadButton.disabled = true;
+      setStatus(uploadStatus, "Uploading...");
+      uploadResult.classList.add("hidden");
+
+      try {
+        let shareId;
+        while (true) {
+          shareId = generateShareId();
+          const testSnapshot = await get(ref(db, `shares/${shareId}`));
+          if (!testSnapshot.exists()) break;
+        }
+
+        const now = Date.now();
+        const expiresAt = now + SHARE_DURATION_MS;
+
+        const shareData = {
+          code,
+          protected: privacy.value === "protected",
+          password: passwordHash,
+          createdAt: now,
+          expiresAt
+        };
+
+        await set(ref(db, `shares/${shareId}`), shareData);
+
+        newShareId.textContent = shareId;
+        copyLinkButton.dataset.shareId = shareId;
+        copyIdButton.dataset.shareId = shareId;
+
+        newSharePassword.textContent = privacy.value === "protected"
+          ? "This share is password protected."
+          : "This share is public.";
+
+        uploadResult.classList.remove("hidden");
+        setStatus(uploadStatus, "Code uploaded successfully.", "success");
+
+        codeInput.value = "";
+        passwordInput.value = "";
+        charCount.textContent = "0 characters";
+
+      } catch (error) {
+        console.error(error);
+        setStatus(uploadStatus, "Upload failed: " + error.message, "error");
+      }
+
+      uploadButton.disabled = false;
+    }
+
+    uploadButton.addEventListener("click", handleUpload);
+
+    copyLinkButton.addEventListener("click", async () => {
+      const id = copyLinkButton.dataset.shareId;
+      const url = `${location.origin}${location.pathname}?id=${id}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        const original = copyLinkButton.textContent;
+        copyLinkButton.textContent = "Copied!";
+        setTimeout(() => (copyLinkButton.textContent = original), 1500);
+      } catch (e) {
+        alert("Could not copy link. URL: " + url);
+      }
+    });
+
+    copyIdButton.addEventListener("click", async () => {
+      const id = copyIdButton.dataset.shareId;
+      try {
+        await navigator.clipboard.writeText(id);
+        const original = copyIdButton.textContent;
+        copyIdButton.textContent = "Copied!";
+        setTimeout(() => (copyIdButton.textContent = original), 1500);
+      } catch (e) {
+        alert("Could not copy. ID: " + id);
+      }
+    });
+
+    // ============================================================
+    // RETRIEVE
+    // ============================================================
+
+    async function handleRetrieve() {
+      const shareId = shareIdInput.value.trim().toUpperCase();
+      const enteredPassword = retrievePassword.value.trim();
+
+      if (!shareId) {
+        setStatus(retrieveStatus, "Enter a Share ID.", "error");
+        return;
+      }
+
+      retrieveButton.disabled = true;
+      setStatus(retrieveStatus, "Loading...");
+      codeResult.classList.add("hidden");
+      if (countdownInterval) clearInterval(countdownInterval);
+
+      try {
+        const shareRef = ref(db, `shares/${shareId}`);
+        const snapshot = await get(shareRef);
+
+        if (!snapshot.exists()) {
+          setStatus(retrieveStatus, "Share not found.", "error");
+          retrieveButton.disabled = false;
+          return;
+        }
+
+        const data = snapshot.val();
+
+        if (!data.expiresAt || Date.now() >= data.expiresAt) {
+          await remove(shareRef);
+          setStatus(retrieveStatus, "This share has expired.", "error");
+          retrieveButton.disabled = false;
+          return;
+        }
+
+        if (data.protected === true) {
+          if (!/^\d{4}$/.test(enteredPassword)) {
+            setStatus(retrieveStatus, "Enter the 4-digit password.", "error");
+            retrieveButton.disabled = false;
+            return;
+          }
+
+          const enteredHash = await sha256Hex(enteredPassword);
+          if (enteredHash !== data.password) {
+            setStatus(retrieveStatus, "Incorrect password.", "error");
+            retrieveButton.disabled = false;
+            return;
+          }
+        }
+
+        retrievedCode.value = data.code || "";
+        codeResult.classList.remove("hidden");
+        setStatus(retrieveStatus, "Code loaded.", "success");
+        startCountdown(data.expiresAt);
+
+        deleteButton.dataset.shareId = shareId;
+
+      } catch (error) {
+        console.error(error);
+        setStatus(retrieveStatus, "Failed to retrieve code: " + error.message, "error");
+      }
+
+      retrieveButton.disabled = false;
+    }
+
+    retrieveButton.addEventListener("click", handleRetrieve);
+
+    // Enter-to-submit
+    shareIdInput.addEventListener("keydown", e => { if (e.key === "Enter") handleRetrieve(); });
+    retrievePassword.addEventListener("keydown", e => { if (e.key === "Enter") handleRetrieve(); });
+
+    // ============================================================
+    // COPY / DOWNLOAD
+    // ============================================================
+
+    copyButton.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(retrievedCode.value);
+        copyButton.textContent = "Copied!";
+        setTimeout(() => (copyButton.textContent = "Copy Code"), 1500);
+      } catch (error) {
+        console.error(error);
+        alert("Could not copy automatically.");
+      }
+    });
+
+    downloadButton.addEventListener("click", () => {
+      const blob = new Blob([retrievedCode.value], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${shareIdInput.value.trim().toUpperCase() || "code"}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // ============================================================
+    // DELETE
+    // ============================================================
+
+    deleteButton.addEventListener("click", async () => {
+      const shareId = deleteButton.dataset.shareId;
+      if (!shareId) return;
+      if (!confirm("Delete this share permanently?")) return;
+
+      try {
+        await remove(ref(db, `shares/${shareId}`));
+        retrievedCode.value = "";
+        codeResult.classList.add("hidden");
+        if (countdownInterval) clearInterval(countdownInterval);
+        setStatus(retrieveStatus, "Share deleted.", "success");
+      } catch (error) {
+        console.error(error);
+        setStatus(retrieveStatus, "Could not delete share: " + error.message, "error");
+      }
+    });
+
+    // ============================================================
+    // AUTO-LOAD FROM URL (?id=ABC123)
+    // ============================================================
+
+    const urlParams = new URLSearchParams(location.search);
+    const idFromUrl = urlParams.get("id");
+    if (idFromUrl) {
+      shareIdInput.value = idFromUrl.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+      handleRetrieve();
+    }
+
+  </script>
+
+</body>
+</html>
