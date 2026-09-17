@@ -821,6 +821,47 @@
     display: block;
     cursor: pointer;
   }
+
+  /* ══════════════════════════════════════════════════════════
+     PINNING + UNREAD BADGES
+     ══════════════════════════════════════════════════════════ */
+  .pin-btn {
+    background: transparent;
+    border: 1.5px solid #334155;
+    color: #94a3b8;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 5px 10px;
+    border-radius: 7px;
+    flex-shrink: 0;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .pin-btn:hover { color: #f1f5f9; border-color: #475569; }
+  .pin-btn.pinned {
+    color: #eab308;
+    border-color: #a16207;
+    background: rgba(234,179,8,.1);
+  }
+  .pin-btn.pinned:hover { background: rgba(234,179,8,.18); }
+  .chat-list-row.is-pinned { background: rgba(234,179,8,.06); }
+  .chat-list-row.is-pinned:hover { background: rgba(234,179,8,.12); }
+
+  .unread-badge {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #22c55e;
+    color: #000;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
 </style>
 </head>
 <body>
@@ -1067,7 +1108,7 @@ let presenceRef = null;      // global online-presence node: presence/{accountKe
 let connectedRef = null;     // Firebase's special .info/connected node
 let myPresenceRef = null;    // this tab's own presence entry, set once logged in
 let groupChatsRef = null;    // set in initFirebase alongside the other refs
-const GC_MAX_MEMBERS = 20;   // includes the owner
+const GC_MAX_MEMBERS = 50;   // includes the owner
 
 function initFirebase() {
   firebase.initializeApp(FIREBASE_CONFIG);
@@ -1495,6 +1536,125 @@ function watchOwnAccount(accountKey, onChange) {
 function unwatchOwnAccount(accountKey) {
   if (accountKey) usersRef.child(accountKey).off("value");
   currentUserData = null;
+}
+
+/* ══════════════════════════════════════════════════════════
+   PINNING
+   Pins are per-user preferences stored on the account record:
+   /users/{me}/pinnedFriends/{friendAccountKey} = true
+   /users/{me}/pinnedGroups/{gcId} = true
+   Pinning is one-directional (only affects your own sidebar order)
+   and lives entirely under your own account node, so no special
+   security-rule considerations beyond what already applies to
+   /users/{uid} writes.
+   ══════════════════════════════════════════════════════════ */
+async function togglePinFriend(friendAccountKey) {
+  if (!currentSession || !currentUserData) return { ok: false, error: "Not logged in." };
+  const isPinned = !!(currentUserData.pinnedFriends && currentUserData.pinnedFriends[friendAccountKey]);
+  try {
+    await usersRef.child(currentSession.accountKey).child("pinnedFriends").child(friendAccountKey).set(isPinned ? null : true);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: "Couldn't update pin — try again." };
+  }
+}
+
+async function togglePinGroup(gcId) {
+  if (!currentSession || !currentUserData) return { ok: false, error: "Not logged in." };
+  const isPinned = !!(currentUserData.pinnedGroups && currentUserData.pinnedGroups[gcId]);
+  try {
+    await usersRef.child(currentSession.accountKey).child("pinnedGroups").child(gcId).set(isPinned ? null : true);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: "Couldn't update pin — try again." };
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   UNREAD MESSAGE COUNTS
+   Per-thread "last read" timestamps are stored on the account record:
+   /users/{me}/lastRead/{threadKey} = serverTimestamp
+   where threadKey is a DM's threadIdFor(...) or a group's gcId — the
+   two id-spaces are disjoint (DM ids are two pushed keys joined with
+   "_", group ids are single pushed keys) so they can share one node.
+   Unread count = messages in that thread with ts > lastRead[threadKey]
+   and fromAccountKey !== me, computed client-side from each thread's
+   already-loaded message list (bounded by the existing limitToLast(200)
+   read on each thread, matching the read pattern already used
+   elsewhere in this file).
+   ══════════════════════════════════════════════════════════ */
+let unreadCounts = {};      // threadKey -> count, recomputed whenever a watched thread's messages or lastRead changes
+let lastReadMap = {};       // threadKey -> timestamp, kept live from currentUserData
+let allThreadMessages = {}; // threadKey -> [{fromAccountKey, ts}, …], one running list per friend/group thread being tracked for unread counts
+
+function markThreadRead(threadKey) {
+  if (!currentSession) return;
+  usersRef.child(currentSession.accountKey).child("lastRead").child(threadKey).set(firebase.database.ServerValue.TIMESTAMP);
+}
+
+function recomputeUnread(threadKey) {
+  const msgs = allThreadMessages[threadKey] || [];
+  const lastRead = lastReadMap[threadKey] || 0;
+  const isOpen = (threadKey === currentOpenThreadKey());
+  if (isOpen) {
+    unreadCounts[threadKey] = 0;
+    return;
+  }
+  unreadCounts[threadKey] = msgs.filter(m => m.ts && m.ts > lastRead && m.fromAccountKey !== (currentSession && currentSession.accountKey)).length;
+}
+
+function currentOpenThreadKey() {
+  if (openChatGcId) return openChatGcId;
+  if (openChatAccountKey) return threadIdFor(currentSession.accountKey, openChatAccountKey);
+  return null;
+}
+
+// Lightweight background watcher: for every friend, subscribe to their DM
+// thread's messages (metadata only) purely to track unread counts, even
+// while that thread isn't open. Mirrors watchThreadMessages' query shape
+// so it reads from the same cached location.
+let unreadWatchRefs = {}; // threadKey -> ref, so watchers can be torn down on logout/friend-list changes
+function ensureUnreadWatchForFriend(friendAccountKey) {
+  const threadKey = threadIdFor(currentSession.accountKey, friendAccountKey);
+  if (unreadWatchRefs[threadKey]) return;
+  const ref = dmsRef.child(threadKey).child("messages").limitToLast(200);
+  allThreadMessages[threadKey] = [];
+  ref.on("child_added", snap => {
+    allThreadMessages[threadKey].push(snap.val());
+    recomputeUnread(threadKey);
+    renderSidebarLists();
+  });
+  unreadWatchRefs[threadKey] = ref;
+}
+function ensureUnreadWatchForGroup(gcId) {
+  const threadKey = gcId;
+  if (unreadWatchRefs[threadKey]) return;
+  const ref = groupChatsRef.child(gcId).child("messages").limitToLast(200);
+  allThreadMessages[threadKey] = [];
+  ref.on("child_added", snap => {
+    allThreadMessages[threadKey].push(snap.val());
+    recomputeUnread(threadKey);
+    renderSidebarLists();
+  });
+  unreadWatchRefs[threadKey] = ref;
+}
+function teardownUnreadWatch(threadKey) {
+  if (unreadWatchRefs[threadKey]) {
+    unreadWatchRefs[threadKey].off("child_added");
+    delete unreadWatchRefs[threadKey];
+    delete allThreadMessages[threadKey];
+    delete unreadCounts[threadKey];
+  }
+}
+function teardownAllUnreadWatches() {
+  Object.keys(unreadWatchRefs).forEach(teardownUnreadWatch);
+}
+
+// Re-renders whichever sidebar lists exist without needing a fresh
+// account-data event — called whenever a background unread watcher fires.
+function renderSidebarLists() {
+  if (currentUserData) renderFriendsList(currentUserData);
+  if (myGroupChats.length) renderGroupsList(myGroupChats);
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -2175,12 +2335,32 @@ let myGroupChats = []; // kept in sync by watchMyGroupChats, re-rendered on ever
 
 function renderGroupsList(groups) {
   myGroupChats = groups;
+
+  // Keep background unread watchers matched to current group membership.
+  groups.forEach(gc => ensureUnreadWatchForGroup(gc.gcId));
+  Object.keys(unreadWatchRefs).forEach(threadKey => {
+    // Group thread keys are exactly the gcId — only tear down group
+    // watchers here (DM watchers are managed in renderFriendsList) whose
+    // group no longer appears in this list.
+    const stillAGroup = groups.some(g => g.gcId === threadKey);
+    const looksLikeDmKey = threadKey.includes("_");
+    if (!looksLikeDmKey && !stillAGroup) teardownUnreadWatch(threadKey);
+  });
+
+  const pinned = (currentUserData && currentUserData.pinnedGroups) || {};
+  const sorted = [...groups].sort((a, b) => {
+    const ap = !!pinned[a.gcId], bp = !!pinned[b.gcId];
+    if (ap !== bp) return ap ? -1 : 1;
+    return 0;
+  });
+
   $groupsList.innerHTML = "";
   $groupsEmpty.style.display = groups.length === 0 ? "block" : "none";
 
-  groups.forEach(gc => {
+  sorted.forEach(gc => {
+    const isPinned = !!pinned[gc.gcId];
     const row = document.createElement("div");
-    row.className = "chat-list-row" + (openChatGcId === gc.gcId ? " selected" : "");
+    row.className = "chat-list-row" + (openChatGcId === gc.gcId ? " selected" : "") + (isPinned ? " is-pinned" : "");
     row.addEventListener("click", () => openGroupChat(gc.gcId));
 
     const avatar = document.createElement("div");
@@ -2205,6 +2385,26 @@ function renderGroupsList(groups) {
     info.appendChild(preview);
 
     row.appendChild(info);
+
+    const unread = unreadCounts[gc.gcId] || 0;
+    if (unread > 0) {
+      const badge = document.createElement("div");
+      badge.className = "unread-badge";
+      badge.textContent = unread > 99 ? "99+" : String(unread);
+      row.appendChild(badge);
+    }
+
+    const pinBtn = document.createElement("button");
+    pinBtn.className = "pin-btn" + (isPinned ? " pinned" : "");
+    pinBtn.textContent = isPinned ? "📌 Unpin" : "Pin";
+    pinBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      pinBtn.disabled = true;
+      const result = await togglePinGroup(gc.gcId);
+      if (!result.ok) { showComposerNotice(result.error); pinBtn.disabled = false; }
+    });
+    row.appendChild(pinBtn);
+
     $groupsList.appendChild(row);
 
     // If this group is currently open, keep openChatGcId's live info fresh
@@ -2223,14 +2423,30 @@ function renderFriendsList(userData) {
   const friends = (userData && userData.friends) || {};
   const entries = Object.entries(friends);
 
+  // Keep background unread watchers matched to current friend list.
+  entries.forEach(([friendAccountKey]) => ensureUnreadWatchForFriend(friendAccountKey));
+  const currentFriendThreadKeys = new Set(entries.map(([k]) => threadIdFor(currentSession.accountKey, k)));
+  Object.keys(unreadWatchRefs).forEach(threadKey => {
+    const looksLikeDmKey = threadKey.includes("_");
+    if (looksLikeDmKey && !currentFriendThreadKeys.has(threadKey)) teardownUnreadWatch(threadKey);
+  });
+
+  const pinned = (userData && userData.pinnedFriends) || {};
+  const sortedEntries = [...entries].sort((a, b) => {
+    const ap = !!pinned[a[0]], bp = !!pinned[b[0]];
+    if (ap !== bp) return ap ? -1 : 1;
+    return 0;
+  });
+
   $friendsList.innerHTML = "";
   $friendsEmpty.style.display = entries.length === 0 ? "block" : "none";
 
-  entries.forEach(([friendAccountKey, friendData]) => {
+  sortedEntries.forEach(([friendAccountKey, friendData]) => {
+    const isPinned = !!pinned[friendAccountKey];
     const wrap = document.createElement("div");
 
     const row = document.createElement("div");
-    row.className = "chat-list-row" + (openChatAccountKey === friendAccountKey ? " selected" : "");
+    row.className = "chat-list-row" + (openChatAccountKey === friendAccountKey ? " selected" : "") + (isPinned ? " is-pinned" : "");
     row.addEventListener("click", () => openChatWith(friendAccountKey, friendData.username));
 
     row.appendChild(buildAvatarWithPresence(friendData.username, friendAccountKey));
@@ -2251,6 +2467,26 @@ function renderFriendsList(userData) {
     info.appendChild(preview);
 
     row.appendChild(info);
+
+    const threadKey = threadIdFor(currentSession.accountKey, friendAccountKey);
+    const unread = unreadCounts[threadKey] || 0;
+    if (unread > 0) {
+      const badge = document.createElement("div");
+      badge.className = "unread-badge";
+      badge.textContent = unread > 99 ? "99+" : String(unread);
+      row.appendChild(badge);
+    }
+
+    const pinBtn = document.createElement("button");
+    pinBtn.className = "pin-btn" + (isPinned ? " pinned" : "");
+    pinBtn.textContent = isPinned ? "📌 Unpin" : "Pin";
+    pinBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      pinBtn.disabled = true;
+      const result = await togglePinFriend(friendAccountKey);
+      if (!result.ok) { showComposerNotice(result.error); pinBtn.disabled = false; }
+    });
+    row.appendChild(pinBtn);
 
     // Small "⋮" menu button, click stops propagation so it doesn't also
     // open the chat — reveals Unfriend/Block inline underneath rather than
@@ -2343,6 +2579,8 @@ function renderBlockedList(userData) {
 }
 
 function renderAllRelationshipUI(userData) {
+  lastReadMap = (userData && userData.lastRead) || {};
+  Object.keys(allThreadMessages).forEach(recomputeUnread);
   renderIncomingRequests(userData);
   renderOutgoingRequests(userData);
   renderFriendsList(userData);
@@ -2615,6 +2853,7 @@ $sidebarLogoutBtn.addEventListener("click", () => {
   unwatchOwnAccount(currentSession && currentSession.accountKey);
   unwatchMyGroupChats();
   unwatchGroupInfo();
+  teardownAllUnreadWatches();
   clearPendingImage();
   closeOpenChat();
   closeModal();
@@ -2757,6 +2996,10 @@ function renderChatMessage(msg) {
   $chatMessages.appendChild(el);
   chatMessageCount++;
   requestAnimationFrame(() => { $chatMessages.scrollTop = $chatMessages.scrollHeight; });
+
+  // The open thread is always considered read as new messages stream in.
+  const threadKey = currentOpenThreadKey();
+  if (threadKey) markThreadRead(threadKey);
 }
 
 function openChatWith(accountKey, username) {
@@ -2777,6 +3020,8 @@ function openChatWith(accountKey, username) {
 
   $chatMessages.innerHTML = "";
   watchThreadMessages(accountKey, renderChatMessage);
+  markThreadRead(threadIdFor(currentSession.accountKey, accountKey));
+  recomputeUnread(threadIdFor(currentSession.accountKey, accountKey));
 
   // Re-render the friend list so the "selected" highlight moves to this row.
   if (currentUserData) renderFriendsList(currentUserData);
@@ -2804,6 +3049,8 @@ function openGroupChat(gcId) {
 
   $chatMessages.innerHTML = "";
   watchGroupMessages(gcId, renderChatMessage);
+  markThreadRead(gcId);
+  recomputeUnread(gcId);
 
   if (currentUserData) renderFriendsList(currentUserData);
   renderGroupsList(myGroupChats);
