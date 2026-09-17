@@ -77,7 +77,7 @@
 {"name":"Groq API Keys","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/GroqKeys-NeatUI","desc":"Free Groq API keys for anyone","icon":"GK","color":"green"},
 {"name":"Notes","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Notes","desc":"Keep text saved easily in your browser","icon":"📝","color":"amber"},
 {"name":"VUS Analytics","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/analytics.html","desc":"helps me figure out when yall use my site","icon":"📈","color":"purple"},
-{"name":"","url":"","desc":"","icon":"","color":""},
+{"name":"Image to Base64","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Image-2-Base64","desc":"if you want to add an image to your code but the image is blocked? base64 takes care of that","icon":"B64","color":"green"},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
