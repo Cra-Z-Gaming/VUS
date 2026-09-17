@@ -1613,6 +1613,16 @@ function currentOpenThreadKey() {
 // thread's messages (metadata only) purely to track unread counts, even
 // while that thread isn't open. Mirrors watchThreadMessages' query shape
 // so it reads from the same cached location.
+//
+// IMPORTANT: Firebase's limitToLast(200).on("child_added") fires once
+// per already-existing message the moment you subscribe — so with many
+// friends/groups this can mean thousands of synchronous callbacks in a
+// burst right after login. Two things keep that from freezing the page:
+//   1. Each event only updates in-memory state (push + recompute) — it
+//      never touches the DOM directly.
+//   2. Any DOM re-render is routed through scheduleSidebarRender(), which
+//      coalesces bursts into a single re-render on the next animation
+//      frame instead of one re-render per event.
 let unreadWatchRefs = {}; // threadKey -> ref, so watchers can be torn down on logout/friend-list changes
 function ensureUnreadWatchForFriend(friendAccountKey) {
   const threadKey = threadIdFor(currentSession.accountKey, friendAccountKey);
@@ -1622,7 +1632,7 @@ function ensureUnreadWatchForFriend(friendAccountKey) {
   ref.on("child_added", snap => {
     allThreadMessages[threadKey].push(snap.val());
     recomputeUnread(threadKey);
-    renderSidebarLists();
+    scheduleSidebarRender();
   });
   unreadWatchRefs[threadKey] = ref;
 }
@@ -1634,7 +1644,7 @@ function ensureUnreadWatchForGroup(gcId) {
   ref.on("child_added", snap => {
     allThreadMessages[threadKey].push(snap.val());
     recomputeUnread(threadKey);
-    renderSidebarLists();
+    scheduleSidebarRender();
   });
   unreadWatchRefs[threadKey] = ref;
 }
@@ -1648,6 +1658,7 @@ function teardownUnreadWatch(threadKey) {
 }
 function teardownAllUnreadWatches() {
   Object.keys(unreadWatchRefs).forEach(teardownUnreadWatch);
+  sidebarRenderScheduled = false;
 }
 
 // Re-renders whichever sidebar lists exist without needing a fresh
@@ -1655,6 +1666,20 @@ function teardownAllUnreadWatches() {
 function renderSidebarLists() {
   if (currentUserData) renderFriendsList(currentUserData);
   if (myGroupChats.length) renderGroupsList(myGroupChats);
+}
+
+// Coalesces many rapid unread-watcher events (e.g. an initial backlog of
+// hundreds of messages loading at once) into a single sidebar re-render
+// per animation frame, instead of rebuilding the whole friends/groups DOM
+// on every individual message event.
+let sidebarRenderScheduled = false;
+function scheduleSidebarRender() {
+  if (sidebarRenderScheduled) return;
+  sidebarRenderScheduled = true;
+  requestAnimationFrame(() => {
+    sidebarRenderScheduled = false;
+    renderSidebarLists();
+  });
 }
 
 /* ══════════════════════════════════════════════════════════
