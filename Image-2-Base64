@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Image → Base64</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-2: #1c2129;
+    --border: #2a313c;
+    --text: #e6edf3;
+    --text-dim: #8b96a5;
+    --accent: #4fd1c5;
+    --accent-dim: #2a5c56;
+    --danger: #e5534b;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    --sans: -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 32px 20px 80px;
+  }
+
+  .wrap {
+    max-width: 880px;
+    margin: 0 auto;
+  }
+
+  header {
+    margin-bottom: 24px;
+  }
+
+  h1 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+
+  header p {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    margin: 0;
+  }
+
+  .drop {
+    border: 1.5px dashed var(--border);
+    border-radius: 10px;
+    padding: 36px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    background: var(--panel);
+  }
+
+  .drop.drag {
+    border-color: var(--accent);
+    background: var(--panel-2);
+  }
+
+  .drop strong {
+    display: block;
+    font-size: 0.95rem;
+    margin-bottom: 4px;
+  }
+
+  .drop span {
+    color: var(--text-dim);
+    font-size: 0.82rem;
+  }
+
+  input[type="file"] { display: none; }
+
+  .toolbar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin: 14px 0 0;
+    min-height: 30px;
+  }
+
+  button {
+    font-family: var(--sans);
+    font-size: 0.8rem;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text-dim);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+
+  button:hover {
+    border-color: var(--text-dim);
+    color: var(--text);
+  }
+
+  button.danger:hover {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+
+  .rows {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  .row {
+    display: flex;
+    gap: 14px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    align-items: center;
+  }
+
+  .thumb {
+    width: 56px;
+    height: 56px;
+    border-radius: 6px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+  }
+
+  .thumb-skeleton {
+    width: 56px;
+    height: 56px;
+    border-radius: 6px;
+    flex-shrink: 0;
+    background: linear-gradient(90deg, var(--panel-2) 25%, #232a34 37%, var(--panel-2) 63%);
+    background-size: 400% 100%;
+    animation: shimmer 1.4s ease infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 100% 0; }
+    100% { background-position: 0 0; }
+  }
+
+  .info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .info .name {
+    font-size: 0.85rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 6px;
+  }
+
+  .info .name .skel-text {
+    display: inline-block;
+    width: 120px;
+    height: 12px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--panel-2) 25%, #232a34 37%, var(--panel-2) 63%);
+    background-size: 400% 100%;
+    animation: shimmer 1.4s ease infinite;
+  }
+
+  .info .meta {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+
+  .actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .actions button {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+  }
+
+  .actions button.copied {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .remove {
+    flex-shrink: 0;
+    color: var(--text-dim);
+    background: transparent;
+    border: none;
+    font-size: 1.1rem;
+    line-height: 1;
+    padding: 4px 6px;
+  }
+
+  .remove:hover { color: var(--danger); }
+
+  .empty {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    padding: 40px 0;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Image → Base64</h1>
+    <p>Upload or paste images. Copy the encoded string, use it however you need.</p>
+  </header>
+
+  <div class="drop" id="drop">
+    <strong>Drop images here, click to browse, or paste (Ctrl/Cmd+V)</strong>
+    <span>Multiple files at once are fine</span>
+    <input type="file" id="fileInput" accept="image/*" multiple>
+  </div>
+
+  <div class="toolbar" id="toolbar" style="display:none;">
+    <button id="clearAll" class="danger">Clear all</button>
+  </div>
+
+  <div class="rows" id="rows"></div>
+  <div class="empty" id="emptyMsg">No images yet</div>
+</div>
+
+<script>
+(function () {
+  const drop = document.getElementById('drop');
+  const fileInput = document.getElementById('fileInput');
+  const rowsEl = document.getElementById('rows');
+  const emptyMsg = document.getElementById('emptyMsg');
+  const toolbar = document.getElementById('toolbar');
+  const clearAllBtn = document.getElementById('clearAll');
+
+  let seq = 0;
+
+  function updateEmptyState() {
+    const has = rowsEl.children.length > 0;
+    emptyMsg.style.display = has ? 'none' : 'block';
+    toolbar.style.display = has ? 'flex' : 'none';
+  }
+
+  function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+  }
+
+  function makeSkeletonRow(id) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.dataset.id = id;
+    row.innerHTML = `
+      <div class="thumb-skeleton"></div>
+      <div class="info">
+        <div class="name"><span class="skel-text"></span></div>
+        <div class="meta">Reading file…</div>
+      </div>
+    `;
+    return row;
+  }
+
+  function fillRow(row, file, dataUrl) {
+    const raw = dataUrl.split(',')[1] || '';
+    const sizeLabel = formatBytes(file.size || Math.ceil(raw.length * 0.75));
+
+    row.innerHTML = `
+      <img class="thumb" src="${dataUrl}" alt="">
+      <div class="info">
+        <div class="name">${escapeHtml(file.name || 'pasted-image')}</div>
+        <div class="meta">${sizeLabel}</div>
+        <div class="actions">
+          <button data-copy="full">Copy with prefix</button>
+          <button data-copy="raw">Copy raw base64</button>
+        </div>
+      </div>
+      <button class="remove" title="Remove">&times;</button>
+    `;
+
+    row.querySelector('[data-copy="full"]').addEventListener('click', (e) => copyText(dataUrl, e.target));
+    row.querySelector('[data-copy="raw"]').addEventListener('click', (e) => copyText(raw, e.target));
+    row.querySelector('.remove').addEventListener('click', () => {
+      row.remove();
+      updateEmptyState();
+    });
+  }
+
+  function escapeHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  async function copyText(text, btn) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (err) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    const original = btn.textContent;
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = original;
+      btn.classList.remove('copied');
+    }, 1200);
+  }
+
+  function handleFile(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+
+    const id = ++seq;
+    const skeleton = makeSkeletonRow(id);
+    rowsEl.prepend(skeleton);
+    updateEmptyState();
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      // Slight delay so the skeleton is perceptible even on fast local reads
+      setTimeout(() => fillRow(skeleton, file, e.target.result), 150);
+    };
+    reader.onerror = () => {
+      skeleton.querySelector('.meta').textContent = 'Failed to read file';
+      skeleton.querySelector('.meta').style.color = 'var(--danger)';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function handleFiles(fileList) {
+    Array.from(fileList).forEach(handleFile);
+  }
+
+  // File picker
+  drop.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', (e) => {
+    handleFiles(e.target.files);
+    fileInput.value = '';
+  });
+
+  // Drag and drop
+  ['dragenter', 'dragover'].forEach(evt =>
+    drop.addEventListener(evt, (e) => {
+      e.preventDefault();
+      drop.classList.add('drag');
+    })
+  );
+  ['dragleave', 'drop'].forEach(evt =>
+    drop.addEventListener(evt, (e) => {
+      e.preventDefault();
+      drop.classList.remove('drag');
+    })
+  );
+  drop.addEventListener('drop', (e) => {
+    if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+  });
+
+  // Paste from clipboard
+  document.addEventListener('paste', (e) => {
+    const items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    const files = [];
+    for (const item of items) {
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        const f = item.getAsFile();
+        if (f) files.push(f);
+      }
+    }
+    if (files.length) handleFiles(files);
+  });
+
+  clearAllBtn.addEventListener('click', () => {
+    rowsEl.innerHTML = '';
+    updateEmptyState();
+  });
+
+  updateEmptyState();
+})();
+</script>
+</body>
+</html>
