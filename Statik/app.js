@@ -406,6 +406,7 @@ function renderCurrentPost() {
 
   const reportCount = post.reports || 0;
   const alreadyReported = !!getReportedSet()[post.id];
+  const reportsDisabled = !!post.reportsDisabled;
   const canDelete = isOwnPostDeletable(post.id);
 
   const mediaHtml = post.imageData
@@ -427,7 +428,9 @@ function renderCurrentPost() {
         <button class="like-btn ${liked ? 'liked' : ''}" id="post-like-btn">
           ${liked ? '♥' : '♡'} <span id="post-like-count">${likeCount}</span>
         </button>
-        <button class="report-btn ${alreadyReported ? 'reported' : ''}" id="post-report-btn" ${alreadyReported ? 'disabled' : ''}>
+        <button class="report-btn ${alreadyReported ? 'reported' : ''}" id="post-report-btn"
+          ${(alreadyReported || reportsDisabled) ? 'disabled' : ''}
+          title="${reportsDisabled ? 'This post has been reviewed' : ''}">
           🚩 ${reportCount > 0 ? reportCount : ''}
         </button>
         ${canDelete ? `<button class="delete-own-btn" id="post-delete-btn">Delete</button>` : ''}
@@ -469,6 +472,8 @@ async function togglePostLike(postId, currentlyLiked) {
 
 async function reportPost(postId) {
   if (getReportedSet()[postId]) return; // already reported this session
+  const post = allPosts.find(p => p.id === postId);
+  if (post && post.reportsDisabled) return; // resolved — no more reports accepted
   markReported(postId);
   const ref = db.ref(`posts/${postId}/reports`);
   await ref.transaction((current) => (current || 0) + 1);
