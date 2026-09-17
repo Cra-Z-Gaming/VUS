@@ -1584,23 +1584,89 @@ async function togglePinGroup(gcId) {
    elsewhere in this file).
    ══════════════════════════════════════════════════════════ */
 let unreadCounts = {};      // threadKey -> count, recomputed whenever a watched thread's messages or lastRead changes
-let lastReadMap = {};       // threadKey -> timestamp, kept live from currentUserData
+let lastReadMap = {};       // threadKey -> timestamp, kept live from currentUserData (server-confirmed value)
+let localLastReadMap = {};  // threadKey -> timestamp, set the instant we know a thread is read (see markThreadRead)
 let allThreadMessages = {}; // threadKey -> [{fromAccountKey, ts}, …], one running list per friend/group thread being tracked for unread counts
 
+// Writes lastRead to the server AND records it locally right away.
+//
+// Why both: the server write round-trips through Firebase and comes back
+// down via the separate watchOwnAccount listener, which can lag behind
+// the message-stream listener by a beat. If unread math only trusted the
+// server-confirmed value, a message arriving in the currently-open thread
+// would briefly compute against the OLD lastRead (count jumps up) before
+// the echoed-back value arrived a moment later (count drops back to 0) —
+// exactly the flicker this local value exists to prevent. The effective
+// lastRead used for math is always max(local, server), so neither a
+// slightly-stale local value nor a slightly-stale server value can make
+// the count wrong in either direction.
 function markThreadRead(threadKey) {
   if (!currentSession) return;
+  localLastReadMap[threadKey] = Date.now();
   usersRef.child(currentSession.accountKey).child("lastRead").child(threadKey).set(firebase.database.ServerValue.TIMESTAMP);
 }
 
+function effectiveLastRead(threadKey) {
+  return Math.max(lastReadMap[threadKey] || 0, localLastReadMap[threadKey] || 0);
+}
+
+// Unread counts are recomputed for ALL threads on a fixed global interval
+// (every 3 seconds — see startUnreadRecomputeLoop below), plus once
+// immediately whenever a specific thread needs an up-to-date answer right
+// away (opening it, or marking it read). Message events themselves only
+// append to allThreadMessages — they don't trigger a recompute — so a
+// burst of incoming messages can't cause the count to flicker between an
+// intermediate value and the settled one; there's exactly one code path
+// that computes the number, and it always uses the current, complete
+// message list and the current, complete lastRead value.
 function recomputeUnread(threadKey) {
   const msgs = allThreadMessages[threadKey] || [];
-  const lastRead = lastReadMap[threadKey] || 0;
+  const lastRead = effectiveLastRead(threadKey);
   const isOpen = (threadKey === currentOpenThreadKey());
   if (isOpen) {
     unreadCounts[threadKey] = 0;
     return;
   }
   unreadCounts[threadKey] = msgs.filter(m => m.ts && m.ts > lastRead && m.fromAccountKey !== (currentSession && currentSession.accountKey)).length;
+}
+
+function recomputeAllUnread() {
+  Object.keys(allThreadMessages).forEach(recomputeUnread);
+  updateTabTitleUnreadCount();
+}
+
+// Global recompute loop — every 3 seconds, recompute every tracked
+// thread's unread count in one pass and re-render/re-title once. This is
+// the single steady heartbeat driving the badges and the tab title;
+// individual message/account events no longer trigger their own
+// recompute, which is what was causing the count to flicker between a
+// stale high value and the correct one.
+const UNREAD_RECOMPUTE_INTERVAL_MS = 3000;
+let unreadRecomputeIntervalId = null;
+function startUnreadRecomputeLoop() {
+  stopUnreadRecomputeLoop();
+  unreadRecomputeIntervalId = setInterval(() => {
+    recomputeAllUnread();
+    scheduleSidebarRender();
+  }, UNREAD_RECOMPUTE_INTERVAL_MS);
+}
+function stopUnreadRecomputeLoop() {
+  if (unreadRecomputeIntervalId) {
+    clearInterval(unreadRecomputeIntervalId);
+    unreadRecomputeIntervalId = null;
+  }
+}
+
+// Browser tab title shows the total unread count across every DM and
+// group thread, so someone with the app open in a background tab can
+// tell at a glance whether anything's waiting for them — mirrors the
+// per-row unread badges, just totalled and put where it's visible
+// without needing to switch tabs. Capped at "99+" like the row badges.
+const BASE_TAB_TITLE = "VUS DM's";
+function updateTabTitleUnreadCount() {
+  const total = Object.values(unreadCounts).reduce((sum, n) => sum + (n || 0), 0);
+  const display = total > 99 ? "99+" : String(total);
+  document.title = BASE_TAB_TITLE + " - " + display;
 }
 
 function currentOpenThreadKey() {
@@ -1625,26 +1691,30 @@ function currentOpenThreadKey() {
 //      frame instead of one re-render per event.
 let unreadWatchRefs = {}; // threadKey -> ref, so watchers can be torn down on logout/friend-list changes
 function ensureUnreadWatchForFriend(friendAccountKey) {
+  // Guard: this can be reached from a render pass that fires before login
+  // fully completes (or after logout tears refs down) — bail quietly
+  // instead of throwing and aborting the whole render function partway.
+  if (!currentSession || !dmsRef) return;
   const threadKey = threadIdFor(currentSession.accountKey, friendAccountKey);
   if (unreadWatchRefs[threadKey]) return;
   const ref = dmsRef.child(threadKey).child("messages").limitToLast(200);
   allThreadMessages[threadKey] = [];
+  // Only appends to the raw message list here — the actual unread count
+  // is computed by the global 3-second loop (or on demand when a thread
+  // is opened), never per-message. See recomputeUnread's comment for why.
   ref.on("child_added", snap => {
     allThreadMessages[threadKey].push(snap.val());
-    recomputeUnread(threadKey);
-    scheduleSidebarRender();
   });
   unreadWatchRefs[threadKey] = ref;
 }
 function ensureUnreadWatchForGroup(gcId) {
+  if (!currentSession || !groupChatsRef) return;
   const threadKey = gcId;
   if (unreadWatchRefs[threadKey]) return;
   const ref = groupChatsRef.child(gcId).child("messages").limitToLast(200);
   allThreadMessages[threadKey] = [];
   ref.on("child_added", snap => {
     allThreadMessages[threadKey].push(snap.val());
-    recomputeUnread(threadKey);
-    scheduleSidebarRender();
   });
   unreadWatchRefs[threadKey] = ref;
 }
@@ -1669,17 +1739,31 @@ function renderSidebarLists() {
 }
 
 // Coalesces many rapid unread-watcher events (e.g. an initial backlog of
-// hundreds of messages loading at once) into a single sidebar re-render
-// per animation frame, instead of rebuilding the whole friends/groups DOM
-// on every individual message event.
+// hundreds of messages loading at once, or a burst of live messages) into
+// at most one sidebar re-render per second.
+//
+// This matters for more than performance: renderFriendsList/renderGroupsList
+// fully rebuild their DOM (innerHTML = "" + rebuild) on every call. If that
+// rebuild happens in the split second between a user pressing down on a
+// row and the click event firing, the element they were clicking gets
+// destroyed and replaced out from under them — the click silently does
+// nothing. Capping re-renders to 1/second keeps updates responsive
+// (unread badges, pin state) while leaving a large enough window that
+// clicks reliably land on an element that's still there a moment later.
+const SIDEBAR_RENDER_MIN_INTERVAL_MS = 1000;
 let sidebarRenderScheduled = false;
+let lastSidebarRenderAt = 0;
 function scheduleSidebarRender() {
   if (sidebarRenderScheduled) return;
+  const now = Date.now();
+  const elapsed = now - lastSidebarRenderAt;
+  const wait = Math.max(0, SIDEBAR_RENDER_MIN_INTERVAL_MS - elapsed);
   sidebarRenderScheduled = true;
-  requestAnimationFrame(() => {
+  setTimeout(() => {
     sidebarRenderScheduled = false;
+    lastSidebarRenderAt = Date.now();
     renderSidebarLists();
-  });
+  }, wait);
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -2445,6 +2529,12 @@ function renderGroupsList(groups) {
 }
 
 function renderFriendsList(userData) {
+  // Guard: can be reached (via scheduleSidebarRender or presence updates)
+  // before login finishes or after logout — nothing to render without a
+  // session, and threadIdFor(currentSession.accountKey, …) below would
+  // otherwise throw and abort the render partway through.
+  if (!currentSession) return;
+
   const friends = (userData && userData.friends) || {};
   const entries = Object.entries(friends);
 
@@ -2606,6 +2696,7 @@ function renderBlockedList(userData) {
 function renderAllRelationshipUI(userData) {
   lastReadMap = (userData && userData.lastRead) || {};
   Object.keys(allThreadMessages).forEach(recomputeUnread);
+  updateTabTitleUnreadCount();
   renderIncomingRequests(userData);
   renderOutgoingRequests(userData);
   renderFriendsList(userData);
@@ -2866,11 +2957,13 @@ function showComposerNotice(text) {
 function showLoggedInState(session) {
   document.body.classList.add("app-mode");
   $sidebarYouText.textContent = session.username + " · ID " + session.id;
+  startUnreadRecomputeLoop();
 }
 
 function showAuthFlow() {
   document.body.classList.remove("app-mode");
   $authFlow.style.display = "block";
+  document.title = BASE_TAB_TITLE; // no session, so no unread count to show
 }
 
 $sidebarLogoutBtn.addEventListener("click", () => {
@@ -2878,7 +2971,10 @@ $sidebarLogoutBtn.addEventListener("click", () => {
   unwatchOwnAccount(currentSession && currentSession.accountKey);
   unwatchMyGroupChats();
   unwatchGroupInfo();
+  stopUnreadRecomputeLoop();
   teardownAllUnreadWatches();
+  unreadCounts = {};
+  localLastReadMap = {};
   clearPendingImage();
   closeOpenChat();
   closeModal();
@@ -3047,6 +3143,7 @@ function openChatWith(accountKey, username) {
   watchThreadMessages(accountKey, renderChatMessage);
   markThreadRead(threadIdFor(currentSession.accountKey, accountKey));
   recomputeUnread(threadIdFor(currentSession.accountKey, accountKey));
+  updateTabTitleUnreadCount();
 
   // Re-render the friend list so the "selected" highlight moves to this row.
   if (currentUserData) renderFriendsList(currentUserData);
@@ -3076,6 +3173,7 @@ function openGroupChat(gcId) {
   watchGroupMessages(gcId, renderChatMessage);
   markThreadRead(gcId);
   recomputeUnread(gcId);
+  updateTabTitleUnreadCount();
 
   if (currentUserData) renderFriendsList(currentUserData);
   renderGroupsList(myGroupChats);
@@ -3147,10 +3245,13 @@ $imageFileInput.addEventListener("change", () => {
 });
 $cancelPendingImageBtn.addEventListener("click", clearPendingImage);
 
-// Universal outgoing-message delay. Applies to both DMs and group chats.
-// A staged image sends immediately (see sendChatMessage) — the delay is a
-// text-spam throttle, not meant to hold up image sends. If text is also
-// attached, it follows as its own delayed message right after.
+// Universal outgoing-message rate limit. Applies to both DMs and group
+// chats. The message sends immediately when the user hits Send/Enter —
+// the delay only throttles how soon the NEXT text message can go out
+// (composer stays disabled until it elapses), so there's no wait before
+// your own message appears. A staged image is exempt from the throttle
+// entirely (see sendChatMessage) — it's meant to catch text-spam, not
+// slow down image sends.
 const SEND_DELAY_MS = 2000;
 
 function sendChatMessage() {
@@ -3169,48 +3270,44 @@ function sendChatMessage() {
       : sendDirectMessage(openChatAccountKey, msgText, withImage);
   };
 
-  const finish = () => {
-    $chatSendBtn.disabled = false;
-    $uploadImageBtn.disabled = false;
-    $chatMsgInput.focus();
+  // Re-enables the composer after the rate-limit window, regardless of
+  // whether the send itself succeeded — a failed send still "used up"
+  // the attempt from a spam-prevention standpoint, and the person can
+  // just try again once it re-enables.
+  const finishAfterDelay = () => {
+    setTimeout(() => {
+      $chatSendBtn.disabled = false;
+      $uploadImageBtn.disabled = false;
+      $chatMsgInput.focus();
+    }, SEND_DELAY_MS);
   };
 
   if (imageToSend) {
-    // Image sends go out immediately, skipping the text send-delay — the
-    // delay is a text-spam throttle, not meant to hold up image sends.
+    // Images go out immediately and are exempt from the rate limit —
+    // it exists to throttle text-spam, not to slow down image sends.
     clearPendingImage();
     sendOne(null, imageToSend).then(result => {
-      if (!result.ok) {
-        showComposerNotice(result.error);
-        finish();
-        return;
-      }
+      if (!result.ok) showComposerNotice(result.error);
       if (text.trim()) {
-        // Image already sent; the accompanying text follows as its own
-        // message after the normal delay, same as a text-only send.
-        setTimeout(() => {
-          sendOne(text, null).then(textResult => {
-            if (!textResult.ok) showComposerNotice(textResult.error);
-            else { $chatMsgInput.value = ""; autosizeChatInput(); }
-            finish();
-          });
-        }, SEND_DELAY_MS);
-      } else {
-        finish();
+        // Image already sent; the accompanying text sends right away too
+        // (no extra wait) — the throttle only governs the NEXT message.
+        sendOne(text, null).then(textResult => {
+          if (!textResult.ok) showComposerNotice(textResult.error);
+          else { $chatMsgInput.value = ""; autosizeChatInput(); }
+        });
       }
+      finishAfterDelay();
     });
   } else {
-    setTimeout(() => {
-      sendOne(text, null).then(result => {
-        if (!result.ok) {
-          showComposerNotice(result.error);
-        } else {
-          $chatMsgInput.value = "";
-          autosizeChatInput();
-        }
-        finish();
-      });
-    }, SEND_DELAY_MS);
+    sendOne(text, null).then(result => {
+      if (!result.ok) {
+        showComposerNotice(result.error);
+      } else {
+        $chatMsgInput.value = "";
+        autosizeChatInput();
+      }
+      finishAfterDelay();
+    });
   }
 }
 
