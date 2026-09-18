@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Statik</title>
+</head>
+<body>
+
+  <!-- ===== TOP BAR ===== -->
+  <header class="topbar">
+    <h1 class="logo">Statik</h1>
+    <div class="search-wrap">
+      <input type="text" id="search-input" placeholder="Search titles...">
+    </div>
+    <select id="sort-select" class="sort-select">
+      <option value="shuffle">Shuffle</option>
+      <option value="newest">Newest</option>
+      <option value="oldest">Oldest</option>
+    </select>
+    <label class="skip-viewed-label">
+      <input type="checkbox" id="skip-viewed-checkbox">
+      Skip viewed
+    </label>
+    <button id="refresh-btn" title="Refresh">⟳</button>
+    <div id="reset-timer" class="reset-timer"></div>
+    <div id="total-count" class="total-count"></div>
+    <button id="new-post-btn">＋ New Post</button>
+    <button id="dev-panel-btn" title="Dev panel — reported posts">⚠️</button>
+  </header>
+
+  <!-- ===== MAIN VIEWER ===== -->
+  <main id="viewer" class="viewer">
+    <div id="nav-stack" class="nav-stack">
+      <button id="prev-btn" class="nav-btn nav-up" title="Previous (↑)">▲</button>
+      <button id="next-btn" class="nav-btn nav-down" title="Next (↓)">▼</button>
+    </div>
+
+    <div id="post-stage" class="post-stage">
+      <div id="loading-state" class="loading-state">
+        <div class="loading-spinner"></div>
+        <p>Connecting...</p>
+      </div>
+      <div id="empty-state" class="empty-state hidden">
+        <div class="state-icon">◌</div>
+        <p>No posts yet. Be the first.</p>
+      </div>
+      <div id="end-page" class="end-page hidden">
+        <div class="state-icon">✓</div>
+        <p>You have viewed all posts.</p>
+        <p>Post something to keep the site going.</p>
+        <button id="end-page-refresh-btn">↻ Refresh</button>
+      </div>
+      <!-- Active post card gets rendered here -->
+    </div>
+
+    <div id="post-counter" class="post-counter"></div>
+  </main>
+
+  <!-- ===== COMMENTS PANEL ===== -->
+  <aside id="comments-panel" class="comments-panel">
+    <div class="comments-header">
+      <span>Comments</span>
+      <span id="comments-count" class="comments-count"></span>
+    </div>
+    <div id="comments-list" class="comments-list"></div>
+    <form id="comment-form" class="comment-form">
+      <div class="comment-input-wrap">
+        <input type="text" id="comment-input" placeholder="Add a comment..." maxlength="500" required>
+        <span class="char-counter-inline" id="comment-counter">0/500</span>
+      </div>
+      <button type="submit">Post</button>
+    </form>
+  </aside>
+
+  <!-- ===== NEW POST MODAL ===== -->
+  <div id="post-modal" class="modal hidden">
+    <div class="modal-box">
+      <h2>New Post</h2>
+
+      <div id="unsaved-warning" class="unsaved-warning hidden">
+        You have unsaved text. Click Cancel again to discard it.
+      </div>
+
+      <input type="text" id="title-input" placeholder="Title" maxlength="100" required>
+      <div class="char-counter" id="title-counter">0/100</div>
+
+      <textarea id="desc-input" placeholder="Description (optional)" maxlength="1000"></textarea>
+      <div class="char-counter" id="desc-counter">0/1000</div>
+
+      <label class="file-label">
+        <input type="file" id="file-input" accept="image/*">
+        <span id="file-label-text">Attach image (optional)</span>
+      </label>
+      <img id="preview-img" class="hidden">
+
+      <div class="modal-actions">
+        <button id="cancel-post-btn" type="button">Cancel</button>
+        <button id="submit-post-btn" type="button">Post</button>
+      </div>
+      <p id="post-status"></p>
+    </div>
+  </div>
+
+  <!-- ===== TOAST ===== -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- ===== DEV PANEL (reported posts, view-only) ===== -->
+  <div id="dev-panel-modal" class="modal hidden">
+    <div class="modal-box dev-panel-box">
+      <div class="dev-panel-header">
+        <h2>⚠️ Reported Posts</h2>
+        <button id="dev-panel-close-btn" type="button">✕</button>
+      </div>
+      <p class="dev-panel-note">View-only — no actions happen here. Copy an ID and delete it from the Firebase console.</p>
+      <div id="dev-panel-list" class="dev-panel-list"></div>
+      <p id="dev-panel-empty" class="dev-panel-empty hidden">No reported posts.</p>
+    </div>
+  </div>
+
+  <!-- ===== FULLSCREEN IMAGE VIEW ===== -->
+  <div id="fullscreen-overlay" class="fullscreen-overlay hidden">
+    <button id="fullscreen-close-btn" class="fullscreen-close">✕</button>
+    <img id="fullscreen-img" class="fullscreen-img">
+  </div>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+
+  <script>
+  /* ══════════════════════════════════════════════════════════
+     EXTERNAL FILE LOADER
+     raw.githubusercontent.com serves everything as Content-Type:
+     text/plain, so a plain <link rel="stylesheet"> or <script src>
+     pointed at it gets silently blocked by the browser's strict
+     MIME-type check. Instead we fetch the raw text ourselves and
+     inject it: CSS goes into a <style> tag, JS gets wrapped in a
+     Blob URL (so it still shows up as a real file in devtools,
+     unlike eval/new Function) and loaded as a normal <script src>.
+     Load order: style.css -> firebase-config.js -> app.js
+     (app.js depends on firebase being configured first).
+     ══════════════════════════════════════════════════════════ */
+  (function loadExternalAppFiles() {
+    var BASE = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Statik/";
+    var CSS_URL    = BASE + "style.css";
+    var CONFIG_URL = BASE + "firebase-config.js";
+    var JS_URL     = BASE + "app.js";
+
+    function showLoadError(what, err) {
+      document.body.innerHTML =
+        "<div style='padding:24px;color:#f1f5f9;font-family:Arial,sans-serif;background:#0f172a;min-height:100vh'>" +
+        "<h2>Couldn't load " + what + "</h2>" +
+        "<p style='color:#94a3b8;font-size:14px;margin-top:8px;line-height:1.5'>" +
+        (err && err.message ? err.message : String(err)) +
+        "<br><br>Check that the file exists at the expected GitHub path and the repo/branch is public." +
+        "</p></div>";
+    }
+
+    function loadCss() {
+      return fetch(CSS_URL, { cache: "no-store" })
+        .then(function (r) {
+          if (!r.ok) throw new Error("HTTP " + r.status + " fetching style.css");
+          return r.text();
+        })
+        .then(function (cssText) {
+          var styleEl = document.createElement("style");
+          styleEl.textContent = cssText;
+          document.head.appendChild(styleEl);
+        });
+    }
+
+    function loadScriptFromUrl(url, label) {
+      return fetch(url, { cache: "no-store" })
+        .then(function (r) {
+          if (!r.ok) throw new Error("HTTP " + r.status + " fetching " + label);
+          return r.text();
+        })
+        .then(function (jsText) {
+          var blob = new Blob([jsText], { type: "application/javascript" });
+          var blobUrl = URL.createObjectURL(blob);
+          return new Promise(function (resolve, reject) {
+            var scriptEl = document.createElement("script");
+            scriptEl.src = blobUrl;
+            scriptEl.onload = resolve;
+            scriptEl.onerror = function () { reject(new Error(label + " failed to execute — check it for syntax errors.")); };
+            document.body.appendChild(scriptEl);
+          });
+        });
+    }
+
+    loadCss()
+      .catch(function (err) { showLoadError("styles (style.css)", err); throw err; })
+      .then(function () { return loadScriptFromUrl(CONFIG_URL, "firebase-config.js"); })
+      .catch(function (err) {
+        if (!document.body.querySelector("h2")) showLoadError("Firebase config (firebase-config.js)", err);
+        throw err;
+      })
+      .then(function () { return loadScriptFromUrl(JS_URL, "app.js"); })
+      .catch(function (err) {
+        if (!document.body.querySelector("h2")) showLoadError("app logic (app.js)", err);
+      });
+  })();
+  </script>
+</body>
+</html>
