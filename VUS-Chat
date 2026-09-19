@@ -1085,6 +1085,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script>
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDxMfGQ_xk-au8YgOvaFO2R9LxAe-pa9Rg",
@@ -1278,6 +1279,17 @@ const ROLE_REQUEST_COOLDOWN_MS = 30 * 1000;
    Placeholders: any role with an empty webhookUrl simply can't have a code
    requested for it yet -- paste a Discord webhook URL into that role's
    `webhookUrl` and the Claim menu starts working for it automatically. */
+/* Role self-claiming via code has been retired -- it let anyone who saw a
+   code (leaked through the readable role-meta path, or by reading the
+   webhook URLs below straight out of page source) grant themselves any
+   role including owner, with no privileged action needing to happen first.
+   All roles are now granted via /grant by an existing admin+. `claimable`
+   is left in place on each role (false everywhere) rather than removed, in
+   case a properly server-authorized claim flow gets built later. The old
+   webhookUrl values have been cleared since they were live secrets sitting
+   in public client-side source -- if you want Discord notifications when a
+   role is granted, that needs to happen from a server (e.g. a Cloud
+   Function) that holds the webhook URL privately, never from this file. */
 const ROLES = {
   unranked: {
     id: "unranked", rank: 0, label: "Unranked", icon: "🌱",
@@ -1288,37 +1300,37 @@ const ROLES = {
   normie: {
     id: "normie", rank: 1, label: "Normie", icon: "🔰",
     dbPath: "rooms/vus-hub-main/normieRole", metaPath: "normieMeta",
-    webhookUrl: "", // PLACEHOLDER: paste a Discord webhook URL to enable code requests
+    webhookUrl: "",
     cooldownKey: "vusChatLastNormieRequest",
-    bubbleClass: "normie-bubble", claimable: true
+    bubbleClass: "normie-bubble", claimable: false
   },
   mod: {
     id: "mod", rank: 2, label: "Mod", icon: "🧩",
     dbPath: "modded", metaPath: "modMeta",
-    webhookUrl: "https://discord.com/api/webhooks/1545551358118072320/4VUNceTr4bpwspeNKKkP_9Ko64Nc6iknQwN15AY-5iyl9A1SG5JvwZzEHHolXYLY6v1h",
+    webhookUrl: "", // retired -- was a live Discord webhook exposed in client source
     cooldownKey: "vusChatLastModRequest",
-    bubbleClass: "mod-bubble", claimable: true
+    bubbleClass: "mod-bubble", claimable: false
   },
   admin: {
     id: "admin", rank: 3, label: "Admin", icon: "🛡️",
     dbPath: "rooms/vus-hub-main/admins", metaPath: "adminMeta",
-    webhookUrl: "", // PLACEHOLDER: paste a Discord webhook URL to enable code requests
+    webhookUrl: "",
     cooldownKey: "vusChatLastAdminRequest",
-    bubbleClass: "admin-bubble", claimable: true
+    bubbleClass: "admin-bubble", claimable: false
   },
   coowner: {
     id: "coowner", rank: 4, label: "Co-owner", icon: "💎",
     dbPath: "rooms/vus-hub-main/coOwners", metaPath: "coownerMeta",
-    webhookUrl: "", // PLACEHOLDER: paste a Discord webhook URL to enable code requests
+    webhookUrl: "",
     cooldownKey: "vusChatLastCoownerRequest",
-    bubbleClass: "coowner-bubble", claimable: true
+    bubbleClass: "coowner-bubble", claimable: false
   },
   crown: {
     id: "crown", rank: 5, label: "Owner", icon: "👑",
     dbPath: "crowned", metaPath: "crownMeta",
-    webhookUrl: "https://discord.com/api/webhooks/1542708447991037953/Ge705Wa_quPVC-2pFhttHYNuA4-FI5ZDRIn5VwjQ059SwT0ZRCrqmVLMofb8oJhsLFFJ",
+    webhookUrl: "", // retired -- was a live Discord webhook exposed in client source
     cooldownKey: "vusChatLastCrownRequest",
-    bubbleClass: "crown-bubble", claimable: true
+    bubbleClass: "crown-bubble", claimable: false
   }
 };
 
@@ -1379,9 +1391,35 @@ const ChatBackend = {
   _profilesRef: null,
   currentRoomId: null,
 
+  // Real, server-verified identity. loginId (the 6-digit code) stays as the
+  // display/lookup ID users see and type in commands, but every security
+  // check (role grants, bans, timeouts) is keyed on this uid instead, since
+  // loginId is just a client-chosen string and can't be trusted on its own.
+  auth: null,
+  myUid: null,
+  _authReadyResolve: null,
+  authReady: null,
+
   init() {
     firebase.initializeApp(FIREBASE_CONFIG);
     this._db = firebase.database();
+    this.auth = firebase.auth();
+    this.authReady = new Promise(resolve => { this._authReadyResolve = resolve; });
+
+    this.auth.onAuthStateChanged(user => {
+      if (user) {
+        this.myUid = user.uid;
+        if (this._authReadyResolve) { this._authReadyResolve(user.uid); this._authReadyResolve = null; }
+      }
+    });
+    // Anonymous sign-in: gives every visitor a real, unspoofable uid without
+    // requiring a login screen. If this rejects (e.g. Anonymous Auth not yet
+    // enabled in the Firebase console), role/ban actions that require myUid
+    // will fail closed rather than silently trusting an unverified identity.
+    this.auth.signInAnonymously().catch(err => {
+      console.error("Anonymous sign-in failed — enable Anonymous Auth in Firebase console.", err);
+    });
+
     this._connectedRef = this._db.ref(".info/connected");
     this._bansRef = this._db.ref("rooms/" + MAIN_ROOM_ID + "/bannedUsers");
     this._imageAccessRef = this._db.ref("rooms/" + MAIN_ROOM_ID + "/imageAccess");
@@ -1475,6 +1513,34 @@ const ChatBackend = {
   // ══════════════════════════════════════════════════════════
   _pid(loginId) { return this._safeKey(String(loginId)); },
 
+  // loginId (the 6-digit code) is what the UI, commands and bans key on
+  // everywhere. But it's just a client-chosen string with nothing to stop
+  // someone claiming any loginId as their own, so it can't be the key used
+  // for anything security rules need to check. uid, from Firebase Auth, can
+  // be trusted because only the signed-in browser holding that session can
+  // ever present it. This records loginId -> uid the first time we see a
+  // given loginId acting under a given uid, so role storage and rules can
+  // be keyed on uid while every other loginId-keyed call site is untouched.
+  async _recordUidForLoginId(loginId) {
+    if (!loginId || !this.myUid) return;
+    try {
+      await this._profilesRef.child(this._pid(loginId)).child("uid").set(this.myUid);
+    } catch (e) { /* rules may reject if this loginId is already bound to a different uid */ }
+  },
+
+  // Resolves a loginId to the uid recorded for it. Falls back to the
+  // loginId itself only when no mapping exists yet (e.g. this profile
+  // predates the Auth rollout) -- once _recordUidForLoginId has run for
+  // that loginId at least once, this always returns a real uid.
+  async _uidForLoginId(loginId) {
+    if (!loginId) return null;
+    try {
+      const snap = await this._profilesRef.child(this._pid(loginId)).child("uid").get();
+      const uid = snap.val();
+      return uid || String(loginId);
+    } catch (e) { return String(loginId); }
+  },
+
   async getProfile(loginId) {
     if (!loginId || !this._profilesRef) return null;
     try {
@@ -1556,7 +1622,23 @@ const ChatBackend = {
     return out;
   },
 
+  // Self-service code claiming has been retired: it let anyone who saw a
+  // code (leaked via the readable role-meta path, or via the webhook itself
+  // being visible in client source) grant themselves any role, including
+  // owner, with no privileged action ever needing to happen first. All
+  // roles are granted via /grant by an existing admin+ now (see
+  // handleModerationCommand). These two are kept as no-ops, rather than
+  // removed outright, so any remaining UI entry point (Claim menu, etc.)
+  // fails with a clear message instead of throwing.
   async generateRoleCode(roleId) {
+    return { code: null, webhookOk: false, disabled: true };
+  },
+
+  async redeemRoleCode(roleId, inputCode, loginId) {
+    return { ok: false, reason: "disabled" };
+  },
+
+  async _legacy_generateRoleCode(roleId) {
     const role = ROLES[roleId];
     if (!role.webhookUrl) return { code: null, webhookOk: false, noWebhook: true };
     const code = this._randomRoleCode();
@@ -1581,7 +1663,7 @@ const ChatBackend = {
   // a code stays valid for ROLE_CODE_LIFESPAN_MS and anyone who has it can
   // redeem it during that window, each redeemer getting their own copy of
   // the role. Deliberate, matching the prior crown behavior.
-  async redeemRoleCode(roleId, inputCode, loginId) {
+  async _legacy_redeemRoleCode(roleId, inputCode, loginId) {
     const clean = (inputCode || "").trim().toUpperCase();
     if (!clean || clean === "0000") return { ok: false, reason: "none" };
 
@@ -1943,7 +2025,10 @@ const ChatBackend = {
   // ── ID-keyed role grants ──
   // A permanent grant is `true`; a temporary grant is an object with an
   // expiresAt. Both live at roleIds/{roleId}/{loginId} and persist until
-  // explicitly removed or (for temporary) expired.
+  // explicitly removed or (for temporary) expired. Every write here is
+  // mirrored to uidAuthority/{uid} (see below) so the security rules have
+  // something trustworthy to check -- loginId itself is client-chosen and
+  // can't be used to authorize anything.
   scheduleTemporaryRoleExpiry(roleId, loginId, expiresAt) {
     const timerKey = roleId + ":" + loginId;
     clearTimeout(this._temporaryRoleTimers[timerKey]);
@@ -1972,6 +2057,17 @@ const ChatBackend = {
     try {
       const best = await this.getEffectiveRole(loginId);
       await this.updateProfile(loginId, { role: best });
+      // Mirror to uidAuthority so rules can trust this ID's rank by uid
+      // rather than by the self-reported loginId. If no uid has ever been
+      // recorded for this loginId (e.g. redeemed before Auth was wired up
+      // for that session), this is skipped -- the grant still exists in
+      // roleIds/ for app logic, but won't authorize further privileged
+      // writes from that browser until it re-establishes its uid mapping
+      // (happens automatically on next join).
+      const uid = await this._uidForLoginId(loginId);
+      if (uid) {
+        await this._db.ref("uidAuthority/" + uid).set(ROLES[best] ? ROLES[best].rank : 0);
+      }
     } catch (e) {}
   },
 
@@ -1979,6 +2075,25 @@ const ChatBackend = {
     if (!ROLES[roleId] || ROLES[roleId].implicit || !loginId) throw new Error("Invalid role grant");
     await this._roleIdRefs[roleId].child(this._pid(loginId)).set(true);
     await this._syncProfileRole(loginId);
+  },
+
+  // Lets a browser correct its OWN uidAuthority entry back down to match its
+  // real current rank. Only ever needed when a temporary grant expired while
+  // whoever granted it had already closed their tab (their client-side
+  // expiry timer never got to fire the corresponding lowering write). Rules
+  // only allow this to move a uid's own entry DOWN, never up, so this can't
+  // be used to self-promote.
+  async healMyAuthority(loginId) {
+    if (!loginId || !this.myUid) return;
+    try {
+      const effectiveRoleId = await this.getEffectiveRole(loginId);
+      const trueRank = ROLES[effectiveRoleId] ? ROLES[effectiveRoleId].rank : 0;
+      const snap = await this._db.ref("uidAuthority/" + this.myUid).get();
+      const stored = snap.val();
+      if (typeof stored === "number" && stored > trueRank) {
+        await this._db.ref("uidAuthority/" + this.myUid).set(trueRank);
+      }
+    } catch (e) {}
   },
 
   async grantTemporaryRoleToId(roleId, loginId, durationMs, byLoginId) {
@@ -2967,6 +3082,8 @@ async function joinWithDmSession(session, nickname) {
   }
   myName = name;
   myLoginId = String(session.id);
+  await ChatBackend.authReady;
+  await ChatBackend._recordUidForLoginId(myLoginId);
   saveDmSession(session);
   saveLastChatName(name);
   renderOwnAvatar(name, null);
@@ -3006,6 +3123,13 @@ function onMyRoleMaybeChanged() {
   updateUploadButtonVisibility();
   updateSendButtonState();
   if ($globalClearPanel.style.display === "block" && typeof renderSettingsPanel === "function") renderSettingsPanel();
+  // Self-heal uidAuthority: if a temporary role expired while the granter's
+  // browser was closed, the client-side expiry timer that would normally
+  // lower uidAuthority back down never got to run. The rules let a signed-in
+  // user lower (never raise) their own uidAuthority entry, so each person's
+  // own browser is able to correct its own entry back down to match its
+  // real current rank whenever it notices the two have drifted apart.
+  ChatBackend.healMyAuthority(myLoginId).catch(() => {});
 }
 
 // Shown when auto-login finds the account already online elsewhere.
@@ -4150,7 +4274,16 @@ function openModMenu() {
    ══════════════════════════════════════════════════════════ */
 function openRolesMenu() {
   $rolesMenuList.innerHTML = "";
-  Object.values(ROLES).filter(role => role.claimable).forEach(role => {
+  const claimableRoles = Object.values(ROLES).filter(role => role.claimable);
+  if (claimableRoles.length === 0) {
+    const notice = document.createElement("div");
+    notice.style.cssText = "padding:16px;color:#64748b;font-size:13px;text-align:center;";
+    notice.textContent = "Roles are no longer self-claimable. Ask an admin to use /grant.";
+    $rolesMenuList.appendChild(notice);
+    $rolesMenuOverlay.style.display = "flex";
+    return;
+  }
+  claimableRoles.forEach(role => {
     const btn = document.createElement("button");
     btn.className = "role-menu-option";
     const ready = !!role.webhookUrl;
