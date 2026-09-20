@@ -17,7 +17,7 @@
 {"name":"VUS Zoom","url":"https://us05web.zoom.us/j/2711738491?pwd=pb0mpLVhlFOv5kpE0hm0DCqe2HuvFl.1","desc":"zoom meeting that should stay alive 24/7 with a timeout of 30 minutes per sesh","icon":"Zoom","color":"blue"},
 {"name":"VUS jitsi meet","url":"https://meet.mixp.org/VUS","desc":"alternative to zoom","icon":"JM","color":"blue"},
 {"name":"","url":"","desc":"","icon":"","color":""},
-{"name":"","url":"","desc":"","icon":"","color":""},
+{"name":"ITSUKI'S Chat","url":"https://raw.githubusercontent.com/jace01b-web/itsukis-chat-hub-obfuscated/refs/heads/main/index.html","desc":"","icon":"","color":"blue"},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
