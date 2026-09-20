@@ -3243,6 +3243,16 @@ function guardModerationTarget(target, verb) {
   return true;
 }
 
+// True when the database (its security rules) refused a write.
+function isPermissionDenied(e) {
+  return /permission[_ ]denied/i.test(String((e && (e.code || e.message)) || ""));
+}
+// Owner and Co-owner can only be added by hand in the Firebase console, so the
+// rules refuse them from the browser. Say so plainly instead of a raw error.
+function rankByHandNotice(role) {
+  return role.label + " can only be added by hand in the Firebase console: roleIds/" + role.id + "/<6-digit ID> = true.";
+}
+
 async function handleModerationCommand(text) {
   if (!text.startsWith("/")) return false;
   const parts = text.trim().split(/\s+/);
@@ -3391,7 +3401,9 @@ async function handleModerationCommand(text) {
       await ChatBackend.removeRoleFromId(roleToRemove.id, target.loginId);
       showComposerNotice("Removed " + roleToRemove.label + " from " + target.name + ".");
     } catch (e) {
-      showComposerNotice("Couldn't remove " + roleToRemove.label + ": " + (e && e.message ? e.message : "check your connection") + ".");
+      showComposerNotice(isPermissionDenied(e)
+        ? rankByHandNotice(roleToRemove)
+        : "Couldn't remove " + roleToRemove.label + ": " + (e && e.message ? e.message : "check your connection") + ".");
     }
     return true;
   }
@@ -3448,7 +3460,9 @@ async function handleModerationCommand(text) {
         showComposerNotice("Granted " + roleToGrant.label + " to " + target.name + " for " + formatDurationShort(durationMs) + ".");
       }
     } catch (e) {
-      showComposerNotice("Couldn't grant " + roleToGrant.label + ": " + (e && e.message ? e.message : "check your connection") + ".");
+      showComposerNotice(isPermissionDenied(e)
+        ? rankByHandNotice(roleToGrant)
+        : "Couldn't grant " + roleToGrant.label + ": " + (e && e.message ? e.message : "check your connection") + ".");
     }
     return true;
   }
