@@ -952,34 +952,9 @@
   </div>
 </div>
 
-<!-- Roles dropdown modal: opened from the status dot, centered like Room
-     Settings. Lists claimable roles; picking one opens the claim modal. -->
-<div class="chat-modal-overlay" id="rolesMenuOverlay">
-  <div class="chat-modal">
-    <h3>Claim a role</h3>
-    <div id="rolesMenuList"></div>
-    <div class="chat-modal-row">
-      <button class="chat-modal-btn-secondary" id="rolesMenuCloseBtn">Close</button>
-    </div>
-  </div>
-</div>
-
-<!-- Role claim modal: shared UI for any role in ROLES, rendered dynamically
-     by renderRoleClaimModal() depending on which role was picked above. -->
-<div class="chat-modal-overlay" id="roleClaimOverlay">
-  <div class="chat-modal">
-    <h3 id="roleClaimTitle">Claim role</h3>
-    <div id="roleClaimBody"></div>
-    <div class="chat-modal-row">
-      <button class="chat-modal-btn-secondary" id="roleClaimBackBtn">Back</button>
-      <button class="chat-modal-btn-secondary" id="roleClaimCloseBtn">Close</button>
-    </div>
-  </div>
-</div>
-
-<!-- Owner Menu: crown-holders only (and only once the mod-menu code has
-     been entered this session). Lists everyone online, refreshed every 5s
-     while open, with Timeout / Grant Mod actions per person. -->
+<!-- Staff menu: shared modal for the Owner / Admin / Mod menus. Which one opens
+     depends on your rank -- there is no unlock code. Lists everyone online,
+     refreshed every 5s while open. -->
 <div class="chat-modal-overlay" id="ownerMenuOverlay">
   <div class="chat-modal" style="max-width:560px">
     <h3 id="ownerMenuTitle">👑 Owner Menu</h3>
@@ -1257,69 +1232,28 @@ const PING_SOUND_URL = "https://github.com/Cra-Z-Gaming/VUS/raw/refs/heads/main/
 /* ══════════════════════════════════════════════════════════
    ROLES
    Ranks, low to high:  🌱 Unranked  🔰 Normie  🧩 Mod  🛡️ Admin  💎 Co-owner  👑 Owner
-   Roles are tied to the person's VUS account ID (see roleIds/ and
-   userProfiles/ in ChatBackend), NOT their display name and NOT their
-   connection. Leaving, disconnecting, renaming, logging out and back in --
-   none of it removes a role. Only an explicit removal (/remove, the staff
-   menu, or a temporary grant expiring) does.
-   Requesting a code posts it to that role's private Discord webhook; the code
-   stays valid for ROLE_CODE_LIFESPAN_MS and redemption is MULTI-USE within
-   that window by design. A role with no webhookUrl yet is a placeholder --
-   fill in its `webhookUrl` in ROLES to switch it on.
-   ROLES is the single place to add more roles -- the menu, claim modal,
-   message badges and delays all read from it.
+   Roles are tied to the person's VUS account ID (roleIds/{role}/{loginId} in
+   the database), NOT their display name and NOT their connection. Leaving,
+   disconnecting, renaming, logging out and back in never removes a role.
+   Only an explicit removal (/remove, or a temporary grant expiring) does.
+
+   THERE IS NO WAY TO CLAIM A ROLE. No codes, no Discord. A role can only be
+   given by someone ranked ABOVE it (/grant), or added by hand in the database:
+       roleIds/crown/<loginId>   = true      (Owner)
+       roleIds/coowner/<loginId> = true      (Co-owner)   ...and so on.
+   ROLES is the single place to add ranks -- badges, delays, permissions and
+   the command list all read from it.
    ══════════════════════════════════════════════════════════ */
-const ROLE_CODE_LIFESPAN_MS = 30 * 1000;
-const ROLE_REQUEST_COOLDOWN_MS = 30 * 1000;
 
 /* Rank order, lowest to highest. `rank` drives permissions, message delay
-   and image delay. `persistent` roles are stored per login ID (see
-   userProfiles/{loginId}) and survive leaving, renaming and rejoining.
-   Placeholders: any role with an empty webhookUrl simply can't have a code
-   requested for it yet -- paste a Discord webhook URL into that role's
-   `webhookUrl` and the Claim menu starts working for it automatically. */
+   and image delay. `implicit` = everybody starts here, it is never stored. */
 const ROLES = {
-  unranked: {
-    id: "unranked", rank: 0, label: "Unranked", icon: "🌱",
-    dbPath: "rooms/vus-hub-main/unrankedRole", metaPath: "unrankedMeta",
-    webhookUrl: "", cooldownKey: "vusChatLastUnrankedRequest",
-    bubbleClass: "unranked-bubble", claimable: false, implicit: true
-  },
-  normie: {
-    id: "normie", rank: 1, label: "Normie", icon: "🔰",
-    dbPath: "rooms/vus-hub-main/normieRole", metaPath: "normieMeta",
-    webhookUrl: "", // PLACEHOLDER: paste a Discord webhook URL to enable code requests
-    cooldownKey: "vusChatLastNormieRequest",
-    bubbleClass: "normie-bubble", claimable: true
-  },
-  mod: {
-    id: "mod", rank: 2, label: "Mod", icon: "🧩",
-    dbPath: "modded", metaPath: "modMeta",
-    webhookUrl: "https://discord.com/api/webhooks/1545551358118072320/4VUNceTr4bpwspeNKKkP_9Ko64Nc6iknQwN15AY-5iyl9A1SG5JvwZzEHHolXYLY6v1h",
-    cooldownKey: "vusChatLastModRequest",
-    bubbleClass: "mod-bubble", claimable: true
-  },
-  admin: {
-    id: "admin", rank: 3, label: "Admin", icon: "🛡️",
-    dbPath: "rooms/vus-hub-main/admins", metaPath: "adminMeta",
-    webhookUrl: "", // PLACEHOLDER: paste a Discord webhook URL to enable code requests
-    cooldownKey: "vusChatLastAdminRequest",
-    bubbleClass: "admin-bubble", claimable: true
-  },
-  coowner: {
-    id: "coowner", rank: 4, label: "Co-owner", icon: "💎",
-    dbPath: "rooms/vus-hub-main/coOwners", metaPath: "coownerMeta",
-    webhookUrl: "", // PLACEHOLDER: paste a Discord webhook URL to enable code requests
-    cooldownKey: "vusChatLastCoownerRequest",
-    bubbleClass: "coowner-bubble", claimable: true
-  },
-  crown: {
-    id: "crown", rank: 5, label: "Owner", icon: "👑",
-    dbPath: "crowned", metaPath: "crownMeta",
-    webhookUrl: "https://discord.com/api/webhooks/1542708447991037953/Ge705Wa_quPVC-2pFhttHYNuA4-FI5ZDRIn5VwjQ059SwT0ZRCrqmVLMofb8oJhsLFFJ",
-    cooldownKey: "vusChatLastCrownRequest",
-    bubbleClass: "crown-bubble", claimable: true
-  }
+  unranked: { id: "unranked", rank: 0, label: "Unranked", icon: "🌱", bubbleClass: "unranked-bubble", implicit: true },
+  normie:   { id: "normie",   rank: 1, label: "Normie",   icon: "🔰", bubbleClass: "normie-bubble" },
+  mod:      { id: "mod",      rank: 2, label: "Mod",      icon: "🧩", bubbleClass: "mod-bubble" },
+  admin:    { id: "admin",    rank: 3, label: "Admin",    icon: "🛡️", bubbleClass: "admin-bubble" },
+  coowner:  { id: "coowner",  rank: 4, label: "Co-owner", icon: "💎", bubbleClass: "coowner-bubble" },
+  crown:    { id: "crown",    rank: 5, label: "Owner",    icon: "👑", bubbleClass: "crown-bubble" }
 };
 
 /* Highest-ranked role a person holds is their "effective" role. */
@@ -1328,22 +1262,70 @@ const ROLE_ORDER = Object.values(ROLES).sort((a, b) => a.rank - b.rank).map(r =>
 /* Bubble color: was write-once, now changeable every 10s. */
 const COLOR_CHANGE_COOLDOWN_MS = 10 * 1000;
 
-/* Leave messages are debounced per-name: when a leave event for a name
-   comes in, we wait this long before actually posting "X left". If another
-   leave event for the SAME name arrives before the wait is up, the timer
-   resets back to the full delay instead of posting immediately. Once the
-   burst goes quiet for this long, exactly one "X left" is posted. This
+/* How close together two leave-events for the same name must be to be
+   treated as one stray burst instead of two genuine separate leaves —
    fixes repeated "X left / X left / X left" spam caused by duplicate
    onDisconnect writes (multiple tabs under the same name, or reconnect
-   churn on a flaky connection). Keyed per name, so simultaneous leaves by
-   different people are unaffected by each other. */
-const LEAVE_DEBOUNCE_MS = 5 * 1000;
+   churn on a flaky connection). */
 
 /* ── Timeouts (Owner Menu / Mod Menu) ── */
+/* ══════════════════════════════════════════════════════════
+   LEAVE MESSAGES
+   When a leave event shows up, everyone starts a LEAVE_BATCH_QUIET_MS timer.
+   Another leave restarts it. When it finally runs out, exactly ONE client
+   (elected with a database lock) posts a single message naming everyone who
+   left, e.g. "Ali, Bo and Cy left". Without this every open browser posted
+   its own copy, which is why people saw 10 identical messages.
+   ══════════════════════════════════════════════════════════ */
+const LEAVE_BATCH_QUIET_MS = 5 * 1000;   // quiet time after the LAST leave before announcing
+const LEAVE_LOCK_TTL_MS = 15 * 1000;     // a poster that vanishes mid-post is replaced after this
+const LEAVE_RETRY_MS = 4 * 1000;         // how often losers re-check that the winner really posted
+const LEAVE_MAX_AGE_MS = 2 * 60 * 1000;  // stale leave events are cleaned up silently
+function formatLeaveText(names) {
+  if (names.length === 1) return names[0] + " left";
+  if (names.length === 2) return names[0] + " and " + names[1] + " left";
+  if (names.length <= 6) return names.slice(0, -1).join(", ") + " and " + names[names.length - 1] + " left";
+  return names.slice(0, 5).join(", ") + " and " + (names.length - 5) + " others left";
+}
+
 const TIMEOUT_MAX_MS = 30 * 24 * 60 * 60 * 1000; // 30-day cap for owners
 const MOD_TIMEOUT_MAX_MS = 60 * 60 * 1000; // 1-hour cap for mods
 const MOD_TIMEOUT_DEFAULT_MS = 10 * 60 * 1000; // prefilled duration when a mod opens the timeout modal
 const MOD_RETIMEOUT_COOLDOWN_MS = 7 * 1000; // a mod must wait this long after setting OR clearing a timeout before re-timing-out the SAME target
+
+/* ══════════════════════════════════════════════════════════
+   TIME LIMITS -- the ONE place every typed duration is bounded. The same
+   numbers are shown wherever a time can be entered (the "/" list, notices,
+   and the timeout / temp-role dialogs), so what you see is what is enforced.
+   ══════════════════════════════════════════════════════════ */
+const TIME_LIMITS = {
+  timeout:    { min: 1000,  max: TIMEOUT_MAX_MS },      // Admin and up
+  modTimeout: { min: 1000,  max: MOD_TIMEOUT_MAX_MS },  // Mods
+  tempban:    { min: 60000, max: TIMEOUT_MAX_MS },
+  tempGrant:  { min: 60000, max: TIMEOUT_MAX_MS }       // temporary ranks (/grant rank <time> name)
+};
+const TIME_INPUT_HINT = "Try 30s, 10m, 2h, 3d or 1w (a bare number means minutes).";
+const PERMANENT_WORDS = new Set(["perm", "permanent"]);
+
+function formatDurationShort(ms) {
+  for (const [unit, size] of [["d", 86400000], ["h", 3600000], ["m", 60000], ["s", 1000]]) {
+    if (ms >= size && ms % size === 0) return (ms / size) + unit;
+  }
+  return Math.max(1, Math.round(ms / 1000)) + "s";
+}
+function limitsText(limits) {
+  return "min " + formatDurationShort(limits.min) + ", max " + formatDurationShort(limits.max);
+}
+function timeoutLimitsForRank(rank) {
+  return rank >= ROLES.admin.rank ? TIME_LIMITS.timeout : TIME_LIMITS.modTimeout;
+}
+// Returns "" when ms is fine, otherwise a message telling the person exactly why not.
+function checkDurationLimits(ms, limits) {
+  if (!ms || ms <= 0) return "Couldn't read that time. " + TIME_INPUT_HINT;
+  if (ms < limits.min) return "Too short: minimum is " + formatDurationShort(limits.min) + " (" + limitsText(limits) + ").";
+  if (ms > limits.max) return "Too long: maximum is " + formatDurationShort(limits.max) + " (" + limitsText(limits) + ").";
+  return "";
+}
 /* Per-role send delays. Owner and Co-owner are both 1s.
    Images share the same delay per role. Normie and below can't post images
    at all unless a higher-up grants image access (see setImageAccess). */
@@ -1364,10 +1346,10 @@ const ChatBackend = {
   _myLeaveEventRef: null,
   _atPingCooldownRef: null,
   _leaveEventsRef: null,
-  _roleRefs: {},
-  _roleMetaRefs: {},
   _roleIdRefs: {},
-  _pendingLeaveTimers: {},
+  _leaveTimer: null,
+  _leaveAttempts: 0,
+  _clientId: Math.random().toString(36).slice(2) + Date.now().toString(36),
   _timeoutsRef: null,
   _modRetimeoutRef: null,
   _commandHistoryRef: null,
@@ -1393,8 +1375,6 @@ const ChatBackend = {
 
   initRoles() {
     Object.values(ROLES).forEach(role => {
-      this._roleRefs[role.id] = this._db.ref(role.dbPath);
-      this._roleMetaRefs[role.id] = this._db.ref(role.metaPath);
       // ID-keyed holders: roleIds/{roleId}/{loginId} = true | {temporary,...}
       this._roleIdRefs[role.id] = this._db.ref("roleIds/" + role.id);
     });
@@ -1499,12 +1479,6 @@ const ChatBackend = {
     return () => ref.off("value", handler);
   },
 
-  // Every profile, live. Used to resolve "who holds rank X" by ID so badges
-  // stay correct for people who are offline or renamed.
-  watchAllProfiles(onChange) {
-    this._profilesRef.on("value", snap => onChange(snap.val() || {}));
-  },
-
   async getRoleForId(loginId) {
     const profile = await this.getProfile(loginId);
     const role = profile && profile.role;
@@ -1531,89 +1505,10 @@ const ChatBackend = {
     await this._chatStateRef.child("closed").set(!!closed);
   },
 
-  async getModMenuCode() {
-    const snap = await this._chatStateRef.child("modMenuCode").get();
-    return snap.exists() && typeof snap.val() === "string" ? snap.val() : null;
-  },
-
-  async setModMenuCode(code) {
-    await this._chatStateRef.child("modMenuCode").set(code);
-  },
-
   watchChatClosed(onChange) {
     const handler = snap => onChange(snap.val() === true);
     this._chatStateRef.child("closed").on("value", handler);
     return () => this._chatStateRef.child("closed").off("value", handler);
-  },
-
-  _randomRoleCode() {
-    const chars = "0123456789";
-    let out = "";
-    do {
-      out = "";
-      for (let i = 0; i < 4; i++) out += chars[Math.floor(Math.random() * chars.length)];
-    } while (out === "0000");
-    return out;
-  },
-
-  async generateRoleCode(roleId) {
-    const role = ROLES[roleId];
-    if (!role.webhookUrl) return { code: null, webhookOk: false, noWebhook: true };
-    const code = this._randomRoleCode();
-    const serverNow = await this._serverNow();
-    const expiresAt = serverNow + ROLE_CODE_LIFESPAN_MS;
-    await this._roleMetaRefs[roleId].set({ code, expiresAt });
-    let webhookOk = false;
-    try {
-      const res = await fetch(role.webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: role.icon + " " + role.label + " code: **" + code + "** (expires in " + Math.round(ROLE_CODE_LIFESPAN_MS / 1000) + "s)" })
-      });
-      webhookOk = res.ok;
-    } catch (e) {
-      webhookOk = false;
-    }
-    return { code, webhookOk };
-  },
-
-  // Plain read + compare (not a transaction) — nothing is consumed, since
-  // a code stays valid for ROLE_CODE_LIFESPAN_MS and anyone who has it can
-  // redeem it during that window, each redeemer getting their own copy of
-  // the role. Deliberate, matching the prior crown behavior.
-  async redeemRoleCode(roleId, inputCode, loginId) {
-    const clean = (inputCode || "").trim().toUpperCase();
-    if (!clean || clean === "0000") return { ok: false, reason: "none" };
-
-    let current;
-    try {
-      const snap = await this._roleMetaRefs[roleId].get();
-      current = snap.val();
-    } catch (e) {
-      return { ok: false, reason: "wrong" };
-    }
-
-    if (!current || !current.code || current.code === "0000" || current.code !== clean) {
-      return { ok: false, reason: "wrong" };
-    }
-
-    const serverNow = await this._serverNow();
-    if (!current.expiresAt || serverNow > current.expiresAt) {
-      return { ok: false, reason: "expired" };
-    }
-
-    if (!loginId) return { ok: false, reason: "no-id" };
-    await this.grantRoleToId(roleId, loginId);
-    return { ok: true };
-  },
-
-  async getRoleMeta(roleId) {
-    try {
-      const snap = await this._roleMetaRefs[roleId].get();
-      return snap.val();
-    } catch (e) {
-      return null;
-    }
   },
 
   bindToRoom(roomId) {
@@ -1812,35 +1707,94 @@ const ChatBackend = {
     }
   },
 
-  // Leave-event debouncing: multiple queued onDisconnect writes can fire in
-  // a burst for the same name (duplicate tabs under the same name, or
-  // reconnect churn each registering their own leave event) — that used to
-  // post "X left" once per stray event. Now, per name, we start a
-  // LEAVE_DEBOUNCE_MS countdown on the first leave event; if another leave
-  // event for that same name arrives before the countdown finishes, the
-  // countdown is cancelled and restarted from the full delay. Only once a
-  // name has gone quiet for the full delay do we actually post "X left".
-  // Each name has its own independent timer, so this works correctly even
-  // when several people leave at the same time.
+  // See "LEAVE MESSAGES" above. Every client runs this timer; only the client
+  // that wins the lock in _flushLeaves actually posts.
   watchLeaveEvents() {
     this._leaveEventsRef.on("child_added", snap => {
-      const val = snap.val();
-      // The event node is consumed immediately either way, so it can never
-      // be replayed (e.g. on a later reconnect of the listener).
-      snap.ref.remove();
-      if (!val || !val.name) return;
+      if (!snap.val()) { snap.ref.remove(); return; }
+      clearTimeout(this._leaveTimer);
+      this._leaveAttempts = 0;
+      this._leaveTimer = setTimeout(() => this._flushLeaves(), LEAVE_BATCH_QUIET_MS);
+    });
+  },
 
-      const name = val.name;
-      clearTimeout(this._pendingLeaveTimers[name]);
-      this._pendingLeaveTimers[name] = setTimeout(() => {
-        delete this._pendingLeaveTimers[name];
-        this._ref.push({
+  async _isFirstOnline() {
+    if (!this._myPresenceRef) return false;
+    try {
+      const keys = Object.keys((await this._presenceRef.get()).val() || {}).sort();
+      return keys.length > 0 && keys[0] === this._myPresenceRef.key;
+    } catch (e) { return false; }
+  },
+
+  async _flushLeaves() {
+    const roomId = this.currentRoomId;
+    if (!roomId || !this._leaveEventsRef) return;
+
+    // Nothing waiting? (Someone else already announced it.)
+    let waiting;
+    try { waiting = (await this._leaveEventsRef.get()).val(); } catch (e) { return; }
+    if (!waiting || !Object.keys(waiting).length) return;
+
+    // Elect ONE poster. The lock expires so a poster who vanishes can't jam it.
+    const lockRef = this._db.ref("rooms/" + roomId + "/leaveFlushLock");
+    let won = false;
+    try {
+      const result = await lockRef.transaction(current => {
+        const now = Date.now();
+        if (current && current.by && (now - Number(current.at || 0)) < LEAVE_LOCK_TTL_MS) return undefined; // taken
+        return { by: this._clientId, at: now };
+      });
+      won = !!(result && result.committed);
+    } catch (e) {
+      // The lock path isn't usable (e.g. the database rules don't allow it).
+      // Fall back to a rule that needs no extra path: of the people online,
+      // the one whose name sorts first is the poster.
+      won = await this._isFirstOnline();
+    }
+
+    if (!won) {
+      // Someone else is posting. If the events are still there a bit later
+      // (they crashed mid-post), try again a few times.
+      if (this._leaveAttempts++ < 5) {   // 5 x 4s outlasts the 15s lock
+        clearTimeout(this._leaveTimer);
+        this._leaveTimer = setTimeout(() => this._flushLeaves(), LEAVE_RETRY_MS);
+      }
+      return;
+    }
+
+    try {
+      const events = (await this._leaveEventsRef.get()).val() || {};
+      const keys = Object.keys(events);
+      const presence = (await this._presenceRef.get()).val() || {};
+      const now = await this._serverNow();
+      const names = [];
+      const seen = new Set();
+      for (const key of keys) {
+        const ev = events[key];
+        if (!ev || !ev.name) continue;
+        if (now - Number(ev.ts || now) > LEAVE_MAX_AGE_MS) continue;   // too old: drop quietly
+        const safe = this._safeKey(ev.name);
+        if (presence[safe]) continue;   // already back (a refresh): no "left" message
+        if (seen.has(safe)) continue;   // same person, several events
+        seen.add(safe);
+        names.push(ev.name);
+      }
+      if (names.length) {
+        await this._ref.push({
           system: true,
-          text: name + " left",
+          text: formatLeaveText(names),
+          leftNames: names,
           ts: firebase.database.ServerValue.TIMESTAMP
         });
-      }, LEAVE_DEBOUNCE_MS);
-    });
+      }
+      // Remove exactly the events we handled. A leave that arrived while we
+      // were posting stays, and starts the next 5-second timer for everyone.
+      await Promise.all(keys.map(k => this._leaveEventsRef.child(k).remove()));
+    } catch (e) {
+      console.error("[VUS Chat] leave announcement failed:", e);
+    } finally {
+      try { await lockRef.remove(); } catch (e) {}
+    }
   },
 
   watchPresenceCount(onCount) {
@@ -2317,15 +2271,6 @@ const $pingToastTitle = document.getElementById("pingToastTitle");
 const $pingToastBody = document.getElementById("pingToastBody");
 const $pingSound = document.getElementById("pingSound");
 
-const $rolesMenuOverlay = document.getElementById("rolesMenuOverlay");
-const $rolesMenuList = document.getElementById("rolesMenuList");
-const $rolesMenuCloseBtn = document.getElementById("rolesMenuCloseBtn");
-const $roleClaimOverlay = document.getElementById("roleClaimOverlay");
-const $roleClaimTitle = document.getElementById("roleClaimTitle");
-const $roleClaimBody = document.getElementById("roleClaimBody");
-const $roleClaimBackBtn = document.getElementById("roleClaimBackBtn");
-const $roleClaimCloseBtn = document.getElementById("roleClaimCloseBtn");
-
 let myName = "";
 let myLoginId = "";
 let messageCount = 0;
@@ -2393,6 +2338,26 @@ function scrollToBottom() {
   $jumpToBottomBtn.style.display = "none";
 }
 
+// Fills (or refreshes) one badge row from the sender's current rank.
+function fillRoleBadge(row) {
+  const senderId = row.dataset.senderId || loginIdForName(row.dataset.senderName);
+  const role = ROLES[senderId ? effectiveRoleForLoginId(senderId) : "unranked"];
+  row.innerHTML = "";
+  const bubble = document.createElement("div");
+  bubble.className = role.bubbleClass;
+  bubble.textContent = role.icon;
+  bubble.title = role.label;
+  row.appendChild(bubble);
+}
+
+let badgeRefreshTimer = null;
+function scheduleRoleBadgeRefresh() {
+  clearTimeout(badgeRefreshTimer);
+  badgeRefreshTimer = setTimeout(() => {
+    document.querySelectorAll(".role-bubble-row[data-sender-name]").forEach(fillRoleBadge);
+  }, 60);
+}
+
 function renderMessage(msg) {
   $emptyState.style.display = "none";
 
@@ -2412,7 +2377,10 @@ function renderMessage(msg) {
     // something else triggered it — a stray duplicate session, a kick,
     // etc). Don't let this tab keep acting like it's still joined — drop
     // it back to "Continue as X?" so rejoining is deliberate.
-    if (myName && msg.text === myName + " left" && $chatScreen.style.display !== "none") {
+    const leftIsMe = Array.isArray(msg.leftNames)
+      ? msg.leftNames.some(n => ChatBackend._safeKey(n) === ChatBackend._safeKey(myName))
+      : msg.text === myName + " left";
+    if (myName && leftIsMe && $chatScreen.style.display !== "none") {
       forceReturnToJoinScreen("You were disconnected from the chat.");
     }
     return;
@@ -2427,22 +2395,16 @@ function renderMessage(msg) {
   meta.textContent = (mine ? "You" : esc(msg.name)) + (msg.ts ? " · " + formatTime(msg.ts) : "");
   el.appendChild(meta);
 
-  // Role bubbles: one small bubble per role, ABOVE the message bubble, only
-  // for senders who hold that role RIGHT NOW (live presence-based, so it
-  // always reflects current status, not what was true at send time).
-  const safeName = ChatBackend._safeKey(msg.name);
-  const heldRoles = Object.values(ROLES).filter(role => (roleHolders[role.id] || new Set()).has(safeName));
-  if (heldRoles.length > 0) {
-    const row = document.createElement("div");
-    row.className = "role-bubble-row";
-    heldRoles.forEach(role => {
-      const bubble = document.createElement("div");
-      bubble.className = role.bubbleClass;
-      bubble.textContent = role.icon;
-      row.appendChild(bubble);
-    });
-    el.appendChild(row);
-  }
+  // Rank badge ABOVE the message bubble: the sender's highest rank, resolved by
+  // their account ID (stamped on the message), so it survives renames and
+  // shows for people who are offline. Old messages without an ID fall back to
+  // the name. refreshRoleBadges() re-runs this whenever ranks change.
+  const badgeRow = document.createElement("div");
+  badgeRow.className = "role-bubble-row";
+  badgeRow.dataset.senderName = msg.name || "";
+  if (msg.loginId) badgeRow.dataset.senderId = String(msg.loginId);
+  fillRoleBadge(badgeRow);
+  el.appendChild(badgeRow);
 
   const bubble = document.createElement("div");
   bubble.className = "msg-bubble";
@@ -2853,7 +2815,10 @@ function renderNicknamePrompt(session, message) {
         error.textContent = "That username is already being used.";
         return;
       }
-      await joinWithDmSession(session, name);
+      await Promise.race([
+        joinWithDmSession(session, name),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("the chat server didn't respond. Check your connection and try again.")), 15000))
+      ]);
     } catch (e) {
       error.textContent = e && e.message ? "Couldn't join the chat: " + e.message : "Couldn't join the chat — try again.";
     } finally {
@@ -2915,7 +2880,6 @@ function logoutToNamePicker() {
   myLoginId = "";
   isSpectator = false;
   imagesEnabledForMe = false;
-  modMenuUnlocked = false;
   myTimeoutRemainingMs = 0;
   try { localStorage.removeItem(CHAT_LAST_NAME_KEY); } catch (e) {}
   renderOwnAvatar("", null);
@@ -2967,25 +2931,30 @@ async function joinWithDmSession(session, nickname) {
   }
   myName = name;
   myLoginId = String(session.id);
-  saveDmSession(session);
-  saveLastChatName(name);
-  renderOwnAvatar(name, null);
-  loadDmAvatar(session).then(avatar => {
-    if (myLoginId === String(session.id) && myName === name) renderOwnAvatar(name, avatar);
-  });
   isSpectator = false;
-  watchMyBan();
-  watchMyTimeout();
-  startWatchingMyProfile();
-  requestNotificationPermissionIfNeeded();
+
+  // Switch screens FIRST. Everything below is a nicety; if any of it fails the
+  // person is still in the chat instead of stuck on the join screen with their
+  // presence already written.
   $youAre.textContent = "You: " + name;
   $changeNameBtn.style.display = "none";
   $joinScreen.style.display = "none";
   $chatScreen.style.display = "flex";
-  updateComposerLockState();
-  updateUploadButtonVisibility();
-  $msgInput.focus();
-  scrollToBottom();
+
+  const safely = (label, fn) => { try { fn(); } catch (e) { console.error("[VUS Chat] " + label + " failed:", e); } };
+  safely("save session", () => { saveDmSession(session); saveLastChatName(name); });
+  safely("avatar", () => {
+    renderOwnAvatar(name, null);
+    loadDmAvatar(session).then(avatar => {
+      if (myLoginId === String(session.id) && myName === name) renderOwnAvatar(name, avatar);
+    }).catch(() => {});
+  });
+  safely("ban watcher", watchMyBan);
+  safely("timeout watcher", watchMyTimeout);
+  safely("profile watcher", startWatchingMyProfile);
+  safely("notifications", requestNotificationPermissionIfNeeded);
+  safely("composer state", () => { updateComposerLockState(); updateUploadButtonVisibility(); });
+  safely("focus", () => { $msgInput.focus(); scrollToBottom(); });
 }
 
 // Keeps image access + rank live for this ID (someone can grant/revoke while
@@ -3002,6 +2971,7 @@ function startWatchingMyProfile() {
 // Called whenever role sets or the profile change; re-evaluates everything
 // that depends on MY rank (upload button, send delay, menu items).
 function onMyRoleMaybeChanged() {
+  scheduleRoleBadgeRefresh();   // badges on messages already on screen
   if (!myLoginId) return;
   updateUploadButtonVisibility();
   updateSendButtonState();
@@ -3176,77 +3146,134 @@ function parseModerationDuration(value) {
 /* ══════════════════════════════════════════════════════════
    SLASH COMMANDS
    One table drives everything: the "/" list, tab-autofill, the ghost hint,
-   and the unknown-command check. `minRank` hides a command from anyone who
-   can't use it. `insert` is what gets typed when you pick it.
+   the permission check and the unknown-command check. `minRank` hides a
+   command from anyone who can't use it. `desc` may be a function of your rank
+   so the min/max shown always matches what YOUR rank is allowed.
    ══════════════════════════════════════════════════════════ */
 const SLASH_COMMANDS = [
-  { name: "/timeout", args: "time username",         desc: "Temporarily mute a user (1m\u20131h for mods, 1m\u201330d for admins+).", minRank: ROLES.mod.rank,   insert: "/timeout " },
-  { name: "/kick",    args: "username",              desc: "Remove a user from the current private room.",        minRank: ROLES.admin.rank,   insert: "/kick " },
-  { name: "/ban",     args: "username",              desc: "Permanently ban a logged-in user.",                   minRank: ROLES.admin.rank,   insert: "/ban " },
-  { name: "/tempban", args: "time username",         desc: "Temporarily ban a user (1m\u201330d), e.g. 2h.",       minRank: ROLES.admin.rank,   insert: "/tempban " },
-  { name: "/grant",   args: "rank [time] username",  desc: "Give a rank (below yours), permanent unless a time (1m\u201330d) is given. normie/mod/admin/coowner.", minRank: ROLES.admin.rank,   insert: "/grant " },
-  { name: "/remove",  args: "rank username",         desc: "Remove a rank (below yours).",                        minRank: ROLES.admin.rank,   insert: "/remove " },
-  { name: "/image",   args: "on|off username",       desc: "Give or take away image access for a user.",          minRank: ROLES.admin.rank,   insert: "/image " },
-  { name: "/unban",   args: "username|id",           desc: "Remove a ban by username or 6-digit login ID.",       minRank: ROLES.crown.rank,   insert: "/unban " },
-  { name: "/close",   args: "",                      desc: "Remove everyone from VUS Chat.",                      minRank: ROLES.crown.rank,   insert: "/close" }
+  { name: "/timeout", args: "time username",          minRank: ROLES.mod.rank,
+    desc: rank => "Mute someone for a while (" + limitsText(timeoutLimitsForRank(rank)) + ").", insert: "/timeout " },
+  { name: "/kick",    args: "username",               minRank: ROLES.admin.rank,
+    desc: "Remove a user from the current private room.", insert: "/kick " },
+  { name: "/ban",     args: "username or ID",         minRank: ROLES.admin.rank,
+    desc: "Ban the account ID, so a new name won't get around it. A 6-digit ID works even if they're offline.", insert: "/ban " },
+  { name: "/tempban", args: "time username or ID",    minRank: ROLES.admin.rank,
+    desc: () => "Ban the account ID for a while (" + limitsText(TIME_LIMITS.tempban) + ").", insert: "/tempban " },
+  { name: "/grant",   args: "rank perm|time username", minRank: ROLES.admin.rank,
+    desc: () => "Give a rank below yours. perm = permanent, or a time (" + limitsText(TIME_LIMITS.tempGrant) + "). Ranks: normie, mod, admin, coowner.", insert: "/grant " },
+  { name: "/remove",  args: "rank username",          minRank: ROLES.admin.rank,
+    desc: "Take away a rank below yours.", insert: "/remove " },
+  { name: "/image",   args: "on|off username",        minRank: ROLES.admin.rank,
+    desc: "Give or take away image access for someone below your rank.", insert: "/image " },
+  { name: "/unban",   args: "username or ID",         minRank: ROLES.crown.rank,
+    desc: "Lift a ban by username or 6-digit account ID.", insert: "/unban " },
+  { name: "/close",   args: "",                       minRank: ROLES.crown.rank,
+    desc: "Remove everyone from VUS Chat.", insert: "/close" }
 ];
+
+function commandDescription(cmd, rank) {
+  const r = rank === undefined ? myRank() : rank;
+  return typeof cmd.desc === "function" ? cmd.desc(r) : cmd.desc;
+}
 
 function availableSlashCommands() {
   const rank = myRank();
   return SLASH_COMMANDS.filter(c => rank >= c.minRank);
 }
 
+// Online-only lookup by exact chat name (case-insensitive).
 function findModerationTarget(name) {
   const wanted = String(name || "").trim().toLowerCase();
   return latestPresenceList.find(entry => entry.name.toLowerCase() === wanted) || null;
+}
+
+// Real account with this 6-digit ID? (checks both DM databases)
+async function lookupAccountByLoginId(id) {
+  for (const database of [dmAuthDb, legacyDmAuthDb]) {
+    if (!database) continue;
+    try {
+      const snap = await database.ref("idIndex/" + id).get();
+      if (!snap.exists()) continue;
+      const val = snap.val();
+      let username = val && typeof val === "object" ? val.username : null;
+      if (!username && typeof val === "string") {
+        try { username = (await database.ref("users/" + val + "/username").get()).val(); } catch (e) {}
+      }
+      return { loginId: String(id), username: username || null };
+    } catch (e) {}
+  }
+  return null;
+}
+
+// Resolves what someone typed to { name, loginId }. Accepts a chat name of
+// someone online, or a 6-digit account ID. With allowOfflineId, an ID that
+// belongs to a real account works even when that person isn't online -- that
+// is what makes /ban stick to the ACCOUNT no matter what name they use.
+async function resolveModerationTarget(raw, opts) {
+  const wanted = String(raw || "").trim();
+  if (!wanted) return null;
+  if (/^[0-9]{6}$/.test(wanted)) {
+    const online = latestPresenceList.find(e => String(e.loginId || "") === wanted);
+    if (online) return { name: online.name, loginId: wanted, online: true };
+    if (!(opts && opts.allowOfflineId)) return null;
+    const account = await lookupAccountByLoginId(wanted);
+    if (!account) return null;
+    let last = null;
+    try { const profile = await ChatBackend.getProfile(wanted); last = profile && profile.lastName; } catch (e) {}
+    return { name: last || account.username || ("ID #" + wanted), loginId: wanted, online: false };
+  }
+  const hit = findModerationTarget(wanted);
+  return hit && hit.loginId ? { name: hit.name, loginId: String(hit.loginId), online: true } : null;
+}
+
+// Shared checks before acting on someone. Returns true when it's OK to go on.
+function guardModerationTarget(target, verb) {
+  if (!target || !target.loginId) {
+    showComposerNotice("Couldn't find that user. Use the name of someone who's online" + (verb === "ban" ? ", or their 6-digit ID." : "."));
+    return false;
+  }
+  if (String(target.loginId) === String(myLoginId)) {
+    showComposerNotice("You cannot " + verb + " yourself.");
+    return false;
+  }
+  if (rankOfLoginId(target.loginId) >= myRank()) {
+    showComposerNotice("You can only " + verb + " ranks below your own.");
+    return false;
+  }
+  return true;
 }
 
 async function handleModerationCommand(text) {
   if (!text.startsWith("/")) return false;
   const parts = text.trim().split(/\s+/);
   const command = parts[0].toLowerCase();
-  // Rank-based. Only the Owner can /close and /unban; Admin and above can use
-  // everything except /timeout, and can only grant/remove ranks strictly
-  // below their own. Mods can only use /timeout (capped at
-  // MOD_TIMEOUT_MAX_MS) — everything else still routes through the Mod Menu.
   const rank = myRank();
-  const isOwner = rank >= ROLES.crown.rank;
-  const isAdmin = rank >= ROLES.admin.rank;
-  const isMod = rank >= ROLES.mod.rank;
 
-  const commandDef = SLASH_COMMANDS.find(c => c.name === command);
-  if (!commandDef) {
+  const def = SLASH_COMMANDS.find(c => c.name === command);
+  if (!def) {
+    // Someone with no commands at all (Unranked/Normie) typing "/s" or "/shrug"
+    // is just chatting -- send it as a normal message instead of blocking it.
+    if (availableSlashCommands().length === 0) return false;
     showComposerNotice("Unknown command. Type / to see the list.");
     return true;
   }
-  const canModerate = rank >= commandDef.minRank;
-  if (!canModerate) {
-    showComposerNotice("You do not have permission to use that command.");
+  if (rank < def.minRank) {
+    showComposerNotice("You do not have permission to use " + command + ".");
     return true;
   }
   ChatBackend.logCommand(text);
 
+  // ── /close, /unban (Owner) ──
   if (command === "/close") {
-    if (!isOwner || parts.length !== 1) {
-      showComposerNotice("Only the owner can use /close.");
-      return true;
-    }
+    if (parts.length !== 1) { showComposerNotice("Use /close by itself."); return true; }
     await ChatBackend.setChatClosed(true);
     showComposerNotice("VUS Chat was closed for everyone.");
     return true;
   }
-
   if (command === "/unban") {
-    if (!isOwner) {
-      showComposerNotice("Only the owner can use /unban.");
-      return true;
-    }
-    if (parts.length !== 2) {
-      showComposerNotice("Use /unban username or /unban loginID");
-      return true;
-    }
+    if (parts.length < 2) { showComposerNotice("Use /unban username or /unban loginID"); return true; }
     try {
-      const loginId = await ChatBackend.unbanUser(parts[1]);
+      const loginId = await ChatBackend.unbanUser(parts.slice(1).join(" "));
       showComposerNotice("Unbanned login ID #" + loginId + ".");
     } catch (e) {
       showComposerNotice("Couldn't unban that user: " + (e && e.message ? e.message : "check your connection") + ".");
@@ -3254,115 +3281,112 @@ async function handleModerationCommand(text) {
     return true;
   }
 
+  // ── /image ──
   if (command === "/image") {
     const mode = (parts[1] || "").toLowerCase();
     if (parts.length < 3 || !["on", "off"].includes(mode)) {
       showComposerNotice("Use /image on username or /image off username");
       return true;
     }
-    const imgTarget = findModerationTarget(parts.slice(2).join(" "));
-    if (!imgTarget || !imgTarget.loginId) {
-      showComposerNotice("That user must be online and logged in.");
-      return true;
-    }
-    // You can only change image access for someone ranked below you.
-    if (rankOfLoginId(imgTarget.loginId) >= myRank()) {
-      showComposerNotice("You can only change image access for ranks below your own.");
-      return true;
-    }
+    const target = await resolveModerationTarget(parts.slice(2).join(" "));
+    if (!guardModerationTarget(target, "change image access for")) return true;
     try {
-      await ChatBackend.setImageAccess(imgTarget.loginId, mode === "on");
-      showComposerNotice((mode === "on" ? "Gave" : "Removed") + " image access " + (mode === "on" ? "to " : "from ") + imgTarget.name + ".");
+      await ChatBackend.setImageAccess(target.loginId, mode === "on");
+      showComposerNotice((mode === "on" ? "Gave image access to " : "Removed image access from ") + target.name + ".");
     } catch (e) {
       showComposerNotice("Couldn't update image access: " + (e && e.message ? e.message : "check your connection") + ".");
     }
     return true;
   }
 
-  let targetName;
-  let durationMs = 0;
+  // ── /kick ──
   if (command === "/kick") {
-    if (parts.length !== 2 || !currentRoomCode) {
+    if (parts.length < 2 || !currentRoomCode) {
       showComposerNotice("Use /kick name inside a private room.");
       return true;
     }
-    targetName = parts[1];
-    const target = findModerationTarget(targetName);
-    if (!target || !target.loginId) {
-      showComposerNotice("That user must be online and logged in.");
-      return true;
-    }
+    const target = await resolveModerationTarget(parts.slice(1).join(" "));
+    if (!guardModerationTarget(target, "kick")) return true;
     await RoomManager.kickFromRoom(currentRoomCode, target.loginId);
     showComposerNotice("Removed " + target.name + " from the room.");
     return true;
-  } else if (command === "/timeout") {
-    if (parts.length !== 3) {
-      showComposerNotice("Use /timeout time name, such as /timeout 10m alex");
+  }
+
+  // ── /timeout (Mod and up) ──
+  if (command === "/timeout") {
+    const limits = timeoutLimitsForRank(rank);
+    if (parts.length < 3) {
+      showComposerNotice("Use /timeout time username, such as /timeout 10m alex (" + limitsText(limits) + ").");
       return true;
     }
-    durationMs = parseModerationDuration(parts[1]);
-    targetName = parts.slice(2).join(" ");
-    // Admins+ can go up to the full 30-day cap; mods are capped the same as
-    // the Mod Menu's Timeout button.
-    const myTimeoutCapMs = isAdmin ? TIMEOUT_MAX_MS : MOD_TIMEOUT_MAX_MS;
-    if (!durationMs || durationMs > myTimeoutCapMs) {
-      showComposerNotice(isAdmin
-        ? "Timeout time must be between 1 minute and 30 days."
-        : "Timeout time must be between 1 minute and " + formatCountdown(MOD_TIMEOUT_MAX_MS) + ".");
-      return true;
-    }
-    const target = findModerationTarget(targetName);
-    if (!target || !target.loginId) {
-      showComposerNotice("That user must be online and logged in.");
-      return true;
-    }
-    // Mods, like the Mod Menu button, can only time out ranks below their own.
-    if (!isAdmin && rankOfLoginId(target.loginId) >= rank) {
-      showComposerNotice("You can only timeout ranks below your own.");
-      return true;
+    const durationMs = parseModerationDuration(parts[1]);
+    const problem = checkDurationLimits(durationMs, limits);
+    if (problem) { showComposerNotice(problem); return true; }
+    const target = await resolveModerationTarget(parts.slice(2).join(" "));
+    if (!guardModerationTarget(target, "timeout")) return true;
+
+    const isJustMod = rank < ROLES.admin.rank;
+    if (isJustMod) {
+      // Same rules the Mod Menu enforces: no stacking on an active timeout, and
+      // a short wait before re-timing-out the same person.
+      const remaining = await ChatBackend.getTimeoutRemainingMs(target.loginId);
+      if (remaining > 0) {
+        showComposerNotice(target.name + " is already timed out for " + formatCountdown(remaining) + ".");
+        return true;
+      }
+      const cooldown = await ChatBackend.getModRetimeoutRemainingMs(myLoginId, target.loginId);
+      if (cooldown > 0) {
+        showComposerNotice("Wait " + Math.ceil(cooldown / 1000) + "s before timing " + target.name + " out again.");
+        return true;
+      }
     }
     await ChatBackend.setTimeout_(target.loginId, durationMs, myLoginId);
+    if (isJustMod) watchModIssuedTimeoutExpiry(myLoginId, target.loginId);
     showComposerNotice("Timed out " + target.name + " for " + formatCountdown(durationMs) + ".");
     return true;
-  } else if (command === "/ban") {
-    if (parts.length !== 2) {
-      showComposerNotice("Use /ban name");
+  }
+
+  // ── /ban and /tempban: ALWAYS act on the account ID ──
+  if (command === "/ban" || command === "/tempban") {
+    let durationMs = 0;
+    let nameParts;
+    if (command === "/tempban") {
+      if (parts.length < 3) {
+        showComposerNotice("Use /tempban time username, such as /tempban 2h alex (" + limitsText(TIME_LIMITS.tempban) + ").");
+        return true;
+      }
+      durationMs = parseModerationDuration(parts[1]);
+      const problem = checkDurationLimits(durationMs, TIME_LIMITS.tempban);
+      if (problem) { showComposerNotice(problem); return true; }
+      nameParts = parts.slice(2);
+    } else {
+      if (parts.length < 2) { showComposerNotice("Use /ban username, or /ban 123456 (account ID)."); return true; }
+      nameParts = parts.slice(1);
+    }
+    const target = await resolveModerationTarget(nameParts.join(" "), { allowOfflineId: true });
+    if (!target) {
+      showComposerNotice("Couldn't find that user. Use the name of someone who's online, or a real 6-digit account ID.");
       return true;
     }
-    targetName = parts[1];
-  } else if (command === "/tempban") {
-    if (parts.length !== 3) {
-      showComposerNotice("Use /tempban time name, such as /tempban 2h alex");
-      return true;
-    }
-    durationMs = parseModerationDuration(parts[1]);
-    targetName = parts[2];
-    if (!durationMs || durationMs > TIMEOUT_MAX_MS) {
-      showComposerNotice("Tempban time must be between 1 minute and 30 days.");
-      return true;
-    }
-  } else if (command === "/remove") {
-    if (parts.length !== 3) {
-      showComposerNotice("Use /remove mod/admin username");
-      return true;
-    }
-    const rankName = parts[1].toLowerCase();
-    targetName = parts.slice(2).join(" ");
-    const roleToRemove = ROLES[rankName];
+    if (!guardModerationTarget(target, "ban")) return true;
+    openBanConfirm(target, durationMs);
+    return true;
+  }
+
+  // ── /remove ──
+  if (command === "/remove") {
+    if (parts.length < 3) { showComposerNotice("Use /remove rank username, such as /remove mod alex"); return true; }
+    const roleToRemove = ROLES[parts[1].toLowerCase()];
     if (!roleToRemove || roleToRemove.implicit || roleToRemove.id === "crown") {
       showComposerNotice("Rank must be one of: normie, mod, admin, coowner.");
       return true;
     }
-    // You can only take away a rank strictly below your own.
-    if (roleToRemove.rank >= myRank()) {
+    if (roleToRemove.rank >= rank) {
       showComposerNotice("You can only remove ranks below your own.");
       return true;
     }
-    const target = findModerationTarget(targetName);
-    if (!target || !target.loginId) {
-      showComposerNotice("That user must be online and logged in.");
-      return true;
-    }
+    const target = await resolveModerationTarget(parts.slice(2).join(" "));
+    if (!guardModerationTarget(target, "remove a rank from")) return true;
     try {
       await ChatBackend.removeRoleFromId(roleToRemove.id, target.loginId);
       showComposerNotice("Removed " + roleToRemove.label + " from " + target.name + ".");
@@ -3370,45 +3394,58 @@ async function handleModerationCommand(text) {
       showComposerNotice("Couldn't remove " + roleToRemove.label + ": " + (e && e.message ? e.message : "check your connection") + ".");
     }
     return true;
-  } else {
-    if (parts.length !== 3 && parts.length !== 4) {
-      showComposerNotice("Use /grant rank username or /grant rank time username");
+  }
+
+  // ── /grant rank perm|time username ──
+  if (command === "/grant") {
+    if (parts.length < 3) {
+      showComposerNotice("Use /grant rank perm username, or /grant rank 2h username (" + limitsText(TIME_LIMITS.tempGrant) + ").");
       return true;
     }
-    const rankName = parts[1].toLowerCase();
-    const hasDuration = parts.length === 4;
-    durationMs = hasDuration ? parseModerationDuration(parts[2]) : 0;
-    targetName = hasDuration ? parts.slice(3).join(" ") : parts.slice(2).join(" ");
-    const roleToGrant = ROLES[rankName];
+    const roleToGrant = ROLES[parts[1].toLowerCase()];
     if (!roleToGrant || roleToGrant.implicit || roleToGrant.id === "crown") {
       showComposerNotice("Rank must be one of: normie, mod, admin, coowner.");
       return true;
     }
-    if (hasDuration && (!durationMs || durationMs > TIMEOUT_MAX_MS)) {
-      showComposerNotice("Time must be between 1 minute and 30 days.");
-      return true;
-    }
     // You can only hand out ranks strictly below your own.
-    if (roleToGrant.rank >= myRank()) {
+    if (roleToGrant.rank >= rank) {
       showComposerNotice("You can only grant ranks below your own.");
       return true;
     }
-    const target = findModerationTarget(targetName);
-    if (!target || !target.loginId) {
-      showComposerNotice("That user must be online and logged in.");
+    // Third word is "perm" or a time only when a name follows it, so someone
+    // literally named "Perm" (or "10m") can still be granted a rank.
+    const word = (parts[2] || "").toLowerCase();
+    let permanent = true;
+    let durationMs = 0;
+    let nameParts = parts.slice(2);
+    if (parts.length >= 4 && PERMANENT_WORDS.has(word)) {
+      nameParts = parts.slice(3);
+    } else if (parts.length >= 4 && parseModerationDuration(parts[2]) > 0) {
+      permanent = false;
+      durationMs = parseModerationDuration(parts[2]);
+      const problem = checkDurationLimits(durationMs, TIME_LIMITS.tempGrant);
+      if (problem) { showComposerNotice(problem); return true; }
+      nameParts = parts.slice(3);
+    } else if (parts.length >= 4 && /^[0-9]+(\.[0-9]+)?[smhdw]?$/i.test(parts[2])) {
+      // Looks like a time but didn't parse to anything usable.
+      showComposerNotice(checkDurationLimits(0, TIME_LIMITS.tempGrant));
       return true;
     }
-    if (holdsRoleId(roleToGrant.id, target.loginId)) {
-      showComposerNotice(target.name + " already has that rank.");
+    const target = await resolveModerationTarget(nameParts.join(" "));
+    if (!guardModerationTarget(target, "grant a rank to")) return true;
+
+    const alreadyPermanent = roleIdRaw[roleToGrant.id] && roleIdRaw[roleToGrant.id][target.loginId] === true;
+    if (alreadyPermanent) {
+      showComposerNotice(target.name + " already has " + roleToGrant.label + " permanently.");
       return true;
     }
     try {
-      if (durationMs) {
-        await ChatBackend.grantTemporaryRoleToId(roleToGrant.id, target.loginId, durationMs, myLoginId);
-        showComposerNotice("Granted temporary " + roleToGrant.label + " to " + target.name + ".");
-      } else {
+      if (permanent) {
         await ChatBackend.grantRoleToId(roleToGrant.id, target.loginId);
-        showComposerNotice("Granted permanent " + roleToGrant.label + " to " + target.name + ".");
+        showComposerNotice("Granted " + roleToGrant.label + " to " + target.name + " permanently.");
+      } else {
+        await ChatBackend.grantTemporaryRoleToId(roleToGrant.id, target.loginId, durationMs, myLoginId);
+        showComposerNotice("Granted " + roleToGrant.label + " to " + target.name + " for " + formatDurationShort(durationMs) + ".");
       }
     } catch (e) {
       showComposerNotice("Couldn't grant " + roleToGrant.label + ": " + (e && e.message ? e.message : "check your connection") + ".");
@@ -3416,16 +3453,6 @@ async function handleModerationCommand(text) {
     return true;
   }
 
-  const target = findModerationTarget(targetName);
-  if (!target || !target.loginId) {
-    showComposerNotice("That user must be online and logged in.");
-    return true;
-  }
-  if (target.name === myName) {
-    showComposerNotice("You cannot moderate yourself.");
-    return true;
-  }
-  openBanConfirm(target, durationMs);
   return true;
 }
 
@@ -3679,12 +3706,12 @@ $clearChatBtn.addEventListener("click", () => {
   $jumpToBottomBtn.style.display = "none";
 });
 
-const DEFAULT_MOD_MENU_CODE = "2212";
-const DM_ID_LOOKUP_CODE = "VUSDM";
-const LEGACY_DM_ID_LOOKUP_CODE = "5216";
-let modMenuUnlocked = false;   // still gates the staff menus (Owner/Mod/Admin), NOT images
 let imagesEnabledForMe = false; // mirrors userProfiles/{myId}.imageAccess, live
-let modMenuCode = DEFAULT_MOD_MENU_CODE;
+
+/* SETTINGS PANEL ACCESS IS BY RANK -- there is no unlock code any more.
+   Everyone can open it; each section only shows if your rank allows it. */
+const COLOR_MIN_RANK = ROLES.normie.rank;  // custom bubble colors: Normie and up
+const IDS_MIN_RANK   = ROLES.mod.rank;     // seeing other people's account IDs: Mod and up
 
 /* IMAGE ACCESS
    Normie and below can never get images on their own. Only a higher-up can
@@ -3745,69 +3772,6 @@ async function joinAsSpectatorAuto() {
   renderDmLoginPrompt();
 }
 
-function renderModMenuLogin() {
-  $globalClearPanel.innerHTML = "";
-
-  renderPreCodeActions($globalClearPanel);
-
-  const label = document.createElement("div");
-  label.textContent = "Enter code:";
-  label.style.marginBottom = "6px";
-  label.style.color = "#94a3b8";
-
-  const input = document.createElement("input");
-  input.type = "password";
-  input.inputMode = "numeric";
-  input.style.cssText = "width:100%;padding:8px 10px;background:#0f172a;border:1.5px solid #334155;border-radius:8px;color:#f1f5f9;font-size:15px;outline:none;margin-bottom:8px";
-
-  const err = document.createElement("div");
-  err.style.cssText = "color:#ef4444;font-size:13.5px;min-height:18px;margin-bottom:4px";
-
-  const row = document.createElement("div");
-  row.style.cssText = "display:flex;gap:6px";
-
-  const submitBtn = document.createElement("button");
-  submitBtn.textContent = "Submit";
-  submitBtn.className = "toolbar-btn";
-  submitBtn.style.flex = "1";
-
-  const cancelBtn = document.createElement("button");
-  cancelBtn.textContent = "Cancel";
-  cancelBtn.className = "toolbar-btn";
-  cancelBtn.style.flex = "1";
-
-  const trySubmit = async () => {
-    submitBtn.disabled = true;
-    let configuredCode = modMenuCode;
-    try { configuredCode = (await ChatBackend.getModMenuCode()) || DEFAULT_MOD_MENU_CODE; } catch (e) {}
-    modMenuCode = configuredCode;
-    if (input.value === configuredCode) {
-      modMenuUnlocked = true;
-      updateUploadButtonVisibility();
-      renderModMenu();
-    } else if (input.value.toUpperCase() === DM_ID_LOOKUP_CODE || input.value === LEGACY_DM_ID_LOOKUP_CODE) {
-      renderLoginIdLookup();
-    } else {
-      err.textContent = "Incorrect code.";
-      input.value = "";
-      input.focus();
-    }
-    submitBtn.disabled = false;
-  };
-
-  submitBtn.addEventListener("click", trySubmit);
-  input.addEventListener("keydown", e => { if (e.key === "Enter") trySubmit(); });
-  cancelBtn.addEventListener("click", closeClearPanel);
-
-  row.appendChild(submitBtn);
-  row.appendChild(cancelBtn);
-  $globalClearPanel.appendChild(label);
-  $globalClearPanel.appendChild(input);
-  $globalClearPanel.appendChild(err);
-  $globalClearPanel.appendChild(row);
-  input.focus();
-}
-
 function renderLoginIdLookup() {
   $globalClearPanel.innerHTML = "";
   $globalClearPanel.style.width = "260px";
@@ -3861,56 +3825,18 @@ async function renderModMenu() {
 
   renderPreCodeActions($globalClearPanel);
 
+  const showColor = myRank() >= COLOR_MIN_RANK;
+  if (!showColor) {
+    const lockedColor = document.createElement("div");
+    lockedColor.textContent = "Bubble colors unlock at " + ROLES.normie.icon + " " + ROLES.normie.label + ".";
+    lockedColor.style.cssText = "color:#64748b;font-size:12.5px;line-height:1.4;margin-bottom:6px";
+    $globalClearPanel.appendChild(lockedColor);
+  }
+  if (showColor) {
   const title = document.createElement("div");
   title.textContent = "Customize your bubble";
   title.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:10px";
   $globalClearPanel.appendChild(title);
-
-  const codeTitle = document.createElement("div");
-  codeTitle.textContent = "Change unlock code";
-  codeTitle.style.cssText = "color:#f1f5f9;font-weight:600;margin:12px 0 5px";
-  $globalClearPanel.appendChild(codeTitle);
-
-  const codeRow = document.createElement("div");
-  codeRow.style.cssText = "display:flex;gap:6px;margin-bottom:4px";
-  const codeInput = document.createElement("input");
-  codeInput.type = "password";
-  codeInput.inputMode = "text";
-  codeInput.placeholder = "New code";
-  codeInput.maxLength = 24;
-  codeInput.value = modMenuCode;
-  codeInput.style.cssText = "flex:1;min-width:0;padding:7px 9px;background:#0f172a;border:1.5px solid #334155;border-radius:7px;color:#f1f5f9;font-size:13px;outline:none";
-  const saveCodeBtn = document.createElement("button");
-  saveCodeBtn.textContent = "Save";
-  saveCodeBtn.className = "toolbar-btn";
-  saveCodeBtn.style.cssText = "padding:6px 10px";
-  const codeError = document.createElement("div");
-  codeError.style.cssText = "color:#f87171;font-size:11.5px;min-height:16px;margin-bottom:6px";
-  saveCodeBtn.addEventListener("click", async () => {
-    const newCode = codeInput.value.trim();
-    if (!/^[a-zA-Z0-9]{4,24}$/.test(newCode)) {
-      codeError.textContent = "Use 4-24 letters or numbers.";
-      return;
-    }
-    saveCodeBtn.disabled = true;
-    codeError.textContent = "";
-    try {
-      await ChatBackend.setModMenuCode(newCode);
-      modMenuCode = newCode;
-      codeInput.value = newCode;
-      codeError.style.color = "#4ade80";
-      codeError.textContent = "Unlock code updated.";
-    } catch (e) {
-      codeError.style.color = "#f87171";
-      codeError.textContent = "Couldn't save the new code.";
-    } finally {
-      saveCodeBtn.disabled = false;
-    }
-  });
-  codeRow.appendChild(codeInput);
-  codeRow.appendChild(saveCodeBtn);
-  $globalClearPanel.appendChild(codeRow);
-  $globalClearPanel.appendChild(codeError);
 
   const loading = document.createElement("div");
   loading.textContent = "Loading…";
@@ -4006,6 +3932,7 @@ async function renderModMenu() {
     }
   });
   $globalClearPanel.appendChild(confirmBtn);
+  } // end showColor
 
   const divider = document.createElement("div");
   divider.style.cssText = "height:1px;background:#334155;margin:12px 0";
@@ -4046,61 +3973,21 @@ async function renderModMenu() {
   rolesDivider.style.cssText = "height:1px;background:#334155;margin:12px 0";
   $globalClearPanel.appendChild(rolesDivider);
 
-  const rolesBtn = document.createElement("button");
-  rolesBtn.textContent = "🎖 Claim a role";
-  rolesBtn.className = "toolbar-btn";
-  rolesBtn.style.cssText = "width:100%;margin-bottom:6px";
-  rolesBtn.addEventListener("click", () => {
-    closeClearPanel();
-    openRolesMenu();
-  });
-  $globalClearPanel.appendChild(rolesBtn);
-
-  // Owner Menu button: only shown when this browser both has the mod-menu
-  // code unlocked AND the current name currently holds the crown, live —
-  // checked fresh here (not cached) so it disappears the moment the crown
-  // is lost (e.g. cleared on disconnect) without needing the panel reopened.
-  const iAmCrowned = modMenuUnlocked && myName && (roleHolders.crown || new Set()).has(ChatBackend._safeKey(myName));
-  if (iAmCrowned) {
-    const ownerBtn = document.createElement("button");
-    ownerBtn.textContent = "👑 Owner Menu";
-    ownerBtn.className = "toolbar-btn";
-    ownerBtn.style.cssText = "width:100%;margin-bottom:6px";
-    ownerBtn.addEventListener("click", () => {
-      closeClearPanel();
-      openOwnerMenu();
-    });
-    $globalClearPanel.appendChild(ownerBtn);
-  }
-
-  // Mod Menu button: shown when mod-menu code is unlocked AND the current
-  // name holds the mod role, live. A crown-holder who is ALSO modded would
-  // see both buttons — that's fine, each opens its own scoped menu.
-  const iAmModded = modMenuUnlocked && myName && (roleHolders.mod || new Set()).has(ChatBackend._safeKey(myName));
-  if (iAmModded) {
-    const modMenuBtn = document.createElement("button");
-    modMenuBtn.textContent = "🧩 Mod Menu";
-    modMenuBtn.className = "toolbar-btn";
-    modMenuBtn.style.cssText = "width:100%;margin-bottom:6px";
-    modMenuBtn.addEventListener("click", () => {
-      closeClearPanel();
-      openModMenuStaff();
-    });
-    $globalClearPanel.appendChild(modMenuBtn);
-  }
-
-  const iAmAdmin = modMenuUnlocked && isAdminHolder(myName);
-  if (iAmAdmin) {
-    const adminMenuBtn = document.createElement("button");
-    adminMenuBtn.textContent = "🛡️ Admin Menu";
-    adminMenuBtn.className = "toolbar-btn";
-    adminMenuBtn.style.cssText = "width:100%;margin-bottom:6px";
-    adminMenuBtn.addEventListener("click", () => {
-      closeClearPanel();
-      openAdminMenuStaff();
-    });
-    $globalClearPanel.appendChild(adminMenuBtn);
-  }
+  // One staff menu per person, chosen by their highest rank. Checked fresh on
+  // every render, so it appears/disappears the moment a rank changes.
+  const rank = myRank();
+  const addPanelButton = (label, handler) => {
+    const btn = document.createElement("button");
+    btn.textContent = label;
+    btn.className = "toolbar-btn";
+    btn.style.cssText = "width:100%;margin-bottom:6px";
+    btn.addEventListener("click", handler);
+    $globalClearPanel.appendChild(btn);
+  };
+  if (rank >= ROLES.crown.rank)      addPanelButton("👑 Owner Menu", () => { closeClearPanel(); openOwnerMenu(); });
+  else if (rank >= ROLES.admin.rank) addPanelButton("🛡️ Admin Menu", () => { closeClearPanel(); openAdminMenuStaff(); });
+  else if (rank >= ROLES.mod.rank)   addPanelButton("🧩 Mod Menu", () => { closeClearPanel(); openModMenuStaff(); });
+  if (rank >= IDS_MIN_RANK)          addPanelButton("Online account IDs", () => renderLoginIdLookup());
 
   const logoutBtn = document.createElement("button");
   logoutBtn.textContent = "Log out (change name)";
@@ -4120,13 +4007,12 @@ async function renderModMenu() {
 
 // Re-renders whichever view of the settings panel is appropriate right now.
 function renderSettingsPanel() {
-  if (modMenuUnlocked) renderModMenu(); else renderModMenuLogin();
+  renderModMenu();
 }
 
 function closeClearPanel() {
   $globalClearPanel.style.display = "none";
   $settingsBtn.classList.remove("open");
-  if (!modMenuUnlocked) $globalClearPanel.innerHTML = "";
 }
 
 function openModMenu() {
@@ -4136,204 +4022,8 @@ function openModMenu() {
   closePingYouPanel();
   $globalClearPanel.style.display = "block";
   $settingsBtn.classList.add("open");
-  if (modMenuUnlocked) {
-    renderModMenu();
-  } else {
-    renderModMenuLogin();
-  }
+  renderModMenu();
 }
-
-/* ══════════════════════════════════════════════════════════
-   ROLES MENU (centered modal, like Room Settings) — opened from
-   "🎖 Claim a role" inside the mod menu popover. Lists every role
-   in ROLES; picking one opens the shared role-claim modal.
-   ══════════════════════════════════════════════════════════ */
-function openRolesMenu() {
-  $rolesMenuList.innerHTML = "";
-  Object.values(ROLES).filter(role => role.claimable).forEach(role => {
-    const btn = document.createElement("button");
-    btn.className = "role-menu-option";
-    const ready = !!role.webhookUrl;
-    btn.innerHTML = `<span><span class="role-menu-icon">${role.icon}</span> ${esc(role.label)}</span><span style="color:#64748b;font-size:12px">${ready ? "Claim →" : "Not set up yet"}</span>`;
-    btn.addEventListener("click", () => {
-      $rolesMenuOverlay.style.display = "none";
-      openRoleClaimModal(role.id);
-    });
-    $rolesMenuList.appendChild(btn);
-  });
-  $rolesMenuOverlay.style.display = "flex";
-}
-
-$rolesMenuCloseBtn.addEventListener("click", () => {
-  $rolesMenuOverlay.style.display = "none";
-});
-$rolesMenuOverlay.addEventListener("click", (e) => {
-  if (e.target === $rolesMenuOverlay) $rolesMenuOverlay.style.display = "none";
-});
-
-/* ══════════════════════════════════════════════════════════
-   ROLE CLAIM MODAL (centered) — shared UI for any role in ROLES.
-   Replaces the old crown-only section that used to live inside the
-   top-left popover; the logic (request code / redeem code) is
-   unchanged, just generalized to whichever roleId was picked in the
-   roles menu, and moved into its own centered modal.
-   ══════════════════════════════════════════════════════════ */
-let activeRoleClaimId = null;
-let roleClaimStatusTimer = null;
-
-function roleRequestCooldownRemainingMs(role) {
-  try {
-    const last = parseInt(localStorage.getItem(role.cooldownKey) || "0", 10);
-    return Math.max(0, ROLE_REQUEST_COOLDOWN_MS - (Date.now() - last));
-  } catch (e) { return 0; }
-}
-
-function openRoleClaimModal(roleId) {
-  activeRoleClaimId = roleId;
-  renderRoleClaimModal(roleId);
-  $roleClaimOverlay.style.display = "flex";
-}
-
-function renderRoleClaimModal(roleId) {
-  const role = ROLES[roleId];
-  clearInterval(roleClaimStatusTimer);
-  $roleClaimTitle.textContent = role.icon + " " + role.label + " role";
-  $roleClaimBody.innerHTML = "";
-
-  const reqBtn = document.createElement("button");
-  reqBtn.className = "toolbar-btn";
-  reqBtn.style.cssText = "width:100%;margin-bottom:10px";
-
-  function updateReqBtnState() {
-    if (!role.webhookUrl) { reqBtn.disabled = false; reqBtn.textContent = "Request " + role.label + " Code (webhook not set up)"; return; }
-    const remaining = roleRequestCooldownRemainingMs(role);
-    if (remaining > 0) {
-      reqBtn.disabled = true;
-      reqBtn.textContent = "Wait " + Math.ceil(remaining / 1000) + "s";
-      setTimeout(updateReqBtnState, 500);
-    } else {
-      reqBtn.disabled = false;
-      reqBtn.textContent = "Request " + role.label + " Code";
-    }
-  }
-  updateReqBtnState();
-
-  reqBtn.addEventListener("click", async () => {
-    if (!role.webhookUrl) {
-      reqBtn.textContent = "No webhook set for " + role.label + " yet";
-      return;
-    }
-    if (roleRequestCooldownRemainingMs(role) > 0) return;
-    try { localStorage.setItem(role.cooldownKey, String(Date.now())); } catch (e) {}
-    updateReqBtnState();
-    reqBtn.textContent = "Sending…";
-    try {
-      const result = await ChatBackend.generateRoleCode(role.id);
-      reqBtn.textContent = result.webhookOk ? "Sent to Discord ✓" : "Saved, but Discord post failed";
-      refreshRoleClaimStatus(role);
-    } catch (e) {
-      reqBtn.textContent = "Failed — try again";
-    }
-  });
-  $roleClaimBody.appendChild(reqBtn);
-
-  const statusEl = document.createElement("div");
-  statusEl.style.cssText = "font-family:monospace;font-size:13px;color:#94a3b8;margin-bottom:8px;min-height:16px";
-  $roleClaimBody.appendChild(statusEl);
-
-  async function refreshRoleClaimStatus(role) {
-    clearInterval(roleClaimStatusTimer);
-    try {
-      const current = await ChatBackend.getRoleMeta(role.id);
-      if (!current || !current.code || current.code === "0000") {
-        statusEl.textContent = "No active code right now.";
-        return;
-      }
-      const offset = await ChatBackend._serverOffset();
-      const tick = () => {
-        const remaining = current.expiresAt - (Date.now() + offset);
-        if (remaining <= 0) {
-          statusEl.textContent = "The last code has expired.";
-          clearInterval(roleClaimStatusTimer);
-          return;
-        }
-        statusEl.textContent = "A code is active on Discord — expires in " + Math.ceil(remaining / 1000) + "s";
-      };
-      tick();
-      roleClaimStatusTimer = setInterval(tick, 1000);
-    } catch (e) {
-      statusEl.textContent = "Couldn't check code status.";
-    }
-  }
-  refreshRoleClaimStatus(role);
-
-  const codeInput = document.createElement("input");
-  codeInput.type = "text";
-  codeInput.inputMode = "numeric";
-  codeInput.pattern = "[0-9]*";
-  codeInput.maxLength = 4;
-  codeInput.placeholder = "Enter " + role.label.toLowerCase() + " code…";
-  codeInput.style.cssText = "width:100%;padding:8px 10px;background:#0f172a;border:1.5px solid #334155;border-radius:8px;color:#f1f5f9;font-size:14px;outline:none;margin-bottom:6px";
-  $roleClaimBody.appendChild(codeInput);
-
-  const claimErr = document.createElement("div");
-  claimErr.style.cssText = "color:#ef4444;font-size:12.5px;min-height:16px;margin-bottom:4px";
-  $roleClaimBody.appendChild(claimErr);
-
-  let submitInFlight = false;
-
-  const submitBtn = document.createElement("button");
-  submitBtn.textContent = "Claim " + role.label;
-  submitBtn.className = "toolbar-btn";
-  submitBtn.style.cssText = "width:100%";
-  submitBtn.addEventListener("click", async () => {
-    if (submitInFlight) return;
-    if (!myName) { claimErr.style.color = "#ef4444"; claimErr.textContent = "Join with a name first."; return; }
-    submitInFlight = true;
-    submitBtn.disabled = true;
-    claimErr.textContent = "";
-    try {
-      const result = await ChatBackend.redeemRoleCode(role.id, codeInput.value, myLoginId);
-      if (result.ok) {
-        claimErr.style.color = "#4ade80";
-        claimErr.textContent = role.icon + " " + role.label + " claimed!";
-        codeInput.value = "";
-      } else {
-        claimErr.style.color = "#ef4444";
-        const reasonText = {
-          none: "Enter a code first.",
-          wrong: "That's not the current code — check Discord for the latest one.",
-          expired: "That code expired — request a new one."
-        };
-        claimErr.textContent = reasonText[result.reason] || "Invalid code.";
-      }
-      refreshRoleClaimStatus(role);
-    } catch (e) {
-      claimErr.style.color = "#ef4444";
-      claimErr.textContent = "Couldn't check code — try again.";
-    } finally {
-      submitBtn.disabled = false;
-      submitInFlight = false;
-    }
-  });
-  $roleClaimBody.appendChild(submitBtn);
-}
-
-$roleClaimBackBtn.addEventListener("click", () => {
-  $roleClaimOverlay.style.display = "none";
-  clearInterval(roleClaimStatusTimer);
-  openRolesMenu();
-});
-$roleClaimCloseBtn.addEventListener("click", () => {
-  $roleClaimOverlay.style.display = "none";
-  clearInterval(roleClaimStatusTimer);
-});
-$roleClaimOverlay.addEventListener("click", (e) => {
-  if (e.target === $roleClaimOverlay) {
-    $roleClaimOverlay.style.display = "none";
-    clearInterval(roleClaimStatusTimer);
-  }
-});
 
 /* ══════════════════════════════════════════════════════════
    STAFF MENU — one shared modal backing both the crown-only Owner Menu
@@ -4392,14 +4082,11 @@ let pendingBanDurationMs = 0;
    from the ID sets, so older code that asks "does this name hold X?" keeps
    working -- see rebuildRoleHolders(). */
 let roleIdHolders = {};      // roleId -> Set<loginId>
-let allProfiles = {};        // loginId -> profile (role, lastName, color, imageAccess)
+let roleIdRaw = {};          // roleId -> raw db value ({id: true | {temporary,expiresAt}}) so we can tell perm from temp
 const nameToLoginId = () => {
   // Live presence wins (it's who is actually here under that name right now);
   // fall back to the last name each ID was seen using.
   const map = {};
-  Object.entries(allProfiles).forEach(([id, prof]) => {
-    if (prof && prof.lastName) map[ChatBackend._safeKey(prof.lastName)] = id;
-  });
   latestPresenceList.forEach(e => { if (e.loginId) map[ChatBackend._safeKey(e.name)] = String(e.loginId); });
   return map;
 };
@@ -4445,9 +4132,10 @@ function openBanConfirm(target, durationMs) {
   pendingBanTarget = target;
   pendingBanDurationMs = durationMs;
   $banConfirmTitle.textContent = durationMs ? "Temporary ban?" : "Ban user?";
-  $banConfirmText.textContent = durationMs
-    ? "Ban " + target.name + " (#" + target.loginId + ") for " + formatCountdown(durationMs) + "?"
-    : "Ban " + target.name + " (#" + target.loginId + ") from VUS Chat?";
+  $banConfirmText.textContent = (durationMs
+    ? "Ban " + target.name + " (#" + target.loginId + ") for " + formatDurationShort(durationMs) + "?"
+    : "Ban " + target.name + " (#" + target.loginId + ") from VUS Chat?")
+    + " This bans the account ID, so logging out and picking a new name won't get around it.";
   $banConfirmErr.textContent = "";
   $banConfirmBtn.disabled = false;
   $banConfirmBtn.textContent = durationMs ? "Temporary ban" : "Ban";
@@ -4502,7 +4190,7 @@ function openModMenuStaff() {
   staffMenuMode = "mod";
   closeClearPanel();
   $ownerMenuTitle.textContent = "🧩 Mod Menu";
-  $ownerMenuSubtitle.textContent = "Online now — refreshes every 5s while this is open. Timeouts only, up to 1 hour.";
+  $ownerMenuSubtitle.textContent = "Online now, refreshes every 5s while this is open. Timeouts only (" + limitsText(TIME_LIMITS.modTimeout) + ").";
   renderOwnerMenuList();
   $ownerMenuOverlay.style.display = "flex";
   clearInterval(ownerMenuRefreshTimer);
@@ -4533,7 +4221,7 @@ function renderStaffCommands() {
   const list = document.createElement("div");
   list.style.cssText = "display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:6px 14px;padding:10px;background:#0f172a;border:1px solid #334155;border-radius:9px";
   const rank = myRank();
-  const commands = SLASH_COMMANDS.map(c => [c.name + (c.args ? " " + c.args : ""), c.desc, rank >= c.minRank]);
+  const commands = SLASH_COMMANDS.map(c => [c.name + (c.args ? " " + c.args : ""), commandDescription(c, rank), rank >= c.minRank]);
   commands.forEach(([command, description, visible]) => {
     if (!visible) return;
     const item = document.createElement("div");
@@ -4580,10 +4268,10 @@ async function renderOwnerMenuList() {
   // another owner revokes it, etc.) the menu should close itself rather
   // than keep offering actions the person no longer has.
   const stillEligible = staffMenuMode === "owner"
-    ? (modMenuUnlocked && isCrownHolder(myName))
+    ? myRank() >= ROLES.crown.rank
     : staffMenuMode === "admin"
-      ? (modMenuUnlocked && isAdminHolder(myName))
-      : (modMenuUnlocked && isModHolder(myName));
+      ? myRank() >= ROLES.admin.rank
+      : myRank() >= ROLES.mod.rank;
   if (!stillEligible) {
     closeOwnerMenu();
     return;
@@ -4648,7 +4336,8 @@ async function renderOwnerMenuList() {
 
     const nameEl = document.createElement("span");
     nameEl.className = "room-member-name";
-    const badges = (isCrownHolder(name) ? "👑 " : "") + (isModHolder(name) ? "🧩 " : "");
+    const rowRole = loginId ? ROLES[effectiveRoleForLoginId(loginId)] : null;
+    const badges = rowRole && !rowRole.implicit ? rowRole.icon + " " : "";
     nameEl.textContent = badges + name + (loginId ? " (#" + loginId + ")" : "");
     row.appendChild(nameEl);
 
@@ -4757,6 +4446,11 @@ async function renderOwnerMenuList() {
     }
     actions.appendChild(timeoutBtn);
 
+    // Nobody can act on someone of the same or higher rank.
+    if (loginId && rankOfLoginId(loginId) >= myRank()) {
+      actions.querySelectorAll("button").forEach(b => { b.disabled = true; b.title = "Same or higher rank than you"; });
+    }
+
     row.appendChild(actions);
     $ownerMenuList.appendChild(row);
   }
@@ -4774,11 +4468,11 @@ function openTimeoutSetModal(target) {
     const defaultSecs = MOD_TIMEOUT_DEFAULT_MS / 1000;
     $timeoutMinutesInput.value = String(Math.floor(defaultSecs / 60));
     $timeoutSecondsInput.value = String(defaultSecs % 60);
-    $timeoutSetNote.textContent = "Max 1 hour.";
+    $timeoutSetNote.textContent = "Allowed: " + limitsText(TIME_LIMITS.modTimeout) + ". Prefilled with " + formatDurationShort(MOD_TIMEOUT_DEFAULT_MS) + ".";
   } else {
     $timeoutMinutesInput.value = "";
     $timeoutSecondsInput.value = "";
-    $timeoutSetNote.textContent = "Max 30 days.";
+    $timeoutSetNote.textContent = "Allowed: " + limitsText(TIME_LIMITS.timeout) + ".";
   }
 
   $timeoutSetErr.textContent = "";
@@ -4792,7 +4486,7 @@ function openTemporaryModSetModal(target) {
   $timeoutSetTitle.textContent = "Temporary Mod for " + target.name + " (#" + target.loginId + ")";
   $timeoutMinutesInput.value = "";
   $timeoutSecondsInput.value = "";
-  $timeoutSetNote.textContent = "Max 30 days.";
+  $timeoutSetNote.textContent = "Allowed: " + limitsText(TIME_LIMITS.tempGrant) + ".";
   $timeoutSetErr.textContent = "";
   $timeoutSetConfirmBtn.textContent = "Grant Temp Mod";
   $timeoutSetOverlay.style.display = "flex";
@@ -4828,15 +4522,12 @@ $timeoutSetConfirmBtn.addEventListener("click", async () => {
   const mins = parseInt($timeoutMinutesInput.value || "0", 10) || 0;
   const secs = parseInt($timeoutSecondsInput.value || "0", 10) || 0;
   const totalMs = (mins * 60 + secs) * 1000;
-  const cap = staffMenuMode === "mod" ? MOD_TIMEOUT_MAX_MS : TIMEOUT_MAX_MS;
-  const capLabel = staffMenuMode === "mod" ? "1 hour" : "30 days";
-
-  if (totalMs <= 0) {
-    $timeoutSetErr.textContent = "Enter a duration greater than 0.";
-    return;
-  }
-  if (totalMs > cap) {
-    $timeoutSetErr.textContent = "Max timeout is " + capLabel + ".";
+  const limits = pendingTemporaryModTarget
+    ? TIME_LIMITS.tempGrant
+    : (staffMenuMode === "mod" ? TIME_LIMITS.modTimeout : TIME_LIMITS.timeout);
+  const problem = checkDurationLimits(totalMs, limits);
+  if (problem) {
+    $timeoutSetErr.textContent = problem;
     return;
   }
 
@@ -5058,7 +4749,7 @@ $settingsBtn.addEventListener("click", (e) => {
 
 document.addEventListener("keydown", (e) => {
   if (e.key !== "`") return;
-  if (!modMenuUnlocked) return;
+  if (!myLoginId || myRank() < ROLES.mod.rank) return;   // staff hotkey
   const active = document.activeElement;
   const isTypingSomewhere = active && (active.tagName === "TEXTAREA" || active.tagName === "INPUT");
   if (isTypingSomewhere) return;
@@ -5071,7 +4762,8 @@ document.addEventListener("keydown", (e) => {
 });
 
 document.addEventListener("click", (e) => {
-  if (!modMenuUnlocked && $globalClearPanel.style.display === "block" && !$globalClearPanel.contains(e.target)) {
+  // Click anywhere outside the panel (or its button) closes it.
+  if ($globalClearPanel.style.display === "block" && !$globalClearPanel.contains(e.target) && !$settingsBtn.contains(e.target)) {
     closeClearPanel();
   }
 });
@@ -5387,6 +5079,8 @@ function renderCommandList() {
   const token = currentCommandToken();
   if (token === null || !myLoginId) { closeCommandList(); return; }
 
+  if (availableSlashCommands().length === 0) { closeCommandList(); return; }   // nothing to offer this rank
+
   const lower = token.toLowerCase();
   commandMatches = availableSlashCommands().filter(c => c.name.toLowerCase().startsWith(lower));
   if (commandActiveIndex >= commandMatches.length) commandActiveIndex = 0;
@@ -5415,7 +5109,7 @@ function renderCommandList() {
     btn.innerHTML =
       '<span class="cmd-name">' + esc(cmd.name) + '</span>' +
       (cmd.args ? '<span class="cmd-args">' + esc(cmd.args) + '</span>' : '') +
-      '<span class="cmd-desc">' + esc(cmd.desc) + '</span>';
+      '<span class="cmd-desc">' + esc(commandDescription(cmd)) + '</span>';
     // mousedown (not click) so the textarea never loses focus first.
     btn.addEventListener("mousedown", e => { e.preventDefault(); acceptCommand(cmd); });
     btn.addEventListener("mouseenter", () => { commandActiveIndex = i; highlightCommandRow(); updateCommandGhost(); });
@@ -5506,10 +5200,16 @@ function preloadPingSound() {
 }
 
 function requestNotificationPermissionIfNeeded() {
-  if (!("Notification" in window)) return;
-  if (Notification.permission === "default") {
-    Notification.requestPermission().catch(() => {});
-  }
+  // Optional nicety -- must NEVER be able to break joining. Older Safari and
+  // some in-app browsers return undefined (callback style) instead of a
+  // Promise, or throw; both are swallowed here.
+  try {
+    if (!("Notification" in window)) return;
+    if (Notification.permission === "default") {
+      const result = Notification.requestPermission(() => {});
+      if (result && typeof result.catch === "function") result.catch(() => {});
+    }
+  } catch (e) {}
 }
 
 function showPingToast(fromName, note) {
@@ -5651,9 +5351,15 @@ function watchPublicRoomsList() {
 
 function formatCountdown(msRemaining) {
   const totalSecs = Math.max(0, Math.ceil(msRemaining / 1000));
-  const mins = Math.floor(totalSecs / 60);
-  const secs = totalSecs % 60;
-  return mins + ":" + String(secs).padStart(2, "0");
+  if (totalSecs >= 86400) {
+    return Math.floor(totalSecs / 86400) + "d " + Math.floor((totalSecs % 86400) / 3600) + "h";
+  }
+  if (totalSecs >= 3600) {
+    const h = Math.floor(totalSecs / 3600);
+    const m = Math.floor((totalSecs % 3600) / 60);
+    return h + ":" + String(m).padStart(2, "0") + ":" + String(totalSecs % 60).padStart(2, "0");
+  }
+  return Math.floor(totalSecs / 60) + ":" + String(totalSecs % 60).padStart(2, "0");
 }
 
 function openRoomsSidebar() {
@@ -6266,16 +5972,12 @@ function init() {
     roleHolders[role.id] = new Set();
     roleIdHolders[role.id] = new Set();
     if (role.implicit) return;
-    ChatBackend.watchRoleIds(role.id, idSet => {
+    ChatBackend.watchRoleIds(role.id, (idSet, raw) => {
       roleIdHolders[role.id] = idSet;
+      roleIdRaw[role.id] = raw || {};
       rebuildRoleHolders();
       onMyRoleMaybeChanged();
     });
-  });
-  ChatBackend.watchAllProfiles(profiles => {
-    allProfiles = profiles;
-    rebuildRoleHolders();
-    onMyRoleMaybeChanged();
   });
   attachRoomListeners();
   watchPublicRoomsList();
