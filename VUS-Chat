@@ -1640,7 +1640,15 @@ const ChatBackend = {
     this._myLeaveEventRef = leaveEventRef;
 
     this._myPresenceRef.onDisconnect().remove();
-    this._myPresenceRef.set({ loginId: String(loginId), joinedAt: firebase.database.ServerValue.TIMESTAMP });
+    try {
+      await this._myPresenceRef.set({ loginId: String(loginId), joinedAt: firebase.database.ServerValue.TIMESTAMP });
+    } catch (e) {
+      // The database refused the join. While the chat is closed that is
+      // intentional (the rules block new joins), so undo what we armed above.
+      try { this._myPresenceRef.onDisconnect().cancel(); } catch (x) {}
+      try { leaveEventRef.onDisconnect().cancel(); } catch (x) {}
+      return { ok: false, reason: "closed" };
+    }
 
     // Roles/image access/color are tied to loginId (userProfiles + roleIds),
     // so joining changes nothing about them -- they were never removed.
@@ -2339,10 +2347,16 @@ function scrollToBottom() {
 }
 
 // Fills (or refreshes) one badge row from the sender's current rank.
+// The badge is looked up from who is actually ONLINE under that name right
+// now. The loginId stamped on a message is only a claim -- anyone can write any
+// ID there -- so it is never trusted on its own. A sender who isn't online (or
+// whose claimed ID doesn't match the person online under that name) gets no badge.
 function fillRoleBadge(row) {
-  const senderId = row.dataset.senderId || loginIdForName(row.dataset.senderName);
-  const role = ROLES[senderId ? effectiveRoleForLoginId(senderId) : "unranked"];
   row.innerHTML = "";
+  const liveId = loginIdForName(row.dataset.senderName);
+  const claimedId = row.dataset.senderId;
+  if (!liveId || (claimedId && claimedId !== String(liveId))) return;
+  const role = ROLES[effectiveRoleForLoginId(liveId)];
   const bubble = document.createElement("div");
   bubble.className = role.bubbleClass;
   bubble.textContent = role.icon;
@@ -2920,6 +2934,8 @@ async function joinWithDmSession(session, nickname) {
   if (!result.ok) {
     if (result.reason === "banned") {
       renderDmLoginPrompt("This account is banned from VUS Chat.");
+    } else if (result.reason === "closed") {
+      renderChatClosedPrompt();
     } else if (result.reason === "already-online") {
       // Don't dump the person to a password form -- their account is fine,
       // it's just open elsewhere. Keep the saved account and say so.
@@ -2936,7 +2952,7 @@ async function joinWithDmSession(session, nickname) {
   // Switch screens FIRST. Everything below is a nicety; if any of it fails the
   // person is still in the chat instead of stuck on the join screen with their
   // presence already written.
-  $youAre.textContent = "You: " + name;
+  updateYouAre();
   $changeNameBtn.style.display = "none";
   $joinScreen.style.display = "none";
   $chatScreen.style.display = "flex";
@@ -2970,9 +2986,17 @@ function startWatchingMyProfile() {
 
 // Called whenever role sets or the profile change; re-evaluates everything
 // that depends on MY rank (upload button, send delay, menu items).
+// Header line: your name and your highest rank, always visible.
+function updateYouAre() {
+  if (!myName) { $youAre.textContent = ""; return; }
+  const role = ROLES[myRoleId()];
+  $youAre.textContent = "You: " + myName + "  \u00b7  " + role.icon + " " + role.label;
+}
+
 function onMyRoleMaybeChanged() {
   scheduleRoleBadgeRefresh();   // badges on messages already on screen
   if (!myLoginId) return;
+  updateYouAre();
   updateUploadButtonVisibility();
   updateSendButtonState();
   if ($globalClearPanel.style.display === "block" && typeof renderSettingsPanel === "function") renderSettingsPanel();
@@ -3982,6 +4006,25 @@ async function renderModMenu() {
   myRankLine.textContent = "Your rank: " + myRoleObj.icon + " " + myRoleObj.label + " · message delay " + Math.round(currentMessageCooldownMs() / 1000) + "s";
   myRankLine.style.cssText = "color:#94a3b8;font-size:12.5px;margin-top:8px";
   $globalClearPanel.appendChild(myRankLine);
+
+  // Your own account ID (only you see it here; it is not shown on the main screen).
+  const idRow = document.createElement("div");
+  idRow.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px";
+  const idLabel = document.createElement("span");
+  idLabel.textContent = "Your account ID";
+  idLabel.style.cssText = "color:#94a3b8;font-size:12.5px";
+  const idBtn = document.createElement("button");
+  idBtn.className = "toolbar-btn";
+  idBtn.style.cssText = "padding:4px 10px;font-family:monospace";
+  idBtn.textContent = "#" + (myLoginId || "");
+  idBtn.title = "Tap to copy";
+  idBtn.addEventListener("click", () => {
+    const done = () => { idBtn.textContent = "Copied"; setTimeout(() => { idBtn.textContent = "#" + (myLoginId || ""); }, 1200); };
+    try { navigator.clipboard.writeText(String(myLoginId || "")).then(done, () => {}); } catch (e) {}
+  });
+  idRow.appendChild(idLabel);
+  idRow.appendChild(idBtn);
+  $globalClearPanel.appendChild(idRow);
 
   const rolesDivider = document.createElement("div");
   rolesDivider.style.cssText = "height:1px;background:#334155;margin:12px 0";
