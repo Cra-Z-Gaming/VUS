@@ -1109,6 +1109,23 @@ function initDmAuthDatabase() {
   legacyDmAuthDb = firebase.database(firebase.app(legacyAppName));
 }
 
+// Why the login database couldn't be used, if it couldn't. The lookups below
+// used to swallow every error and answer "no account found", which sent people
+// hunting for a wrong password when the real problem was the database.
+let authDbProblem = null;
+const authDbFailedProjects = new Set();
+function describeAuthDbError(e, database) {
+  authDbFailedProjects.add(database === legacyDmAuthDb ? LEGACY_DM_AUTH_CONFIG.projectId : DM_AUTH_CONFIG.projectId);
+  const projects = [...authDbFailedProjects].join(", ");
+  return isPermissionDenied(e)
+    ? "The login database (" + projects + ") refused the request. Its Firebase rules are blocking it."
+    : "Couldn't reach the login database (" + projects + ")" + (e && e.message ? ": " + e.message : ".");
+}
+function noteAuthDbProblem(database, e) {
+  authDbProblem = describeAuthDbError(e, database);
+  console.error("[VUS Chat] login database problem:", e);
+}
+
 async function lookupAccountByIdentifier(database, identifier) {
   const clean = (identifier || "").trim();
   if (!clean) return null;
@@ -1118,13 +1135,13 @@ async function lookupAccountByIdentifier(database, identifier) {
   try {
     const usernameSnap = await database.ref("usernameIndex/" + usernameKey).get();
     if (usernameSnap.exists()) return { accountKey: usernameSnap.val(), source: "username" };
-  } catch (e) {}
+  } catch (e) { noteAuthDbProblem(database, e); }
 
   if (/^[0-9]{6}$/.test(clean)) {
     try {
       const idSnap = await database.ref("idIndex/" + clean).get();
       if (idSnap.exists()) return { accountKey: idSnap.val(), source: "id" };
-    } catch (e) {}
+    } catch (e) { noteAuthDbProblem(database, e); }
   }
 
   try {
@@ -1134,7 +1151,7 @@ async function lookupAccountByIdentifier(database, identifier) {
       const [accountKey] = Object.keys(matches);
       if (accountKey) return { accountKey, source: "fallback" };
     }
-  } catch (e) {}
+  } catch (e) { noteAuthDbProblem(database, e); }
 
   return null;
 }
@@ -1144,6 +1161,8 @@ async function loginFromChat(identifier, password) {
   if (!clean || !password) return { ok: false, error: "Enter your username/ID and password." };
 
   let foundAccount = false;
+  authDbProblem = null;
+  authDbFailedProjects.clear();
   for (const database of [dmAuthDb, legacyDmAuthDb]) {
     if (!database) continue;
     try {
@@ -1156,9 +1175,11 @@ async function loginFromChat(identifier, password) {
         return { ok: true, accountKey: accountSnapshot.key, username: account.username, id: account.id };
       }
     } catch (e) {
+      noteAuthDbProblem(database, e);
       continue;
     }
   }
+  if (!foundAccount && authDbProblem) return { ok: false, error: authDbProblem };
   return { ok: false, error: foundAccount ? "Incorrect password." : "No account found with that username or ID." };
 }
 
@@ -2721,7 +2742,10 @@ function renderDmLoginPrompt(message) {
       saveDmSession(result);
       renderNicknamePrompt(result);
     } catch (e) {
-      error.textContent = "Couldn't reach the login server — try again.";
+      console.error("[VUS Chat] login/signup failed:", e);
+      error.textContent = isPermissionDenied(e)
+        ? describeAuthDbError(e, dmAuthDb)
+        : "Couldn't finish that" + (e && e.message ? " (" + e.message + ")" : "") + ". Try again.";
     } finally {
       loginBtn.disabled = false;
     }
