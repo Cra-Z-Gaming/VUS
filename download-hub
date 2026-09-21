@@ -16,6 +16,8 @@ body {
 #buttons {
     display: flex;
     gap: 24px;
+    flex-wrap: wrap;
+    justify-content: center;
 }
 .launchCol {
     display: flex;
@@ -116,6 +118,16 @@ input:checked + .slider::before {
             </span>
         </label>
     </div>
+    <div class="launchCol">
+        <button id="servers" class="launch-btn">Open VUS Servers</button>
+        <label class="toggleGroup">
+            <span id="labelServers">VUS Servers</span>
+            <span class="switch">
+                <input type="checkbox" id="serversToggle">
+                <span class="slider"></span>
+            </span>
+        </label>
+    </div>
 </div>
 
 <div id="hint">Enable switch to auto-open on next visit</div>
@@ -123,15 +135,20 @@ input:checked + .slider::before {
 <script>
 const HUB_URL = "https://raw.githubusercontent.com/REALDABEAST-VUSALT/VUS/refs/heads/chat-updates-pr/index.html";
 const OS_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS-OS/refs/heads/main/index.html";
+const SERVERS_URL = "VUS-Servers.html";
 const HUB_KEY = "vus_autolaunch_hub";
 const OS_KEY = "vus_autolaunch_os";
+const SERVERS_KEY = "vus_autolaunch_servers";
 
 const hubBtn = document.getElementById("hub");
 const osBtn = document.getElementById("os");
+const serversBtn = document.getElementById("servers");
 const hubToggle = document.getElementById("hubToggle");
 const osToggle = document.getElementById("osToggle");
+const serversToggle = document.getElementById("serversToggle");
 const labelHub = document.getElementById("labelHub");
 const labelOs = document.getElementById("labelOs");
+const labelServers = document.getElementById("labelServers");
 
 function getEnabled(key, fallback) {
     const v = localStorage.getItem(key);
@@ -143,12 +160,16 @@ function setEnabled(key, value) {
 function applyUI() {
     const hubOn = getEnabled(HUB_KEY, true);   // Hub enabled by default
     const osOn = getEnabled(OS_KEY, false);    // OS disabled by default
+    const serversOn = getEnabled(SERVERS_KEY, false);
     hubToggle.checked = hubOn;
     osToggle.checked = osOn;
+    serversToggle.checked = serversOn;
     labelHub.classList.toggle("active", hubOn);
     labelOs.classList.toggle("active", osOn);
+    labelServers.classList.toggle("active", serversOn);
     hubBtn.classList.toggle("default", hubOn);
     osBtn.classList.toggle("default", osOn);
+    serversBtn.classList.toggle("default", serversOn);
 }
 
 hubToggle.addEventListener("change", () => {
@@ -160,6 +181,11 @@ osToggle.addEventListener("change", () => {
     setEnabled(OS_KEY, osToggle.checked);
     applyUI();
     flashSaved(labelOs);
+});
+serversToggle.addEventListener("change", () => {
+    setEnabled(SERVERS_KEY, serversToggle.checked);
+    applyUI();
+    flashSaved(labelServers);
 });
 
 function flashSaved(labelEl) {
@@ -200,12 +226,14 @@ async function launch(url, label) {
 
 hubBtn.onclick = () => launch(HUB_URL, "VUS Hub");
 osBtn.onclick = () => launch(OS_URL, "VUS-OS");
+serversBtn.onclick = () => launch(SERVERS_URL, "VUS Servers");
 
 applyUI();
 
 window.onload = () => {
     if (getEnabled(HUB_KEY, true)) launch(HUB_URL, "VUS Hub");
     if (getEnabled(OS_KEY, false)) launch(OS_URL, "VUS-OS");
+    if (getEnabled(SERVERS_KEY, false)) launch(SERVERS_URL, "VUS Servers");
 };
 </script>
 </body></html>

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VUS Servers</title>
+  <link rel="stylesheet" href="./other/VUS-Servers/style.css">
+</head>
+<body>
+  <main id="authView" class="auth-view">
+    <div class="auth-card">
+      <div class="brand-mark">VS</div>
+      <h1>VUS Servers</h1>
+      <p>Build your own spaces, channels, and voice rooms.</p>
+      <div class="auth-tabs"><button id="loginTab" class="active">Log in</button><button id="signupTab">Sign up</button></div>
+      <input id="usernameInput" placeholder="Username or 6-digit ID" autocomplete="username">
+      <input id="passwordInput" type="password" placeholder="Password" autocomplete="current-password">
+      <div id="authError" class="error"></div>
+      <div id="authStatus" class="status"></div>
+      <button id="authSubmit" class="primary-btn">Log in</button>
+    </div>
+  </main>
+
+  <main id="appView" class="app-view" hidden>
+    <aside class="server-rail">
+      <div class="rail-logo">VS</div>
+      <div id="serverList" class="server-list"></div>
+      <button id="newServerBtn" class="rail-add" title="Create server">+</button>
+      <button id="joinServerBtn" class="rail-join" title="Join server">↗</button>
+      <button id="logoutBtn" class="rail-user" title="Open profile"></button>
+    </aside>
+    <aside class="channel-sidebar">
+      <header class="server-header"><div><strong id="serverName">Select a server</strong><small id="serverCode"></small></div><button id="serverSettingsBtn" title="Server settings">⚙</button></header>
+      <div class="channel-label">Text channels</div>
+      <div id="textChannels"></div>
+      <div class="channel-label">Voice channels</div>
+      <div id="voiceChannels"></div>
+      <div id="voiceMembers" class="voice-members"></div>
+      <div id="voiceControls" class="voice-controls" hidden><button id="muteVoiceBtn">Mute</button><button id="leaveVoiceBtn">Leave</button></div>
+      <div id="ownerTools" class="owner-tools" hidden><button id="addChannelBtn">＋ Add channel</button><button id="rankBtn">✦ Manage ranks</button></div>
+    </aside>
+    <section class="chat-column">
+      <header class="chat-header"><div><span id="channelHash">#</span><strong id="channelName">general</strong><span id="channelTopic"></span></div><span id="channelPermission"></span></header>
+      <div id="announcement" class="announcement" hidden><small>OWNER ANNOUNCEMENT</small><div id="announcementText"></div></div>
+      <div id="ownerComposer" class="owner-composer" hidden><input id="announcementInput" maxlength="240" placeholder="Write an announcement"><button id="publishAnnouncement">Publish</button></div>
+      <div id="messages" class="messages"><div class="empty-state">Select a channel to start talking.</div></div>
+      <form id="messageForm" class="message-form"><div id="mentionSuggestions" class="mention-suggestions" hidden></div><input id="messageInput" maxlength="500" placeholder="Message #general" autocomplete="off"><input id="imageInput" type="file" accept="image/*" hidden><button id="imageButton" type="button" title="Attach image">＋</button><button type="submit">Send</button></form>
+    </section>
+    <aside class="members-sidebar"><header>ONLINE <span id="memberCount">0</span></header><button id="addFriendBtn" class="add-friend-btn">＋ Add friend</button><div id="membersList"></div></aside>
+  </main>
+  <div id="remoteAudio" hidden></div>
+  <div id="modal" class="modal" hidden><div class="modal-card"><button id="modalClose" class="modal-close">×</button><h2 id="modalTitle"></h2><div id="modalBody"></div></div></div>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="./other/VUS-Servers/app.js"></script>
+</body>
+</html>
