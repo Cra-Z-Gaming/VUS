@@ -2890,6 +2890,11 @@ const RoomManager = {
       isPublic: false,
       createdAt: firebase.database.ServerValue.TIMESTAMP,
       expiresAt: now + ROOM_DURATION_MS,
+      channels: {
+        general: { name: "general", type: "text", topic: "A focused place to talk." },
+        announcements: { name: "announcements", type: "announcement", topic: "Owner updates only." },
+        Lounge: { name: "Lounge", type: "voice", topic: "Drop in and hang out." }
+      },
       kicked: {}
     };
     await this._metaRootRef.child(this._safeCode(code)).set(meta);
@@ -2987,6 +2992,24 @@ const RoomManager = {
     const safe = this._safeCode(code);
     await this._metaRootRef.child(safe).remove();
     await this._db.ref("rooms/" + safe).remove();
+  },
+
+  async updateServerMeta(code, updates) {
+    await this._metaRootRef.child(this._safeCode(code)).update(updates);
+  },
+
+  async addServerChannel(code, channel) {
+    const ref = this._metaRootRef.child(this._safeCode(code)).child("channels").push();
+    await ref.set(channel);
+    return ref.key;
+  },
+
+  async setServerRank(code, accountKey, rank) {
+    await this._metaRootRef.child(this._safeCode(code)).child("ranks").child(accountKey).set(rank || null);
+  },
+
+  voiceRef(code, voiceId) {
+    return this._db.ref("rooms/" + this._safeCode(code) + "/voice/" + this._safeCode(voiceId));
   }
 };
 
@@ -4876,6 +4899,28 @@ const $roomCodeSaveBtn = document.getElementById("roomCodeSaveBtn");
 const $roomMembersList = document.getElementById("roomMembersList");
 const $roomSettingsCloseBtn = document.getElementById("roomSettingsCloseBtn");
 
+const $serverWorkspace = document.getElementById("serverWorkspace");
+const $serverWorkspaceName = document.getElementById("serverWorkspaceName");
+const $serverWorkspaceCode = document.getElementById("serverWorkspaceCode");
+const $serverTextChannels = document.getElementById("serverTextChannels");
+const $serverVoiceChannels = document.getElementById("serverVoiceChannels");
+const $serverVoiceMembers = document.getElementById("serverVoiceMembers");
+const $serverOwnerTools = document.getElementById("serverOwnerTools");
+const $serverChannelName = document.getElementById("serverChannelName");
+const $serverChannelTopic = document.getElementById("serverChannelTopic");
+const $serverChannelMode = document.getElementById("serverChannelMode");
+const $serverAnnouncement = document.getElementById("serverAnnouncement");
+const $serverAnnouncementText = document.getElementById("serverAnnouncementText");
+const $serverOwnerPanel = document.getElementById("serverOwnerPanel");
+const $serverAnnouncementInput = document.getElementById("serverAnnouncementInput");
+const $serverAnnouncementBtn = document.getElementById("serverAnnouncementBtn");
+const $serverOwnerStatus = document.getElementById("serverOwnerStatus");
+const $serverCustomizeBtn = document.getElementById("serverCustomizeBtn");
+const $serverAddChannelBtn = document.getElementById("serverAddChannelBtn");
+const $serverRanksBtn = document.getElementById("serverRanksBtn");
+const $serverMembersList = document.getElementById("serverMembersList");
+const $serverMembersCount = document.getElementById("serverMembersCount");
+
 const $extendRoomOverlay = document.getElementById("extendRoomOverlay");
 const $extendRoomText = document.getElementById("extendRoomText");
 const $extendRoomDismissBtn = document.getElementById("extendRoomDismissBtn");
@@ -4904,6 +4949,156 @@ let extendPromptShownForCode = null;
 let pendingKickTarget = null;
 let sidebarCountdownTimer = null;
 let topBarCountdownTimer = null;
+let serverChannelId = "general";
+let serverVoiceId = null;
+let serverVoiceUnsubscribe = null;
+let serverVoicePresenceRef = null;
+let serverVoiceWatchRef = null;
+
+const DEFAULT_SERVER_CHANNELS = [
+  { id: "general", name: "general", type: "text", topic: "A focused place to talk." },
+  { id: "announcements", name: "announcements", type: "announcement", topic: "Owner updates only." },
+  { id: "Lounge", name: "Lounge", type: "voice", topic: "Drop in and hang out." }
+];
+
+function serverChannels(meta) {
+  const configured = meta && meta.channels ? Object.entries(meta.channels).map(([id, channel]) => ({ id, ...channel })) : [];
+  return configured.length ? configured : DEFAULT_SERVER_CHANNELS;
+}
+
+function serverRoomPath(code, channelId) {
+  return code + "/channels/" + channelId;
+}
+
+function isServerOwner() {
+  return !!(currentRoomMeta && currentRoomMeta.ownerName === myName);
+}
+
+function renderServerWorkspace(meta) {
+  if (!meta || !currentRoomCode) {
+    $serverWorkspace.classList.remove("server-visible");
+    return;
+  }
+  const channels = serverChannels(meta);
+  const textChannels = channels.filter(channel => channel.type !== "voice");
+  const voiceChannels = channels.filter(channel => channel.type === "voice");
+  if (!channels.some(channel => channel.id === serverChannelId && channel.type !== "voice")) serverChannelId = textChannels[0].id;
+
+  $serverWorkspace.classList.add("server-visible");
+  $serverWorkspaceName.textContent = meta.name || "VUS Server";
+  $serverWorkspaceCode.textContent = "invite " + meta.code;
+  $serverTextChannels.innerHTML = "";
+  textChannels.forEach(channel => {
+    const button = document.createElement("button");
+    button.className = "server-channel-btn" + (channel.id === serverChannelId ? " active" : "");
+    button.innerHTML = "<span>#</span><span>" + esc(channel.name) + "</span>";
+    button.addEventListener("click", () => switchServerChannel(channel));
+    $serverTextChannels.appendChild(button);
+  });
+
+  $serverVoiceChannels.innerHTML = "";
+  voiceChannels.forEach(channel => {
+    const row = document.createElement("div");
+    row.className = "server-channel-btn voice";
+    row.innerHTML = "<span>" + esc(channel.name) + "</span>";
+    const join = document.createElement("button");
+    join.className = "server-voice-join" + (serverVoiceId === channel.id ? " joined" : "");
+    join.textContent = serverVoiceId === channel.id ? "Leave" : "Join";
+    join.addEventListener("click", event => { event.stopPropagation(); toggleServerVoice(channel.id); });
+    row.appendChild(join);
+    $serverVoiceChannels.appendChild(row);
+  });
+  $serverOwnerTools.classList.toggle("visible", isServerOwner());
+  renderServerChannelMeta(meta);
+  watchServerVoiceMembers(voiceChannels);
+}
+
+function renderServerChannelMeta(meta) {
+  const channel = serverChannels(meta).find(item => item.id === serverChannelId) || DEFAULT_SERVER_CHANNELS[0];
+  $serverChannelName.textContent = channel.name;
+  $serverChannelTopic.textContent = channel.topic || "";
+  $serverChannelMode.textContent = channel.type === "announcement" ? "OWNER ONLY" : "LIVE";
+  const announcement = meta.announcement && meta.announcement.text;
+  $serverAnnouncement.hidden = !announcement;
+  $serverAnnouncementText.textContent = announcement || "";
+  const ownerAnnouncementPage = channel.type === "announcement";
+  $serverOwnerPanel.hidden = !(ownerAnnouncementPage && isServerOwner());
+  $serverChannelMode.textContent = ownerAnnouncementPage ? "OWNER ONLY" : "LIVE";
+}
+
+function renderServerMembers() {
+  if (!$serverMembersList) return;
+  const members = latestPresenceList.slice().sort((a, b) => a.name.localeCompare(b.name));
+  const ranks = (currentRoomMeta && currentRoomMeta.ranks) || {};
+  $serverMembersCount.textContent = members.length;
+  $serverMembersList.innerHTML = "";
+  members.forEach(member => {
+    const row = document.createElement("div");
+    row.className = "server-member-row";
+    const avatar = document.createElement("div");
+    avatar.className = "server-member-avatar";
+    avatar.textContent = member.name.slice(0, 2).toUpperCase();
+    const info = document.createElement("div");
+    info.className = "server-member-info";
+    const name = document.createElement("div");
+    name.className = "server-member-name";
+    name.textContent = member.name;
+    const rank = document.createElement("div");
+    rank.className = "server-member-rank";
+    rank.textContent = member.name === (currentRoomMeta && currentRoomMeta.ownerName) ? "Owner" : (ranks[member.accountKey] || "Member");
+    info.appendChild(name);
+    info.appendChild(rank);
+    row.appendChild(avatar);
+    row.appendChild(info);
+    $serverMembersList.appendChild(row);
+  });
+}
+
+async function switchServerChannel(channel) {
+  if (!currentRoomCode || channel.type === "voice") return;
+  serverChannelId = channel.id;
+  ChatBackend.bindToRoom(serverRoomPath(currentRoomCode, serverChannelId));
+  ChatBackend.claimPresence(myAccountKey, myName, false);
+  attachRoomListeners();
+  $messages.innerHTML = "";
+  messageCount = 0;
+  $emptyState.style.display = "flex";
+  renderServerWorkspace(currentRoomMeta);
+  updateComposerLockState();
+}
+
+function stopServerVoice() {
+  if (serverVoiceWatchRef && serverVoiceUnsubscribe) serverVoiceWatchRef.off("value", serverVoiceUnsubscribe);
+  serverVoiceWatchRef = null;
+  serverVoiceUnsubscribe = null;
+  if (serverVoicePresenceRef) { serverVoicePresenceRef.onDisconnect().cancel(); serverVoicePresenceRef.remove(); serverVoicePresenceRef = null; }
+  serverVoiceId = null;
+}
+
+function watchServerVoiceMembers(voiceChannels) {
+  if (serverVoiceWatchRef && serverVoiceUnsubscribe) { serverVoiceWatchRef.off("value", serverVoiceUnsubscribe); }
+  serverVoiceWatchRef = null;
+  serverVoiceUnsubscribe = null;
+  if (!currentRoomCode || !voiceChannels.length) { $serverVoiceMembers.textContent = ""; return; }
+  const ref = RoomManager.voiceRef(currentRoomCode, serverVoiceId || voiceChannels[0].id);
+  serverVoiceWatchRef = ref;
+  serverVoiceUnsubscribe = snap => {
+    const members = Object.values(snap.val() || {}).map(member => member.name).filter(Boolean);
+    $serverVoiceMembers.textContent = members.length ? members.join(" · ") : "No one connected";
+  };
+  ref.on("value", serverVoiceUnsubscribe);
+}
+
+async function toggleServerVoice(voiceId) {
+  if (!currentRoomCode) return;
+  if (serverVoiceId === voiceId) { stopServerVoice(); renderServerWorkspace(currentRoomMeta); return; }
+  stopServerVoice();
+  serverVoiceId = voiceId;
+  serverVoicePresenceRef = RoomManager.voiceRef(currentRoomCode, voiceId).child(myAccountKey);
+  serverVoicePresenceRef.onDisconnect().remove();
+  await serverVoicePresenceRef.set({ name: myName, joinedAt: firebase.database.ServerValue.TIMESTAMP });
+  renderServerWorkspace(currentRoomMeta);
+}
 
 function loadJoinedRoomsFromStorage() {
   try {
@@ -5185,8 +5380,10 @@ async function joinRoomByCode(code) {
   }
 
   teardownCurrentRoomMetaWatch();
+  stopServerVoice();
   currentRoomCode = code;
-  ChatBackend.bindToRoom(code);
+  serverChannelId = "general";
+  ChatBackend.bindToRoom(serverRoomPath(code, serverChannelId));
   ChatBackend.claimPresence(myAccountKey, myName, false);
   watchMyTimeout();
   attachRoomListeners();
@@ -5203,6 +5400,7 @@ function switchToMainRoom() {
   if (currentRoomCode === null) return;
 
   teardownCurrentRoomMetaWatch();
+  stopServerVoice();
   currentRoomCode = null;
   currentRoomMeta = null;
   ChatBackend.bindToRoom(MAIN_ROOM_ID);
@@ -5215,6 +5413,7 @@ function switchToMainRoom() {
   $emptyState.style.display = "flex";
 
   $roomTopBar.style.display = "none";
+  $serverWorkspace.classList.remove("server-visible");
   clearInterval(topBarCountdownTimer);
   extendPromptShownForCode = null;
 }
@@ -5236,6 +5435,8 @@ function onRoomMetaUpdate(meta) {
   }
 
   currentRoomMeta = meta;
+  renderServerWorkspace(meta);
+  renderServerMembers();
 
   const myKey = ChatBackend._safeKey(myName);
   if (meta.kicked && meta.kicked[myKey]) {
@@ -5526,6 +5727,7 @@ function attachRoomListeners() {
   });
   ChatBackend.watchPresenceList(list => {
     latestPresenceList = list;
+    renderServerMembers();
     if ($onlineListPanel.style.display === "block") renderOnlineListPanel();
     refreshMentionDropdownIfOpen();
     checkSoleSurvivorAutoOwnership(list);
