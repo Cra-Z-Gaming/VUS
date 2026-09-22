@@ -1575,12 +1575,16 @@ function loadHomeFrame() {
   if (homeFrameLoaded || homeFrameLoading) return;
   homeFrameLoading = true;
 
-  fetch(HOME_HTML_URL + "?v=" + Date.now())
+  const localHomeUrl = new URL("home.html", location.href).href;
+  const homeSources = location.hostname === "raw.githubusercontent.com"
+    ? [HOME_HTML_URL]
+    : [localHomeUrl, HOME_HTML_URL];
+  homeSources.reduce((request, source) => request.catch(() => fetch(source + "?v=" + Date.now()).then(response => {
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    return response.text();
+  })), Promise.reject(new Error("No Home source available")))
     .then(r => {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.text();
-    })
-    .then(html => {
+      const html = r;
       const homeFrame = document.getElementById("homeFrame");
       homeFrame.srcdoc = html;
       homeFrameLoaded = true;
@@ -1798,6 +1802,30 @@ function openApp(app) {
   // finished setting up window.VUSAnalytics yet on a very fast first click.
   if (window.VUSAnalytics && typeof window.VUSAnalytics.trackAppClick === "function") {
     window.VUSAnalytics.trackAppClick(app.name);
+  }
+
+  // Sektor is a local HTML page in this repository. When the hub itself is
+  // viewed from raw GitHub, fetch the page and write it into a real document
+  // so the browser does not display GitHub's text response as source code.
+  if (app.name === "Sektor" || /(?:^|\/)VUS-Servers\.html(?:$|[?#])/i.test(app.url)) {
+    const appUrl = new URL("VUS-Servers.html", location.href).href;
+    if (location.hostname !== "raw.githubusercontent.com") {
+      window.open(appUrl, "_blank", "noopener");
+      return;
+    }
+    showToast("Loading " + app.name + "...", "load");
+    fetch(appUrl).then(r => {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    }).then(text => {
+      const win = window.open("about:blank", "_blank");
+      if (!win) throw new Error("Popup blocked");
+      win.document.open();
+      win.document.write(text.replace(/<head>/i, "<head><base href=\"" + appUrl.slice(0, appUrl.lastIndexOf("/") + 1) + "\">")
+        .replace(/<title>[^<]*<\/title>/i, "<title>Sektor</title>"));
+      win.document.close();
+    }).catch(() => showToast("Failed to load Sektor", "err"));
+    return;
   }
 
   // Local app pages open directly when the hub has a normal document URL.
