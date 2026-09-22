@@ -953,16 +953,43 @@
 </div>
 
 <!-- Staff menu: shared modal for the Owner / Admin / Mod menus. Which one opens
-     depends on your rank -- there is no unlock code. Lists everyone online,
-     refreshed every 5s while open. -->
+     depends on your rank -- there is no unlock code. Lists everyone online;
+     refreshes when opened and when you press Refresh (no timer). -->
 <div class="chat-modal-overlay" id="ownerMenuOverlay">
   <div class="chat-modal" style="max-width:560px">
     <h3 id="ownerMenuTitle">👑 Owner Menu</h3>
-    <p id="ownerMenuSubtitle" style="margin-bottom:8px">Online now — refreshes every 5s while this is open.</p>
+    <p id="ownerMenuSubtitle" style="margin-bottom:8px">Online now. Press Refresh to update the list.</p>
     <div id="ownerMenuCommands" style="margin-bottom:14px"></div>
     <div id="ownerMenuList" style="margin-bottom:8px"></div>
     <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="ownerMenuRefreshBtn">&#8635; Refresh</button>
       <button class="chat-modal-btn-secondary" id="ownerMenuCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Rank roster (Mod and up): everyone who holds a rank, online or not. Loads when
+     opened and when you press Refresh -- no timer. -->
+<div class="chat-modal-overlay" id="rosterOverlay">
+  <div class="chat-modal" style="max-width:520px">
+    <h3>&#128101; Rank roster</h3>
+    <p id="rosterSubtitle" style="margin-bottom:8px">Everyone who holds a rank, online or not.</p>
+    <div id="rosterList" style="margin-bottom:8px"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="rosterRefreshBtn">&#8635; Refresh</button>
+      <button class="chat-modal-btn-secondary" id="rosterCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Rank guide (everyone): what each rank can do. Built from the same tables the
+     chat itself uses, so the numbers can't drift out of date. -->
+<div class="chat-modal-overlay" id="rankGuideOverlay">
+  <div class="chat-modal" style="max-width:560px">
+    <h3>&#128214; What each rank does</h3>
+    <div id="rankGuideBody"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="rankGuideCloseBtn">Close</button>
     </div>
   </div>
 </div>
@@ -1151,7 +1178,11 @@ async function lookupAccountByIdentifier(database, identifier) {
       const [accountKey] = Object.keys(matches);
       if (accountKey) return { accountKey, source: "fallback" };
     }
-  } catch (e) { noteAuthDbProblem(database, e); }
+  } catch (e) {
+    // The secured login database refuses to list every account, on purpose.
+    // Only a failure that is NOT that refusal is a real problem worth reporting.
+    if (!isPermissionDenied(e)) noteAuthDbProblem(database, e);
+  }
 
   return null;
 }
@@ -1500,12 +1531,6 @@ const ChatBackend = {
     return () => ref.off("value", handler);
   },
 
-  async getRoleForId(loginId) {
-    const profile = await this.getProfile(loginId);
-    const role = profile && profile.role;
-    return ROLES[role] ? role : "unranked";
-  },
-
   async setRoleForId(loginId, roleId) {
     if (!ROLES[roleId]) throw new Error("Unknown role");
     await this.updateProfile(loginId, { role: roleId });
@@ -1730,7 +1755,7 @@ const ChatBackend = {
         const val = (await this._roleIdRefs[role.id].child(this._pid(loginId)).get()).val();
         if (val && val.temporary) {
           if (Number(val.expiresAt) > Date.now()) this.scheduleTemporaryRoleExpiry(role.id, loginId, Number(val.expiresAt));
-          else { await this._roleIdRefs[role.id].child(this._pid(loginId)).remove(); await this._syncProfileRole(loginId); }
+          else { await this._roleIdRefs[role.id].child(this._pid(loginId)).remove(); }
         }
       } catch (e) {}
     }
@@ -1942,26 +1967,15 @@ const ChatBackend = {
         const current = (await ref.get()).val();
         if (current && current.temporary && Number(current.expiresAt) <= Date.now()) {
           await ref.remove();
-          await this._syncProfileRole(loginId);
-        }
+              }
       } catch (e) {}
       delete this._temporaryRoleTimers[timerKey];
     }, wait);
   },
 
-  // Keeps userProfiles/{id}.role equal to the highest role the ID holds, so
-  // the profile always reflects current rank without a scan.
-  async _syncProfileRole(loginId) {
-    try {
-      const best = await this.getEffectiveRole(loginId);
-      await this.updateProfile(loginId, { role: best });
-    } catch (e) {}
-  },
-
   async grantRoleToId(roleId, loginId) {
     if (!ROLES[roleId] || ROLES[roleId].implicit || !loginId) throw new Error("Invalid role grant");
     await this._roleIdRefs[roleId].child(this._pid(loginId)).set(true);
-    await this._syncProfileRole(loginId);
   },
 
   async grantTemporaryRoleToId(roleId, loginId, durationMs, byLoginId) {
@@ -1976,14 +1990,12 @@ const ChatBackend = {
       expiresAt
     });
     this.scheduleTemporaryRoleExpiry(roleId, loginId, expiresAt);
-    await this._syncProfileRole(loginId);
   },
 
   async removeRoleFromId(roleId, loginId) {
     if (!ROLES[roleId] || ROLES[roleId].implicit || !loginId) throw new Error("Invalid role removal");
     clearTimeout(this._temporaryRoleTimers[roleId + ":" + loginId]);
     await this._roleIdRefs[roleId].child(this._pid(loginId)).remove();
-    await this._syncProfileRole(loginId);
   },
 
   async unbanUser(identifier) {
@@ -2931,6 +2943,9 @@ function logoutToNamePicker() {
 }
 
 function closeAllPanels() {
+  closeRoster();
+  closeRankGuide();
+  closeOwnerMenu();
   closeClearPanel();
   closeOnlineListPanel();
   closePingYouPanel();
@@ -3834,53 +3849,6 @@ async function joinAsSpectatorAuto() {
   renderDmLoginPrompt();
 }
 
-function renderLoginIdLookup() {
-  $globalClearPanel.innerHTML = "";
-  $globalClearPanel.style.width = "260px";
-
-  const title = document.createElement("div");
-  title.textContent = "VUS DM IDs";
-  title.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:10px";
-  $globalClearPanel.appendChild(title);
-
-  const note = document.createElement("div");
-  note.textContent = "These are each person's VUS DM account IDs.";
-  note.style.cssText = "color:#94a3b8;font-size:12.5px;line-height:1.4;margin-bottom:8px";
-  $globalClearPanel.appendChild(note);
-
-  const entries = [...latestPresenceList].sort((a, b) => a.name.localeCompare(b.name));
-  if (!entries.length) {
-    const empty = document.createElement("div");
-    empty.textContent = "No one is online.";
-    empty.style.color = "#64748b";
-    $globalClearPanel.appendChild(empty);
-  } else {
-    entries.forEach(entry => {
-      const row = document.createElement("div");
-      row.style.cssText = "display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid #273549";
-
-      const name = document.createElement("span");
-      name.textContent = entry.name;
-      name.style.cssText = "color:#f1f5f9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
-
-      const id = document.createElement("span");
-      id.textContent = entry.loginId ? "#" + entry.loginId : "No VUS DM ID";
-      id.style.cssText = "color:#4ade80;font-family:monospace;flex-shrink:0";
-
-      row.appendChild(name);
-      row.appendChild(id);
-      $globalClearPanel.appendChild(row);
-    });
-  }
-
-  const closeBtn = document.createElement("button");
-  closeBtn.textContent = "Close";
-  closeBtn.className = "toolbar-btn";
-  closeBtn.style.cssText = "width:100%;margin-top:10px";
-  closeBtn.addEventListener("click", closeClearPanel);
-  $globalClearPanel.appendChild(closeBtn);
-}
-
 async function renderModMenu() {
   $globalClearPanel.innerHTML = "";
   $globalClearPanel.style.width = "260px";
@@ -4065,10 +4033,11 @@ async function renderModMenu() {
     btn.addEventListener("click", handler);
     $globalClearPanel.appendChild(btn);
   };
+  addPanelButton("\uD83D\uDCD6 Rank guide", () => { closeClearPanel(); openRankGuide(); });
+  if (rank >= ROSTER_MIN_RANK)       addPanelButton("\uD83D\uDC65 Rank roster", () => { closeClearPanel(); openRoster(); });
   if (rank >= ROLES.crown.rank)      addPanelButton("👑 Owner Menu", () => { closeClearPanel(); openOwnerMenu(); });
   else if (rank >= ROLES.admin.rank) addPanelButton("🛡️ Admin Menu", () => { closeClearPanel(); openAdminMenuStaff(); });
   else if (rank >= ROLES.mod.rank)   addPanelButton("🧩 Mod Menu", () => { closeClearPanel(); openModMenuStaff(); });
-  if (rank >= IDS_MIN_RANK)          addPanelButton("Online account IDs", () => renderLoginIdLookup());
 
   const logoutBtn = document.createElement("button");
   logoutBtn.textContent = "Log out (change name)";
@@ -4127,6 +4096,7 @@ const $ownerMenuSubtitle = document.getElementById("ownerMenuSubtitle");
 const $ownerMenuCommands = document.getElementById("ownerMenuCommands");
 const $ownerMenuList = document.getElementById("ownerMenuList");
 const $ownerMenuCloseBtn = document.getElementById("ownerMenuCloseBtn");
+const $ownerMenuRefreshBtn = document.getElementById("ownerMenuRefreshBtn");
 
 const $timeoutSetOverlay = document.getElementById("timeoutSetOverlay");
 const $timeoutSetTitle = document.getElementById("timeoutSetTitle");
@@ -4150,7 +4120,6 @@ const $banCancelBtn = document.getElementById("banCancelBtn");
 const $banConfirmBtn = document.getElementById("banConfirmBtn");
 
 let staffMenuMode = "owner"; // "owner" | "mod" — which gate/limits currently apply
-let ownerMenuRefreshTimer = null;
 let pendingTimeoutTarget = null;
 let pendingTemporaryModTarget = null;
 let pendingGrantModTarget = null;
@@ -4256,11 +4225,9 @@ function openOwnerMenu() {
   staffMenuMode = "owner";
   closeClearPanel();
   $ownerMenuTitle.textContent = "👑 Owner Menu";
-  $ownerMenuSubtitle.textContent = "Online now — refreshes every 5s while this is open.";
+  $ownerMenuSubtitle.textContent = "Online now. Press Refresh to update the list.";
   renderOwnerMenuList();
   $ownerMenuOverlay.style.display = "flex";
-  clearInterval(ownerMenuRefreshTimer);
-  ownerMenuRefreshTimer = setInterval(renderOwnerMenuList, 5000);
 }
 
 // Mod Menu: same modal, same list/refresh machinery, far fewer buttons per
@@ -4271,22 +4238,18 @@ function openModMenuStaff() {
   staffMenuMode = "mod";
   closeClearPanel();
   $ownerMenuTitle.textContent = "🧩 Mod Menu";
-  $ownerMenuSubtitle.textContent = "Online now, refreshes every 5s while this is open. Timeouts only (" + limitsText(TIME_LIMITS.modTimeout) + ").";
+  $ownerMenuSubtitle.textContent = "Online now. Press Refresh to update the list. Timeouts only (" + limitsText(TIME_LIMITS.modTimeout) + ").";
   renderOwnerMenuList();
   $ownerMenuOverlay.style.display = "flex";
-  clearInterval(ownerMenuRefreshTimer);
-  ownerMenuRefreshTimer = setInterval(renderOwnerMenuList, 5000);
 }
 
 function openAdminMenuStaff() {
   staffMenuMode = "admin";
   closeClearPanel();
   $ownerMenuTitle.textContent = "🛡️ Admin Menu";
-  $ownerMenuSubtitle.textContent = "Online now — use commands to grant temporary Mod status.";
+  $ownerMenuSubtitle.textContent = "Online now. Press Refresh to update the list. Use /grant to give ranks.";
   renderOwnerMenuList();
   $ownerMenuOverlay.style.display = "flex";
-  clearInterval(ownerMenuRefreshTimer);
-  ownerMenuRefreshTimer = setInterval(renderOwnerMenuList, 5000);
 }
 
 function renderStaffCommands() {
@@ -4335,13 +4298,249 @@ function renderStaffCommands() {
 
 function closeOwnerMenu() {
   $ownerMenuOverlay.style.display = "none";
-  clearInterval(ownerMenuRefreshTimer);
 }
 
 $ownerMenuCloseBtn.addEventListener("click", closeOwnerMenu);
 $ownerMenuOverlay.addEventListener("click", (e) => {
   if (e.target === $ownerMenuOverlay) closeOwnerMenu();
 });
+
+
+/* ══════════════════════════════════════════════════════════
+   STAFF MENU: Refresh button (the list no longer refreshes by itself)
+   ══════════════════════════════════════════════════════════ */
+$ownerMenuRefreshBtn.addEventListener("click", async () => {
+  const box = $ownerMenuOverlay.querySelector(".chat-modal");
+  const scrolled = box ? box.scrollTop : 0;
+  $ownerMenuRefreshBtn.disabled = true;
+  $ownerMenuRefreshBtn.textContent = "Refreshing...";
+  try { await renderOwnerMenuList(); } finally {
+    $ownerMenuRefreshBtn.disabled = false;
+    $ownerMenuRefreshBtn.innerHTML = "&#8635; Refresh";
+    if (box) box.scrollTop = scrolled;   // keep your place in a long list
+  }
+});
+
+/* ══════════════════════════════════════════════════════════
+   RANK ROSTER (Mod and up)
+   Everyone who holds a rank, offline people included, each listed once under
+   their highest rank. Names of offline people come from their saved profile
+   (their last chat name). Account IDs show for Mod and up.
+   ══════════════════════════════════════════════════════════ */
+const ROSTER_MIN_RANK = ROLES.mod.rank;
+const $rosterOverlay = document.getElementById("rosterOverlay");
+const $rosterList = document.getElementById("rosterList");
+const $rosterRefreshBtn = document.getElementById("rosterRefreshBtn");
+const $rosterCloseBtn = document.getElementById("rosterCloseBtn");
+
+function closeRoster() { $rosterOverlay.style.display = "none"; }
+
+async function renderRoster() {
+  if (!myLoginId || myRank() < ROSTER_MIN_RANK) { closeRoster(); return; }
+  const showIds = myRank() >= IDS_MIN_RANK;
+
+  // Everyone who holds any stored rank, grouped by their HIGHEST one.
+  const holderIds = new Set();
+  Object.values(ROLES).forEach(role => {
+    if (!role.implicit) (roleIdHolders[role.id] || new Set()).forEach(id => holderIds.add(String(id)));
+  });
+  const ids = [...holderIds];
+  const profiles = {};
+  await Promise.all(ids.map(async id => {
+    try { profiles[id] = await ChatBackend.getProfile(id); } catch (e) { profiles[id] = null; }
+  }));
+
+  const people = ids.map(id => {
+    const roleId = effectiveRoleForLoginId(id);
+    const online = latestPresenceList.find(e => String(e.loginId || "") === id);
+    const raw = (roleIdRaw[roleId] || {})[id];
+    return {
+      id, role: ROLES[roleId], online: !!online,
+      name: (online && online.name) || (profiles[id] && profiles[id].lastName) || "Unknown",
+      tempLeftMs: raw && typeof raw === "object" && raw.temporary ? Number(raw.expiresAt) - Date.now() : 0
+    };
+  });
+
+  $rosterList.innerHTML = "";
+  if (people.length === 0) {
+    const empty = document.createElement("div");
+    empty.textContent = "Nobody holds a rank yet.";
+    empty.style.cssText = "color:#64748b;font-size:13.5px;padding:6px 0";
+    $rosterList.appendChild(empty);
+    return;
+  }
+
+  Object.values(ROLES).filter(r => !r.implicit).sort((a, b) => b.rank - a.rank).forEach(role => {
+    const group = people.filter(p => p.role.id === role.id)
+      .sort((a, b) => (b.online - a.online) || a.name.localeCompare(b.name));
+    if (group.length === 0) return;
+
+    const header = document.createElement("div");
+    header.textContent = role.icon + " " + role.label + " (" + group.length + ")";
+    header.style.cssText = "margin:12px 0 2px;color:#94a3b8;font-size:12.5px;font-weight:700;letter-spacing:.03em";
+    $rosterList.appendChild(header);
+
+    group.forEach(person => {
+      const row = document.createElement("div");
+      row.className = "room-member-row";
+      row.dataset.loginId = person.id;
+
+      const nameEl = document.createElement("div");
+      nameEl.className = "room-member-name";
+      const dot = document.createElement("span");
+      dot.textContent = person.online ? "\u25cf" : "\u25cb";
+      dot.style.color = person.online ? "#22c55e" : "#64748b";
+      dot.title = person.online ? "Online" : "Offline";
+      const label = document.createElement("span");
+      label.textContent = person.name;
+      nameEl.appendChild(dot);
+      nameEl.appendChild(label);
+
+      const meta = document.createElement("div");
+      meta.style.cssText = "color:#64748b;font-size:12px;flex-shrink:0;text-align:right";
+      const bits = [person.online ? "Online" : "Offline"];
+      if (person.tempLeftMs > 0) bits.push("temporary, " + formatCountdown(person.tempLeftMs) + " left");
+      if (showIds) bits.push("#" + person.id);
+      meta.textContent = bits.join(" \u00b7 ");
+
+      row.appendChild(nameEl);
+      row.appendChild(meta);
+      $rosterList.appendChild(row);
+    });
+  });
+}
+
+function openRoster() {
+  if (myRank() < ROSTER_MIN_RANK) return;
+  $rosterOverlay.style.display = "flex";
+  return renderRoster();
+}
+
+$rosterRefreshBtn.addEventListener("click", async () => {
+  const box = $rosterOverlay.querySelector(".chat-modal");
+  const scrolled = box ? box.scrollTop : 0;
+  $rosterRefreshBtn.disabled = true;
+  $rosterRefreshBtn.textContent = "Refreshing...";
+  try { await renderRoster(); } finally {
+    $rosterRefreshBtn.disabled = false;
+    $rosterRefreshBtn.innerHTML = "&#8635; Refresh";
+    if (box) box.scrollTop = scrolled;
+  }
+});
+$rosterCloseBtn.addEventListener("click", closeRoster);
+$rosterOverlay.addEventListener("click", e => { if (e.target === $rosterOverlay) closeRoster(); });
+
+/* ══════════════════════════════════════════════════════════
+   RANK GUIDE (everyone)
+   What each rank can do. Everything numeric or command-related is read from
+   the same tables the chat enforces (delays, TIME_LIMITS, SLASH_COMMANDS), so
+   this can't disagree with what actually happens.
+   ══════════════════════════════════════════════════════════ */
+const $rankGuideOverlay = document.getElementById("rankGuideOverlay");
+const $rankGuideBody = document.getElementById("rankGuideBody");
+const $rankGuideCloseBtn = document.getElementById("rankGuideCloseBtn");
+
+function closeRankGuide() { $rankGuideOverlay.style.display = "none"; }
+
+function rankGuideLines(role) {
+  const msgEvery = formatDurationShort(ROLE_MESSAGE_COOLDOWNS_MS[role.id]);
+  const imgEvery = formatDurationShort(ROLE_IMAGE_COOLDOWNS_MS[role.id]);
+  const gated = role.rank <= IMAGE_GATED_MAX_RANK;
+  const byHand = role.id === "crown" || role.id === "coowner";
+  const newCommands = SLASH_COMMANDS.filter(c => c.minRank === role.rank);
+  const grantable = Object.values(ROLES).filter(r => !r.implicit && r.id !== "crown" && r.id !== "coowner" && r.rank < role.rank);
+  const canGrant = role.rank >= ROLES.admin.rank && grantable.length > 0;
+  const menu = role.rank >= ROLES.crown.rank ? "Owner Menu" : role.rank >= ROLES.admin.rank ? "Admin Menu" : role.rank >= ROLES.mod.rank ? "Mod Menu" : null;
+
+  const lines = [];
+  lines.push(["How you get it", role.implicit ? "Everyone starts here."
+    : byHand ? "Added by hand in the database. It can't be given out in chat."
+    : "Given to you by a higher rank."]);
+  lines.push(["Chatting", "One message every " + msgEvery + "."]);
+  lines.push(["Images", gated
+    ? "One every " + imgEvery + ", but only after a higher rank turns image access on for you."
+    : "You can post images, one every " + imgEvery + "."]);
+  lines.push(["Bubble color", role.rank >= COLOR_MIN_RANK ? "You can pick your own colors in Settings." : "Unlocks at " + ROLES.normie.icon + " " + ROLES.normie.label + "."]);
+  if (menu) lines.push(["Menu", menu + (role.id === "mod" ? " (timeouts only)" : "") + " in Settings."]);
+  if (canGrant) lines.push(["Can give out", grantable.map(r => r.icon + " " + r.label).join(", ") + ", permanently or for a set time."]);
+  if (role.id === "coowner") lines.push(["Commands", "The same as " + ROLES.admin.icon + " " + ROLES.admin.label + "."]);
+  return { lines, newCommands, notes: [
+    role.id === "crown" ? "The only rank that can /close the chat and /unban." : null,
+    byHand ? "Can't be banned or timed out." : null
+  ].filter(Boolean) };
+}
+
+function openRankGuide() {
+  const mine = myRoleId();
+  $rankGuideBody.innerHTML = "";
+
+  const intro = document.createElement("p");
+  intro.textContent = "Ranks belong to your account, so they stay when you leave, rename or log back in. A rank can only give out or take away ranks below its own, and nobody can act on someone of the same or higher rank.";
+  intro.style.marginBottom = "6px";
+  $rankGuideBody.appendChild(intro);
+
+  Object.values(ROLES).sort((a, b) => a.rank - b.rank).forEach(role => {
+    const guide = rankGuideLines(role);
+    const card = document.createElement("div");
+    card.dataset.role = role.id;
+    card.style.cssText = "border:1.5px solid " + (role.id === mine ? "#22c55e" : "#334155") + ";border-radius:11px;padding:11px 13px;margin-bottom:9px";
+
+    const head = document.createElement("div");
+    head.style.cssText = "display:flex;align-items:center;justify-content:space-between;font-weight:700;font-size:15px;margin-bottom:6px";
+    const title = document.createElement("span");
+    title.textContent = role.icon + " " + role.label;
+    head.appendChild(title);
+    if (role.id === mine) {
+      const tag = document.createElement("span");
+      tag.textContent = "You are here";
+      tag.style.cssText = "font-size:11.5px;font-weight:700;color:#052e16;background:#22c55e;border-radius:6px;padding:1px 7px";
+      head.appendChild(tag);
+    }
+    card.appendChild(head);
+
+    const addLine = (label, text) => {
+      const line = document.createElement("div");
+      line.style.cssText = "font-size:13.5px;line-height:1.45;color:#cbd5e1;margin-bottom:3px";
+      const strong = document.createElement("strong");
+      strong.textContent = label + ": ";
+      strong.style.color = "#f1f5f9";
+      line.appendChild(strong);
+      line.appendChild(document.createTextNode(text));
+      card.appendChild(line);
+    };
+    guide.lines.forEach(([label, text]) => addLine(label, text));
+
+    if (guide.newCommands.length) {
+      const cmdTitle = document.createElement("div");
+      cmdTitle.textContent = "Commands you get:";
+      cmdTitle.style.cssText = "font-size:13.5px;font-weight:700;color:#f1f5f9;margin:4px 0 2px";
+      card.appendChild(cmdTitle);
+      guide.newCommands.forEach(cmd => {
+        const item = document.createElement("div");
+        item.style.cssText = "font-size:13px;line-height:1.4;color:#94a3b8;margin-bottom:2px";
+        const name = document.createElement("span");
+        name.textContent = cmd.name + (cmd.args ? " " + cmd.args : "");
+        name.style.cssText = "color:#4ade80;font-family:monospace";
+        item.appendChild(name);
+        item.appendChild(document.createTextNode(" \u2014 " + commandDescription(cmd, role.rank)));
+        card.appendChild(item);
+      });
+    }
+    guide.notes.forEach(note => {
+      const n = document.createElement("div");
+      n.textContent = note;
+      n.style.cssText = "font-size:13px;color:#fbbf24;margin-top:4px";
+      card.appendChild(n);
+    });
+    $rankGuideBody.appendChild(card);
+  });
+
+  $rankGuideOverlay.style.display = "flex";
+  const box = $rankGuideOverlay.querySelector(".chat-modal");
+  if (box) box.scrollTop = 0;
+}
+$rankGuideCloseBtn.addEventListener("click", closeRankGuide);
+$rankGuideOverlay.addEventListener("click", e => { if (e.target === $rankGuideOverlay) closeRankGuide(); });
 
 async function renderOwnerMenuList() {
   // Re-check the relevant gate every refresh too — if the role backing
