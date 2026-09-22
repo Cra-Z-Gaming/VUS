@@ -400,6 +400,14 @@
     font-size: 16px;
     font-weight: 700;
     position: relative;
+    overflow: hidden;
+  }
+  .card-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border-radius: inherit;
   }
 
   .card-icon.green { background: rgba(34,197,94,0.12); color: #4ade80; }
@@ -424,6 +432,7 @@
     color: var(--fg-muted);
     line-height: 1.5;
     display: -webkit-box;
+    line-clamp: 2;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
@@ -1448,6 +1457,11 @@ function escapeHtml(str) {
   }[c]));
 }
 
+function isImageIcon(value) {
+  const icon = String(value || "").trim();
+  return /^(data:image\/|https?:\/\/|\/)/i.test(icon) || /\.(png|jpe?g|gif|svg|webp)(\?.*)?$/i.test(icon);
+}
+
 // ===================== TOAST SYSTEM =====================
 function showToast(msg, type) {
   const container = document.getElementById("toasts");
@@ -1664,8 +1678,13 @@ function renderCards(grid, items, fromHomeSearch) {
 
     const favorited = isFavorite(app);
 
+    const icon = String(app.icon || "").trim();
+    const iconHtml = isImageIcon(icon)
+      ? `<div class="card-icon ${app.color || 'green'}"><img src="${escapeHtml(icon)}" alt="${escapeHtml(app.name)}" /></div>`
+      : `<div class="card-icon ${app.color || 'green'}">${escapeHtml(icon || app.name.substring(0, 2).toUpperCase())}</div>`;
+
     card.innerHTML = `
-      <div class="card-icon ${app.color || 'green'}">${escapeHtml(app.icon || app.name.substring(0, 2).toUpperCase())}</div>
+      ${iconHtml}
       <button type="button" class="card-favorite${favorited ? ' active' : ''}" aria-label="${favorited ? 'Remove from favorites' : 'Add to favorites'}" aria-pressed="${favorited}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
@@ -1781,8 +1800,29 @@ function openApp(app) {
     window.VUSAnalytics.trackAppClick(app.name);
   }
 
-  // Local app pages open directly, preserving their relative assets.
+  // Local app pages open directly when the hub has a normal document URL.
   if (!app.url.includes("://")) {
+    if (location.hostname === "raw.githubusercontent.com") {
+      const appUrl = new URL(app.url, location.href).href;
+      showToast("Loading " + app.name + "...", "load");
+      fetch(appUrl)
+        .then(r => {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.text();
+        })
+        .then(text => {
+          const win = window.open("about:blank", "_blank");
+          if (!win) throw new Error("Popup blocked");
+          const baseUrl = appUrl.slice(0, appUrl.lastIndexOf("/") + 1);
+          win.document.open();
+          win.document.write(text.replace("<head>", "<head><base href=\"" + baseUrl + "\">")
+            .replace(/<title>[^<]*<\/title>/i, "<title>" + app.name + "<\/title>"));
+          win.document.close();
+          showToast(app.name + " opened successfully", "ok");
+        })
+        .catch(() => showToast("Failed to load " + app.name, "err"));
+      return;
+    }
     window.open(app.url, "_blank", "noopener");
     return;
   }

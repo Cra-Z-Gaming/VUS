@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>VUS Servers</title>
+  <title>Sektor</title>
   <link rel="stylesheet" href="./other/VUS-Servers/style.css">
 </head>
 <body>
   <main id="authView" class="auth-view">
     <div class="auth-card">
-      <div class="brand-mark">VS</div>
-      <h1>VUS Servers</h1>
+      <div class="brand-mark" aria-label="Sektor"><span>S</span></div>
+      <h1>Sektor</h1>
       <p>Build your own spaces, channels, and voice rooms.</p>
       <div class="auth-tabs"><button id="loginTab" class="active">Log in</button><button id="signupTab">Sign up</button></div>
       <input id="usernameInput" placeholder="Username or 6-digit ID" autocomplete="username">
@@ -23,11 +23,11 @@
 
   <main id="appView" class="app-view" hidden>
     <aside class="server-rail">
-      <div class="rail-logo">VS</div>
+      <div class="rail-logo" aria-label="Sektor"><span>S</span></div>
       <div id="serverList" class="server-list"></div>
       <button id="newServerBtn" class="rail-add" title="Create server">+</button>
       <button id="joinServerBtn" class="rail-join" title="Join server">↗</button>
-      <button id="logoutBtn" class="rail-user" title="Open profile"></button>
+      <button id="logoutBtn" class="rail-user" type="button" title="Open profile" aria-label="Open profile"></button>
     </aside>
     <aside class="channel-sidebar">
       <header class="server-header"><div><strong id="serverName">Select a server</strong><small id="serverCode"></small></div><button id="serverSettingsBtn" title="Server settings">⚙</button></header>
@@ -40,15 +40,17 @@
       <div id="ownerTools" class="owner-tools" hidden><button id="addChannelBtn">＋ Add channel</button><button id="rankBtn">✦ Manage ranks</button></div>
     </aside>
     <section class="chat-column">
+      <section class="youtube-player" aria-label="YouTube audio player"><button id="youtubeOpenBtn" class="youtube-open-btn" type="button"><span class="youtube-player-icon">♪</span><span><strong>Sektor audio</strong><small id="youtubeTopStatus">Open player</small></span></button></section>
       <header class="chat-header"><div><span id="channelHash">#</span><strong id="channelName">general</strong><span id="channelTopic"></span></div><span id="channelPermission"></span></header>
       <div id="announcement" class="announcement" hidden><small>OWNER ANNOUNCEMENT</small><div id="announcementText"></div></div>
       <div id="ownerComposer" class="owner-composer" hidden><input id="announcementInput" maxlength="240" placeholder="Write an announcement"><button id="publishAnnouncement">Publish</button></div>
       <div id="messages" class="messages"><div class="empty-state">Select a channel to start talking.</div></div>
       <form id="messageForm" class="message-form"><div id="mentionSuggestions" class="mention-suggestions" hidden></div><input id="messageInput" maxlength="500" placeholder="Message #general" autocomplete="off"><input id="imageInput" type="file" accept="image/*" hidden><button id="imageButton" type="button" title="Attach image">＋</button><button type="submit">Send</button></form>
     </section>
-    <aside class="members-sidebar"><header>ONLINE <span id="memberCount">0</span></header><button id="addFriendBtn" class="add-friend-btn">＋ Add friend</button><div id="membersList"></div></aside>
+    <aside class="members-sidebar"><header>ONLINE <span id="memberCount">0</span></header><button id="addFriendBtn" class="add-friend-btn">＋ Add friend</button><button id="friendRequestsBtn" class="friend-requests-btn" type="button">♡ Friend requests <span id="friendRequestCount">0</span></button><div id="membersList"></div></aside>
   </main>
   <div id="remoteAudio" hidden></div>
+  <div id="youtubePopup" class="youtube-popup" hidden><section class="youtube-popup-card" role="dialog" aria-modal="true" aria-labelledby="youtubePopupTitle"><header class="youtube-popup-header"><div><strong id="youtubePopupTitle">Sektor audio</strong><small id="youtubeNowPlaying">Add an audio file or link</small></div><button id="youtubePopupClose" class="youtube-popup-close" type="button" aria-label="Close audio player">×</button></header><form id="youtubeAddForm" class="youtube-add-form"><input id="youtubeUrlInput" type="url" placeholder="Paste an .mp3, .wav, or .ogg link" aria-label="Direct audio link" autocomplete="off"><button type="submit">Add link</button></form><div class="youtube-file-row"><label for="youtubeFileInput" class="youtube-file-button">Choose audio files</label><input id="youtubeFileInput" type="file" accept="audio/mpeg,audio/wav,audio/ogg,.mp3,.wav,.ogg" multiple><span>Files stay in this browser</span></div><div id="youtubePlayerError" class="youtube-player-error" role="status"></div><div id="youtubeEmbedWrap" class="youtube-embed-wrap" hidden><audio id="youtubeAudio" controls preload="metadata"></audio></div><div id="youtubePlaylist" class="youtube-playlist" aria-label="Saved audio songs"></div></section></div>
   <div id="modal" class="modal" hidden><div class="modal-card"><button id="modalClose" class="modal-close">×</button><h2 id="modalTitle"></h2><div id="modalBody"></div></div></div>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>

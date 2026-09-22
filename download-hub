@@ -119,9 +119,9 @@ input:checked + .slider::before {
         </label>
     </div>
     <div class="launchCol">
-        <button id="servers" class="launch-btn">Open VUS Servers</button>
+        <button id="servers" class="launch-btn">Open Sektor</button>
         <label class="toggleGroup">
-            <span id="labelServers">VUS Servers</span>
+            <span id="labelServers">Sektor</span>
             <span class="switch">
                 <input type="checkbox" id="serversToggle">
                 <span class="slider"></span>
@@ -206,11 +206,12 @@ async function launch(url, label) {
     win.document.write("<p>Loading " + label + "...</p>");
 
     try {
-        const response = await fetch(url + "?v=" + Date.now());
+        const resolvedUrl = new URL(url, location.href).href;
+        const response = await fetch(resolvedUrl + "?v=" + Date.now());
         if (!response.ok) throw new Error("HTTP " + response.status);
 
         const html = await response.text();
-        const baseUrl = url.slice(0, url.lastIndexOf("/") + 1);
+        const baseUrl = resolvedUrl.slice(0, resolvedUrl.lastIndexOf("/") + 1);
         win.document.open();
         win.document.write(html.replace(
             "<head>",
@@ -226,14 +227,14 @@ async function launch(url, label) {
 
 hubBtn.onclick = () => launch(HUB_URL, "VUS Hub");
 osBtn.onclick = () => launch(OS_URL, "VUS-OS");
-serversBtn.onclick = () => launch(SERVERS_URL, "VUS Servers");
+serversBtn.onclick = () => launch(SERVERS_URL, "Sektor");
 
 applyUI();
 
 window.onload = () => {
     if (getEnabled(HUB_KEY, true)) launch(HUB_URL, "VUS Hub");
     if (getEnabled(OS_KEY, false)) launch(OS_URL, "VUS-OS");
-    if (getEnabled(SERVERS_KEY, false)) launch(SERVERS_URL, "VUS Servers");
+    if (getEnabled(SERVERS_KEY, false)) launch(SERVERS_URL, "Sektor");
 };
 </script>
 </body></html>
