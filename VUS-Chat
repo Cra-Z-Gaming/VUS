@@ -1118,6 +1118,25 @@ const LEGACY_DM_AUTH_CONFIG = {
   appId: "1:898140075693:web:0ad830a523dd12135f3824"
 };
 
+// Links to this editor project have been reported as an abuse vector. Keep
+// the block in the shared send layer so every composer path gets the same
+// protection, including image-plus-text messages.
+const BLOCKED_LINK_PATTERNS = [
+  /\b(?:https?:\/\/)?(?:www\.)?editor\.p5js\.org\b/i
+];
+
+function containsBlockedLink(value) {
+  return BLOCKED_LINK_PATTERNS.some(pattern => pattern.test(String(value || "")));
+}
+
+function blockedLinkNotice() {
+  return new Error("That link is blocked for safety.");
+}
+
+function blockedJoinNotice() {
+  return new Error("That link cannot be used as a chat username.");
+}
+
 let dmAuthDb = null;
 let legacyDmAuthDb = null;
 
@@ -1606,6 +1625,7 @@ const ChatBackend = {
   },
 
   async send(name, text, mention, loginId) {
+    if (containsBlockedLink(text)) throw blockedLinkNotice();
     const color = await this.getNameColor(loginId);
     return this._ref.push({
       name: name,
@@ -2969,6 +2989,7 @@ async function joinWithDmSession(session, nickname) {
     return;
   }
   const name = nickname.trim();
+  if (containsBlockedLink(name)) throw blockedJoinNotice();
   const result = await ChatBackend.claimPresence(name, false, session.id);
   if (!result.ok) {
     if (result.reason === "banned") {
@@ -3535,6 +3556,11 @@ async function handleModerationCommand(text) {
 
 async function sendMessage() {
   const text = $msgInput.value.trim();
+
+  if (containsBlockedLink(text)) {
+    showComposerNotice("That link is blocked for safety.");
+    return;
+  }
 
   const mentionTarget = currentMentionTarget;
 

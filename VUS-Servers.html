@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sektor</title>
-  <link rel="stylesheet" href="./other/VUS-Servers/style.css">
+  <link rel="stylesheet" href="./other/VUS-Servers/style.css?v=20260922-3">
 </head>
 <body>
   <main id="authView" class="auth-view">
@@ -25,18 +25,22 @@
     <aside class="server-rail">
       <div class="rail-logo" aria-label="Sektor"><span>S</span></div>
       <div id="serverList" class="server-list"></div>
+      <button id="friendsBtn" class="server-button friends-server-btn" type="button" title="Friends &amp; DMs" aria-label="Friends and private messages">◎</button>
+      <div id="friendsList" class="friends-list"></div>
       <button id="newServerBtn" class="rail-add" title="Create server">+</button>
       <button id="joinServerBtn" class="rail-join" title="Join server">↗</button>
       <button id="logoutBtn" class="rail-user" type="button" title="Open profile" aria-label="Open profile"></button>
     </aside>
     <aside class="channel-sidebar">
       <header class="server-header"><div><strong id="serverName">Select a server</strong><small id="serverCode"></small></div><button id="serverSettingsBtn" title="Server settings">⚙</button></header>
-      <div class="channel-label">Text channels</div>
+      <div id="friendRequestsPanel" class="friend-requests-panel" hidden><div class="friend-panel-label">Friend requests</div><div id="friendRequestsList"></div></div>
+      <div id="textChannelsLabel" class="channel-label">Text channels</div>
       <div id="textChannels"></div>
-      <div class="channel-label">Voice channels</div>
+      <div id="voiceChannelsLabel" class="channel-label">Voice channels</div>
       <div id="voiceChannels"></div>
       <div id="voiceMembers" class="voice-members"></div>
       <div id="voiceControls" class="voice-controls" hidden><button id="muteVoiceBtn">Mute</button><button id="leaveVoiceBtn">Leave</button></div>
+      <div id="friendsDirectory" class="friends-directory" hidden></div>
       <div id="ownerTools" class="owner-tools" hidden><button id="addChannelBtn">＋ Add channel</button><button id="rankBtn">✦ Manage ranks</button></div>
     </aside>
     <section class="chat-column">
@@ -44,17 +48,20 @@
       <header class="chat-header"><div><span id="channelHash">#</span><strong id="channelName">general</strong><span id="channelTopic"></span></div><span id="channelPermission"></span></header>
       <div id="announcement" class="announcement" hidden><small>OWNER ANNOUNCEMENT</small><div id="announcementText"></div></div>
       <div id="ownerComposer" class="owner-composer" hidden><input id="announcementInput" maxlength="240" placeholder="Write an announcement"><button id="publishAnnouncement">Publish</button></div>
+      <div id="videoStage" class="video-stage" hidden></div>
+      <div id="gamesPanel" class="games-panel" hidden></div>
       <div id="messages" class="messages"><div class="empty-state">Select a channel to start talking.</div></div>
-      <form id="messageForm" class="message-form"><div id="mentionSuggestions" class="mention-suggestions" hidden></div><input id="messageInput" maxlength="500" placeholder="Message #general" autocomplete="off"><input id="imageInput" type="file" accept="image/*" hidden><button id="imageButton" type="button" title="Attach image">＋</button><button type="submit">Send</button></form>
+      <form id="messageForm" class="message-form"><div id="mentionSuggestions" class="mention-suggestions" hidden></div><input id="messageInput" maxlength="500" placeholder="Message #general" autocomplete="off"><input id="imageInput" type="file" accept="image/*" hidden><input id="audioInput" type="file" accept="audio/mpeg,audio/wav,audio/ogg,.mp3,.wav,.ogg" hidden><button id="imageButton" type="button" title="Attach image">＋</button><button id="audioButton" type="button" title="Attach MP3, WAV, or OGG">♪</button><button type="submit">Send</button></form>
     </section>
     <aside class="members-sidebar"><header>ONLINE <span id="memberCount">0</span></header><button id="addFriendBtn" class="add-friend-btn">＋ Add friend</button><div id="membersList"></div></aside>
   </main>
   <div id="remoteAudio" hidden></div>
-  <div id="youtubePopup" class="youtube-popup" hidden><section class="youtube-popup-card" role="dialog" aria-modal="true" aria-labelledby="youtubePopupTitle"><header class="youtube-popup-header"><div><strong id="youtubePopupTitle">Sektor audio</strong><small id="youtubeNowPlaying">Add an audio file or link</small></div><button id="youtubePopupClose" class="youtube-popup-close" type="button" aria-label="Close audio player">×</button></header><form id="youtubeAddForm" class="youtube-add-form"><input id="youtubeUrlInput" type="url" placeholder="Paste an .mp3, .wav, or .ogg link" aria-label="Direct audio link" autocomplete="off"><button type="submit">Add link</button></form><div class="youtube-file-row"><label for="youtubeFileInput" class="youtube-file-button">Choose audio files</label><input id="youtubeFileInput" type="file" accept="audio/mpeg,audio/wav,audio/ogg,.mp3,.wav,.ogg" multiple><span>Files stay in this browser</span></div><div id="youtubePlayerError" class="youtube-player-error" role="status"></div><div id="youtubeEmbedWrap" class="youtube-embed-wrap" hidden><audio id="youtubeAudio" controls preload="metadata"></audio></div><div id="youtubePlaylist" class="youtube-playlist" aria-label="Saved audio songs"></div></section></div>
+  <div id="mediaControlPopup" class="media-control-popup" hidden><div class="media-control-card"><div class="media-control-title">Video controls</div><div class="media-control-actions"><button id="popupMuteBtn" type="button">Mute</button><button id="popupCameraBtn" type="button">Camera</button><button id="popupScreenBtn" type="button">Share screen</button><button id="popupLeaveBtn" type="button" class="media-leave-btn">Leave</button></div></div></div>
+  <div id="youtubePopup" class="youtube-popup" hidden><section class="youtube-popup-card sektor-music-card" role="dialog" aria-modal="true" aria-labelledby="youtubePopupTitle"><header class="youtube-popup-header"><div><strong id="youtubePopupTitle">Sektor music player</strong><small id="youtubeNowPlaying">Local music player</small></div><button id="youtubePopupClose" class="youtube-popup-close" type="button" aria-label="Close audio player">×</button></header><iframe class="sektor-music-frame" src="./vus-music-player.html" title="Sektor local music player"></iframe></section></div>
   <div id="modal" class="modal" hidden><div class="modal-card"><button id="modalClose" class="modal-close">×</button><h2 id="modalTitle"></h2><div id="modalBody"></div></div></div>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-  <script src="./other/VUS-Servers/app.js"></script>
+  <script src="./other/VUS-Servers/app.js?v=20260922-4"></script>
 </body>
 </html>
