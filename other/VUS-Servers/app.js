@@ -92,6 +92,7 @@ const state = { user:null, servers:[], server:null, channel:"general", gameRef:n
 const $ = id => document.getElementById(id);
 const els = { authView:$('authView'), appView:$('appView'), loginTab:$('loginTab'), signupTab:$('signupTab'), username:$('usernameInput'), password:$('passwordInput'), authError:$('authError'), authStatus:$('authStatus'), authSubmit:$('authSubmit'), serverList:$('serverList'), serverName:$('serverName'), serverCode:$('serverCode'), friendsBtn:$('friendsBtn'), friendsList:$('friendsList'), friendRequestsPanel:$('friendRequestsPanel'), friendRequestsList:$('friendRequestsList'), friendsDirectory:$('friendsDirectory'), textChannelsLabel:$('textChannelsLabel'), textChannels:$('textChannels'), voiceChannelsLabel:$('voiceChannelsLabel'), voiceChannels:$('voiceChannels'), voiceMembers:$('voiceMembers'), voiceControls:$('voiceControls'), muteVoice:$('muteVoiceBtn'), leaveVoice:$('leaveVoiceBtn'), videoStage:$('videoStage'), gamesPanel:$('gamesPanel'), mediaControlPopup:$('mediaControlPopup'), popupMuteBtn:$('popupMuteBtn'), popupCameraBtn:$('popupCameraBtn'), popupScreenBtn:$('popupScreenBtn'), popupLeaveBtn:$('popupLeaveBtn'), remoteAudio:$('remoteAudio'), ownerTools:$('ownerTools'), channelName:$('channelName'), channelTopic:$('channelTopic'), channelPermission:$('channelPermission'), announcement:$('announcement'), announcementText:$('announcementText'), ownerComposer:$('ownerComposer'), announcementInput:$('announcementInput'), messages:$('messages'), messageForm:$('messageForm'), messageInput:$('messageInput'), mentionSuggestions:$('mentionSuggestions'), imageInput:$('imageInput'), imageButton:$('imageButton'), memberCount:$('memberCount'), membersList:$('membersList'), addFriend:$('addFriendBtn'), logout:$('logoutBtn'), newServer:$('newServerBtn'), joinServer:$('joinServerBtn'), serverSettings:$('serverSettingsBtn'), addChannel:$('addChannelBtn'), rank:$('rankBtn'), publish:$('publishAnnouncement'), modal:$('modal'), modalTitle:$('modalTitle'), modalBody:$('modalBody'), modalClose:$('modalClose'), youtubeOpenBtn:$('youtubeOpenBtn'), youtubePopup:$('youtubePopup'), youtubePopupClose:$('youtubePopupClose') };
 els.audioInput = $('audioInput');
+els.friendHome = $('friendHome');
 els.audioButton = $('audioButton');
 let signupMode = false;
 const safe = value => String(value || '').replace(/[.#$\[\]/]/g, '_');
@@ -175,11 +176,12 @@ function openFriendModal() {
   };
   document.getElementById('friendSearchBtn').onclick = search; input.onkeydown = event => { if (event.key === 'Enter') search(); }; input.focus();
 }
-function channels() { return Object.entries((state.server && state.server.channels) || {}).filter(([, channel]) => channel && typeof channel === 'object').map(([id, channel]) => ({id,...channel, type:channel.game || String(channel.topic || '').startsWith('[games]') ? 'games' : channel.type, topic:String(channel.topic || '').replace(/^\[games\]\s*/, '')})); }
-function isGamesChannel(channel) { return !!(channel && (channel.type === 'games' || channel.game === true)); }
+function channels() { return Object.entries((state.server && state.server.channels) || {}).filter(([, channel]) => channel && typeof channel === 'object').map(([id, channel]) => ({id,...channel, type:channel.type === 'games' || channel.game === true ? 'text' : channel.type, topic:String(channel.topic || '').replace(/^\[games\]\s*/, '')})); }
+function isGamesChannel() { return false; }
 function rankForMember(memberKey, memberName) { if (!state.server) return null; if (state.server.ownerKey === memberKey) return {name:'Owner', color:'#e8b768', permissions:{manage:true}}; const rank = state.server.ranks && state.server.ranks[memberKey]; if (!rank) return null; return typeof rank === 'string' ? {name:rank, color:'#9aa5b4', permissions:{}} : rank; }
 function renderServer() { if (state.dmFriend) closePrivateDm(); if (!state.server) return clearServer(); els.serverName.textContent = state.server.name; els.serverCode.textContent = 'Invite code: ' + state.server.code; const text = channels().filter(channel => !['voice','video','games'].includes(channel.type)); const voice = channels().filter(channel => channel.type === 'voice' || channel.type === 'video'); const games = channels().filter(channel => channel.type === 'games'); const owner = state.server.ownerKey === state.user.key; els.textChannels.innerHTML = ''; text.forEach(channel => { const button = document.createElement('button'); button.className = 'channel-button' + (state.channel === channel.id ? ' active' : ''); button.innerHTML = '<span>#</span><span>' + esc(channel.name) + '</span>'; button.onclick = () => selectChannel(channel.id); if (owner && !channel.default) addChannelDeleteButton(button, channel); els.textChannels.appendChild(button); }); els.voiceChannels.innerHTML = ''; voice.forEach(channel => { const button = document.createElement('button'); button.className = 'channel-button'; button.innerHTML = '<span>' + (channel.type === 'video' ? '▣' : '🔊') + '</span><span>' + esc(channel.name) + '</span><span class="channel-meta">Join</span>'; button.onclick = () => joinVoice(channel.id, channel.type === 'video'); if (owner && !channel.default) addChannelDeleteButton(button, channel); els.voiceChannels.appendChild(button); }); games.forEach(channel => { const button = document.createElement('button'); button.className = 'channel-button' + (state.channel === channel.id ? ' active' : ''); button.innerHTML = '<span>🎲</span><span>' + esc(channel.name) + '</span>'; button.onclick = () => selectChannel(channel.id); if (owner && !channel.default) addChannelDeleteButton(button); els.textChannels.appendChild(button); }); els.ownerTools.hidden = !owner; const current = channels().find(channel => channel.id === state.channel) || text[0]; if (current) { els.channelName.textContent = current.name; els.channelTopic.textContent = current.topic || ''; els.channelPermission.textContent = current.type === 'announcement' ? 'OWNER ONLY' : ''; els.announcement.hidden = !state.server.announcement; els.announcementText.textContent = state.server.announcement ? state.server.announcement.text : ''; els.ownerComposer.hidden = !(current.type === 'announcement' && owner); els.messageInput.placeholder = current.type === 'announcement' ? 'Only the server owner can post here' : 'Message #' + current.name; selectMessages(current.id); } }
-function addChannelDeleteButton(channelButton, channel) { if (['general','announcements','lounge'].includes(channel.id)) return; const removeButton = document.createElement('button'); removeButton.className = 'channel-delete'; removeButton.type = 'button'; removeButton.title = 'Delete ' + channel.name; removeButton.textContent = '×'; removeButton.onclick = event => { event.stopPropagation(); openDeleteChannelModal(channel); }; channelButton.appendChild(removeButton); }
+function addChannelDeleteButton(channelButton, channel) { const renameButton = document.createElement('button'); renameButton.className = 'channel-action channel-rename'; renameButton.type = 'button'; renameButton.title = 'Rename ' + channel.name; renameButton.textContent = '✎'; renameButton.onclick = event => { event.stopPropagation(); openRenameChannelModal(channel); }; channelButton.appendChild(renameButton); if (['general','announcements','lounge'].includes(channel.id)) return; const removeButton = document.createElement('button'); removeButton.className = 'channel-action channel-delete'; removeButton.type = 'button'; removeButton.title = 'Delete ' + channel.name; removeButton.textContent = '×'; removeButton.onclick = event => { event.stopPropagation(); openDeleteChannelModal(channel); }; channelButton.appendChild(removeButton); }
+function openRenameChannelModal(channel) { if (!state.server || state.server.ownerKey !== state.user.key) return; els.modalTitle.textContent = 'Rename channel'; els.modalBody.innerHTML = '<label class="modal-label" for="renameChannelName">Channel name</label><input id="renameChannelName" class="modal-input" maxlength="24" value="' + esc(channel.name) + '"><div id="modalError" class="error"></div><button id="saveChannelName" class="primary-btn">Save name</button>'; els.modal.hidden = false; const input = document.getElementById('renameChannelName'); const error = document.getElementById('modalError'); input.focus(); input.select(); document.getElementById('saveChannelName').onclick = async () => { const name = input.value.trim(); if (!name) { error.textContent = 'Enter a channel name.'; return; } try { if (state.server.localOnly) { state.server.channels[channel.id].name = name.slice(0,24); saveLocalServers(localServers().map(server => server.code === state.server.code ? state.server : server)); } else await db.ref('serverMeta/' + state.server.code + '/channels/' + channel.id + '/name').set(name.slice(0,24)); els.modal.hidden = true; renderServer(); } catch (renameError) { error.textContent = 'Could not rename this channel.'; } }; }
 function openDeleteChannelModal(channel) { els.modalTitle.textContent = 'Delete channel'; els.modalBody.innerHTML = '<p class="modal-copy">Delete <strong>#' + esc(channel.name) + '</strong>? Messages in this channel will no longer be available.</p><div id="modalError" class="error"></div><div class="modal-actions"><button id="cancelDelete" class="modal-secondary">Cancel</button><button id="confirmDelete" class="modal-danger">Delete channel</button></div>'; els.modal.hidden = false; document.getElementById('cancelDelete').onclick = () => { els.modal.hidden = true; }; document.getElementById('confirmDelete').onclick = async () => { try { if (state.server.localOnly) { delete state.server.channels[channel.id]; saveLocalServers(localServers().map(server => server.code === state.server.code ? state.server : server)); } else await db.ref('serverMeta/' + state.server.code + '/channels/' + channel.id).remove(); if (state.channel === channel.id) state.channel = 'general'; els.modal.hidden = true; renderServer(); } catch (error) { document.getElementById('modalError').textContent = 'Could not delete this channel.'; } }; }
 function closePrivateDm() { state.dmFriend = null; if (state.dmRef && state.dmHandler) state.dmRef.off('child_added', state.dmHandler); state.dmRef = null; state.dmHandler = null; }
 function selectChannel(id) { closePrivateDm(); leaveVoice(); els.friendRequestsPanel.hidden = true; els.friendsDirectory.hidden = true; els.textChannelsLabel.hidden = false; els.textChannels.hidden = false; els.voiceChannelsLabel.hidden = false; els.voiceChannels.hidden = false; els.voiceMembers.hidden = false; els.voiceControls.hidden = false; els.friendsBtn.classList.remove('active'); state.channel = id; renderServer(); }
@@ -406,12 +408,6 @@ new MutationObserver(() => {
     option.textContent = 'Video Calls and Streaming · HD camera or screen';
     channelType.insertBefore(option, channelType.querySelector('option[value="announcement"]'));
   }
-  if (channelType && !channelType.querySelector('option[value="games"]')) {
-    const option = document.createElement('option');
-    option.value = 'games';
-    option.textContent = 'Games · party games';
-    channelType.insertBefore(option, channelType.querySelector('option[value="announcement"]'));
-  }
 }).observe(els.modalBody, {childList:true});
 els.friendsBtn.onclick = openFriendsArea;
 els.serverList.addEventListener('click', () => { els.friendRequestsPanel.hidden = true; els.friendsDirectory.hidden = true; els.textChannelsLabel.hidden = false; els.textChannels.hidden = false; els.voiceChannelsLabel.hidden = false; els.voiceChannels.hidden = false; els.voiceMembers.hidden = false; els.voiceControls.hidden = false; els.friendsBtn.classList.remove('active'); });
@@ -456,9 +452,67 @@ els.addChannel.onclick = () => {
 };
 (function keepOwnerToolsAvailable() {
   const observer = new MutationObserver(() => {
-    if (state.server && state.user && String(state.server.ownerKey || '').trim() === String(state.user.key || '').trim()) els.ownerTools.hidden = false;
+    if (!els.friendsBtn.classList.contains('active') && state.server && state.user && String(state.server.ownerKey || '').trim() === String(state.user.key || '').trim()) els.ownerTools.hidden = false;
   });
   observer.observe(els.ownerTools, {attributes:true, attributeFilter:['hidden']});
 })();
 (function addProfileButton() { els.logout.title = 'Profile (double-click) or log out'; })();
 (function restoreSession() { try { const session = JSON.parse(localStorage.getItem('vusServersSession')); if (session && session.key) { state.user = session; showApp(); } } catch (error) {} })();
+
+// Keep navigation safe when the legacy voice/game handlers are still present.
+(function refineSektorNavigation() {
+  const originalLeaveVoice = leaveVoice;
+  leaveVoice = async function () {
+    state.voiceChannel = null;
+    return originalLeaveVoice();
+  };
+
+  const removeGamesOption = () => {
+    const option = document.querySelector('#newChannelType option[value="games"]');
+    if (option) option.remove();
+  };
+  new MutationObserver(removeGamesOption).observe(els.modalBody, {childList:true, subtree:true});
+
+  const originalRenderFriendsArea = renderFriendsArea;
+  renderFriendsArea = function () {
+    originalRenderFriendsArea();
+    renderFriendsHome('all');
+  };
+
+  function renderFriendsHome(view) {
+    if (!els.friendHome) return;
+    const pending = state.friendRequests || [];
+    const friends = state.friends || [];
+    const content = view === 'pending'
+      ? pending.map(request => '<div class="friend-home-row"><span class="friend-nav-avatar">' + esc((request.fromUsername || '?').slice(0,2).toUpperCase()) + '</span><span class="friend-home-row-copy"><strong class="friend-home-row-name">' + esc(request.fromUsername || 'Friend request') + '</strong><small class="friend-home-row-status">Incoming friend request</small></span><button class="friend-home-add" type="button" data-request-key="' + esc(request.key) + '">Accept</button></div>').join('')
+      : friends.map(friend => '<button class="friend-home-row" type="button" data-friend-key="' + esc(friend.key) + '">' + friendAvatarMarkup(friend) + '<span class="friend-home-row-copy"><strong class="friend-home-row-name">' + esc(friend.username) + '</strong><small class="friend-home-row-status">Friend</small></span></button>').join('');
+    els.friendHome.innerHTML = '<div class="friend-home-header"><div><div class="friend-home-title">Friends</div><div class="friend-home-subtitle">Your friends, requests, and private conversations.</div></div><button class="friend-home-add" type="button" data-friend-action="add">Add Friend</button></div><nav class="friend-tabs" aria-label="Friends views"><button class="friend-tab ' + (view === 'all' ? 'active' : '') + '" type="button" data-friend-view="all">All</button><button class="friend-tab ' + (view === 'pending' ? 'active' : '') + '" type="button" data-friend-view="pending">Pending' + (pending.length ? ' (' + pending.length + ')' : '') + '</button><button class="friend-tab ' + (view === 'add' ? 'active' : '') + '" type="button" data-friend-view="add">Add Friend</button></nav>' + (view === 'add' ? '<div class="friend-home-section-title">Find someone</div><div class="friend-home-empty">Search for a username or six-digit ID to send a friend request.</div>' : '<div class="friend-home-section-title">' + (view === 'pending' ? 'Pending requests' : 'Your friends') + '</div><div class="friend-home-list">' + (content || '<div class="friend-home-empty">' + (view === 'pending' ? 'No pending requests.' : 'You do not have any friends yet.') + '</div>') + '</div>');
+    els.friendHome.querySelectorAll('[data-friend-view]').forEach(button => { button.onclick = () => renderFriendsHome(button.dataset.friendView); });
+    const addButton = els.friendHome.querySelector('[data-friend-action="add"]');
+    if (addButton) addButton.onclick = openFriendModal;
+    els.friendHome.querySelectorAll('[data-friend-key]').forEach(button => { button.onclick = () => { const friend = friends.find(item => item.key === button.dataset.friendKey); if (friend) openPrivateDm(friend); }; });
+    els.friendHome.querySelectorAll('[data-request-key]').forEach(button => { button.onclick = () => { const request = pending.find(item => item.key === button.dataset.requestKey); if (request) acceptFriendRequest(request); }; });
+  }
+
+  const originalOpenFriendsArea = openFriendsArea;
+  openFriendsArea = function () {
+    originalOpenFriendsArea();
+    leaveVoice();
+    if (els.friendHome) els.friendHome.hidden = false;
+    if (els.messages) els.messages.hidden = true;
+    if (els.messageForm) els.messageForm.hidden = true;
+    renderFriendsHome('all');
+  };
+  els.friendsBtn.onclick = openFriendsArea;
+
+  const originalOpenPrivateDm = openPrivateDm;
+  openPrivateDm = function (friend) {
+    if (els.friendHome) els.friendHome.hidden = true;
+    if (els.messages) els.messages.hidden = false;
+    if (els.messageForm) els.messageForm.hidden = false;
+    return originalOpenPrivateDm(friend);
+  };
+  els.serverList.addEventListener('click', () => {
+    if (els.friendHome) els.friendHome.hidden = true;
+  });
+})();

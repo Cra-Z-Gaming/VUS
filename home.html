@@ -353,26 +353,43 @@
 // so we always fetch firebase.js by absolute URL and load it as a module.
 let onOnlineCount = () => {}; // no-op fallback until firebase.js loads
 
-fetch("https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/firebase.js?v=" + Date.now())
-  .then(r => {
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    return r.text();
-  })
-  .then(code => {
-    const blob = new Blob([code], { type: "application/javascript" });
-    const blobUrl = URL.createObjectURL(blob);
-    return import(blobUrl);
-  })
-  .then(mod => {
-    onOnlineCount = mod.onOnlineCount;
-    onOnlineCount((count) => {
-      const el = document.getElementById("onlineCount");
-      if (el) el.textContent = count;
-    });
-  })
-  .catch(() => {
-    console.warn("VUS Hub: failed to load firebase.js for online count.");
+function loadCompatFirebase() {
+  const loadScript = (src) => new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = false;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load " + src));
+    document.head.appendChild(script);
   });
+
+  return loadScript("https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js")
+    .then(() => loadScript("https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"))
+    .then(() => fetch("https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/firebase.js?v=" + Date.now()))
+    .then(r => {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    })
+    .then(code => {
+      const script = document.createElement("script");
+      script.textContent = code;
+      document.head.appendChild(script);
+      return window;
+    })
+    .then(() => {
+      if (typeof window.VUSPresence?.onOnlineCount === "function") {
+        onOnlineCount = window.VUSPresence.onOnlineCount;
+        onOnlineCount((count) => {
+          const el = document.getElementById("onlineCount");
+          if (el) el.textContent = count;
+        });
+      }
+    });
+}
+
+loadCompatFirebase().catch(() => {
+  console.warn("VUS Hub: failed to load firebase.js for online count.");
+});
 
 // ===================== FAVORITES & RECENTLY USED (from localStorage) =====================
 // Both are written by index.html's card star button / openApp() and shared via

@@ -46,10 +46,11 @@
     <section class="chat-column">
       <section class="youtube-player" aria-label="YouTube audio player"><button id="youtubeOpenBtn" class="youtube-open-btn" type="button"><span class="youtube-player-icon">♪</span><span><strong>Sektor audio</strong><small id="youtubeTopStatus">Open player</small></span></button></section>
       <header class="chat-header"><div><span id="channelHash">#</span><strong id="channelName">general</strong><span id="channelTopic"></span></div><span id="channelPermission"></span></header>
+      <section id="friendHome" class="friend-home" hidden></section>
       <div id="announcement" class="announcement" hidden><small>OWNER ANNOUNCEMENT</small><div id="announcementText"></div></div>
       <div id="ownerComposer" class="owner-composer" hidden><input id="announcementInput" maxlength="240" placeholder="Write an announcement"><button id="publishAnnouncement">Publish</button></div>
       <div id="videoStage" class="video-stage" hidden></div>
-      <div id="gamesPanel" class="games-panel" hidden></div>
+      <div id="gamesPanel" hidden></div>
       <div id="messages" class="messages"><div class="empty-state">Select a channel to start talking.</div></div>
       <form id="messageForm" class="message-form"><div id="mentionSuggestions" class="mention-suggestions" hidden></div><input id="messageInput" maxlength="500" placeholder="Message #general" autocomplete="off"><input id="imageInput" type="file" accept="image/*" hidden><input id="audioInput" type="file" accept="audio/mpeg,audio/wav,audio/ogg,.mp3,.wav,.ogg" hidden><button id="imageButton" type="button" title="Attach image">＋</button><button id="audioButton" type="button" title="Attach MP3, WAV, or OGG">♪</button><button type="submit">Send</button></form>
     </section>
