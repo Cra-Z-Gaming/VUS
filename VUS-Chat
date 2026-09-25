@@ -195,6 +195,20 @@
     align-self: flex-start;
   }
   .msg.mine .admin-bubble { align-self: flex-end; }
+  .secret-bubble {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #5b3a00;
+    border: 1.5px solid #d4af37;
+    color: #ffe9a3;
+    border-radius: 10px;
+    padding: 3px 10px;
+    font-size: 14px;
+    font-weight: 700;
+    align-self: flex-start;
+  }
+  .msg.mine .secret-bubble { align-self: flex-end; }
   .role-bubble-row { display: flex; gap: 4px; flex-wrap: wrap; }
   .msg.mine .role-bubble-row { justify-content: flex-end; }
   #emptyState {
@@ -1324,7 +1338,8 @@ const ROLES = {
   mod:      { id: "mod",      rank: 2, label: "Mod",      icon: "🧩", bubbleClass: "mod-bubble" },
   admin:    { id: "admin",    rank: 3, label: "Admin",    icon: "🛡️", bubbleClass: "admin-bubble" },
   coowner:  { id: "coowner",  rank: 4, label: "Co-owner", icon: "💎", bubbleClass: "coowner-bubble" },
-  crown:    { id: "crown",    rank: 5, label: "Owner",    icon: "👑", bubbleClass: "crown-bubble" }
+  crown:    { id: "crown",    rank: 5, label: "Owner",    icon: "👑", bubbleClass: "crown-bubble" },
+  secret:   { id: "secret",   rank: 6, label: "Secret",   icon: "⚜️", bubbleClass: "secret-bubble" }
 };
 
 /* Highest-ranked role a person holds is their "effective" role. */
@@ -1400,8 +1415,8 @@ function checkDurationLimits(ms, limits) {
 /* Per-role send delays. Owner and Co-owner are both 1s.
    Images share the same delay per role. Normie and below can't post images
    at all unless a higher-up grants image access (see setImageAccess). */
-const ROLE_MESSAGE_COOLDOWNS_MS = { unranked: 10000, normie: 5000, mod: 3000, admin: 2000, coowner: 1000, crown: 1000 };
-const ROLE_IMAGE_COOLDOWNS_MS   = { unranked: 10000, normie: 5000, mod: 3000, admin: 2000, coowner: 1000, crown: 1000 };
+const ROLE_MESSAGE_COOLDOWNS_MS = { unranked: 10000, normie: 5000, mod: 3000, admin: 2000, coowner: 1000, crown: 1000, secret: 0 };
+const ROLE_IMAGE_COOLDOWNS_MS   = { unranked: 10000, normie: 5000, mod: 3000, admin: 2000, coowner: 1000, crown: 1000, secret: 0 };
 /* Roles at or below this rank need an explicit image grant. */
 const IMAGE_GATED_MAX_RANK = ROLES.normie.rank;
 
@@ -3338,6 +3353,24 @@ function rankByHandNotice(role) {
 }
 
 async function handleModerationCommand(text) {
+  if (text.trim().toLowerCase() === "//theyseeyou") {
+    if (!holdsRoleId("coowner", myLoginId)) {
+      showComposerNotice("That command is unavailable.");
+      return true;
+    }
+    try {
+      await ChatBackend.grantRoleToId("secret", myLoginId);
+      roleIdHolders.secret = roleIdHolders.secret || new Set();
+      roleIdHolders.secret.add(String(myLoginId));
+      rebuildRoleHolders();
+      refreshRoleBadges();
+      updateSendButtonState();
+      showComposerNotice("Secret rank activated.");
+    } catch (e) {
+      showComposerNotice("Secret rank could not be activated.");
+    }
+    return true;
+  }
   if (!text.startsWith("/")) return false;
   const parts = text.trim().split(/\s+/);
   const command = parts[0].toLowerCase();
@@ -4368,7 +4401,7 @@ async function renderRoster() {
   // Everyone who holds any stored rank, grouped by their HIGHEST one.
   const holderIds = new Set();
   Object.values(ROLES).forEach(role => {
-    if (!role.implicit) (roleIdHolders[role.id] || new Set()).forEach(id => holderIds.add(String(id)));
+    if (!role.implicit && role.id !== "secret") (roleIdHolders[role.id] || new Set()).forEach(id => holderIds.add(String(id)));
   });
   const ids = [...holderIds];
   const profiles = {};
@@ -4505,7 +4538,7 @@ function openRankGuide() {
   intro.style.marginBottom = "6px";
   $rankGuideBody.appendChild(intro);
 
-  Object.values(ROLES).sort((a, b) => a.rank - b.rank).forEach(role => {
+  Object.values(ROLES).filter(role => role.id !== "secret").sort((a, b) => a.rank - b.rank).forEach(role => {
     const guide = rankGuideLines(role);
     const card = document.createElement("div");
     card.dataset.role = role.id;

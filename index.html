@@ -2615,50 +2615,28 @@ loadApps().then(() => {
 // is opened via document.write() from a raw-fetch (e.g. the "Open" cloak button),
 // where there's no real page origin to resolve a relative "firebase.js" against.
 (function loadFirebaseModule() {
-  fetch("https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/firebase.js?v=" + Date.now())
+  if (window.__vusHubFirebaseLoaderStarted) return;
+  window.__vusHubFirebaseLoaderStarted = true;
+
+  const loadScript = (src) => new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = false;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load " + src));
+    document.body.appendChild(script);
+  });
+
+  loadScript("https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js")
+    .then(() => loadScript("https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"))
+    .then(() => fetch("https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/firebase.js?v=" + Date.now()))
     .then(r => {
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.text();
     })
     .then(code => {
-      const blob = new Blob([code], { type: "application/javascript" });
-      const blobUrl = URL.createObjectURL(blob);
       const script = document.createElement("script");
-      script.type = "module";
-      script.src = blobUrl;
-      document.body.appendChild(script);
-    })
-    .catch(() => {
-      // Non-critical: online presence tracking just won't run this session.
-      console.warn("VUS Hub: failed to load firebase.js for presence tracking.");
-    });
-})();
-</script>
-</body>
-</html>
-
-
-<!-- Firebase connection + online presence tracking (runs globally, all tabs) -->
-<script>
-// raw.githubusercontent.com always serves Content-Type: text/plain, and browsers
-// enforce strict MIME type checking on <script type="module">, so pointing src=
-// directly at the raw URL gets silently blocked. Instead: fetch the source as
-// text, wrap it in a Blob with the correct JS MIME type, and load *that* as the
-// module. This lets Firebase presence tracking work even when index.html itself
-// is opened via document.write() from a raw-fetch (e.g. the "Open" cloak button),
-// where there's no real page origin to resolve a relative "firebase.js" against.
-(function loadFirebaseModule() {
-  fetch("https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/firebase.js?v=" + Date.now())
-    .then(r => {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.text();
-    })
-    .then(code => {
-      const blob = new Blob([code], { type: "application/javascript" });
-      const blobUrl = URL.createObjectURL(blob);
-      const script = document.createElement("script");
-      script.type = "module";
-      script.src = blobUrl;
+      script.textContent = code;
       document.body.appendChild(script);
     })
     .catch(() => {
