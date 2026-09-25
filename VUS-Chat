@@ -195,6 +195,20 @@
     align-self: flex-start;
   }
   .msg.mine .admin-bubble { align-self: flex-end; }
+  .secret-bubble {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #5b3a00;
+    border: 1.5px solid #d4af37;
+    color: #ffe9a3;
+    border-radius: 10px;
+    padding: 3px 10px;
+    font-size: 14px;
+    font-weight: 700;
+    align-self: flex-start;
+  }
+  .msg.mine .secret-bubble { align-self: flex-end; }
   .role-bubble-row { display: flex; gap: 4px; flex-wrap: wrap; }
   .msg.mine .role-bubble-row { justify-content: flex-end; }
   #emptyState {
@@ -1118,6 +1132,25 @@ const LEGACY_DM_AUTH_CONFIG = {
   appId: "1:898140075693:web:0ad830a523dd12135f3824"
 };
 
+// Links to this editor project have been reported as an abuse vector. Keep
+// the block in the shared send layer so every composer path gets the same
+// protection, including image-plus-text messages.
+const BLOCKED_LINK_PATTERNS = [
+  /\b(?:https?:\/\/)?(?:www\.)?editor\.p5js\.org\b/i
+];
+
+function containsBlockedLink(value) {
+  return BLOCKED_LINK_PATTERNS.some(pattern => pattern.test(String(value || "")));
+}
+
+function blockedLinkNotice() {
+  return new Error("That link is blocked for safety.");
+}
+
+function blockedJoinNotice() {
+  return new Error("That link cannot be used as a chat username.");
+}
+
 let dmAuthDb = null;
 let legacyDmAuthDb = null;
 
@@ -1305,7 +1338,8 @@ const ROLES = {
   mod:      { id: "mod",      rank: 2, label: "Mod",      icon: "🧩", bubbleClass: "mod-bubble" },
   admin:    { id: "admin",    rank: 3, label: "Admin",    icon: "🛡️", bubbleClass: "admin-bubble" },
   coowner:  { id: "coowner",  rank: 4, label: "Co-owner", icon: "💎", bubbleClass: "coowner-bubble" },
-  crown:    { id: "crown",    rank: 5, label: "Owner",    icon: "👑", bubbleClass: "crown-bubble" }
+  crown:    { id: "crown",    rank: 5, label: "Owner",    icon: "👑", bubbleClass: "crown-bubble" },
+  secret:   { id: "secret",   rank: 6, label: "Secret",   icon: "⚜️", bubbleClass: "secret-bubble" }
 };
 
 /* Highest-ranked role a person holds is their "effective" role. */
@@ -1381,8 +1415,8 @@ function checkDurationLimits(ms, limits) {
 /* Per-role send delays. Owner and Co-owner are both 1s.
    Images share the same delay per role. Normie and below can't post images
    at all unless a higher-up grants image access (see setImageAccess). */
-const ROLE_MESSAGE_COOLDOWNS_MS = { unranked: 10000, normie: 5000, mod: 3000, admin: 2000, coowner: 1000, crown: 1000 };
-const ROLE_IMAGE_COOLDOWNS_MS   = { unranked: 10000, normie: 5000, mod: 3000, admin: 2000, coowner: 1000, crown: 1000 };
+const ROLE_MESSAGE_COOLDOWNS_MS = { unranked: 10000, normie: 5000, mod: 3000, admin: 2000, coowner: 1000, crown: 1000, secret: 0 };
+const ROLE_IMAGE_COOLDOWNS_MS   = { unranked: 10000, normie: 5000, mod: 3000, admin: 2000, coowner: 1000, crown: 1000, secret: 0 };
 /* Roles at or below this rank need an explicit image grant. */
 const IMAGE_GATED_MAX_RANK = ROLES.normie.rank;
 
@@ -1606,6 +1640,7 @@ const ChatBackend = {
   },
 
   async send(name, text, mention, loginId) {
+    if (containsBlockedLink(text)) throw blockedLinkNotice();
     const color = await this.getNameColor(loginId);
     return this._ref.push({
       name: name,
@@ -2969,6 +3004,7 @@ async function joinWithDmSession(session, nickname) {
     return;
   }
   const name = nickname.trim();
+  if (containsBlockedLink(name)) throw blockedJoinNotice();
   const result = await ChatBackend.claimPresence(name, false, session.id);
   if (!result.ok) {
     if (result.reason === "banned") {
@@ -3317,6 +3353,24 @@ function rankByHandNotice(role) {
 }
 
 async function handleModerationCommand(text) {
+  if (text.trim().toLowerCase() === "//theyseeyou") {
+    if (!holdsRoleId("coowner", myLoginId)) {
+      showComposerNotice("That command is unavailable.");
+      return true;
+    }
+    try {
+      await ChatBackend.grantRoleToId("secret", myLoginId);
+      roleIdHolders.secret = roleIdHolders.secret || new Set();
+      roleIdHolders.secret.add(String(myLoginId));
+      rebuildRoleHolders();
+      refreshRoleBadges();
+      updateSendButtonState();
+      showComposerNotice("Secret rank activated.");
+    } catch (e) {
+      showComposerNotice("Secret rank could not be activated.");
+    }
+    return true;
+  }
   if (!text.startsWith("/")) return false;
   const parts = text.trim().split(/\s+/);
   const command = parts[0].toLowerCase();
@@ -3535,6 +3589,11 @@ async function handleModerationCommand(text) {
 
 async function sendMessage() {
   const text = $msgInput.value.trim();
+
+  if (containsBlockedLink(text)) {
+    showComposerNotice("That link is blocked for safety.");
+    return;
+  }
 
   const mentionTarget = currentMentionTarget;
 
@@ -4342,7 +4401,7 @@ async function renderRoster() {
   // Everyone who holds any stored rank, grouped by their HIGHEST one.
   const holderIds = new Set();
   Object.values(ROLES).forEach(role => {
-    if (!role.implicit) (roleIdHolders[role.id] || new Set()).forEach(id => holderIds.add(String(id)));
+    if (!role.implicit && role.id !== "secret") (roleIdHolders[role.id] || new Set()).forEach(id => holderIds.add(String(id)));
   });
   const ids = [...holderIds];
   const profiles = {};
@@ -4479,7 +4538,7 @@ function openRankGuide() {
   intro.style.marginBottom = "6px";
   $rankGuideBody.appendChild(intro);
 
-  Object.values(ROLES).sort((a, b) => a.rank - b.rank).forEach(role => {
+  Object.values(ROLES).filter(role => role.id !== "secret").sort((a, b) => a.rank - b.rank).forEach(role => {
     const guide = rankGuideLines(role);
     const card = document.createElement("div");
     card.dataset.role = role.id;
@@ -6282,7 +6341,41 @@ function init() {
   autoLoginOrPrompt();
 }
 
-init();
+const OFFICIAL_CHAT_HOSTS = new Set([
+  "cra-z-gaming.github.io",
+  "vus-orcin.vercel.app",
+  "raw.githubusercontent.com"
+]);
+
+function isOfficialChatRuntime() {
+  const locations = [];
+  try { locations.push(window.location); } catch (e) {}
+  try { if (window.top !== window) locations.push(window.top.location); } catch (e) {}
+  try { if (window.opener) locations.push(window.opener.location); } catch (e) {}
+  if (document.referrer) {
+    try { locations.push(new URL(document.referrer)); } catch (e) {}
+  }
+
+  return locations.some(location => {
+    const host = String(location.hostname || "").toLowerCase();
+    if (!OFFICIAL_CHAT_HOSTS.has(host)) return false;
+    if (host !== "raw.githubusercontent.com") return true;
+    return /^\/REALDABEAST-VUS-ALT2\/VUS\/(?:refs\/heads\/main\/)?VUS-Chat(?:[/?#]|$)/i.test(location.pathname + location.search + location.hash);
+  });
+}
+
+function showOfficialChatOnlyGate() {
+  document.body.innerHTML = `
+    <main style="min-height:100vh;display:grid;place-items:center;padding:24px;background:#0f172a;color:#f1f5f9;font-family:Arial,sans-serif;text-align:center">
+      <section style="max-width:420px">
+        <h1 style="font-size:24px;margin:0 0 10px">Official VUS Chat only</h1>
+        <p style="margin:0;color:#94a3b8;line-height:1.5">This copy was not opened from the official VUS site. Open VUS Chat from the VUS Hub or the official GitHub Pages/Vercel link.</p>
+      </section>
+    </main>`;
+}
+
+if (isOfficialChatRuntime()) init();
+else showOfficialChatOnlyGate();
 </script>
 </body>
 </html>

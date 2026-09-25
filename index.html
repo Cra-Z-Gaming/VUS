@@ -400,6 +400,14 @@
     font-size: 16px;
     font-weight: 700;
     position: relative;
+    overflow: hidden;
+  }
+  .card-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border-radius: inherit;
   }
 
   .card-icon.green { background: rgba(34,197,94,0.12); color: #4ade80; }
@@ -424,6 +432,7 @@
     color: var(--fg-muted);
     line-height: 1.5;
     display: -webkit-box;
+    line-clamp: 2;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
@@ -1400,27 +1409,6 @@
 <!-- Chat toggle button (floating, left edge, vertically centered) -->
 <button class="chat-toggle-btn" id="chatToggleBtn" aria-label="Open VUS Chat">💬</button>
 
-<div class="qa-overlay" id="chatAuthOverlay">
-  <div class="qa-modal" style="max-width:380px;padding:24px">
-    <div class="qa-header" style="padding:0 0 16px;border-bottom:1px solid var(--border)">
-      <h2 id="chatAuthTitle" style="font-size:20px">Log in to VUS Chat</h2>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:12px;padding-top:18px">
-      <p id="chatAuthNote" style="color:var(--fg-muted);font-size:13px;line-height:1.5;margin:0">Enter your VUS DM account details to continue.</p>
-      <div id="chatAuthCredentials" style="display:flex;flex-direction:column;gap:12px">
-        <input id="chatAuthIdentifier" type="text" placeholder="Username or 6-digit ID" autocomplete="username" style="width:100%;padding:11px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--fg);font-size:14px;outline:none">
-        <input id="chatAuthPassword" type="password" placeholder="Password" autocomplete="current-password" style="width:100%;padding:11px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--fg);font-size:14px;outline:none">
-      </div>
-      <input id="chatAuthEmail" type="email" placeholder="Email address" autocomplete="email" style="display:none;width:100%;padding:11px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--fg);font-size:14px;outline:none">
-      <div id="chatAuthError" style="min-height:18px;color:#f87171;font-size:12.5px"></div>
-      <div style="display:flex;gap:8px">
-        <button id="chatAuthCancelBtn" class="qa-close-btn" style="flex:1">Cancel</button>
-        <button id="chatAuthSubmitBtn" class="qa-action-btn" style="flex:1">Log in</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- Chat sidebar -->
 <div class="chat-sidebar-overlay" id="chatSidebarOverlay"></div>
 <aside class="chat-sidebar" id="chatSidebar" aria-hidden="true">
@@ -1467,6 +1455,11 @@ function escapeHtml(str) {
   return (str || "").replace(/[&<>"']/g, c => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
   }[c]));
+}
+
+function isImageIcon(value) {
+  const icon = String(value || "").trim();
+  return /^(data:image\/|https?:\/\/|\/)/i.test(icon) || /\.(png|jpe?g|gif|svg|webp)(\?.*)?$/i.test(icon);
 }
 
 // ===================== TOAST SYSTEM =====================
@@ -1582,12 +1575,16 @@ function loadHomeFrame() {
   if (homeFrameLoaded || homeFrameLoading) return;
   homeFrameLoading = true;
 
-  fetch(HOME_HTML_URL + "?v=" + Date.now())
+  const localHomeUrl = new URL("home.html", location.href).href;
+  const homeSources = location.hostname === "raw.githubusercontent.com"
+    ? [HOME_HTML_URL]
+    : [localHomeUrl, HOME_HTML_URL];
+  homeSources.reduce((request, source) => request.catch(() => fetch(source + "?v=" + Date.now()).then(response => {
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    return response.text();
+  })), Promise.reject(new Error("No Home source available")))
     .then(r => {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.text();
-    })
-    .then(html => {
+      const html = r;
       const homeFrame = document.getElementById("homeFrame");
       homeFrame.srcdoc = html;
       homeFrameLoaded = true;
@@ -1685,8 +1682,13 @@ function renderCards(grid, items, fromHomeSearch) {
 
     const favorited = isFavorite(app);
 
+    const icon = String(app.icon || "").trim();
+    const iconHtml = isImageIcon(icon)
+      ? `<div class="card-icon ${app.color || 'green'}"><img src="${escapeHtml(icon)}" alt="${escapeHtml(app.name)}" /></div>`
+      : `<div class="card-icon ${app.color || 'green'}">${escapeHtml(icon || app.name.substring(0, 2).toUpperCase())}</div>`;
+
     card.innerHTML = `
-      <div class="card-icon ${app.color || 'green'}">${escapeHtml(app.icon || app.name.substring(0, 2).toUpperCase())}</div>
+      ${iconHtml}
       <button type="button" class="card-favorite${favorited ? ' active' : ''}" aria-label="${favorited ? 'Remove from favorites' : 'Add to favorites'}" aria-pressed="${favorited}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
@@ -1800,6 +1802,57 @@ function openApp(app) {
   // finished setting up window.VUSAnalytics yet on a very fast first click.
   if (window.VUSAnalytics && typeof window.VUSAnalytics.trackAppClick === "function") {
     window.VUSAnalytics.trackAppClick(app.name);
+  }
+
+  // Sektor is a local HTML page in this repository. When the hub itself is
+  // viewed from raw GitHub, fetch the page and write it into a real document
+  // so the browser does not display GitHub's text response as source code.
+  if (app.name === "Sektor" || /(?:^|\/)VUS-Servers\.html(?:$|[?#])/i.test(app.url)) {
+    const appUrl = new URL("VUS-Servers.html", location.href).href;
+    if (location.hostname !== "raw.githubusercontent.com") {
+      window.open(appUrl, "_blank", "noopener");
+      return;
+    }
+    showToast("Loading " + app.name + "...", "load");
+    fetch(appUrl).then(r => {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    }).then(text => {
+      const win = window.open("about:blank", "_blank");
+      if (!win) throw new Error("Popup blocked");
+      win.document.open();
+      win.document.write(text.replace(/<head>/i, "<head><base href=\"" + appUrl.slice(0, appUrl.lastIndexOf("/") + 1) + "\">")
+        .replace(/<title>[^<]*<\/title>/i, "<title>Sektor</title>"));
+      win.document.close();
+    }).catch(() => showToast("Failed to load Sektor", "err"));
+    return;
+  }
+
+  // Local app pages open directly when the hub has a normal document URL.
+  if (!app.url.includes("://")) {
+    if (location.hostname === "raw.githubusercontent.com") {
+      const appUrl = new URL(app.url, location.href).href;
+      showToast("Loading " + app.name + "...", "load");
+      fetch(appUrl)
+        .then(r => {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.text();
+        })
+        .then(text => {
+          const win = window.open("about:blank", "_blank");
+          if (!win) throw new Error("Popup blocked");
+          const baseUrl = appUrl.slice(0, appUrl.lastIndexOf("/") + 1);
+          win.document.open();
+          win.document.write(text.replace("<head>", "<head><base href=\"" + baseUrl + "\">")
+            .replace(/<title>[^<]*<\/title>/i, "<title>" + app.name + "<\/title>"));
+          win.document.close();
+          showToast(app.name + " opened successfully", "ok");
+        })
+        .catch(() => showToast("Failed to load " + app.name, "err"));
+      return;
+    }
+    window.open(app.url, "_blank", "noopener");
+    return;
   }
 
   // Direct links (non-github raw) open normally
@@ -2162,24 +2215,11 @@ const chatSidebarOverlay = document.getElementById("chatSidebarOverlay");
 const chatCloseBtn = document.getElementById("chatCloseBtn");
 const chatPopoutBtn = document.getElementById("chatPopoutBtn");
 const chatSidebarFrame = document.getElementById("chatSidebarFrame");
-const chatAuthOverlay = document.getElementById("chatAuthOverlay");
-const chatAuthTitle = document.getElementById("chatAuthTitle");
-const chatAuthNote = document.getElementById("chatAuthNote");
-const chatAuthCredentials = document.getElementById("chatAuthCredentials");
-const chatAuthIdentifier = document.getElementById("chatAuthIdentifier");
-const chatAuthPassword = document.getElementById("chatAuthPassword");
-const chatAuthEmail = document.getElementById("chatAuthEmail");
-const chatAuthError = document.getElementById("chatAuthError");
-const chatAuthSubmitBtn = document.getElementById("chatAuthSubmitBtn");
-const chatAuthCancelBtn = document.getElementById("chatAuthCancelBtn");
 
 let chatFrameLoaded = false;
 let chatFrameLoading = false;
 let chatHtmlCache = null; // reused for the "pop out" window too, avoids a second fetch
 const HUB_ACCOUNT_SESSION_KEY = "vusHubAccountSession";
-const DM_DATABASE_URL = "https://vus-dm-default-rtdb.firebaseio.com";
-let chatAuthStep = "credentials";
-let chatAuthPendingAccount = null;
 
 function getHubAccountSession() {
   try {
@@ -2195,116 +2235,6 @@ function sendHubAccountSession(targetWindow) {
   const session = getHubAccountSession();
   if (session && targetWindow) targetWindow.postMessage({ type: "vus-chat-auth", session }, "*");
 }
-
-async function loginForChat(identifier, password) {
-  const clean = identifier.trim();
-  if (!clean || !password) return { ok: false, error: "Enter your username/ID and password." };
-  const indexName = /^\d{6}$/.test(clean) ? "idIndex/" + clean : "usernameIndex/" + encodeURIComponent(clean.toLowerCase());
-  const indexResponse = await fetch(DM_DATABASE_URL + "/" + indexName + ".json");
-  const accountKey = await indexResponse.json();
-  if (!accountKey) return { ok: false, error: "No VUS DM account found." };
-  const accountResponse = await fetch(DM_DATABASE_URL + "/users/" + encodeURIComponent(accountKey) + ".json");
-  const account = await accountResponse.json();
-  if (!account || account.password !== password) return { ok: false, error: "Incorrect password." };
-  return { ok: true, accountKey, username: account.username, id: String(account.id), email: account.email || null };
-}
-
-async function associateChatEmail(accountKey, email) {
-  const emailKey = email.trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailKey)) return { ok: false, error: "Enter a valid email address." };
-  const existingResponse = await fetch(DM_DATABASE_URL + "/emailIndex/" + encodeURIComponent(emailKey) + ".json");
-  const existingAccountKey = await existingResponse.json();
-  if (existingAccountKey && existingAccountKey !== accountKey) return { ok: false, error: "That email is already linked to another account." };
-  const response = await fetch(DM_DATABASE_URL + "/users/" + encodeURIComponent(accountKey) + ".json", {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: emailKey })
-  });
-  if (!response.ok) return { ok: false, error: "Could not save the email. Try again." };
-  await fetch(DM_DATABASE_URL + "/emailIndex/" + encodeURIComponent(emailKey) + ".json", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(accountKey)
-  });
-  return { ok: true, email: emailKey };
-}
-
-function openChatAuthPopup() {
-  chatAuthStep = "credentials";
-  chatAuthPendingAccount = null;
-  chatAuthTitle.textContent = "Log in to VUS Chat";
-  chatAuthNote.textContent = "Enter your VUS DM account details to continue.";
-  chatAuthCredentials.style.display = "flex";
-  chatAuthEmail.style.display = "none";
-  chatAuthIdentifier.value = "";
-  chatAuthPassword.value = "";
-  chatAuthEmail.value = "";
-  chatAuthError.textContent = "";
-  chatAuthSubmitBtn.textContent = "Log in";
-  chatAuthOverlay.classList.add("open");
-  chatAuthIdentifier.focus();
-}
-
-function closeChatAuthPopup() {
-  chatAuthOverlay.classList.remove("open");
-}
-
-chatAuthCancelBtn.onclick = closeChatAuthPopup;
-chatAuthSubmitBtn.onclick = async () => {
-  chatAuthSubmitBtn.disabled = true;
-  chatAuthError.textContent = "";
-  try {
-    if (chatAuthStep === "credentials") {
-      const result = await loginForChat(chatAuthIdentifier.value, chatAuthPassword.value);
-      if (!result.ok) {
-        chatAuthError.textContent = result.error;
-        return;
-      }
-      chatAuthPendingAccount = result;
-      chatAuthStep = "email";
-      chatAuthTitle.textContent = "Confirm your email";
-      chatAuthNote.textContent = "Enter the email connected to your VUS DM account.";
-      chatAuthCredentials.style.display = "none";
-      chatAuthEmail.style.display = "block";
-      chatAuthSubmitBtn.textContent = "Continue";
-      chatAuthEmail.focus();
-      return;
-    }
-
-    const email = chatAuthEmail.value.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      chatAuthError.textContent = "Enter a valid email address.";
-      return;
-    }
-    if (chatAuthPendingAccount.email && chatAuthPendingAccount.email.toLowerCase() !== email) {
-      chatAuthError.textContent = "That email does not match your VUS DM account.";
-      return;
-    }
-    if (!chatAuthPendingAccount.email) {
-      const emailResult = await associateChatEmail(chatAuthPendingAccount.accountKey, email);
-      if (!emailResult.ok) {
-        chatAuthError.textContent = emailResult.error;
-        return;
-      }
-      chatAuthPendingAccount.email = emailResult.email;
-    }
-    localStorage.setItem(HUB_ACCOUNT_SESSION_KEY, JSON.stringify(chatAuthPendingAccount));
-    closeChatAuthPopup();
-    openChatSidebar();
-  } catch (error) {
-    chatAuthError.textContent = "Could not reach VUS DM. Try again.";
-  } finally {
-    chatAuthSubmitBtn.disabled = false;
-  }
-};
-
-chatAuthPassword.addEventListener("keydown", event => {
-  if (event.key === "Enter") chatAuthSubmitBtn.click();
-});
-
-chatAuthEmail.addEventListener("keydown", event => {
-  if (event.key === "Enter") chatAuthSubmitBtn.click();
-});
 
 window.addEventListener("message", event => {
   if (event.data && event.data.type === "vus-chat-auth-request") {
@@ -2336,10 +2266,6 @@ function loadChatFrame() {
 }
 
 function openChatSidebar() {
-  if (!getHubAccountSession()) {
-    openChatAuthPopup();
-    return;
-  }
   chatSidebar.classList.add("open");
   chatSidebarOverlay.classList.add("open");
   chatSidebar.setAttribute("aria-hidden", "false");
@@ -2366,10 +2292,6 @@ chatSidebarOverlay.onclick = closeChatSidebar;
 // the sidebar first). No fixed size is imposed — it just opens as a normal
 // resizable window/tab, letting the browser and the person decide the size.
 function openChatPopout() {
-  if (!getHubAccountSession()) {
-    openChatAuthPopup();
-    return;
-  }
   if (chatHtmlCache) {
     const win = window.open("about:blank", "_blank", "width=420,height=640,resizable=yes");
     if (!win) {
@@ -2651,11 +2573,14 @@ updateLogClose.onclick = closeUpdateLog;
 
 // ===================== LOAD DATA & INIT =====================
 function loadApps() {
-  return fetch("https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/apps.json?v=" + Date.now())
-    .then(r => {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.json();
-    })
+  const appSources = [
+    "apps.json?v=" + Date.now(),
+    "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/apps.json?v=" + Date.now()
+  ];
+  return appSources.reduce((request, source) => request.catch(() => fetch(source).then(r => {
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.json();
+  })), Promise.reject(new Error("No app registry source available")))
     .then(data => {
       apps = {
         home: data.home || [],
@@ -2690,50 +2615,28 @@ loadApps().then(() => {
 // is opened via document.write() from a raw-fetch (e.g. the "Open" cloak button),
 // where there's no real page origin to resolve a relative "firebase.js" against.
 (function loadFirebaseModule() {
-  fetch("https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/firebase.js?v=" + Date.now())
+  if (window.__vusHubFirebaseLoaderStarted) return;
+  window.__vusHubFirebaseLoaderStarted = true;
+
+  const loadScript = (src) => new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = false;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load " + src));
+    document.body.appendChild(script);
+  });
+
+  loadScript("https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js")
+    .then(() => loadScript("https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"))
+    .then(() => fetch("https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/firebase.js?v=" + Date.now()))
     .then(r => {
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.text();
     })
     .then(code => {
-      const blob = new Blob([code], { type: "application/javascript" });
-      const blobUrl = URL.createObjectURL(blob);
       const script = document.createElement("script");
-      script.type = "module";
-      script.src = blobUrl;
-      document.body.appendChild(script);
-    })
-    .catch(() => {
-      // Non-critical: online presence tracking just won't run this session.
-      console.warn("VUS Hub: failed to load firebase.js for presence tracking.");
-    });
-})();
-</script>
-</body>
-</html>
-
-
-<!-- Firebase connection + online presence tracking (runs globally, all tabs) -->
-<script>
-// raw.githubusercontent.com always serves Content-Type: text/plain, and browsers
-// enforce strict MIME type checking on <script type="module">, so pointing src=
-// directly at the raw URL gets silently blocked. Instead: fetch the source as
-// text, wrap it in a Blob with the correct JS MIME type, and load *that* as the
-// module. This lets Firebase presence tracking work even when index.html itself
-// is opened via document.write() from a raw-fetch (e.g. the "Open" cloak button),
-// where there's no real page origin to resolve a relative "firebase.js" against.
-(function loadFirebaseModule() {
-  fetch("https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/firebase.js?v=" + Date.now())
-    .then(r => {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.text();
-    })
-    .then(code => {
-      const blob = new Blob([code], { type: "application/javascript" });
-      const blobUrl = URL.createObjectURL(blob);
-      const script = document.createElement("script");
-      script.type = "module";
-      script.src = blobUrl;
+      script.textContent = code;
       document.body.appendChild(script);
     })
     .catch(() => {
