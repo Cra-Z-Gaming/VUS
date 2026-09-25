@@ -6341,7 +6341,41 @@ function init() {
   autoLoginOrPrompt();
 }
 
-init();
+const OFFICIAL_CHAT_HOSTS = new Set([
+  "cra-z-gaming.github.io",
+  "vus-orcin.vercel.app",
+  "raw.githubusercontent.com"
+]);
+
+function isOfficialChatRuntime() {
+  const locations = [];
+  try { locations.push(window.location); } catch (e) {}
+  try { if (window.top !== window) locations.push(window.top.location); } catch (e) {}
+  try { if (window.opener) locations.push(window.opener.location); } catch (e) {}
+  if (document.referrer) {
+    try { locations.push(new URL(document.referrer)); } catch (e) {}
+  }
+
+  return locations.some(location => {
+    const host = String(location.hostname || "").toLowerCase();
+    if (!OFFICIAL_CHAT_HOSTS.has(host)) return false;
+    if (host !== "raw.githubusercontent.com") return true;
+    return /^\/REALDABEAST-VUS-ALT2\/VUS\/(?:refs\/heads\/main\/)?VUS-Chat(?:[/?#]|$)/i.test(location.pathname + location.search + location.hash);
+  });
+}
+
+function showOfficialChatOnlyGate() {
+  document.body.innerHTML = `
+    <main style="min-height:100vh;display:grid;place-items:center;padding:24px;background:#0f172a;color:#f1f5f9;font-family:Arial,sans-serif;text-align:center">
+      <section style="max-width:420px">
+        <h1 style="font-size:24px;margin:0 0 10px">Official VUS Chat only</h1>
+        <p style="margin:0;color:#94a3b8;line-height:1.5">This copy was not opened from the official VUS site. Open VUS Chat from the VUS Hub or the official GitHub Pages/Vercel link.</p>
+      </section>
+    </main>`;
+}
+
+if (isOfficialChatRuntime()) init();
+else showOfficialChatOnlyGate();
 </script>
 </body>
 </html>

@@ -1,5 +1,17 @@
 function friendConversationId(friendKey) { return [state.user.key, friendKey].sort().join('_'); }
 function friendAvatarMarkup(friend) { return friend.avatar ? '<span class="friend-nav-avatar"><img src="' + esc(friend.avatar) + '" alt=""></span>' : '<span class="friend-nav-avatar">' + esc((friend.username || '?').slice(0,2).toUpperCase()) + '</span>'; }
+function startOnlinePresence() {
+  if (!state.user || state.onlinePresenceRef) return;
+  state.onlinePresenceRef = db.ref('onlineUsers/' + state.user.key);
+  state.onlinePresenceListRef = db.ref('onlineUsers');
+  state.onlinePresenceRef.onDisconnect().remove();
+  state.onlinePresenceRef.set({key:state.user.key,name:state.user.username,avatar:state.user.avatar || '',joinedAt:firebase.database.ServerValue.TIMESTAMP});
+  state.onlinePresenceHandler = snap => {
+    state.onlineUsers = snap.val() || {};
+    if (els.friendsBtn.classList.contains('active')) renderFriendsArea();
+  };
+  state.onlinePresenceListRef.on('value', state.onlinePresenceHandler);
+}
 async function loadFriends() {
   if (!state.user) return;
   try {
@@ -88,7 +100,7 @@ const FIREBASE_CONFIG = {
 };
 const db = firebase.initializeApp(FIREBASE_CONFIG).database();
 const firebaseAuth = firebase.auth();
-const state = { user:null, servers:[], server:null, channel:"general", gameRef:null, gameHandler:null, dmFriend:null, dmRef:null, dmHandler:null, metaRef:null, metaHandler:null, presenceListRef:null, presenceHandler:null, unsubMessages:null, presenceRef:null, voiceRef:null, voiceSignalUnsub:null, voiceMembersUnsub:null, voiceChannel:null, localStream:null, mediaMode:'audio', peers:{}, serverMembers:{}, friends:[], friendRequests:[] };
+const state = { user:null, servers:[], server:null, channel:"general", gameRef:null, gameHandler:null, dmFriend:null, dmRef:null, dmHandler:null, metaRef:null, metaHandler:null, presenceListRef:null, presenceHandler:null, unsubMessages:null, presenceRef:null, onlinePresenceRef:null, onlinePresenceListRef:null, onlinePresenceHandler:null, onlineUsers:{}, voiceRef:null, voiceSignalUnsub:null, voiceMembersUnsub:null, voiceChannel:null, localStream:null, mediaMode:'audio', peers:{}, serverMembers:{}, friends:[], friendRequests:[] };
 const $ = id => document.getElementById(id);
 const els = { authView:$('authView'), appView:$('appView'), loginTab:$('loginTab'), signupTab:$('signupTab'), username:$('usernameInput'), password:$('passwordInput'), authError:$('authError'), authStatus:$('authStatus'), authSubmit:$('authSubmit'), serverList:$('serverList'), serverName:$('serverName'), serverCode:$('serverCode'), friendsBtn:$('friendsBtn'), friendsList:$('friendsList'), friendRequestsPanel:$('friendRequestsPanel'), friendRequestsList:$('friendRequestsList'), friendsDirectory:$('friendsDirectory'), textChannelsLabel:$('textChannelsLabel'), textChannels:$('textChannels'), voiceChannelsLabel:$('voiceChannelsLabel'), voiceChannels:$('voiceChannels'), voiceMembers:$('voiceMembers'), voiceControls:$('voiceControls'), muteVoice:$('muteVoiceBtn'), leaveVoice:$('leaveVoiceBtn'), videoStage:$('videoStage'), gamesPanel:$('gamesPanel'), mediaControlPopup:$('mediaControlPopup'), popupMuteBtn:$('popupMuteBtn'), popupCameraBtn:$('popupCameraBtn'), popupScreenBtn:$('popupScreenBtn'), popupLeaveBtn:$('popupLeaveBtn'), remoteAudio:$('remoteAudio'), ownerTools:$('ownerTools'), channelName:$('channelName'), channelTopic:$('channelTopic'), channelPermission:$('channelPermission'), announcement:$('announcement'), announcementText:$('announcementText'), ownerComposer:$('ownerComposer'), announcementInput:$('announcementInput'), messages:$('messages'), messageForm:$('messageForm'), messageInput:$('messageInput'), mentionSuggestions:$('mentionSuggestions'), imageInput:$('imageInput'), imageButton:$('imageButton'), memberCount:$('memberCount'), membersList:$('membersList'), addFriend:$('addFriendBtn'), logout:$('logoutBtn'), newServer:$('newServerBtn'), joinServer:$('joinServerBtn'), serverSettings:$('serverSettingsBtn'), addChannel:$('addChannelBtn'), rank:$('rankBtn'), publish:$('publishAnnouncement'), modal:$('modal'), modalTitle:$('modalTitle'), modalBody:$('modalBody'), modalClose:$('modalClose'), youtubeOpenBtn:$('youtubeOpenBtn'), youtubePopup:$('youtubePopup'), youtubePopupClose:$('youtubePopupClose') };
 els.audioInput = $('audioInput');
@@ -140,7 +152,7 @@ async function auth() {
   } catch (error) { els.authError.textContent = error.message || 'Could not sign in.'; } finally { els.authStatus.textContent = ''; }
 }
 async function ensureFirebaseAccess() { try { if (!firebaseAuth.currentUser) await firebaseAuth.signInAnonymously(); return true; } catch (error) { return false; } }
-async function showApp() { els.authView.hidden = true; els.appView.hidden = false; els.logout.textContent = state.user.username.slice(0,2).toUpperCase(); await ensureFirebaseAccess(); loadFriends(); loadServers(); }
+async function showApp() { els.authView.hidden = true; els.appView.hidden = false; els.logout.textContent = state.user.username.slice(0,2).toUpperCase(); await ensureFirebaseAccess(); startOnlinePresence(); loadFriends(); loadServers(); }
 function showAuth() { els.authView.hidden = false; els.appView.hidden = true; }
 function avatarMarkup(user, className) { const image = user && user.avatar; return image ? '<div class="' + className + ' has-image"><img src="' + esc(image) + '" alt=""></div>' : '<div class="' + className + '">' + esc((user && user.name || state.user.username).slice(0,2).toUpperCase()) + '</div>'; }
 function showError(message) { if (els.authError) els.authError.textContent = message; console.error('[Sektor]', message); }
@@ -487,6 +499,12 @@ els.addChannel.onclick = () => {
       ? pending.map(request => '<div class="friend-home-row"><span class="friend-nav-avatar">' + esc((request.fromUsername || '?').slice(0,2).toUpperCase()) + '</span><span class="friend-home-row-copy"><strong class="friend-home-row-name">' + esc(request.fromUsername || 'Friend request') + '</strong><small class="friend-home-row-status">Incoming friend request</small></span><button class="friend-home-add" type="button" data-request-key="' + esc(request.key) + '">Accept</button></div>').join('')
       : friends.map(friend => '<button class="friend-home-row" type="button" data-friend-key="' + esc(friend.key) + '">' + friendAvatarMarkup(friend) + '<span class="friend-home-row-copy"><strong class="friend-home-row-name">' + esc(friend.username) + '</strong><small class="friend-home-row-status">Friend</small></span></button>').join('');
     els.friendHome.innerHTML = '<div class="friend-home-header"><div><div class="friend-home-title">Friends</div><div class="friend-home-subtitle">Your friends, requests, and private conversations.</div></div><button class="friend-home-add" type="button" data-friend-action="add">Add Friend</button></div><nav class="friend-tabs" aria-label="Friends views"><button class="friend-tab ' + (view === 'all' ? 'active' : '') + '" type="button" data-friend-view="all">All</button><button class="friend-tab ' + (view === 'pending' ? 'active' : '') + '" type="button" data-friend-view="pending">Pending' + (pending.length ? ' (' + pending.length + ')' : '') + '</button><button class="friend-tab ' + (view === 'add' ? 'active' : '') + '" type="button" data-friend-view="add">Add Friend</button></nav>' + (view === 'add' ? '<div class="friend-home-section-title">Find someone</div><div class="friend-home-empty">Search for a username or six-digit ID to send a friend request.</div>' : '<div class="friend-home-section-title">' + (view === 'pending' ? 'Pending requests' : 'Your friends') + '</div><div class="friend-home-list">' + (content || '<div class="friend-home-empty">' + (view === 'pending' ? 'No pending requests.' : 'You do not have any friends yet.') + '</div>') + '</div>');
+    if (view === 'all') {
+      const online = Object.values(state.onlineUsers || {}).filter(person => person && person.key).sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+      const onlineRows = online.map(person => '<div class="friend-home-row">' + friendAvatarMarkup({username:person.name,avatar:person.avatar}) + '<span class="friend-home-row-copy"><strong class="friend-home-row-name">' + esc(person.name || 'Unknown') + '</strong><small class="friend-home-row-status">Online now</small></span></div>').join('');
+      const onlineSection = '<div class="friend-home-section-title">Online now (' + online.length + ')</div><div class="friend-home-list">' + (onlineRows || '<div class="friend-home-empty">Nobody is online right now.</div>') + '</div>';
+      els.friendHome.querySelector('.friend-tabs').insertAdjacentHTML('afterend', onlineSection);
+    }
     els.friendHome.querySelectorAll('[data-friend-view]').forEach(button => { button.onclick = () => renderFriendsHome(button.dataset.friendView); });
     const addButton = els.friendHome.querySelector('[data-friend-action="add"]');
     if (addButton) addButton.onclick = openFriendModal;
