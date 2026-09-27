@@ -334,6 +334,51 @@
   .normie-bubble   { background: #334155; border: 1.5px solid #64748b; color: #e2e8f0; }
   .coowner-bubble  { background: #4c1d95; border: 1.5px solid #8b5cf6; color: #ddd6fe; }
   .msg.mine .unranked-bubble, .msg.mine .normie-bubble, .msg.mine .coowner-bubble { align-self: flex-end; }
+
+  #banScreen {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #0f172a;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    padding: 24px;
+  }
+  #banCard {
+    width: 100%;
+    max-width: 380px;
+    background: #1e293b;
+    border: 1.5px solid #7f1d1d;
+    border-radius: 16px;
+    padding: 28px 26px;
+    text-align: center;
+  }
+  #banIcon { font-size: 42px; margin-bottom: 6px; }
+  #banTitle { color: #f87171; font-size: 21px; font-weight: 800; margin: 0 0 10px; }
+  #banReason { color: #94a3b8; font-size: 14.5px; line-height: 1.5; margin: 0 0 16px; }
+  #banCountdownWrap { margin-bottom: 16px; }
+  #banCountdown {
+    font-family: monospace;
+    font-size: 34px;
+    font-weight: 700;
+    color: #f1f5f9;
+    letter-spacing: 1px;
+  }
+  #banCountdownLabel { color: #64748b; font-size: 13px; margin-top: 4px; }
+  #banPermanentNote { color: #fbbf24; font-size: 13.5px; margin-bottom: 16px; line-height: 1.4; }
+  #banRefreshBtn {
+    width: 100%;
+    padding: 11px;
+    background: transparent;
+    border: 1.5px solid #334155;
+    border-radius: 10px;
+    color: #94a3b8;
+    font-size: 14.5px;
+    cursor: pointer;
+  }
+  #banRefreshBtn:hover { color: #f1f5f9; border-color: #475569; }
+  #banRefreshBtn:disabled { opacity: .5; cursor: default; }
   #jumpToBottomBtn {
     display: none;
     background: #1e293b;
@@ -1040,6 +1085,23 @@
 
 <div id="joinScreen">
   <div id="joinCard"></div>
+</div>
+
+<!-- Shown instead of the join screen while your account is banned. Never lets
+     you back to login/signup -- only unban (owner) or the timer running out
+     (temporary bans) gets you out of this screen. -->
+<div id="banScreen" style="display:none">
+  <div id="banCard">
+    <div id="banIcon">&#128683;</div>
+    <h2 id="banTitle">You are banned</h2>
+    <p id="banReason"></p>
+    <div id="banCountdownWrap" style="display:none">
+      <div id="banCountdown"></div>
+      <p id="banCountdownLabel">until you can log back in</p>
+    </div>
+    <p id="banPermanentNote" style="display:none">This ban has no time limit. Only an Owner can lift it.</p>
+    <button id="banRefreshBtn" type="button">Check again</button>
+  </div>
 </div>
 
 <div id="chatScreen">
@@ -2272,6 +2334,13 @@ const RoomManager = {
 };
 
 const $joinScreen  = document.getElementById("joinScreen");
+const $banScreen = document.getElementById("banScreen");
+const $banTitle = document.getElementById("banTitle");
+const $banReason = document.getElementById("banReason");
+const $banCountdownWrap = document.getElementById("banCountdownWrap");
+const $banCountdown = document.getElementById("banCountdown");
+const $banPermanentNote = document.getElementById("banPermanentNote");
+const $banRefreshBtn = document.getElementById("banRefreshBtn");
 const $joinCard    = document.getElementById("joinCard");
 const $chatScreen  = document.getElementById("chatScreen");
 const $messages    = document.getElementById("messages");
@@ -2972,7 +3041,8 @@ async function joinWithDmSession(session, nickname) {
   const result = await ChatBackend.claimPresence(name, false, session.id);
   if (!result.ok) {
     if (result.reason === "banned") {
-      renderDmLoginPrompt("This account is banned from VUS Chat.");
+      const ban = (await ChatBackend.getBan(session.id).catch(() => null)) || {};
+      showBanScreen(ban);
     } else if (result.reason === "closed") {
       renderChatClosedPrompt();
     } else if (result.reason === "already-online") {
@@ -3184,6 +3254,93 @@ function watchMyTimeout() {
   });
 }
 
+
+/* ══════════════════════════════════════════════════════════
+   BAN SCREEN
+   Being banned NEVER shows login/signup again. It shows this screen and
+   nothing else -- refreshing, closing and reopening the tab, or trying the
+   login form directly all land back here as long as the ban is active. A
+   temporary ban counts down live and clears itself the instant it expires;
+   a permanent ban stays until an Owner runs /unban.
+   ══════════════════════════════════════════════════════════ */
+let banCountdownTimer = null;
+
+function formatBanCountdown(msRemaining) {
+  const totalSecs = Math.max(0, Math.ceil(msRemaining / 1000));
+  const d = Math.floor(totalSecs / 86400);
+  const h = Math.floor((totalSecs % 86400) / 3600);
+  const m = Math.floor((totalSecs % 3600) / 60);
+  const sec = totalSecs % 60;
+  if (d > 0) return d + "d " + String(h).padStart(2, "0") + "h " + String(m).padStart(2, "0") + "m";
+  if (h > 0) return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0") + ":" + String(sec).padStart(2, "0");
+  return String(m).padStart(2, "0") + ":" + String(sec).padStart(2, "0");
+}
+
+function stopBanCountdown() {
+  clearInterval(banCountdownTimer);
+  banCountdownTimer = null;
+}
+
+function showBanScreen(ban) {
+  stopBanCountdown();
+  $joinScreen.style.display = "none";
+  $chatScreen.style.display = "none";
+  $banScreen.style.display = "flex";
+
+  const isTemporary = !!ban.expiresAt;
+  $banTitle.textContent = isTemporary ? "You're temporarily banned" : "You are banned";
+  $banReason.textContent = "Your account was removed from VUS Chat by staff.";
+  $banCountdownWrap.style.display = isTemporary ? "block" : "none";
+  $banPermanentNote.style.display = isTemporary ? "none" : "block";
+
+  if (isTemporary) {
+    const tick = () => {
+      const remaining = Number(ban.expiresAt) - Date.now();
+      if (remaining <= 0) {
+        stopBanCountdown();
+        // Ban has run out -- re-check with the server rather than trusting
+        // the local clock, then drop back to the normal join flow.
+        recheckBanStatus();
+        return;
+      }
+      $banCountdown.textContent = formatBanCountdown(remaining);
+    };
+    tick();
+    banCountdownTimer = setInterval(tick, 1000);
+  }
+}
+
+function hideBanScreen() {
+  stopBanCountdown();
+  $banScreen.style.display = "none";
+}
+
+// Re-asks the database "am I still banned?" -- used when a countdown hits
+// zero, and by the "Check again" button for a permanent ban (in case an
+// Owner just lifted it).
+async function recheckBanStatus() {
+  if (!myLoginId) { hideBanScreen(); renderDmLoginPrompt(); return; }
+  $banRefreshBtn.disabled = true;
+  $banRefreshBtn.textContent = "Checking...";
+  try {
+    const ban = await ChatBackend.getBan(myLoginId);
+    if (ban) {
+      showBanScreen(ban);
+    } else {
+      hideBanScreen();
+      // Ban is gone -- go back to the ordinary auto-login/name flow rather
+      // than dumping them straight into chat unannounced.
+      autoLoginOrPrompt();
+    }
+  } catch (e) {
+    // leave the screen as-is; nothing else to show here
+  } finally {
+    $banRefreshBtn.disabled = false;
+    $banRefreshBtn.textContent = "Check again";
+  }
+}
+$banRefreshBtn.addEventListener("click", recheckBanStatus);
+
 function watchMyBan() {
   if (unwatchMyBan) { unwatchMyBan(); unwatchMyBan = null; }
   if (!myLoginId) return;
@@ -3193,9 +3350,7 @@ function watchMyBan() {
     myName = "";
     myLoginId = "";
     isSpectator = false;
-    $chatScreen.style.display = "none";
-    $joinScreen.style.display = "flex";
-    renderDmLoginPrompt("This account was banned from VUS Chat.");
+    showBanScreen(ban);
   });
 }
 
