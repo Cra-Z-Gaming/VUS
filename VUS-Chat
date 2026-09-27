@@ -3319,7 +3319,18 @@ function hideBanScreen() {
 // zero, and by the "Check again" button for a permanent ban (in case an
 // Owner just lifted it).
 async function recheckBanStatus() {
-  if (!myLoginId) { hideBanScreen(); renderDmLoginPrompt(); return; }
+  // watchMyBan clears myLoginId before showing this screen, so by the time a
+  // temp ban's countdown hits zero there is no session left to re-check with
+  // ChatBackend -- fall back to the saved account and the normal join flow
+  // instead, same as any other "come back later" entry into the app.
+  if (!myLoginId) {
+    const savedSession = loadDmSession();
+    hideBanScreen();
+    $joinScreen.style.display = "flex";
+    if (savedSession) rejoinAfterBanLifted(savedSession);
+    else autoLoginOrPrompt();
+    return;
+  }
   $banRefreshBtn.disabled = true;
   $banRefreshBtn.textContent = "Checking...";
   try {
@@ -3344,14 +3355,43 @@ $banRefreshBtn.addEventListener("click", recheckBanStatus);
 function watchMyBan() {
   if (unwatchMyBan) { unwatchMyBan(); unwatchMyBan = null; }
   if (!myLoginId) return;
+  // Remembers the account so that when the ban clears (lifted early, or its
+  // own countdown running out and being reported by this same listener) we
+  // can rejoin under it directly -- without this, unbanning someone left them
+  // stuck on the ban screen forever with no session to recover with.
+  const watchedSession = loadDmSession();
   unwatchMyBan = ChatBackend.watchBan(myLoginId, ban => {
-    if (!ban || !myName) return;
-    ChatBackend.releasePresenceSilently();
-    myName = "";
-    myLoginId = "";
-    isSpectator = false;
-    showBanScreen(ban);
+    if (ban) {
+      if (!myName) return;   // already signed out for some other reason; nothing to ban out of
+      ChatBackend.releasePresenceSilently();
+      myName = "";
+      myLoginId = "";
+      isSpectator = false;
+      showBanScreen(ban);
+      return;
+    }
+    // Ban is gone. Only act if we're actually sitting on the ban screen for
+    // this account -- a `null` fires once on every fresh subscribe too
+    // (nothing to do then, since the person is already in chat normally).
+    if ($banScreen.style.display !== "flex") return;
+    hideBanScreen();
+    $joinScreen.style.display = "flex";
+    if (watchedSession) rejoinAfterBanLifted(watchedSession);
+    else autoLoginOrPrompt();
   });
+}
+
+// Rejoins directly under the account that was banned, rather than routing
+// through autoLoginOrPrompt() a second time mid-session (that path is meant
+// for the very first load and assumes nothing is running yet).
+async function rejoinAfterBanLifted(session) {
+  const lastName = loadLastChatName();
+  try {
+    if (lastName) await joinWithDmSession(session, lastName);
+    else renderNicknamePrompt(session);
+  } catch (e) {
+    renderDmLoginPrompt("Couldn't rejoin  log in again.");
+  }
 }
 
 function parseModerationDuration(value) {
