@@ -168,6 +168,49 @@
       </div>
     </div>
 
+    <section id="serverWorkspace" aria-label="Server workspace">
+      <aside id="serverChannelRail">
+        <div class="server-brand-row">
+          <div>
+            <div id="serverWorkspaceName">Server</div>
+            <div id="serverWorkspaceCode"></div>
+          </div>
+          <button id="serverCustomizeBtn" class="server-icon-btn" title="Customize server">⚙</button>
+        </div>
+        <div class="server-section-label">Text channels</div>
+        <div id="serverTextChannels"></div>
+        <div class="server-section-label voice-label">Voice channels</div>
+        <div id="serverVoiceChannels"></div>
+        <div id="serverVoiceMembers"></div>
+        <div class="server-owner-tools" id="serverOwnerTools">
+          <button id="serverAddChannelBtn" class="server-tool-btn">＋ Add channel</button>
+          <button id="serverRanksBtn" class="server-tool-btn">✦ Manage ranks</button>
+        </div>
+      </aside>
+      <section id="serverChannelView">
+        <header class="server-channel-header">
+          <div>
+            <span id="serverChannelIcon">#</span>
+            <strong id="serverChannelName">general</strong>
+            <span id="serverChannelTopic">A focused place to talk.</span>
+          </div>
+          <span id="serverChannelMode"></span>
+        </header>
+        <div id="serverAnnouncement" class="server-announcement" hidden>
+          <div class="server-announcement-kicker">📣 Owner announcement</div>
+          <div id="serverAnnouncementText"></div>
+        </div>
+        <div id="serverOwnerPanel" class="server-owner-panel" hidden>
+          <label for="serverAnnouncementInput">Announcement</label>
+          <div class="server-owner-row">
+            <input id="serverAnnouncementInput" maxlength="240" placeholder="Only the owner can post here…">
+            <button id="serverAnnouncementBtn">Publish</button>
+          </div>
+          <div id="serverOwnerStatus"></div>
+        </div>
+      </section>
+    </section>
+
     <div class="chat-modal-overlay" id="createRoomOverlay">
       <div class="chat-modal">
         <h3>Create a Room</h3>
@@ -370,6 +413,11 @@
       </div>
     </div>
 
+    <aside id="serverMembersPanel" aria-label="Server members">
+      <div class="server-members-heading">Members <span id="serverMembersCount"></span></div>
+      <div id="serverMembersList"></div>
+    </aside>
+
     <audio id="pingSound" preload="auto"></audio>
   </div>
 
@@ -508,8 +556,8 @@
    unlike eval/new Function) and loaded as a normal <script src>.
    ══════════════════════════════════════════════════════════ */
 (function loadExternalAppFiles() {
-  var CSS_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/other/Chat-DM/style.css";
-  var JS_URL  = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/other/Chat-DM/app.js";
+  var CSS_URL = "./other/Chat-DM/style.css";
+  var JS_URL  = "./other/Chat-DM/app.js";
 
   function showLoadError(what, err) {
     document.body.innerHTML =

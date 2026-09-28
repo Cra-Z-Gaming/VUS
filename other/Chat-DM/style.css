@@ -987,6 +987,77 @@
   .room-top-btn:hover { color: #f1f5f9; border-color: #475569; }
   .room-top-btn.leave { border-color: #7f1d1d; color: #f87171; }
   .room-top-btn.leave:hover { background: rgba(239,68,68,.1); }
+
+  #serverWorkspace {
+    display: none;
+    position: absolute;
+    top: 92px;
+    left: 0;
+    bottom: 0;
+    width: 238px;
+    z-index: 4;
+    background: #101923;
+    color: #dbe7f1;
+    overflow-y: auto;
+    border-right: 1px solid #243241;
+  }
+  #serverWorkspace.server-visible { display: flex; }
+  #serverChannelRail { width: 100%; padding-bottom: 14px; }
+  .server-brand-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 14px 12px; border-bottom: 1px solid #243241; }
+  #serverWorkspaceName { font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #serverWorkspaceCode { color: #607487; font: 10px ui-monospace, Consolas, monospace; margin-top: 3px; }
+  .server-icon-btn { width: 28px; height: 28px; border: 1px solid #33485a; border-radius: 6px; background: #172431; color: #91a6b8; cursor: pointer; }
+  .server-icon-btn:hover { color: #f1f5f9; border-color: #4c687d; }
+  .server-section-label { padding: 16px 14px 6px; color: #607487; font: 10px ui-monospace, Consolas, monospace; text-transform: uppercase; letter-spacing: .08em; }
+  .server-section-label.voice-label { padding-top: 18px; }
+  .server-channel-btn { width: calc(100% - 16px); display: flex; align-items: center; gap: 8px; margin: 2px 8px; padding: 8px 9px; border: 0; border-radius: 6px; background: transparent; color: #8da1b2; text-align: left; cursor: pointer; }
+  .server-channel-btn:hover { background: #172633; color: #dbe7f1; }
+  .server-channel-btn.active { background: #1d3444; color: #f1f5f9; }
+  .server-channel-btn .channel-count { margin-left: auto; color: #5d7587; font-size: 10px; }
+  .server-channel-btn.voice::before { content: "🔊"; font-size: 12px; }
+  .server-voice-join { margin-left: auto; border: 0; background: transparent; color: #6e899d; cursor: pointer; font-size: 11px; }
+  .server-voice-join.joined { color: #62d7a4; }
+  #serverVoiceMembers { padding: 0 18px; color: #6e899d; font-size: 11px; line-height: 1.7; }
+  .server-owner-tools { display: none; padding: 18px 14px 0; gap: 6px; }
+  .server-owner-tools.visible { display: grid; }
+  .server-tool-btn { padding: 8px 9px; border: 1px solid #33485a; border-radius: 6px; background: transparent; color: #9bb0c0; cursor: pointer; text-align: left; font-size: 11px; }
+  .server-tool-btn:hover { border-color: #5c7a90; color: #f1f5f9; }
+  #serverChannelView { display: none; }
+  .server-channel-header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 12px 18px; border-bottom: 1px solid #243241; background: #111d28; }
+  .server-channel-header strong { font-size: 14px; }
+  #serverChannelIcon { color: #7f9aad; margin-right: 7px; }
+  #serverChannelTopic { color: #607487; font-size: 11px; margin-left: 10px; }
+  #serverChannelMode { color: #62d7a4; font-size: 10px; }
+  .server-announcement { margin: 10px 18px 0; padding: 10px 12px; border-left: 3px solid #e6b86a; background: rgba(230,184,106,.08); color: #f0d7a5; font-size: 12px; line-height: 1.45; }
+  .server-announcement-kicker { color: #e6b86a; font: 10px ui-monospace, Consolas, monospace; text-transform: uppercase; margin-bottom: 4px; }
+  .server-owner-panel { margin: 10px 18px 0; padding: 10px 12px; background: #172431; border: 1px solid #33485a; }
+  .server-owner-panel label { display: block; color: #9bb0c0; font-size: 11px; margin-bottom: 6px; }
+  .server-owner-row { display: flex; gap: 6px; }
+  .server-owner-row input { flex: 1; min-width: 0; padding: 7px 8px; border: 1px solid #33485a; background: #0d1720; color: #f1f5f9; border-radius: 5px; outline: none; }
+  .server-owner-row button { border: 0; border-radius: 5px; padding: 0 10px; background: #e6b86a; color: #172431; font-weight: 700; cursor: pointer; }
+  #serverOwnerStatus { min-height: 14px; color: #f58b8b; font-size: 10px; margin-top: 5px; }
+  @media (max-width: 700px) {
+    #serverWorkspace { width: 190px; }
+    #serverChannelTopic { display: none; }
+  }
+  #chatRoomPane { position: relative; }
+  #chatRoomPane:has(#serverWorkspace.server-visible) #chatScreen { margin-left: 238px; margin-right: 190px; }
+  #serverMembersPanel { display: none; }
+  #chatRoomPane:has(#serverWorkspace.server-visible) #serverMembersPanel {
+    display: block; position: absolute; top: 92px; right: 0; bottom: 0; width: 190px;
+    z-index: 3; padding: 18px 12px; background: #111a24; border-left: 1px solid #243241; overflow-y: auto;
+  }
+  .server-members-heading { color: #73899a; font: 10px ui-monospace, Consolas, monospace; text-transform: uppercase; letter-spacing: .08em; padding: 0 8px 9px; }
+  .server-members-heading span { color: #536b7d; }
+  .server-member-row { display: flex; align-items: center; gap: 8px; padding: 7px 8px; color: #bbcbd6; font-size: 12px; }
+  .server-member-avatar { width: 25px; height: 25px; flex: 0 0 25px; display: grid; place-items: center; border-radius: 50%; background: #38566b; color: #f1f5f9; font-size: 10px; font-weight: 700; }
+  .server-member-info { min-width: 0; overflow: hidden; }
+  .server-member-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .server-member-rank { color: #6e8798; font-size: 10px; margin-top: 2px; }
+  @media (max-width: 700px) {
+    #chatRoomPane:has(#serverWorkspace.server-visible) #chatScreen { margin-left: 190px; margin-right: 0; }
+    #chatRoomPane:has(#serverWorkspace.server-visible) #serverMembersPanel { display: none; }
+  }
   .chat-modal-overlay {
     display: none;
     position: fixed;
