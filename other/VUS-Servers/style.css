@@ -379,3 +379,19 @@ body { background-image:radial-gradient(circle at 18% 0%,rgba(101,230,173,.08),t
 .server-header button,.chat-sidebar-btn,.modal-close { transition:background .16s ease,color .16s ease,transform .16s ease; }.server-header button:hover,.chat-sidebar-btn:hover,.modal-close:hover { transform:translateY(-1px); }
 button:focus-visible,input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 @media(max-width:560px) { .auth-card { padding:30px 22px 26px; }.auth-card h1 { font-size:25px; }.chat-header::after { display:none; }.youtube-popup { top:66px; } }
+
+/* Keep the composer visible while the channel history grows. */
+html, body { min-height:0; overflow:hidden; }
+.app-view { height:100vh; min-height:0; }
+.chat-column { min-height:0; }
+.messages { min-height:0; overflow-y:auto; }
+.message-form { flex:0 0 auto; }
+.sektor-inline-player { display:flex; flex-direction:column; gap:16px; padding:24px; border:1px solid rgba(101,230,173,.16); border-radius:10px; background:linear-gradient(145deg,#131d25,#0b1117); color:#edf7f2; }
+.sektor-inline-brand { display:flex; align-items:center; gap:11px; }
+.sektor-inline-brand strong,.sektor-inline-brand small { display:block; }
+.sektor-inline-brand strong { font-size:14px; }
+.sektor-inline-brand small { margin-top:3px; color:#78958d; font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sektor-file-button { align-self:flex-start; padding:9px 12px; border:1px solid rgba(101,230,173,.3); border-radius:7px; background:rgba(101,230,173,.1); color:#b7d8cd; cursor:pointer; font-size:11px; font-weight:700; }
+.sektor-file-button:hover { background:rgba(101,230,173,.18); color:#edf7f2; }
+.sektor-file-button input { display:none; }
+.sektor-inline-player audio { width:100%; height:38px; }

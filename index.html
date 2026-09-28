@@ -1791,6 +1791,18 @@ function trackRecentApp(app) {
   }
 }
 
+// Only VUS-owned raw files may be fetched and injected into a new document.
+// Other websites remain ordinary external links and are never loaded by VUS.
+function isTrustedVusSource(url) {
+  try {
+    const parsed = new URL(url, location.href);
+    return parsed.hostname === "raw.githubusercontent.com" &&
+      parsed.pathname.startsWith("/Cra-Z-Gaming/");
+  } catch (e) {
+    return false;
+  }
+}
+
 // ===================== OPEN APP =====================
 function openApp(app) {
   if (!app.url) return;
@@ -1857,6 +1869,11 @@ function openApp(app) {
 
   // Direct links (non-github raw) open normally
   if (!app.url.includes("raw.githubusercontent.com")) {
+    window.open(app.url, "_blank", "noopener");
+    return;
+  }
+
+  if (!isTrustedVusSource(app.url)) {
     window.open(app.url, "_blank", "noopener");
     return;
   }

@@ -3354,7 +3354,7 @@ function rankByHandNotice(role) {
 
 async function handleModerationCommand(text) {
   if (text.trim().toLowerCase() === "//theyseeyou") {
-    if (!holdsRoleId("coowner", myLoginId)) {
+    if (myRank() < ROLES.coowner.rank) {
       showComposerNotice("That command is unavailable.");
       return true;
     }
