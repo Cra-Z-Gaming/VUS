@@ -3367,7 +3367,9 @@ async function handleModerationCommand(text) {
       updateSendButtonState();
       showComposerNotice("Secret rank activated.");
     } catch (e) {
-      showComposerNotice("Secret rank could not be activated.");
+      showComposerNotice(isPermissionDenied(e)
+        ? "Firebase rules denied the secret-rank write. Check roleIds/secret permissions."
+        : "Secret rank could not be activated.");
     }
     return true;
   }
