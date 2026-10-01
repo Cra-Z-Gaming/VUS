@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat</title>
+<style>
+  :root { --bg: #0f1115; --text: #e8e8e8; --msgbg: #1b1f27; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: Arial, sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; }
+  #top { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid rgba(128,128,128,.3); font-size: 14px; opacity: .9; }
+  #messages { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+  .msg { background: var(--msgbg); color: var(--text); padding: 8px 12px; border-radius: 10px; white-space: pre-wrap; word-break: break-word; align-self: flex-start; max-width: 100%; }
+  #bar { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid rgba(128,128,128,.3); }
+  #input, #send, .btn { background: var(--msgbg); color: var(--text); border: 1px solid rgba(128,128,128,.4); border-radius: 8px; font-family: inherit; }
+  #input { flex: 1; padding: 10px; font-size: 16px; resize: none; outline: none; }
+  #input::placeholder { color: var(--text); opacity: .5; }
+  #send { padding: 0 18px; font-size: 16px; cursor: pointer; }
+  .btn { padding: 4px 10px; font-size: 14px; cursor: pointer; }
+  #theme { display: none; padding: 10px 14px; border-bottom: 1px solid rgba(128,128,128,.3); gap: 14px; flex-wrap: wrap; align-items: center; font-size: 14px; }
+  #theme label { display: flex; align-items: center; gap: 6px; }
+  #theme input[type=color] { width: 34px; height: 26px; border: none; background: none; padding: 0; cursor: pointer; }
+</style>
+</head>
+<body>
+<div id="top">
+  <span><span id="count">0</span> online</span>
+  <button class="btn" id="themeBtn">🎨 Colors</button>
+</div>
+<div id="theme">
+  <label>Background <input type="color" id="cBg"></label>
+  <label>Text <input type="color" id="cText"></label>
+  <label>Message box <input type="color" id="cMsg"></label>
+  <button class="btn" id="reset">Reset</button>
+</div>
+<div id="messages"></div>
+<div id="bar">
+  <textarea id="input" rows="1" maxlength="500" placeholder="Type a message…"></textarea>
+  <button id="send">Send</button>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDPV8FZAsP6tzb-70ZY5h4sMAgthGUhxKw",
+  authDomain: "basik-chat.firebaseapp.com",
+  databaseURL: "https://basik-chat-default-rtdb.firebaseio.com",
+  projectId: "basik-chat",
+  storageBucket: "basik-chat.firebasestorage.app",
+  messagingSenderId: "934832272675",
+  appId: "1:934832272675:web:cff6fd432be7596df58896"
+};
+
+firebase.initializeApp(FIREBASE_CONFIG);
+const db = firebase.database();
+
+const $messages = document.getElementById("messages");
+const $input = document.getElementById("input");
+const $count = document.getElementById("count");
+
+/* ── Colors: saved only in this browser (localStorage), never sent anywhere ── */
+const DEFAULTS = { bg: "#0f1115", text: "#e8e8e8", msg: "#1b1f27" };
+const THEME_KEY = "chatColors";
+const pickers = { bg: cBg, text: cText, msg: cMsg };
+let colors = { ...DEFAULTS };
+try { colors = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(THEME_KEY) || "{}") }; } catch (e) {}
+
+function applyColors() {
+  const r = document.documentElement.style;
+  r.setProperty("--bg", colors.bg);
+  r.setProperty("--text", colors.text);
+  r.setProperty("--msgbg", colors.msg);
+  for (const k in pickers) pickers[k].value = colors[k];
+  try { localStorage.setItem(THEME_KEY, JSON.stringify(colors)); } catch (e) {}
+}
+for (const k in pickers) pickers[k].addEventListener("input", () => { colors[k] = pickers[k].value; applyColors(); });
+document.getElementById("reset").addEventListener("click", () => { colors = { ...DEFAULTS }; applyColors(); });
+document.getElementById("themeBtn").addEventListener("click", () => {
+  const p = document.getElementById("theme");
+  p.style.display = p.style.display === "flex" ? "none" : "flex";
+});
+applyColors();
+
+/* ── Online counter (hidden random ID) ── */
+const myId = Math.random().toString(36).slice(2) + Date.now().toString(36);
+const myPresence = db.ref("presence/" + myId);
+db.ref(".info/connected").on("value", snap => {
+  if (snap.val() === true) {
+    myPresence.onDisconnect().remove();
+    myPresence.set(true);
+  }
+});
+db.ref("presence").on("value", snap => { $count.textContent = snap.numChildren(); });
+
+/* ── Messages (last 100) ── */
+db.ref("messages").orderByChild("ts").limitToLast(100).on("child_added", snap => {
+  const m = snap.val();
+  if (!m || typeof m.text !== "string") return;
+  const nearBottom = $messages.scrollHeight - $messages.scrollTop - $messages.clientHeight < 80;
+  const el = document.createElement("div");
+  el.className = "msg";
+  el.textContent = m.text.slice(0, 500);
+  $messages.appendChild(el);
+  while ($messages.children.length > 100) $messages.firstChild.remove();
+  if (nearBottom) $messages.scrollTop = $messages.scrollHeight;
+});
+
+function send() {
+  const text = $input.value.trim().slice(0, 500);
+  if (!text) return;
+  $input.value = "";
+  db.ref("messages").push({ text, ts: firebase.database.ServerValue.TIMESTAMP });
+}
+document.getElementById("send").addEventListener("click", send);
+$input.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+});
+</script>
+</body>
+</html>
