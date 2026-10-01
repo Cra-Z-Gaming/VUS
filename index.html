@@ -4,2743 +4,484 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VUS Hub</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg: #0a0e1a;
-    --bg-elevated: #111827;
-    --card: rgba(17, 24, 39, 0.6);
-    --card-hover: rgba(30, 41, 59, 0.7);
-    --border: rgba(51, 65, 85, 0.5);
-    --border-hover: rgba(74, 222, 128, 0.3);
-    --fg: #f1f5f9;
-    --fg-muted: #94a3b8;
-    --fg-dim: #475569;
-    --accent: #22c55e;
-    --accent-glow: rgba(34, 197, 94, 0.15);
-    --accent-soft: rgba(34, 197, 94, 0.08);
-    --danger: #ef4444;
-    --radius: 14px;
-    --font: 'Space Grotesk', sans-serif;
-    --mono: 'JetBrains Mono', monospace;
-  }
-
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  body {
-    background: var(--bg);
-    color: var(--fg);
-    font-family: var(--font);
-    min-height: 100vh;
-    overflow-x: hidden;
-    position: relative;
-  }
-
-  /* ---- Animated background ---- */
-  .bg-canvas {
-    position: fixed;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-    overflow: hidden;
-  }
-
-  .bg-orb {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(100px);
-    opacity: 0.35;
-    animation: orbFloat 20s ease-in-out infinite alternate;
-  }
-
-  .bg-orb:nth-child(1) {
-    width: 500px; height: 500px;
-    background: radial-gradient(circle, rgba(34,197,94,0.4), transparent 70%);
-    top: -15%; left: -10%;
-    animation-duration: 22s;
-  }
-  .bg-orb:nth-child(2) {
-    width: 400px; height: 400px;
-    background: radial-gradient(circle, rgba(16,185,129,0.3), transparent 70%);
-    bottom: -10%; right: -5%;
-    animation-duration: 18s;
-    animation-delay: -5s;
-  }
-  .bg-orb:nth-child(3) {
-    width: 300px; height: 300px;
-    background: radial-gradient(circle, rgba(52,211,153,0.2), transparent 70%);
-    top: 40%; left: 50%;
-    animation-duration: 25s;
-    animation-delay: -10s;
-  }
-
-  @keyframes orbFloat {
-    0% { transform: translate(0, 0) scale(1); }
-    33% { transform: translate(60px, -40px) scale(1.1); }
-    66% { transform: translate(-30px, 50px) scale(0.95); }
-    100% { transform: translate(40px, 20px) scale(1.05); }
-  }
-
-  /* ---- Grid noise overlay ---- */
-  .bg-canvas::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background-image: 
-      linear-gradient(rgba(34,197,94,0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(34,197,94,0.03) 1px, transparent 1px);
-    background-size: 60px 60px;
-    mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, black 20%, transparent 80%);
-  }
-
-  /* ---- Mouse glow ---- */
-  .mouse-glow {
-    position: fixed;
-    width: 600px; height: 600px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(34,197,94,0.06), transparent 60%);
-    pointer-events: none;
-    z-index: 1;
-    transform: translate(-50%, -50%);
-    transition: left 0.3s ease-out, top 0.3s ease-out;
-    will-change: left, top;
-  }
-
-  /* ---- Main layout ---- */
-  .app-shell {
-    position: relative;
-    z-index: 2;
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 20px 20px 40px;
-    min-height: 100vh;
-  }
-
-  /* ---- Header ---- */
-  .hub-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 0 24px;
-  }
-
-  .hub-logo {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .logo-mark {
-    width: 40px; height: 40px;
-    border-radius: 10px;
-    background: linear-gradient(135deg, var(--accent), #10b981);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 18px;
-    color: #000;
-    box-shadow: 0 0 20px rgba(34,197,94,0.25);
-    position: relative;
-    overflow: hidden;
-  }
-
-  .logo-mark img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-    position: relative;
-    z-index: 1;
-  }
-
-  .logo-mark::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.2));
-  }
-
-  .logo-text {
-    font-size: 24px;
-    font-weight: 700;
-    letter-spacing: -0.5px;
-    background: linear-gradient(135deg, var(--fg), var(--fg-muted));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-
-  .header-right {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-
-  .clock-display {
-    font-family: var(--mono);
-    font-size: 14px;
-    color: var(--fg-dim);
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 6px 14px;
-    backdrop-filter: blur(10px);
-    letter-spacing: 0.5px;
-  }
-
-  /* ---- Search ---- */
-  .search-wrap {
-    position: relative;
-    margin-bottom: 20px;
-  }
-
-  .search-icon {
-    position: absolute;
-    left: 16px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--fg-dim);
-    width: 18px; height: 18px;
-    pointer-events: none;
-    transition: color 0.2s;
-  }
-
-  .search-input {
-    width: 100%;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 14px 16px 14px 46px;
-    font-size: 15px;
-    font-family: var(--font);
-    color: var(--fg);
-    outline: none;
-    backdrop-filter: blur(12px);
-    transition: border-color 0.2s, box-shadow 0.2s;
-  }
-
-  .search-input::placeholder { color: var(--fg-dim); }
-  .search-input:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-glow);
-  }
-  .search-input:focus ~ .search-icon { color: var(--accent); }
-
-  .search-shortcut {
-    position: absolute;
-    right: 14px;
-    top: 50%;
-    transform: translateY(-50%);
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--fg-dim);
-    background: var(--bg-elevated);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 3px 8px;
-    pointer-events: none;
-  }
-
-  /* ---- Tabs ---- */
-  .hub-tabs {
-    display: flex;
-    gap: 4px;
-    padding: 4px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    margin-bottom: 24px;
-    backdrop-filter: blur(12px);
-    position: relative;
-  }
-
-  .hub-tab {
-    flex: 1;
-    padding: 10px 16px;
-    border-radius: 9px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
-    font-family: var(--font);
-    color: var(--fg-muted);
-    background: transparent;
-    border: none;
-    transition: color 0.2s;
-    position: relative;
-    z-index: 1;
-    text-align: center;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-  }
-
-  .hub-tab:hover { color: var(--fg); }
-
-  .hub-tab.active { color: #000; }
-
-  .tab-indicator {
-    position: absolute;
-    top: 4px;
-    bottom: 4px;
-    background: var(--accent);
-    border-radius: 9px;
-    transition: left 0.35s cubic-bezier(0.4, 0, 0.2, 1), width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-    z-index: 0;
-    box-shadow: 0 0 16px rgba(34,197,94,0.3);
-  }
-
-  .tab-count {
-    font-size: 11px;
-    font-weight: 600;
-    background: rgba(255,255,255,0.15);
-    border-radius: 6px;
-    padding: 1px 7px;
-    line-height: 1.5;
-  }
-
-  .hub-tab.active .tab-count {
-    background: rgba(0,0,0,0.2);
-  }
-
-  /* ---- Grid ---- */
-  .hub-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 14px;
-    min-height: 200px;
-  }
-
-  @media (max-width: 768px) {
-    .hub-grid { grid-template-columns: repeat(2, 1fr); }
-  }
-  @media (max-width: 480px) {
-    .hub-grid { grid-template-columns: 1fr; }
-    .hub-header { flex-wrap: wrap; gap: 12px; }
-    .search-shortcut { display: none; }
-  }
-
-  /* ---- Home dashboard iframe ---- */
-  .home-frame {
-    display: none;
-    width: 100%;
-    min-height: 200px;
-    height: calc(100vh - 260px);
-    border: none;
-    border-radius: var(--radius);
-    background: transparent;
-  }
-
-  .home-frame.active {
-    display: block;
-  }
-
-  @media (max-width: 480px) {
-    .home-frame { height: calc(100vh - 300px); }
-  }
-
-  /* ---- Cards ---- */
-  .hub-card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px 18px;
-    cursor: pointer;
-    text-align: left;
-    backdrop-filter: blur(12px);
-    transition: 
-      border-color 0.25s, 
-      background 0.25s, 
-      transform 0.25s,
-      box-shadow 0.25s;
-    position: relative;
-    overflow: hidden;
-    opacity: 0;
-    transform: translateY(16px);
-    animation: cardIn 0.4s ease forwards;
-  }
-
-  .hub-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, var(--accent), transparent);
-    opacity: 0;
-    transition: opacity 0.3s;
-  }
-
-  .hub-card:hover {
-    border-color: var(--border-hover);
-    background: var(--card-hover);
-    transform: translateY(-3px);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 0 0 1px rgba(34,197,94,0.1);
-  }
-
-  .hub-card:hover::before { opacity: 1; }
-
-  .hub-card:active {
-    transform: translateY(-1px) scale(0.99);
-    transition-duration: 0.08s;
-  }
-
-  @keyframes cardIn {
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  .card-icon {
-    width: 36px; height: 36px;
-    border-radius: 9px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 14px;
-    font-size: 16px;
-    font-weight: 700;
-    position: relative;
-  }
-
-  .card-icon.green { background: rgba(34,197,94,0.12); color: #4ade80; }
-  .card-icon.blue { background: rgba(59,130,246,0.12); color: #60a5fa; }
-  .card-icon.amber { background: rgba(245,158,11,0.12); color: #fbbf24; }
-  .card-icon.rose { background: rgba(244,63,94,0.12); color: #fb7185; }
-  .card-icon.violet { background: rgba(139,92,246,0.12); color: #a78bfa; }
-  .card-icon.cyan { background: rgba(6,182,212,0.12); color: #22d3ee; }
-  .card-icon.lime { background: rgba(132,204,22,0.12); color: #a3e635; }
-  .card-icon.orange { background: rgba(249,115,22,0.12); color: #fb923c; }
-
-  .hub-card-title {
-    font-size: 15px;
-    font-weight: 600;
-    margin-bottom: 6px;
-    color: var(--fg);
-    line-height: 1.3;
-  }
-
-  .hub-card-sub {
-    font-size: 13px;
-    color: var(--fg-muted);
-    line-height: 1.5;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .card-arrow {
-    position: absolute;
-    top: 20px; right: 16px;
-    color: var(--fg-dim);
-    width: 16px; height: 16px;
-    opacity: 0;
-    transform: translateX(-4px);
-    transition: opacity 0.2s, transform 0.2s, color 0.2s;
-  }
-
-  .hub-card:hover .card-arrow {
-    opacity: 1;
-    transform: translateX(0);
-    color: var(--accent);
-  }
-
-  .card-favorite {
-    position: absolute;
-    top: 14px; right: 14px;
-    width: 28px; height: 28px;
-    border-radius: 8px;
-    border: none;
-    background: transparent;
-    color: var(--fg-dim);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: color 0.2s, background 0.2s, transform 0.15s;
-    z-index: 2;
-  }
-
-  .card-favorite:hover {
-    background: rgba(255,255,255,0.06);
-    color: #fbbf24;
-    transform: scale(1.1);
-  }
-
-  .card-favorite svg {
-    width: 16px; height: 16px;
-    transition: fill 0.15s, stroke 0.15s;
-  }
-
-  .card-favorite.active {
-    color: #fbbf24;
-  }
-
-  .card-favorite.active svg {
-    fill: #fbbf24;
-    stroke: #fbbf24;
-  }
-
-  /* Room for the star: keep the hover-arrow from overlapping it */
-  .hub-card .card-arrow {
-    right: 46px;
-  }
-
-  /* ---- Empty state ---- */
-  .hub-empty {
-    grid-column: 1 / -1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 60px 20px;
-    color: var(--fg-dim);
-    gap: 8px;
-  }
-
-  .hub-empty-icon {
-    width: 48px; height: 48px;
-    border-radius: 12px;
-    background: var(--accent-soft);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 8px;
-    color: var(--accent);
-  }
-
-  .hub-empty-text { font-size: 15px; font-weight: 500; }
-  .hub-empty-sub { font-size: 13px; color: var(--fg-dim); }
-
-  /* ---- Footer ---- */
-  .hub-footer {
-    margin-top: 32px;
-    padding-top: 20px;
-    border-top: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .hub-footer-left {
-    font-size: 13px;
-    color: var(--fg-dim);
-  }
-
-  .hub-footer-link {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--accent);
-    text-decoration: none;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    border-radius: 8px;
-    background: var(--accent-soft);
-    border: 1px solid rgba(34,197,94,0.15);
-    transition: background 0.2s, border-color 0.2s, transform 0.15s;
-  }
-
-  .hub-footer-link:hover {
-    background: rgba(34,197,94,0.15);
-    border-color: rgba(34,197,94,0.3);
-    transform: translateY(-1px);
-  }
-
-  .hub-footer-link svg { width: 14px; height: 14px; }
-
-  /* ---- Q/A Button ---- */
-  .qa-btn {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    background: linear-gradient(135deg, var(--accent), #10b981);
-    color: #000;
-    border: none;
-    border-radius: 12px;
-    padding: 14px 24px;
-    font-size: 15px;
-    font-weight: 700;
-    font-family: var(--font);
-    cursor: pointer;
-    box-shadow: 0 4px 24px rgba(34,197,94,0.3);
-    transition: transform 0.2s, box-shadow 0.2s;
-    z-index: 50;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .qa-btn:hover {
-    transform: scale(1.05) translateY(-2px);
-    box-shadow: 0 8px 32px rgba(34,197,94,0.4);
-  }
-
-  .qa-btn:active { transform: scale(0.98); }
-
-  .qa-btn svg { width: 18px; height: 18px; }
-
-  /* ---- Settings Button ---- */
-  .settings-btn {
-    position: fixed;
-    bottom: 24px;
-    left: 24px;
-    background: var(--bg-elevated);
-    color: var(--fg);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 14px 24px;
-    font-size: 15px;
-    font-weight: 700;
-    font-family: var(--font);
-    cursor: pointer;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
-    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
-    z-index: 50;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    backdrop-filter: blur(12px);
-  }
-
-  .settings-btn:hover {
-    transform: scale(1.05) translateY(-2px);
-    border-color: var(--border-hover);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-  }
-
-  .settings-btn:active { transform: scale(0.98); }
-
-  .settings-btn svg { width: 18px; height: 18px; }
-
-  /* ---- Chat toggle button (floating, left edge, vertically centered) ---- */
-  .chat-toggle-btn {
-    position: fixed;
-    left: 20px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent), #10b981);
-    color: #000;
-    border: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
-    box-shadow: 0 4px 24px rgba(34,197,94,0.35);
-    transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
-    z-index: 60;
-  }
-
-  .chat-toggle-btn:hover {
-    transform: translateY(-50%) scale(1.08);
-    box-shadow: 0 8px 32px rgba(34,197,94,0.45);
-  }
-
-  .chat-toggle-btn:active { transform: translateY(-50%) scale(0.96); }
-
-  .chat-toggle-btn.hidden {
-    opacity: 0;
-    pointer-events: none;
-    transform: translateY(-50%) scale(0.7);
-  }
-
-  body.reduced-motion .chat-toggle-btn {
-    transition: opacity 0.15s;
-  }
-  body.reduced-motion .chat-toggle-btn:hover,
-  body.reduced-motion .chat-toggle-btn:active {
-    transform: translateY(-50%);
-  }
-
-  /* ---- Chat sidebar ---- */
-  .chat-sidebar-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.4);
-    z-index: 90;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s;
-  }
-
-  .chat-sidebar-overlay.open {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  body.reduced-motion .chat-sidebar-overlay { transition: none; }
-
-  .chat-sidebar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    width: 400px;
-    max-width: 92vw;
-    background: var(--bg-elevated);
-    border-right: 1px solid var(--border);
-    box-shadow: 24px 0 64px rgba(0,0,0,0.5);
-    z-index: 91;
-    display: flex;
-    flex-direction: column;
-    transform: translateX(-100%);
-    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .chat-sidebar.open {
-    transform: translateX(0);
-  }
-
-  body.reduced-motion .chat-sidebar { transition: none; }
-
-  .chat-sidebar-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-
-  .chat-sidebar-title {
-    font-size: 15px;
-    font-weight: 700;
-    color: var(--fg);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .chat-sidebar-actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .chat-sidebar-btn {
-    width: 30px; height: 30px;
-    border-radius: 8px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    color: var(--fg-muted);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-    transition: background 0.15s, color 0.15s;
-    font-family: var(--font);
-  }
-
-  .chat-sidebar-btn:hover { background: var(--card-hover); color: var(--fg); }
-
-  .chat-sidebar-frame {
-    flex: 1;
-    width: 100%;
-    border: none;
-    background: transparent;
-  }
-
-  @media (max-width: 480px) {
-    .chat-toggle-btn { left: 14px; width: 46px; height: 46px; font-size: 19px; }
-    .chat-sidebar { width: 100vw; max-width: 100vw; }
-  }
-
-  /* ---- Toast ---- */
-  .toast-container {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 200;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    pointer-events: none;
-  }
-
-  .toast {
-    background: var(--bg-elevated);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 12px 18px;
-    font-size: 14px;
-    color: var(--fg);
-    backdrop-filter: blur(16px);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-    pointer-events: auto;
-    animation: toastIn 0.35s ease, toastOut 0.3s ease 2.7s forwards;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    max-width: 360px;
-  }
-
-  .toast.err { border-color: rgba(239,68,68,0.4); }
-  .toast.err .toast-dot { background: var(--danger); box-shadow: 0 0 8px rgba(239,68,68,0.5); }
-  .toast.ok { border-color: rgba(34,197,94,0.4); }
-  .toast.ok .toast-dot { background: var(--accent); box-shadow: 0 0 8px rgba(34,197,94,0.5); }
-  .toast.load { border-color: rgba(59,130,246,0.4); }
-  .toast.load .toast-dot { background: #3b82f6; box-shadow: 0 0 8px rgba(59,130,246,0.5); animation: pulse 1s infinite; }
-
-  .toast-dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  @keyframes toastIn {
-    from { opacity: 0; transform: translateX(40px); }
-    to { opacity: 1; transform: translateX(0); }
-  }
-  @keyframes toastOut {
-    to { opacity: 0; transform: translateX(40px); }
-  }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
-
-  /* ---- Q/A Modal ---- */
-  .qa-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.6);
-    backdrop-filter: blur(6px);
-    z-index: 150;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s;
-    padding: 20px;
-  }
-
-  .qa-overlay.open {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  .qa-modal {
-    background: var(--bg-elevated);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    width: 100%;
-    max-width: 640px;
-    max-height: 80vh;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    transform: translateY(20px) scale(0.97);
-    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 24px 64px rgba(0,0,0,0.5);
-  }
-
-  .qa-overlay.open .qa-modal {
-    transform: translateY(0) scale(1);
-  }
-
-  .qa-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 20px 24px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-
-  .qa-header h2 {
-    font-size: 20px;
-    font-weight: 700;
-    letter-spacing: -0.3px;
-  }
-
-  .qa-close {
-    width: 32px; height: 32px;
-    border-radius: 8px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    color: var(--fg-muted);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-    transition: background 0.15s, color 0.15s;
-    font-family: var(--font);
-  }
-
-  .qa-close:hover { background: var(--card-hover); color: var(--fg); }
-
-  .qa-body {
-    padding: 16px 24px 24px;
-    overflow-y: auto;
-    flex: 1;
-  }
-
-  .qa-body::-webkit-scrollbar { width: 6px; }
-  .qa-body::-webkit-scrollbar-track { background: transparent; }
-  .qa-body::-webkit-scrollbar-thumb { background: var(--fg-dim); border-radius: 3px; }
-
-  /* ---- Update Log ---- */
-  .log-tabs {
-    display: flex;
-    gap: 6px;
-    padding: 0 24px 12px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-
-  .log-tab {
-    background: transparent;
-    border: none;
-    color: var(--fg-muted);
-    font-family: var(--font);
-    font-size: 13.5px;
-    font-weight: 600;
-    padding: 8px 14px;
-    border-radius: 8px 8px 0 0;
-    cursor: pointer;
-    transition: color 0.15s, background 0.15s;
-  }
-
-  .log-tab:hover { color: var(--fg); }
-
-  .log-tab.active {
-    color: var(--accent);
-    background: var(--accent-soft);
-  }
-
-  .log-entry {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 12px 16px;
-    margin-bottom: 8px;
-    font-size: 14px;
-    color: var(--fg);
-    line-height: 1.5;
-  }
-
-  .log-entry:last-child { margin-bottom: 0; }
-
-  /* ---- Settings form ---- */
-  .settings-section {
-    margin-bottom: 24px;
-  }
-
-  .settings-section:last-child { margin-bottom: 0; }
-
-  .settings-label {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--fg);
-    margin-bottom: 4px;
-    display: block;
-  }
-
-  .settings-sub {
-    font-size: 12px;
-    color: var(--fg-dim);
-    margin-bottom: 12px;
-  }
-
-  .settings-input {
-    width: 100%;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 11px 14px;
-    font-size: 14px;
-    font-family: var(--font);
-    color: var(--fg);
-    outline: none;
-    transition: border-color 0.2s, box-shadow 0.2s;
-  }
-
-  .settings-input:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-glow);
-  }
-
-  .settings-input::placeholder { color: var(--fg-dim); }
-
-  .settings-option-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-    gap: 8px;
-  }
-
-  .settings-option {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px 14px;
-    font-size: 13px;
-    font-weight: 500;
-    font-family: var(--font);
-    color: var(--fg-muted);
-    cursor: pointer;
-    transition: border-color 0.2s, color 0.2s, background 0.2s;
-    text-align: center;
-  }
-
-  .settings-option:hover {
-    border-color: var(--border-hover);
-    color: var(--fg);
-  }
-
-  .settings-option.active {
-    border-color: var(--accent);
-    background: var(--accent-soft);
-    color: var(--fg);
-  }
-
-  .settings-file-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-
-  .settings-file-btn {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px 16px;
-    font-size: 13px;
-    font-weight: 600;
-    font-family: var(--font);
-    color: var(--fg);
-    cursor: pointer;
-    transition: border-color 0.2s, background 0.2s;
-  }
-
-  .settings-file-btn:hover {
-    border-color: var(--border-hover);
-    background: var(--card-hover);
-  }
-
-  .settings-file-name {
-    font-size: 12px;
-    color: var(--fg-dim);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 220px;
-  }
-
-  .settings-warning {
-    font-size: 12px;
-    color: #fbbf24;
-    background: rgba(245,158,11,0.08);
-    border: 1px solid rgba(245,158,11,0.25);
-    border-radius: 8px;
-    padding: 8px 12px;
-    margin-top: 10px;
-    line-height: 1.5;
-  }
-
-  .settings-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    padding-top: 20px;
-    margin-top: 4px;
-    border-top: 1px solid var(--border);
-  }
-
-  .settings-btn-secondary,
-  .settings-btn-primary {
-    padding: 10px 20px;
-    border-radius: 10px;
-    font-size: 14px;
-    font-weight: 600;
-    font-family: var(--font);
-    cursor: pointer;
-    transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
-  }
-
-  .settings-btn-secondary {
-    background: var(--card);
-    border: 1px solid var(--border);
-    color: var(--fg-muted);
-  }
-
-  #clearDataBtn.confirm-pending {
-    background: rgba(239,68,68,.12);
-    border-color: #ef4444;
-    color: #fca5a5;
-  }
-
-  .settings-btn-secondary:hover { color: var(--fg); background: var(--card-hover); }
-
-  .settings-btn-primary {
-    background: linear-gradient(135deg, var(--accent), #10b981);
-    border: none;
-    color: #000;
-  }
-
-  .settings-btn-primary:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 16px rgba(34,197,94,0.35);
-  }
-
-  .settings-btn-primary:active { transform: translateY(0); }
-
-  .qa-row {
-    display: flex;
-    gap: 16px;
-    padding: 16px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    margin-bottom: 10px;
-    transition: border-color 0.2s;
-  }
-
-  .qa-row:hover { border-color: var(--border-hover); }
-
-  .qa-num {
-    color: var(--accent);
-    font-weight: 700;
-    font-size: 18px;
-    min-width: 28px;
-    padding-top: 2px;
-    font-family: var(--mono);
-  }
-
-  .qa-content { flex: 1; }
-
-  .qa-line {
-    font-size: 14px;
-    margin-bottom: 10px;
-    line-height: 1.6;
-    color: var(--fg);
-  }
-
-  .qa-line:last-child { margin-bottom: 0; }
-
-  .qa-label {
-    color: var(--accent);
-    font-weight: 700;
-    margin-right: 8px;
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .qa-answer-label { color: #60a5fa; }
-
-  .qa-text:empty::before {
-    content: "No response yet";
-    color: var(--fg-dim);
-    font-style: italic;
-  }
-
-  .qa-empty {
-    text-align: center;
-    padding: 40px 0;
-    color: var(--fg-dim);
-    font-size: 15px;
-  }
-
-  /* ---- Reduced motion (OS-level preference) ---- */
-  @media (prefers-reduced-motion: reduce) {
-    .bg-orb { animation: none; }
-    .hub-card { animation: none; opacity: 1; transform: none; }
-    .tab-indicator { transition: none; }
-    .toast { animation: none; opacity: 1; }
-    .qa-modal { transition: none; }
-    .mouse-glow { display: none; }
-  }
-
-  /* ---- Reduced motion (manual Settings toggle) ---- */
-  body.reduced-motion .bg-orb { animation: none; }
-  body.reduced-motion .hub-card { animation: none; opacity: 1; transform: none; }
-  body.reduced-motion .tab-indicator { transition: none; }
-  body.reduced-motion .toast { animation: none; opacity: 1; }
-  body.reduced-motion .qa-overlay { transition: none; }
-  body.reduced-motion .qa-modal { transition: none; }
-  body.reduced-motion .mouse-glow { display: none; }
-  body.reduced-motion .card-arrow,
-  body.reduced-motion .card-favorite,
-  body.reduced-motion .qa-btn,
-  body.reduced-motion .settings-btn { transition: none; }
-
-  /* Cards: keep only the border-color outline on hover — no lift, no shadow
-     pop, no top gradient-bar animation, no active-state scale/press effect. */
-  body.reduced-motion .hub-card:hover {
-    transform: none;
-    box-shadow: none;
-    background: var(--card);
-  }
-  body.reduced-motion .hub-card::before { transition: none; }
-  body.reduced-motion .hub-card:hover::before { opacity: 0; }
-  body.reduced-motion .hub-card:active { transform: none; }
-  body.reduced-motion .card-arrow { transition: none; transform: none; }
-  body.reduced-motion .hub-card:hover .card-arrow { transform: none; }
-  body.reduced-motion .card-favorite { transition: none; }
-  body.reduced-motion .card-favorite:hover { transform: none; }
-  body.reduced-motion .qa-btn:hover,
-  body.reduced-motion .qa-btn:active,
-  body.reduced-motion .settings-btn:hover,
-  body.reduced-motion .settings-btn:active {
-    transform: none;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
-  }
-  body.reduced-motion .settings-btn-primary:hover,
-  body.reduced-motion .settings-btn-primary:active {
-    transform: none;
-    box-shadow: none;
-  }
+:root{--bg:#0a0e1a;--el:#111827;--card:rgba(17,24,39,.6);--hover:rgba(30,41,59,.7);--border:rgba(51,65,85,.5);--bh:rgba(74,222,128,.3);--fg:#f1f5f9;--mut:#94a3b8;--dim:#475569;--accent:#22c55e;--soft:rgba(34,197,94,.08);--r:14px;--font:'Space Grotesk',sans-serif;--mono:'JetBrains Mono',monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:radial-gradient(ellipse at 50% -10%,rgba(34,197,94,.12),transparent 60%) var(--bg);background-attachment:fixed;color:var(--fg);font-family:var(--font);min-height:100vh;overflow-x:hidden}
+.shell{max-width:1100px;margin:0 auto;padding:20px 20px 40px}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 0 16px}
+.logo,.hr{display:flex;align-items:center;gap:12px}
+.hr{gap:10px}
+.mark{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#10b981);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:#000;overflow:hidden}
+.mark img{width:100%;height:100%;object-fit:cover;display:block}
+.sname{font-size:24px;font-weight:700;letter-spacing:-.5px}
+.clock{font:500 14px var(--mono);color:var(--dim);background:var(--card);border:1px solid var(--border);border-radius:8px;padding:6px 14px}
+.ibtn{height:32px;padding:0 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--mut);font:600 13px var(--font);cursor:pointer}
+.ibtn:hover{color:var(--fg);border-color:var(--bh)}
+.vus-message{display:flex;gap:12px;align-items:baseline;margin-bottom:16px;padding:12px 16px;background:var(--soft);border:1px solid rgba(34,197,94,.3);border-radius:12px;font-size:14px;line-height:1.5}
+.vus-message[hidden]{display:none}
+.vm-label{font:500 11px var(--mono);color:var(--accent);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
+.sticky{position:sticky;top:0;z-index:20;padding-top:8px;background:linear-gradient(var(--bg) 85%,transparent)}
+.search{width:100%;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;font:15px var(--font);color:var(--fg);outline:none;backdrop-filter:blur(12px);margin-bottom:14px}
+.search:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(34,197,94,.15)}
+.tabs{display:flex;gap:4px;padding:4px;background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:20px;backdrop-filter:blur(12px);position:relative}
+.tab{flex:1;padding:10px 12px;border-radius:9px;cursor:pointer;font:500 14px var(--font);color:var(--mut);background:transparent;border:none;position:relative;z-index:1;display:flex;align-items:center;justify-content:center;gap:8px}
+.tab:hover{color:var(--fg)}.tab.active{color:#000}
+.ind{position:absolute;top:4px;bottom:4px;background:var(--accent);border-radius:9px;transition:left .35s cubic-bezier(.4,0,.2,1),width .35s cubic-bezier(.4,0,.2,1);z-index:0}
+.cnt{font-size:11px;font-weight:600;background:rgba(255,255,255,.15);border-radius:6px;padding:1px 7px}
+.tab.active .cnt{background:rgba(0,0,0,.2)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;min-height:200px}
+@media(max-width:768px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){.grid{grid-template-columns:1fr}.tab .cnt{display:none}}
+.home-frame{display:none;width:100%;height:calc(100vh - 300px);min-height:300px;border:none}
+.home-frame.on{display:block}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:20px 18px;cursor:pointer;backdrop-filter:blur(12px);transition:border-color .25s,background .25s,transform .25s;position:relative;opacity:0;animation:cardIn .4s ease forwards}
+.card:hover{border-color:var(--bh);background:var(--hover);transform:translateY(-3px)}
+@keyframes cardIn{to{opacity:1}}
+.ci{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;margin-bottom:14px;font-size:16px;font-weight:700;background:rgba(34,197,94,.12);color:#4ade80}
+.ci.blue{background:rgba(59,130,246,.12);color:#60a5fa}.ci.amber{background:rgba(245,158,11,.12);color:#fbbf24}.ci.rose{background:rgba(244,63,94,.12);color:#fb7185}.ci.violet{background:rgba(139,92,246,.12);color:#a78bfa}.ci.cyan{background:rgba(6,182,212,.12);color:#22d3ee}.ci.lime{background:rgba(132,204,22,.12);color:#a3e635}.ci.orange{background:rgba(249,115,22,.12);color:#fb923c}.ci.red{background:rgba(239,68,68,.12);color:#f87171}.ci.black{background:rgba(148,163,184,.12);color:#cbd5e1}.ci.white{background:rgba(241,245,249,.12);color:#f1f5f9}
+.ct{font-size:15px;font-weight:600;margin-bottom:6px;padding-right:26px}
+.cd{font-size:13px;color:var(--mut);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.src{margin-top:8px;font:500 11px var(--mono);color:var(--accent);text-transform:uppercase}
+.fav{position:absolute;top:14px;right:14px;width:28px;height:28px;border-radius:8px;border:none;background:transparent;color:var(--dim);cursor:pointer;display:flex;align-items:center;justify-content:center}
+.fav:hover{background:rgba(255,255,255,.06);color:#fbbf24}
+.fav svg{width:16px;height:16px}.fav.active{color:#fbbf24}.fav.active svg{fill:#fbbf24}
+body.compact .grid{grid-template-columns:repeat(4,1fr);gap:10px}
+body.compact .card{padding:12px}body.compact .cd{display:none}
+body.compact .ci{width:30px;height:30px;margin-bottom:8px;font-size:14px}
+@media(max-width:768px){body.compact .grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:480px){body.compact .grid{grid-template-columns:repeat(2,1fr)}}
+.skel{height:110px;border-radius:var(--r);border:1px solid var(--border);background:linear-gradient(90deg,var(--card) 25%,var(--hover) 50%,var(--card) 75%);background-size:200% 100%;animation:shim 1.4s linear infinite}
+@keyframes shim{to{background-position:-200% 0}}
+.empty{grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--dim)}
+.empty b{display:block;font-size:15px;color:var(--mut);margin-bottom:6px}
+footer{margin-top:32px;padding-top:20px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13px;color:var(--dim)}
+footer a{color:var(--accent);text-decoration:none;font-weight:500;padding:8px 16px;border-radius:8px;background:var(--soft);border:1px solid rgba(34,197,94,.15)}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);z-index:150;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .3s;padding:20px}
+.ov.open{opacity:1;pointer-events:auto}
+.modal{background:var(--el);border:1px solid var(--border);border-radius:16px;width:100%;max-width:640px;max-height:80vh;overflow:hidden;display:flex;flex-direction:column}
+.mh{display:flex;justify-content:space-between;align-items:center;padding:20px 24px;border-bottom:1px solid var(--border)}
+.mh h2{font-size:20px}
+.x{width:32px;height:32px;border-radius:8px;background:var(--card);border:1px solid var(--border);color:var(--mut);cursor:pointer;font-size:18px}
+.mb{padding:16px 24px 24px;overflow-y:auto}
+.qa{padding:16px;background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;font-size:14px;line-height:1.6}
+.qa b{color:var(--accent);margin-right:8px;font-size:13px}.qa .a b{color:#60a5fa}.qa div+div{margin-top:10px}
+.sec{margin-bottom:22px}
+.lbl{font-size:13px;font-weight:600;display:block;margin-bottom:6px}
+.sub{font-size:12px;color:var(--dim);margin-bottom:10px}
+.inp{width:100%;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:11px 14px;font:14px var(--font);color:var(--fg);outline:none}
+.inp:focus{border-color:var(--accent)}
+.og{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}
+.opt,.btn{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font:500 13px var(--font);color:var(--mut);cursor:pointer}
+.opt:hover,.btn:hover{color:var(--fg);border-color:var(--bh)}
+.opt.active{border-color:var(--accent);background:var(--soft);color:var(--fg)}
+.btn{font-weight:600;padding:10px 20px}
+.btn.pri{background:linear-gradient(135deg,var(--accent),#10b981);border:none;color:#000}
+.btn.arm{background:rgba(239,68,68,.12);border-color:#ef4444;color:#fca5a5}
+.foot{display:flex;justify-content:flex-end;gap:10px;padding-top:18px;border-top:1px solid var(--border)}
+.toasts{position:fixed;top:20px;right:20px;z-index:200;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--el);border:1px solid rgba(34,197,94,.4);border-radius:10px;padding:12px 18px;font-size:14px;max-width:360px}
+.toast.err{border-color:rgba(239,68,68,.4)}.toast.load{border-color:rgba(59,130,246,.4)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.search:focus-visible{outline:none}
+/* Low-motion mode: removes motion, blur and shadows */
+body.rm *,body.rm *::before,body.rm *::after{animation:none!important;transition:none!important;backdrop-filter:none!important;box-shadow:none!important}
+body.rm .card{opacity:1;transform:none}
+body.rm .card,body.rm .tabs,body.rm .search,body.rm .clock,body.rm .ibtn{background:var(--el)}
 </style>
 </head>
 <body>
+<div class="toasts" id="toasts"></div>
 
-<!-- Animated background -->
-<div class="bg-canvas">
-  <div class="bg-orb"></div>
-  <div class="bg-orb"></div>
-  <div class="bg-orb"></div>
-</div>
+<div class="ov" id="qaOv"><div class="modal"><div class="mh"><h2>Q / A</h2><button class="x" id="qaX" aria-label="Close Q/A panel">&times;</button></div><div class="mb" id="qaBody"></div></div></div>
 
-<!-- Mouse-following glow -->
-<div class="mouse-glow" id="mouseGlow"></div>
+<div class="ov" id="setOv"><div class="modal"><div class="mh"><h2>Settings</h2><button class="x" id="setX" aria-label="Close Settings panel">&times;</button></div><div class="mb">
+  <div class="sec"><label class="lbl" for="sName">Site Name</label><input class="inp" id="sName" maxlength="40" autocomplete="off"></div>
+  <div class="sec"><label class="lbl">Default Tab</label><div class="og" id="sTab"></div></div>
+  <div class="sec"><label class="lbl">Background</label><div class="og" id="sBg"></div><div id="sColorWrap" style="margin-top:10px" hidden><input class="inp" id="sColor" type="color" style="height:44px;padding:4px"></div></div>
+  <div class="sec"><label class="lbl">Animations</label><div class="sub">Off removes motion, blur and shadows for smoother performance.</div><div class="og" id="sAnim"></div></div>
+  <div class="sec"><label class="lbl">Card Size</label><div class="sub">Compact hides descriptions and shrinks cards.</div><div class="og" id="sSize"></div></div>
+  <div class="sec"><button class="btn" id="devBtn" style="width:100%">📊 Dev Info</button></div>
+  <div class="foot"><button class="btn" id="sReset">Reset to Defaults</button><button class="btn pri" id="sSave">Save Changes</button></div>
+  <div class="sec" style="margin-top:20px"><label class="lbl" style="color:#f87171">Danger Zone</label><div class="sub">Erases Favorites, Recently Used, Settings and any data apps saved in this browser. Cannot be undone.</div><button class="btn" id="clearBtn" style="width:100%;border-color:#7f1d1d;color:#f87171">🗑️ Clear All Data</button></div>
+</div></div></div>
 
-<!-- Toast container -->
-<div class="toast-container" id="toasts"></div>
-
-<!-- Q/A Modal -->
-<div class="qa-overlay" id="qaOverlay">
-  <div class="qa-modal">
-    <div class="qa-header">
-      <h2>Q / A</h2>
-      <button class="qa-close" id="qaClose" aria-label="Close Q/A panel">&times;</button>
+<div class="shell">
+  <header>
+    <div class="logo">
+      <div class="mark"><img src="https://github.com/Cra-Z-Gaming/VUS/raw/refs/heads/main/logo" alt="VUS Hub logo" onerror="this.style.display='none';this.parentElement.textContent='V'"></div>
+      <span class="sname" id="siteName">VUS Hub</span>
     </div>
-    <div class="qa-body" id="qaBody"></div>
-  </div>
-</div>
-
-<!-- Update Log Modal -->
-<div class="qa-overlay" id="updateLogOverlay">
-  <div class="qa-modal">
-    <div class="qa-header">
-      <h2>📋 Update Log</h2>
-      <button class="qa-close" id="updateLogClose" aria-label="Close Update Log panel">&times;</button>
-    </div>
-    <div class="log-tabs">
-      <button type="button" class="log-tab active" id="logTabUpcoming" data-log-tab="upcoming">Upcoming</button>
-      <button type="button" class="log-tab" id="logTabReleases" data-log-tab="releases">Releases</button>
-    </div>
-    <div class="qa-body" id="updateLogBody"></div>
-  </div>
-</div>
-
-<!-- Settings Modal -->
-<div class="qa-overlay" id="settingsOverlay">
-  <div class="qa-modal">
-    <div class="qa-header">
-      <h2>Settings</h2>
-      <button class="qa-close" id="settingsClose" aria-label="Close Settings panel">&times;</button>
-    </div>
-    <div class="qa-body" id="settingsBody">
-
-      <div class="settings-section">
-        <label class="settings-label" for="settingSiteName">Site Name</label>
-        <div class="settings-sub">Shown in the header next to the logo.</div>
-        <input class="settings-input" id="settingSiteName" type="text" placeholder="VUS Hub" maxlength="40" autocomplete="off">
-      </div>
-
-      <div class="settings-section">
-        <label class="settings-label">Site Icon</label>
-        <div class="settings-sub">Replaces the logo shown in the header. Use a link, or upload an image (saved in this browser).</div>
-        <div class="settings-option-grid" id="settingIconMode">
-          <button type="button" class="settings-option" data-icon-mode="default">Default</button>
-          <button type="button" class="settings-option" data-icon-mode="link">Image Link</button>
-          <button type="button" class="settings-option" data-icon-mode="upload">Upload</button>
-        </div>
-
-        <div id="settingIconLinkWrap" style="display:none; margin-top:12px;">
-          <input class="settings-input" id="settingIconLink" type="text" placeholder="https://example.com/icon.png" autocomplete="off">
-        </div>
-
-        <div id="settingIconUploadWrap" style="display:none; margin-top:12px;">
-          <div class="settings-file-row">
-            <button type="button" class="settings-file-btn" id="settingIconUploadBtn">Choose Image</button>
-            <span class="settings-file-name" id="settingIconUploadName">No file selected</span>
-          </div>
-          <input type="file" id="settingIconUploadInput" accept="image/*" style="display:none;">
-          <div class="settings-warning">
-            Uploaded icons are stored in this browser's local storage, which has a limited size. Small images (under ~200KB) work best.
-          </div>
-        </div>
-
-        <div id="settingIconPreviewWrap" style="display:flex; align-items:center; gap:10px; margin-top:12px;">
-          <span style="font-size:12px; color:var(--fg-muted);">Preview:</span>
-          <div style="width:36px; height:36px; border-radius:9px; overflow:hidden; background:var(--bg-elevated); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-            <img id="settingIconPreviewImg" style="width:100%; height:100%; object-fit:cover; display:none;">
-            <span id="settingIconPreviewFallback" style="font-weight:700; color:var(--fg);">V</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="settings-section">
-        <label class="settings-label">Default Tab</label>
-        <div class="settings-sub">Which tab loads when you open the site.</div>
-        <div class="settings-option-grid" id="settingDefaultTab"></div>
-      </div>
-
-      <div class="settings-section">
-        <label class="settings-label">Background</label>
-        <div class="settings-sub">Choose the background style for VUS Hub.</div>
-        <div class="settings-option-grid" id="settingBackgroundMode">
-          <button type="button" class="settings-option" data-bg-mode="default">Default</button>
-          <button type="button" class="settings-option" data-bg-mode="block">Solid Block</button>
-          <button type="button" class="settings-option" data-bg-mode="image">Custom Image</button>
-        </div>
-
-        <div id="settingBlockColorWrap" style="display:none; margin-top:12px;">
-          <label class="settings-label" for="settingBlockColor">Block Color</label>
-          <input class="settings-input" id="settingBlockColor" type="color" value="#0a0e1a" style="height:44px; padding:4px; cursor:pointer;">
-        </div>
-
-        <div id="settingImageWrap" style="display:none; margin-top:12px;">
-          <div class="settings-file-row">
-            <button type="button" class="settings-file-btn" id="settingImageBtn">Choose Image</button>
-            <span class="settings-file-name" id="settingImageName">No file selected</span>
-          </div>
-          <input type="file" id="settingImageInput" accept="image/*" style="display:none;">
-          <div class="settings-warning">
-            Large images are stored as-is in your browser's local storage, which has a limited size (usually a few MB total). Big files may fail to save or slow things down — smaller images work best.
-          </div>
-        </div>
-      </div>
-
-      <div class="settings-section">
-        <label class="settings-label">Animations</label>
-        <div class="settings-sub">Turn off background motion, hover effects, and the mouse-follow glow if things feel laggy.</div>
-        <div class="settings-option-grid" id="settingAnimations">
-          <button type="button" class="settings-option" data-anim-mode="on">On</button>
-          <button type="button" class="settings-option" data-anim-mode="off">Off</button>
-        </div>
-      </div>
-
-      <div class="settings-section">
-        <button type="button" class="settings-btn-secondary" id="devInfoBtn" style="width:100%;">📊 Dev Info</button>
-      </div>
-
-      <div class="settings-footer">
-        <button type="button" class="settings-btn-secondary" id="settingsReset">Reset to Defaults</button>
-        <button type="button" class="settings-btn-primary" id="settingsSave">Save Changes</button>
-      </div>
-
-      <div class="settings-section" style="margin-top:4px;">
-        <label class="settings-label" style="color:#f87171;">Danger Zone</label>
-        <div class="settings-sub">Permanently erases Favorites, Recently Used, all Settings, and any other data stored in this browser by VUS Hub or apps opened through it (game saves, Notes, YouTube info, cached data, etc). This cannot be undone.</div>
-        <button type="button" class="settings-btn-secondary" id="clearDataBtn" style="width:100%; border-color:#7f1d1d; color:#f87171;">🗑️ Clear All Data</button>
-      </div>
-
-    </div>
-  </div>
-</div>
-
-<!-- Main app -->
-<div class="app-shell">
-
-  <header class="hub-header">
-    <div class="hub-logo">
-      <div class="logo-mark"><img src="https://github.com/Cra-Z-Gaming/VUS/raw/refs/heads/main/logo" alt="VUS Hub logo" onerror="this.style.display='none';this.parentElement.textContent='V';"></div>
-      <span class="logo-text" id="siteNameDisplay">VUS Hub</span>
-    </div>
-    <div class="header-right">
-      <div class="clock-display" id="clock"></div>
+    <div class="hr">
+      <button class="ibtn" id="qaBtn" aria-label="Open Q/A panel">Q/A</button>
+      <button class="ibtn" id="settingsBtn" aria-label="Open Settings panel">⚙ Settings</button>
+      <div class="clock" id="clock"></div>
     </div>
   </header>
 
-  <!-- Search -->
-  <div class="search-wrap" id="searchWrap">
-    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-    </svg>
-    <input class="search-input" id="searchInput" type="text" placeholder="Search apps and tools..." autocomplete="off">
-    <span class="search-shortcut">/</span>
+  <div class="vus-message" id="vusMessage" hidden><span class="vm-label">VUS Message</span><span class="vm-text"></span></div>
+
+  <div class="sticky">
+    <input class="search" id="searchInput" type="text" placeholder="Search apps and tools..." autocomplete="off" aria-label="Search">
+    <nav class="tabs" id="tabs" role="tablist"><div class="ind" id="ind"></div></nav>
   </div>
 
-  <!-- Tabs -->
-  <nav class="hub-tabs" id="tabs" role="tablist">
-    <div class="tab-indicator" id="tabIndicator"></div>
-  </nav>
+  <main class="grid" id="grid"></main>
+  <iframe class="home-frame" id="homeFrame" title="Home"></iframe>
 
-  <!-- Grid -->
-  <main class="hub-grid" id="grid" role="tabpanel"></main>
-
-  <!-- Home dashboard (widgets) -->
-  <iframe class="home-frame" id="homeFrame" title="Home" role="tabpanel"></iframe>
-
-  <!-- Footer -->
-  <footer class="hub-footer">
-    <span class="hub-footer-left">VUS Hub</span>
-    <a class="hub-footer-link" href="https://docs.google.com/forms/d/e/1FAIpQLSfO_dcIdueYBKYRj11jthkGrWO22ZLg3kQGr8dXYvrXne_wUA/viewform" target="_blank" rel="noopener">
-      Rate / Suggest
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-        <polyline points="15 3 21 3 21 9"/>
-        <line x1="10" y1="14" x2="21" y2="3"/>
-      </svg>
-    </a>
+  <footer>
+    <span>VUS Hub <span id="footerVersion"></span></span>
+    <a href="https://docs.google.com/forms/d/e/1FAIpQLSfO_dcIdueYBKYRj11jthkGrWO22ZLg3kQGr8dXYvrXne_wUA/viewform" target="_blank" rel="noopener">Rate / Suggest ↗</a>
   </footer>
 </div>
 
-<!-- Chat toggle button (floating, left edge, vertically centered) -->
-<button class="chat-toggle-btn" id="chatToggleBtn" aria-label="Open VUS Chat">💬</button>
-
-<div class="qa-overlay" id="chatAuthOverlay">
-  <div class="qa-modal" style="max-width:380px;padding:24px">
-    <div class="qa-header" style="padding:0 0 16px;border-bottom:1px solid var(--border)">
-      <h2 id="chatAuthTitle" style="font-size:20px">Log in to VUS Chat</h2>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:12px;padding-top:18px">
-      <p id="chatAuthNote" style="color:var(--fg-muted);font-size:13px;line-height:1.5;margin:0">Enter your VUS DM account details to continue.</p>
-      <div id="chatAuthCredentials" style="display:flex;flex-direction:column;gap:12px">
-        <input id="chatAuthIdentifier" type="text" placeholder="Username or 6-digit ID" autocomplete="username" style="width:100%;padding:11px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--fg);font-size:14px;outline:none">
-        <input id="chatAuthPassword" type="password" placeholder="Password" autocomplete="current-password" style="width:100%;padding:11px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--fg);font-size:14px;outline:none">
-      </div>
-      <input id="chatAuthEmail" type="email" placeholder="Email address" autocomplete="email" style="display:none;width:100%;padding:11px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--fg);font-size:14px;outline:none">
-      <div id="chatAuthError" style="min-height:18px;color:#f87171;font-size:12.5px"></div>
-      <div style="display:flex;gap:8px">
-        <button id="chatAuthCancelBtn" class="qa-close-btn" style="flex:1">Cancel</button>
-        <button id="chatAuthSubmitBtn" class="qa-action-btn" style="flex:1">Log in</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Chat sidebar -->
-<div class="chat-sidebar-overlay" id="chatSidebarOverlay"></div>
-<aside class="chat-sidebar" id="chatSidebar" aria-hidden="true">
-  <div class="chat-sidebar-header">
-    <div class="chat-sidebar-title">💬 VUS Chat</div>
-    <div class="chat-sidebar-actions">
-      <button class="chat-sidebar-btn" id="chatPopoutBtn" title="Open in its own window" aria-label="Pop out chat into its own window">⤢</button>
-      <button class="chat-sidebar-btn" id="chatCloseBtn" title="Close" aria-label="Close chat">&times;</button>
-    </div>
-  </div>
-  <iframe class="chat-sidebar-frame" id="chatSidebarFrame" title="VUS Chat"></iframe>
-</aside>
-
-<!-- Settings floating button -->
-<button class="settings-btn" id="settingsBtn" aria-label="Open Settings panel">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="12" cy="12" r="3"/>
-    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-  </svg>
-  Settings
-</button>
-
-<!-- Q/A floating button -->
-<button class="qa-btn" id="qaBtn" aria-label="Open Q/A panel">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-  </svg>
-  Q/A
-</button>
-
 <script>
-// ===================== DATA =====================
-// App list and Q/A data are now loaded dynamically from apps.json (see loadApps() below).
-let apps = null;
-let qaEntries = [];
+const BASE = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/";
+const HUB_URL = BASE + "index.html";   // confirm this is your hub's filename
+const APPS_URL = BASE + "apps.json", HOME_URL = BASE + "home.html", ANALYTICS_URL = BASE + "analytics.html";
+const REFRESH_GAP_MS = 5 * 60 * 1000;
+const FAV_KEY = "vus_favorites", RECENT_KEY = "vus_recent_apps", SKEY = "vus_settings", CACHE_KEY = "vus_apps_cache";
+const tabLabels = { home: "Home", apps: "Apps", hubs: "Hubs", tools: "Tools", links: "Links" };
 
-// ===================== STATE =====================
-let currentTab = "home";
-let searchQuery = "";
-let animationsEnabled = true; // updated once Settings load, just below
+const $ = id => document.getElementById(id);
+const esc = s => (s || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const bust = u => u + (u.includes("?") ? "&" : "?") + "v=" + Date.now();
 
-// ===================== UTILITIES =====================
-function escapeHtml(str) {
-  return (str || "").replace(/[&<>"']/g, c => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-  }[c]));
+let apps = null, qaEntries = [], currentTab = "home", searchQuery = "";
+let appsLoaded = false, appsReady = false, loadedVersion = "", lastCheck = Date.now();
+const tabButtons = [];
+const searchInput = $("searchInput");
+
+function toast(msg, type) {
+  const t = document.createElement("div");
+  t.className = "toast " + (type || "ok");
+  t.textContent = msg;
+  $("toasts").appendChild(t);
+  setTimeout(() => t.remove(), 3200);
 }
 
-// ===================== TOAST SYSTEM =====================
-function showToast(msg, type) {
-  const container = document.getElementById("toasts");
-  const toast = document.createElement("div");
-  toast.className = "toast " + (type || "ok");
-  toast.innerHTML = '<span class="toast-dot"></span>' + escapeHtml(msg);
-  container.appendChild(toast);
-  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 3200);
+// ---------- Clock (minutes only) ----------
+function updateClock() { $("clock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
+updateClock();
+const clockTimer = setInterval(updateClock, 15000);
+
+// ---------- Settings ----------
+const DEF = {
+  siteName: "VUS Hub", defaultTab: "home", backgroundMode: "default", backgroundColor: "#0a0e1a", compactView: false,
+  animationsEnabled: !(matchMedia("(prefers-reduced-motion: reduce)").matches ||
+    (navigator.deviceMemory && navigator.deviceMemory <= 2) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2))
+};
+function loadSettings() { try { return { ...DEF, ...JSON.parse(localStorage.getItem(SKEY) || "{}") }; } catch (e) { return { ...DEF }; } }
+let cur = loadSettings(), draft = { ...cur };
+
+function applySettings(s) {
+  $("siteName").textContent = s.siteName || DEF.siteName;
+  document.title = s.siteName || DEF.siteName;
+  document.body.style.background = s.backgroundMode === "block" ? s.backgroundColor : "";
+  const rm = s.animationsEnabled === false;
+  document.body.classList.toggle("rm", rm);
+  document.body.classList.toggle("compact", s.compactView === true);
+  try { $("homeFrame").contentDocument.body.classList.toggle("rm", rm); } catch (e) {}
 }
 
-// ===================== MOUSE GLOW =====================
-const mouseGlow = document.getElementById("mouseGlow");
-document.addEventListener("mousemove", (e) => {
-  if (!animationsEnabled) return;
-  mouseGlow.style.left = e.clientX + "px";
-  mouseGlow.style.top = e.clientY + "px";
+// ---------- Resume state (after an in-place refresh) ----------
+let resume = null;
+try { resume = JSON.parse(sessionStorage.getItem("vus_resume") || "null"); sessionStorage.removeItem("vus_resume"); } catch (e) {}
+currentTab = (resume && resume.tab) || cur.defaultTab || "home";
+applySettings(cur);
+
+// ---------- Favorites / Recent ----------
+const getFavs = () => { try { return JSON.parse(localStorage.getItem(FAV_KEY) || "[]"); } catch (e) { return []; } };
+const isFav = a => getFavs().some(f => f.name === a.name);
+function toggleFav(app) {
+  let exists = false;
+  try {
+    let favs = getFavs();
+    exists = favs.some(f => f.name === app.name);
+    favs = exists ? favs.filter(f => f.name !== app.name) : [...favs, { name: app.name, url: app.url || "", icon: app.icon || "", color: app.color || "" }];
+    localStorage.setItem(FAV_KEY, JSON.stringify(favs));
+    return !exists;
+  } catch (e) { toast("Couldn't save favorite. Storage full or unavailable", "err"); return exists; }
+}
+function trackRecent(app) {
+  try {
+    let r = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]").filter(x => x.name !== app.name);
+    r.unshift({ name: app.name, url: app.url || "", icon: app.icon || "", color: app.color || "", ts: Date.now() });
+    localStorage.setItem(RECENT_KEY, JSON.stringify(r.slice(0, 8)));
+  } catch (e) {}
+}
+
+// ---------- apps.json is the only source of truth ----------
+function findLatest(name) {
+  if (!apps) return null;
+  for (const k of Object.keys(apps)) { const hit = apps[k].find(a => a.name === name && a.url && a.url.trim()); if (hit) return hit; }
+  return null;
+}
+function syncList(key) {
+  if (!appsLoaded) return; // only prune off fresh network data, never cached
+  try {
+    const fresh = [];
+    JSON.parse(localStorage.getItem(key) || "[]").forEach(i => {
+      const l = findLatest(i.name);
+      if (l) fresh.push({ ...i, url: l.url, icon: l.icon || "", color: l.color || "" });
+    });
+    localStorage.setItem(key, JSON.stringify(fresh));
+  } catch (e) {}
+}
+const syncAll = () => { syncList(FAV_KEY); syncList(RECENT_KEY); };
+
+function openApp(requested) {
+  if (!requested || !requested.name) return;
+  if (!appsReady) { toast("App list not loaded. Refresh the page.", "err"); return; }
+  const app = findLatest(requested.name);
+  if (!app) { syncAll(); toast(requested.name + " is no longer available", "err"); return; }
+  trackRecent(app);
+  if (window.VUSAnalytics && typeof window.VUSAnalytics.trackAppClick === "function") window.VUSAnalytics.trackAppClick(app.name);
+  if (!app.url.includes("raw.githubusercontent.com")) { window.open(app.url, "_blank", "noopener"); return; }
+  const win = window.open("about:blank", "_blank"); // open first to keep the click gesture
+  if (!win) { toast("Popup blocked. Allow popups for this site", "err"); return; }
+  toast("Loading " + app.name + "...", "load");
+  fetch(bust(app.url), { cache: "no-store" })
+    .then(r => { if (!r.ok) throw 0; return r.text(); })
+    .then(t => { win.document.open(); win.document.write(t); win.document.close(); toast(app.name + " opened successfully"); })
+    .catch(() => { win.close(); toast("Failed to load " + app.name, "err"); });
+}
+
+// ---------- Message / version / data ----------
+function showMessage(text) {
+  const el = $("vusMessage"); text = (text || "").trim();
+  if (!text) { el.hidden = true; return; }
+  el.querySelector(".vm-text").textContent = text; el.hidden = false;
+}
+function setAppsData(d) {
+  apps = { home: [], apps: d.apps || [], hubs: d.hubs || [], tools: d.tools || [], links: d.links || [] };
+  qaEntries = d.qa || [];
+  loadedVersion = d.updated || "";
+  $("footerVersion").textContent = d.updated ? "· Updated " + d.updated : "";
+  showMessage(d.message);
+  appsReady = true;
+}
+function loadApps() {
+  return fetch(bust(APPS_URL), { cache: "no-store" })
+    .then(r => { if (!r.ok) throw 0; return r.json(); })
+    .then(d => { setAppsData(d); appsLoaded = true; try { localStorage.setItem(CACHE_KEY, JSON.stringify(d)); } catch (e) {} })
+    .catch(() => {
+      try { const c = JSON.parse(localStorage.getItem(CACHE_KEY) || "null"); if (c) { setAppsData(c); toast("Offline: showing your last saved app list", "err"); return; } } catch (e) {}
+      toast("Failed to load app list", "err"); setAppsData({}); appsReady = false;
+    });
+}
+
+// ---------- Auto-refresh (same tab, never a reload) ----------
+function swapHub(html) {
+  clearInterval(clockTimer);
+  const own = window.frameElement;
+  if (own && own.dataset.vusShell) { own.srcdoc = html; return; }
+  document.body.innerHTML = "";
+  const f = document.createElement("iframe");
+  f.dataset.vusShell = "1";
+  f.style.cssText = "position:fixed;inset:0;width:100%;height:100%;border:0";
+  f.srcdoc = html;
+  document.body.appendChild(f);
+}
+const fetchAndSwap = () => fetch(bust(HUB_URL), { cache: "no-store" }).then(r => { if (!r.ok) throw 0; return r.text(); }).then(swapHub).catch(() => {});
+function reloadHubInPlace() {
+  try { sessionStorage.setItem("vus_resume", JSON.stringify({ tab: currentTab, q: searchInput.value, y: window.scrollY })); } catch (e) {}
+  fetchAndSwap();
+}
+function refreshHub() {
+  lastCheck = Date.now();
+  if ($("setOv").classList.contains("open")) return;
+  fetch(bust(APPS_URL), { cache: "no-store" }).then(r => { if (!r.ok) throw 0; return r.json(); }).then(d => {
+    if (loadedVersion && d.updated && d.updated !== loadedVersion) { reloadHubInPlace(); return; }
+    setAppsData(d); appsLoaded = true;
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(d)); } catch (e) {}
+    syncAll(); render();
+  }).catch(() => {});
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && Date.now() - lastCheck > REFRESH_GAP_MS) refreshHub();
 });
 
-// ===================== CLOCK =====================
-function updateClock() {
-  const el = document.getElementById("clock");
-  const now = new Date();
-  el.textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-}
-setInterval(updateClock, 1000);
-updateClock();
-
-// ===================== TABS =====================
-const tabLabels = { home: "Home", apps: "Apps", hubs: "Hubs", tools: "Tools", links: "Links" };
-const tabsEl = document.getElementById("tabs");
-const tabIndicator = document.getElementById("tabIndicator");
-const tabButtons = [];
-
+// ---------- Tabs ----------
 function buildTabs() {
   Object.keys(apps).forEach(key => {
-    const btn = document.createElement("button");
-    btn.className = "hub-tab" + (key === currentTab ? " active" : "");
-    btn.setAttribute("role", "tab");
-    btn.setAttribute("aria-selected", key === currentTab ? "true" : "false");
-    if (key === "home") {
-      btn.innerHTML = tabLabels[key];
-    } else {
-      const count = apps[key].filter(app => app.name && app.name.trim() !== "").length;
-      btn.innerHTML = tabLabels[key] + '<span class="tab-count">' + count + '</span>';
-    }
-    btn.onclick = () => switchTab(key);
-    tabsEl.appendChild(btn);
-    tabButtons.push({ key, el: btn });
+    const b = document.createElement("button");
+    b.className = "tab" + (key === currentTab ? " active" : "");
+    b.setAttribute("role", "tab");
+    const n = key === "home" ? "" : '<span class="cnt">' + apps[key].filter(a => a.name && a.name.trim()).length + "</span>";
+    b.innerHTML = tabLabels[key] + n;
+    b.onclick = () => switchTab(key);
+    $("tabs").appendChild(b); tabButtons.push({ key, el: b });
   });
 }
-
 function switchTab(key) {
   currentTab = key;
-  tabButtons.forEach(t => {
-    const isActive = t.key === key;
-    t.el.classList.toggle("active", isActive);
-    t.el.setAttribute("aria-selected", isActive ? "true" : "false");
-  });
-  updateIndicator();
-  render();
+  tabButtons.forEach(t => t.el.classList.toggle("active", t.key === key));
+  updateIndicator(); render();
 }
-
 function updateIndicator() {
-  const activeBtn = tabButtons.find(t => t.key === currentTab);
-  if (!activeBtn) return;
-  const tabRect = tabsEl.getBoundingClientRect();
-  const btnRect = activeBtn.el.getBoundingClientRect();
-  tabIndicator.style.left = (btnRect.left - tabRect.left) + "px";
-  tabIndicator.style.width = btnRect.width + "px";
+  const a = tabButtons.find(t => t.key === currentTab); if (!a) return;
+  $("ind").style.left = (a.el.getBoundingClientRect().left - $("tabs").getBoundingClientRect().left) + "px";
+  $("ind").style.width = a.el.getBoundingClientRect().width + "px";
+}
+addEventListener("resize", updateIndicator);
+
+// ---------- Home iframe ----------
+let homeLoaded = false, homeLoading = false;
+function loadHome() {
+  if (homeLoaded || homeLoading) return;
+  homeLoading = true;
+  fetch(bust(HOME_URL), { cache: "no-store" }).then(r => { if (!r.ok) throw 0; return r.text(); })
+    .then(h => { $("homeFrame").srcdoc = h; homeLoaded = true; })
+    .catch(() => toast("Failed to load Home dashboard", "err"))
+    .finally(() => { homeLoading = false; });
 }
 
-window.addEventListener("resize", updateIndicator);
-
-// ===================== SEARCH =====================
-const searchInput = document.getElementById("searchInput");
-
-searchInput.addEventListener("input", (e) => {
-  searchQuery = e.target.value.toLowerCase().trim();
-  render();
-});
-
-// "/" keyboard shortcut to focus search
-document.addEventListener("keydown", (e) => {
-  if (e.key === "/" && document.activeElement !== searchInput) {
-    e.preventDefault();
-    searchInput.focus();
-  }
-  if (e.key === "Escape") {
-    if (document.getElementById("qaOverlay").classList.contains("open")) {
-      closeQA();
-    } else if (document.activeElement === searchInput) {
-      searchInput.blur();
-      searchInput.value = "";
-      searchQuery = "";
-      render();
-    }
-  }
-});
-
-// ===================== HOME DASHBOARD LOADER =====================
-// raw.githubusercontent.com always serves text/plain, so an <iframe src="...">
-// pointed at it would just show the raw source instead of rendering it. Instead,
-// fetch the HTML as text (same technique the cloak-open button uses) and inject
-// it into the iframe via srcdoc, which does render normally. Loaded once and
-// cached so switching back to Home doesn't re-fetch every time.
-const HOME_HTML_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/home.html";
-let homeFrameLoaded = false;
-let homeFrameLoading = false;
-
-function loadHomeFrame() {
-  if (homeFrameLoaded || homeFrameLoading) return;
-  homeFrameLoading = true;
-
-  fetch(HOME_HTML_URL + "?v=" + Date.now())
-    .then(r => {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.text();
-    })
-    .then(html => {
-      const homeFrame = document.getElementById("homeFrame");
-      homeFrame.srcdoc = html;
-      homeFrameLoaded = true;
-    })
-    .catch(() => {
-      showToast("Failed to load Home dashboard", "err");
-    })
-    .finally(() => {
-      homeFrameLoading = false;
-    });
-}
-
-// ===================== RENDER GRID =====================
+// ---------- Render ----------
+const valid = a => a.url && a.url.trim();
+const match = a => !searchQuery || a.name.toLowerCase().includes(searchQuery);
 function render() {
   if (!apps) return;
-  const grid = document.getElementById("grid");
-  const homeFrame = document.getElementById("homeFrame");
-
-  document.getElementById("searchWrap").style.display = "";
-
-  // Home tab: show the widget dashboard normally, but switch to a cross-tab
-  // title-only search view (reusing the same card grid) while there's a query.
+  const grid = $("grid"), hf = $("homeFrame");
+  searchInput.placeholder = currentTab === "home" ? "Search all apps..." : "Search apps and tools...";
+  if (currentTab === "home" && !searchQuery) { grid.style.display = "none"; hf.classList.add("on"); loadHome(); return; }
+  hf.classList.remove("on"); grid.style.display = "";
+  let items = [], fromSearch = false;
   if (currentTab === "home") {
-    searchInput.placeholder = "Search all apps...";
-
-    if (!searchQuery) {
-      grid.style.display = "none";
-      homeFrame.classList.add("active");
-      loadHomeFrame();
-      return;
-    }
-
-    homeFrame.classList.remove("active");
-    grid.style.display = "";
-    grid.innerHTML = "";
-
-    // Search titles only, across every real tab (exclude "home" itself, which has no cards)
-    const searchableTabs = Object.keys(apps).filter(key => key !== "home");
-    let results = [];
-    searchableTabs.forEach(tabKey => {
-      apps[tabKey]
-        .filter(app => app.url && app.url.trim() !== "" && app.name.toLowerCase().includes(searchQuery))
-        .forEach(app => results.push({ ...app, _tab: tabKey }));
-    });
-
-    renderCards(grid, results, true);
-    return;
+    fromSearch = true;
+    Object.keys(apps).filter(k => k !== "home").forEach(k => apps[k].filter(valid).filter(match).forEach(a => items.push({ ...a, _tab: k })));
+  } else {
+    items = apps[currentTab].filter(valid).filter(match);
+    const fav = new Set(getFavs().map(f => f.name)); // favorites first
+    items = [...items.filter(a => fav.has(a.name)), ...items.filter(a => !fav.has(a.name))];
   }
-
-  searchInput.placeholder = "Search apps and tools...";
-  homeFrame.classList.remove("active");
-  grid.style.display = "";
-
+  renderCards(grid, items, fromSearch);
+}
+function renderCards(grid, items, fromSearch) {
   grid.innerHTML = "";
-
-  let items = apps[currentTab].filter(app => app.url && app.url.trim() !== "");
-
-  // Filter by search (titles only)
-  if (searchQuery) {
-    items = items.filter(app =>
-      app.name.toLowerCase().includes(searchQuery)
-    );
-  }
-
-  renderCards(grid, items, false);
-}
-
-// Renders a list of app cards into the given grid element.
-// fromHomeSearch: when true, clicking a card switches to that app's own tab
-// first (so the tab bar/state stays correct), then opens it.
-function renderCards(grid, items, fromHomeSearch) {
-  if (items.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "hub-empty";
-    empty.innerHTML = `
-      <div class="hub-empty-icon">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-      </div>
-      <div class="hub-empty-text">${searchQuery ? "No results found" : "Nothing here yet"}</div>
-      <div class="hub-empty-sub">${searchQuery ? 'Try a different search term' : 'Check back later for updates'}</div>
-    `;
-    grid.appendChild(empty);
+  if (!items.length) {
+    grid.innerHTML = '<div class="empty"><b>' + (searchQuery ? "No results found" : "Nothing here yet") + "</b>" + (searchQuery ? "Try a different search term" : "Check back later for updates") + "</div>";
     return;
   }
-
   items.forEach((app, i) => {
-    const card = document.createElement("article");
-    card.className = "hub-card";
-    card.style.animationDelay = (i * 0.06) + "s";
-    card.setAttribute("tabindex", "0");
-    card.setAttribute("role", "button");
-    card.setAttribute("aria-label", "Open " + app.name);
-
-    const favorited = isFavorite(app);
-
-    card.innerHTML = `
-      <div class="card-icon ${app.color || 'green'}">${escapeHtml(app.icon || app.name.substring(0, 2).toUpperCase())}</div>
-      <button type="button" class="card-favorite${favorited ? ' active' : ''}" aria-label="${favorited ? 'Remove from favorites' : 'Add to favorites'}" aria-pressed="${favorited}">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-        </svg>
-      </button>
-      <div class="hub-card-title">${escapeHtml(app.name)}</div>
-      <div class="hub-card-sub">${escapeHtml(app.desc)}</div>
-      <svg class="card-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/>
-      </svg>
-    `;
-
-    const activate = () => {
-      if (fromHomeSearch && app._tab) {
-        searchInput.value = "";
-        searchQuery = "";
-        switchTab(app._tab);
-      }
-      openApp(app);
-    };
-
-    const favBtn = card.querySelector(".card-favorite");
-    favBtn.onclick = (e) => {
-      e.stopPropagation();
-      const nowFavorited = toggleFavorite(app);
-      favBtn.classList.toggle("active", nowFavorited);
-      favBtn.setAttribute("aria-pressed", nowFavorited);
-      favBtn.setAttribute("aria-label", nowFavorited ? "Remove from favorites" : "Add to favorites");
-    };
-
-    card.onclick = activate;
-    card.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); } };
-    grid.appendChild(card);
+    const c = document.createElement("article");
+    c.className = "card"; c.style.animationDelay = (i * 0.05) + "s";
+    c.tabIndex = 0; c.setAttribute("role", "button"); c.setAttribute("aria-label", "Open " + app.name);
+    const f = isFav(app);
+    c.innerHTML = '<div class="ci ' + esc(app.color || "") + '">' + esc(app.icon || app.name.substring(0, 2).toUpperCase()) + "</div>" +
+      '<button type="button" class="fav' + (f ? " active" : "") + '" aria-label="' + (f ? "Remove from favorites" : "Add to favorites") + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button>' +
+      '<div class="ct">' + esc(app.name) + '</div><div class="cd">' + esc(app.desc) + "</div>" +
+      (app._tab ? '<div class="src">' + tabLabels[app._tab] + "</div>" : "");
+    const go = () => { if (fromSearch && app._tab) { searchInput.value = ""; searchQuery = ""; switchTab(app._tab); } openApp(app); };
+    const fb = c.querySelector(".fav");
+    fb.onclick = e => { e.stopPropagation(); const on = toggleFav(app); fb.classList.toggle("active", on); fb.setAttribute("aria-label", on ? "Remove from favorites" : "Add to favorites"); };
+    c.onclick = go;
+    c.onkeydown = e => { if (e.target === c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); go(); } };
+    grid.appendChild(c);
   });
 }
+searchInput.addEventListener("input", e => { searchQuery = e.target.value.toLowerCase().trim(); render(); });
 
-// ===================== FAVORITES =====================
-// Shared with home.html (loaded in an iframe) via localStorage, same-origin.
-// Keyed by app name (stable identifier across tabs/categories).
-const FAVORITES_KEY = "vus_favorites";
-
-function getFavorites() {
-  try {
-    return JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]");
-  } catch (e) {
-    return [];
-  }
-}
-
-function isFavorite(app) {
-  if (!app || !app.name) return false;
-  return getFavorites().some(f => f.name === app.name);
-}
-
-function toggleFavorite(app) {
-  if (!app || !app.name) return false;
-  try {
-    let favs = getFavorites();
-    const exists = favs.some(f => f.name === app.name);
-    if (exists) {
-      favs = favs.filter(f => f.name !== app.name);
-    } else {
-      favs.push({
-        name: app.name,
-        url: app.url || "",
-        icon: app.icon || "",
-        color: app.color || ""
-      });
-    }
-    localStorage.setItem(FAVORITES_KEY, JSON.stringify(favs));
-    return !exists; // returns new favorited state
-  } catch (e) {
-    showToast("Couldn't save favorite — storage full or unavailable", "err");
-    return exists;
-  }
-}
-
-// ===================== RECENTLY USED TRACKING =====================
-// Shared with home.html (loaded in an iframe) via localStorage, same-origin.
-const RECENT_APPS_KEY = "vus_recent_apps";
-const RECENT_APPS_MAX = 8;
-
-function trackRecentApp(app) {
-  if (!app || !app.name) return;
-  try {
-    let recent = JSON.parse(localStorage.getItem(RECENT_APPS_KEY) || "[]");
-    // Remove any existing entry for this app (by name) so it moves to the front
-    recent = recent.filter(r => r.name !== app.name);
-    recent.unshift({
-      name: app.name,
-      url: app.url || "",
-      icon: app.icon || "",
-      color: app.color || "",
-      ts: Date.now()
-    });
-    if (recent.length > RECENT_APPS_MAX) recent = recent.slice(0, RECENT_APPS_MAX);
-    localStorage.setItem(RECENT_APPS_KEY, JSON.stringify(recent));
-  } catch (e) {
-    // localStorage unavailable or full — fail silently, this is a non-critical feature
-  }
-}
-
-// ===================== OPEN APP =====================
-function openApp(app) {
-  if (!app.url) return;
-
-  trackRecentApp(app);
-
-  // Log this click for the "Most Clicked" analytics view. Guarded since
-  // firebase.js loads asynchronously (via blob-URL import) and may not have
-  // finished setting up window.VUSAnalytics yet on a very fast first click.
-  if (window.VUSAnalytics && typeof window.VUSAnalytics.trackAppClick === "function") {
-    window.VUSAnalytics.trackAppClick(app.name);
-  }
-
-  // Direct links (non-github raw) open normally
-  if (!app.url.includes("raw.githubusercontent.com")) {
-    window.open(app.url, "_blank", "noopener");
-    return;
-  }
-
-  showToast("Loading " + app.name + "...", "load");
-
-  fetch(app.url)
-    .then(r => {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.text();
-    })
-    .then(text => {
-      const win = window.open("about:blank", "_blank");
-      if (!win) {
-        showToast("Popup blocked — allow popups for this site", "err");
-        return;
-      }
-      win.document.open();
-      win.document.write(text);
-      win.document.close();
-      showToast(app.name + " opened successfully", "ok");
-    })
-    .catch(() => {
-      showToast("Failed to load " + app.name, "err");
-    });
-}
-
-// ===================== SETTINGS =====================
-const SETTINGS_KEY = "vus_settings";
-const DEFAULT_SETTINGS = {
-  siteName: "VUS Hub",
-  defaultTab: "home",
-  backgroundMode: "default", // "default" | "block" | "image"
-  backgroundColor: "#0a0e1a",
-  backgroundImage: "", // data URL
-  animationsEnabled: true,
-  iconMode: "default", // "default" | "link" | "upload"
-  iconLink: "",
-  iconUpload: "" // data URL
-};
-
-function loadSettings() {
-  try {
-    const raw = localStorage.getItem(SETTINGS_KEY);
-    if (!raw) return { ...DEFAULT_SETTINGS };
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
-  } catch (e) {
-    return { ...DEFAULT_SETTINGS };
-  }
-}
-
-function saveSettingsToStorage(settings) {
-  try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-    return true;
-  } catch (e) {
-    // Most likely a quota error from a large background image
-    return false;
-  }
-}
-
-let currentSettings = loadSettings();
-
-// Apply site name immediately (element already exists in the DOM at this point)
-function applySiteName(name) {
-  const display = document.getElementById("siteNameDisplay");
-  if (display) display.textContent = name || DEFAULT_SETTINGS.siteName;
-  document.title = (name || DEFAULT_SETTINGS.siteName);
-}
-
-// Apply background immediately. "default" leaves the existing animated
-// background/orbs untouched; "block" and "image" cover them with a solid
-// color or image on the body itself.
-function applyBackground(settings) {
-  const canvas = document.querySelector(".bg-canvas");
-  if (settings.backgroundMode === "block") {
-    document.body.style.background = settings.backgroundColor || DEFAULT_SETTINGS.backgroundColor;
-    document.body.style.backgroundImage = "none";
-    if (canvas) canvas.style.display = "none";
-  } else if (settings.backgroundMode === "image" && settings.backgroundImage) {
-    document.body.style.background = "#0a0e1a";
-    document.body.style.backgroundImage = `url("${settings.backgroundImage}")`;
-    document.body.style.backgroundSize = "cover";
-    document.body.style.backgroundPosition = "center";
-    document.body.style.backgroundAttachment = "fixed";
-    if (canvas) canvas.style.display = "none";
-  } else {
-    // default
-    document.body.style.background = "";
-    document.body.style.backgroundImage = "";
-    if (canvas) canvas.style.display = "";
-  }
-}
-
-// Apply the site icon (header logo image). "default" restores the original
-// VUS logo; "link" and "upload" both just point the same <img> at a
-// different source — the fallback "V" text is handled by the existing
-// onerror handler already on that element if a link ever fails to load.
-const DEFAULT_ICON_URL = "https://github.com/Cra-Z-Gaming/VUS/raw/refs/heads/main/logo";
-
-function applySiteIcon(settings) {
-  const img = document.querySelector(".logo-mark img");
-  if (!img) return;
-
-  let src = DEFAULT_ICON_URL;
-  if (settings.iconMode === "link" && settings.iconLink) {
-    src = settings.iconLink;
-  } else if (settings.iconMode === "upload" && settings.iconUpload) {
-    src = settings.iconUpload;
-  }
-
-  img.style.display = "";
-  img.src = src;
-}
-
-
-// Toggles the body.reduced-motion class, which mirrors the OS-level
-// prefers-reduced-motion rules already in the stylesheet. Also flips a global
-// flag the mouse-glow listener checks, since disabling that purely via CSS
-// (display:none) would still leave the mousemove handler doing work on every
-// pixel of cursor movement — the actual source of lag, not just the visual.
-function applyAnimations(settings) {
-  animationsEnabled = settings.animationsEnabled !== false;
-  document.body.classList.toggle("reduced-motion", !animationsEnabled);
-}
-
-// Apply currentTab from saved settings before buildTabs()/render() run.
-// This only takes effect on initial load; switching tabs afterward behaves normally.
-currentTab = currentSettings.defaultTab || DEFAULT_SETTINGS.defaultTab;
-applySiteName(currentSettings.siteName);
-applyBackground(currentSettings);
-applyAnimations(currentSettings);
-applySiteIcon(currentSettings);
-
-// ---- Settings modal wiring ----
-const settingsOverlay = document.getElementById("settingsOverlay");
-const settingsBtn = document.getElementById("settingsBtn");
-const settingsClose = document.getElementById("settingsClose");
-const settingSiteNameInput = document.getElementById("settingSiteName");
-const settingDefaultTabWrap = document.getElementById("settingDefaultTab");
-const settingBgModeWrap = document.getElementById("settingBackgroundMode");
-const settingBlockColorWrap = document.getElementById("settingBlockColorWrap");
-const settingBlockColorInput = document.getElementById("settingBlockColor");
-const settingImageWrap = document.getElementById("settingImageWrap");
-const settingImageBtn = document.getElementById("settingImageBtn");
-const settingImageInput = document.getElementById("settingImageInput");
-const settingImageName = document.getElementById("settingImageName");
-const settingAnimationsWrap = document.getElementById("settingAnimations");
-const settingIconModeWrap = document.getElementById("settingIconMode");
-const settingIconLinkWrap = document.getElementById("settingIconLinkWrap");
-const settingIconLinkInput = document.getElementById("settingIconLink");
-const settingIconUploadWrap = document.getElementById("settingIconUploadWrap");
-const settingIconUploadBtn = document.getElementById("settingIconUploadBtn");
-const settingIconUploadInput = document.getElementById("settingIconUploadInput");
-const settingIconUploadName = document.getElementById("settingIconUploadName");
-const settingIconPreviewImg = document.getElementById("settingIconPreviewImg");
-const settingIconPreviewFallback = document.getElementById("settingIconPreviewFallback");
-
-// Draft state while the modal is open — only written to currentSettings/storage on Save
-let settingsDraft = { ...currentSettings };
-
-function buildDefaultTabOptions() {
-  settingDefaultTabWrap.innerHTML = "";
-  Object.keys(tabLabels).forEach(key => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "settings-option" + (settingsDraft.defaultTab === key ? " active" : "");
-    btn.textContent = tabLabels[key];
-    btn.dataset.tabKey = key;
-    btn.onclick = () => {
-      settingsDraft.defaultTab = key;
-      Array.from(settingDefaultTabWrap.children).forEach(c =>
-        c.classList.toggle("active", c.dataset.tabKey === key)
-      );
-    };
-    settingDefaultTabWrap.appendChild(btn);
-  });
-}
-
-function updateBackgroundModeUI() {
-  Array.from(settingBgModeWrap.children).forEach(btn =>
-    btn.classList.toggle("active", btn.dataset.bgMode === settingsDraft.backgroundMode)
-  );
-  settingBlockColorWrap.style.display = settingsDraft.backgroundMode === "block" ? "" : "none";
-  settingImageWrap.style.display = settingsDraft.backgroundMode === "image" ? "" : "none";
-}
-
-Array.from(settingBgModeWrap.children).forEach(btn => {
-  btn.onclick = () => {
-    settingsDraft.backgroundMode = btn.dataset.bgMode;
-    updateBackgroundModeUI();
-  };
-});
-
-settingBlockColorInput.addEventListener("input", (e) => {
-  settingsDraft.backgroundColor = e.target.value;
-});
-
-settingImageBtn.onclick = () => settingImageInput.click();
-
-settingImageInput.addEventListener("change", (e) => {
-  const file = e.target.files && e.target.files[0];
-  if (!file) return;
-  settingImageName.textContent = file.name;
-  const reader = new FileReader();
-  reader.onload = () => {
-    settingsDraft.backgroundImage = reader.result;
-  };
-  reader.onerror = () => {
-    showToast("Failed to read image file", "err");
-  };
-  reader.readAsDataURL(file);
-});
-
-function updateIconPreview() {
-  let src = "";
-  if (settingsDraft.iconMode === "link" && settingsDraft.iconLink) {
-    src = settingsDraft.iconLink;
-  } else if (settingsDraft.iconMode === "upload" && settingsDraft.iconUpload) {
-    src = settingsDraft.iconUpload;
-  }
-
-  if (src) {
-    settingIconPreviewImg.src = src;
-    settingIconPreviewImg.style.display = "block";
-    settingIconPreviewFallback.style.display = "none";
-    settingIconPreviewImg.onerror = () => {
-      settingIconPreviewImg.style.display = "none";
-      settingIconPreviewFallback.style.display = "block";
-    };
-  } else {
-    settingIconPreviewImg.style.display = "none";
-    settingIconPreviewFallback.style.display = "block";
-  }
-}
-
-function updateIconModeUI() {
-  Array.from(settingIconModeWrap.children).forEach(btn =>
-    btn.classList.toggle("active", btn.dataset.iconMode === settingsDraft.iconMode)
-  );
-  settingIconLinkWrap.style.display = settingsDraft.iconMode === "link" ? "" : "none";
-  settingIconUploadWrap.style.display = settingsDraft.iconMode === "upload" ? "" : "none";
-  updateIconPreview();
-}
-
-Array.from(settingIconModeWrap.children).forEach(btn => {
-  btn.onclick = () => {
-    settingsDraft.iconMode = btn.dataset.iconMode;
-    updateIconModeUI();
-  };
-});
-
-settingIconLinkInput.addEventListener("input", (e) => {
-  settingsDraft.iconLink = e.target.value.trim();
-  updateIconPreview();
-});
-
-settingIconUploadBtn.onclick = () => settingIconUploadInput.click();
-
-settingIconUploadInput.addEventListener("change", (e) => {
-  const file = e.target.files && e.target.files[0];
-  if (!file) return;
-  settingIconUploadName.textContent = file.name;
-  const reader = new FileReader();
-  reader.onload = () => {
-    settingsDraft.iconUpload = reader.result;
-    updateIconPreview();
-  };
-  reader.onerror = () => {
-    showToast("Failed to read image file", "err");
-  };
-  reader.readAsDataURL(file);
-});
-
-function updateAnimationsUI() {
-  const isOn = settingsDraft.animationsEnabled !== false;
-  Array.from(settingAnimationsWrap.children).forEach(btn =>
-    btn.classList.toggle("active", (btn.dataset.animMode === "on") === isOn)
-  );
-}
-
-Array.from(settingAnimationsWrap.children).forEach(btn => {
-  btn.onclick = () => {
-    settingsDraft.animationsEnabled = btn.dataset.animMode === "on";
-    updateAnimationsUI();
-  };
-});
-
-function openSettings() {
-  settingsDraft = { ...currentSettings };
-  settingSiteNameInput.value = currentSettings.siteName || "";
-  settingBlockColorInput.value = currentSettings.backgroundColor || DEFAULT_SETTINGS.backgroundColor;
-  settingImageName.textContent = currentSettings.backgroundImage ? "Image saved" : "No file selected";
-  settingIconLinkInput.value = currentSettings.iconLink || "";
-  settingIconUploadName.textContent = currentSettings.iconUpload ? "Image saved" : "No file selected";
-  buildDefaultTabOptions();
-  updateBackgroundModeUI();
-  updateAnimationsUI();
-  updateIconModeUI();
-  settingsOverlay.classList.add("open");
-  settingsClose.focus();
-}
-
-function closeSettings() {
-  settingsOverlay.classList.remove("open");
-  settingsBtn.focus();
-}
-
-settingsBtn.onclick = openSettings;
-settingsClose.onclick = closeSettings;
-
-// Click-outside-to-close intentionally disabled — only the X button closes this modal.
-
-document.getElementById("settingsSave").onclick = () => {
-  settingsDraft.siteName = settingSiteNameInput.value.trim() || DEFAULT_SETTINGS.siteName;
-
-  const ok = saveSettingsToStorage(settingsDraft);
-  if (!ok) {
-    showToast("Failed to save — image may be too large for local storage", "err");
-    return;
-  }
-
-  currentSettings = { ...settingsDraft };
-  applySiteName(currentSettings.siteName);
-  applyBackground(currentSettings);
-  applyAnimations(currentSettings);
-  applySiteIcon(currentSettings);
-  showToast("Settings saved", "ok");
-  closeSettings();
-};
-
-document.getElementById("settingsReset").onclick = () => {
-  settingsDraft = { ...DEFAULT_SETTINGS };
-  settingSiteNameInput.value = settingsDraft.siteName;
-  settingBlockColorInput.value = settingsDraft.backgroundColor;
-  settingImageName.textContent = "No file selected";
-  settingIconLinkInput.value = "";
-  settingIconUploadName.textContent = "No file selected";
-  buildDefaultTabOptions();
-  updateBackgroundModeUI();
-  updateAnimationsUI();
-  updateIconModeUI();
-};
-
-// ===================== CHAT SIDEBAR =====================
-// VUS-Chat is a standalone app with its own separate Firebase project (not
-// the same one VUS Hub's presence/analytics use). raw.githubusercontent.com
-// serves it as text/plain, so — same as home.html — it's fetched as text and
-// injected via srcdoc rather than used as a direct iframe src, which would
-// otherwise just show raw source instead of rendering the page.
-const CHAT_HTML_URL = "https://raw.githubusercontent.com/REALDABEAST-VUS-ALT2/VUS/refs/heads/main/VUS-Chat";
-
-const chatToggleBtn = document.getElementById("chatToggleBtn");
-const chatSidebar = document.getElementById("chatSidebar");
-const chatSidebarOverlay = document.getElementById("chatSidebarOverlay");
-const chatCloseBtn = document.getElementById("chatCloseBtn");
-const chatPopoutBtn = document.getElementById("chatPopoutBtn");
-const chatSidebarFrame = document.getElementById("chatSidebarFrame");
-const chatAuthOverlay = document.getElementById("chatAuthOverlay");
-const chatAuthTitle = document.getElementById("chatAuthTitle");
-const chatAuthNote = document.getElementById("chatAuthNote");
-const chatAuthCredentials = document.getElementById("chatAuthCredentials");
-const chatAuthIdentifier = document.getElementById("chatAuthIdentifier");
-const chatAuthPassword = document.getElementById("chatAuthPassword");
-const chatAuthEmail = document.getElementById("chatAuthEmail");
-const chatAuthError = document.getElementById("chatAuthError");
-const chatAuthSubmitBtn = document.getElementById("chatAuthSubmitBtn");
-const chatAuthCancelBtn = document.getElementById("chatAuthCancelBtn");
-
-let chatFrameLoaded = false;
-let chatFrameLoading = false;
-let chatHtmlCache = null; // reused for the "pop out" window too, avoids a second fetch
-const HUB_ACCOUNT_SESSION_KEY = "vusHubAccountSession";
-const DM_DATABASE_URL = "https://vus-dm-default-rtdb.firebaseio.com";
-let chatAuthStep = "credentials";
-let chatAuthPendingAccount = null;
-
-function getHubAccountSession() {
-  try {
-    const raw = localStorage.getItem(HUB_ACCOUNT_SESSION_KEY);
-    const session = raw ? JSON.parse(raw) : null;
-    return session && session.accountKey && session.username && session.id && session.email ? session : null;
-  } catch (e) {
-    return null;
-  }
-}
-
-function sendHubAccountSession(targetWindow) {
-  const session = getHubAccountSession();
-  if (session && targetWindow) targetWindow.postMessage({ type: "vus-chat-auth", session }, "*");
-}
-
-async function loginForChat(identifier, password) {
-  const clean = identifier.trim();
-  if (!clean || !password) return { ok: false, error: "Enter your username/ID and password." };
-  const indexName = /^\d{6}$/.test(clean) ? "idIndex/" + clean : "usernameIndex/" + encodeURIComponent(clean.toLowerCase());
-  const indexResponse = await fetch(DM_DATABASE_URL + "/" + indexName + ".json");
-  const accountKey = await indexResponse.json();
-  if (!accountKey) return { ok: false, error: "No VUS DM account found." };
-  const accountResponse = await fetch(DM_DATABASE_URL + "/users/" + encodeURIComponent(accountKey) + ".json");
-  const account = await accountResponse.json();
-  if (!account || account.password !== password) return { ok: false, error: "Incorrect password." };
-  return { ok: true, accountKey, username: account.username, id: String(account.id), email: account.email || null };
-}
-
-async function associateChatEmail(accountKey, email) {
-  const emailKey = email.trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailKey)) return { ok: false, error: "Enter a valid email address." };
-  const existingResponse = await fetch(DM_DATABASE_URL + "/emailIndex/" + encodeURIComponent(emailKey) + ".json");
-  const existingAccountKey = await existingResponse.json();
-  if (existingAccountKey && existingAccountKey !== accountKey) return { ok: false, error: "That email is already linked to another account." };
-  const response = await fetch(DM_DATABASE_URL + "/users/" + encodeURIComponent(accountKey) + ".json", {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: emailKey })
-  });
-  if (!response.ok) return { ok: false, error: "Could not save the email. Try again." };
-  await fetch(DM_DATABASE_URL + "/emailIndex/" + encodeURIComponent(emailKey) + ".json", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(accountKey)
-  });
-  return { ok: true, email: emailKey };
-}
-
-function openChatAuthPopup() {
-  chatAuthStep = "credentials";
-  chatAuthPendingAccount = null;
-  chatAuthTitle.textContent = "Log in to VUS Chat";
-  chatAuthNote.textContent = "Enter your VUS DM account details to continue.";
-  chatAuthCredentials.style.display = "flex";
-  chatAuthEmail.style.display = "none";
-  chatAuthIdentifier.value = "";
-  chatAuthPassword.value = "";
-  chatAuthEmail.value = "";
-  chatAuthError.textContent = "";
-  chatAuthSubmitBtn.textContent = "Log in";
-  chatAuthOverlay.classList.add("open");
-  chatAuthIdentifier.focus();
-}
-
-function closeChatAuthPopup() {
-  chatAuthOverlay.classList.remove("open");
-}
-
-chatAuthCancelBtn.onclick = closeChatAuthPopup;
-chatAuthSubmitBtn.onclick = async () => {
-  chatAuthSubmitBtn.disabled = true;
-  chatAuthError.textContent = "";
-  try {
-    if (chatAuthStep === "credentials") {
-      const result = await loginForChat(chatAuthIdentifier.value, chatAuthPassword.value);
-      if (!result.ok) {
-        chatAuthError.textContent = result.error;
-        return;
-      }
-      chatAuthPendingAccount = result;
-      chatAuthStep = "email";
-      chatAuthTitle.textContent = "Confirm your email";
-      chatAuthNote.textContent = "Enter the email connected to your VUS DM account.";
-      chatAuthCredentials.style.display = "none";
-      chatAuthEmail.style.display = "block";
-      chatAuthSubmitBtn.textContent = "Continue";
-      chatAuthEmail.focus();
-      return;
-    }
-
-    const email = chatAuthEmail.value.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      chatAuthError.textContent = "Enter a valid email address.";
-      return;
-    }
-    if (chatAuthPendingAccount.email && chatAuthPendingAccount.email.toLowerCase() !== email) {
-      chatAuthError.textContent = "That email does not match your VUS DM account.";
-      return;
-    }
-    if (!chatAuthPendingAccount.email) {
-      const emailResult = await associateChatEmail(chatAuthPendingAccount.accountKey, email);
-      if (!emailResult.ok) {
-        chatAuthError.textContent = emailResult.error;
-        return;
-      }
-      chatAuthPendingAccount.email = emailResult.email;
-    }
-    localStorage.setItem(HUB_ACCOUNT_SESSION_KEY, JSON.stringify(chatAuthPendingAccount));
-    closeChatAuthPopup();
-    openChatSidebar();
-  } catch (error) {
-    chatAuthError.textContent = "Could not reach VUS DM. Try again.";
-  } finally {
-    chatAuthSubmitBtn.disabled = false;
-  }
-};
-
-chatAuthPassword.addEventListener("keydown", event => {
-  if (event.key === "Enter") chatAuthSubmitBtn.click();
-});
-
-chatAuthEmail.addEventListener("keydown", event => {
-  if (event.key === "Enter") chatAuthSubmitBtn.click();
-});
-
-window.addEventListener("message", event => {
-  if (event.data && event.data.type === "vus-chat-auth-request") {
-    sendHubAccountSession(event.source);
-  }
-});
-
-function loadChatFrame() {
-  if (chatFrameLoaded || chatFrameLoading) return;
-  chatFrameLoading = true;
-
-  fetch(CHAT_HTML_URL + "?v=" + Date.now())
-    .then(r => {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.text();
-    })
-    .then(html => {
-      chatHtmlCache = html;
-      chatSidebarFrame.srcdoc = html;
-      chatFrameLoaded = true;
-      sendHubAccountSession(chatSidebarFrame.contentWindow);
-    })
-    .catch(() => {
-      showToast("Failed to load VUS Chat", "err");
-    })
-    .finally(() => {
-      chatFrameLoading = false;
-    });
-}
-
-function openChatSidebar() {
-  if (!getHubAccountSession()) {
-    openChatAuthPopup();
-    return;
-  }
-  chatSidebar.classList.add("open");
-  chatSidebarOverlay.classList.add("open");
-  chatSidebar.setAttribute("aria-hidden", "false");
-  chatToggleBtn.classList.add("hidden");
-  loadChatFrame();
-  chatCloseBtn.focus();
-}
-
-function closeChatSidebar() {
-  chatSidebar.classList.remove("open");
-  chatSidebarOverlay.classList.remove("open");
-  chatSidebar.setAttribute("aria-hidden", "true");
-  chatToggleBtn.classList.remove("hidden");
-  chatToggleBtn.focus();
-}
-
-chatToggleBtn.onclick = openChatSidebar;
-chatCloseBtn.onclick = closeChatSidebar;
-chatSidebarOverlay.onclick = closeChatSidebar;
-
-// "Pop out" — opens the same chat in its own free-floating browser window/tab
-// instead of the docked sidebar. Reuses the already-fetched HTML if we have
-// it cached, otherwise fetches fresh (e.g. if popped out before ever opening
-// the sidebar first). No fixed size is imposed — it just opens as a normal
-// resizable window/tab, letting the browser and the person decide the size.
-function openChatPopout() {
-  if (!getHubAccountSession()) {
-    openChatAuthPopup();
-    return;
-  }
-  if (chatHtmlCache) {
-    const win = window.open("about:blank", "_blank", "width=420,height=640,resizable=yes");
-    if (!win) {
-      showToast("Popup blocked — allow popups for this site", "err");
-      return;
-    }
-    win.document.open();
-    win.document.write(chatHtmlCache);
-    win.document.close();
-    sendHubAccountSession(win);
-    return;
-  }
-
-  showToast("Loading VUS Chat...", "load");
-  fetch(CHAT_HTML_URL + "?v=" + Date.now())
-    .then(r => {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.text();
-    })
-    .then(html => {
-      chatHtmlCache = html;
-      const win = window.open("about:blank", "_blank", "width=420,height=640,resizable=yes");
-      if (!win) {
-        showToast("Popup blocked — allow popups for this site", "err");
-        return;
-      }
-      win.document.open();
-      win.document.write(html);
-      win.document.close();
-      sendHubAccountSession(win);
-      showToast("VUS Chat opened in a new window", "ok");
-    })
-    .catch(() => {
-      showToast("Failed to load VUS Chat", "err");
-    });
-}
-
-chatPopoutBtn.onclick = openChatPopout;
-
-// ===================== DEV INFO (opens analytics.html) =====================
-const devInfoBtn = document.getElementById("devInfoBtn");
-const ANALYTICS_HTML_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/analytics.html";
-
-devInfoBtn.onclick = () => {
-  showToast("Loading analytics...", "load");
-
-  fetch(ANALYTICS_HTML_URL + "?v=" + Date.now())
-    .then(r => {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.text();
-    })
-    .then(text => {
-      const win = window.open("about:blank", "_blank");
-      if (!win) {
-        showToast("Popup blocked — allow popups for this site", "err");
-        return;
-      }
-      win.document.open();
-      win.document.write(text);
-      win.document.close();
-      showToast("Analytics opened successfully", "ok");
-    })
-    .catch(() => {
-      showToast("Failed to load analytics", "err");
-    });
-};
-
-// ===================== CLEAR ALL DATA (Settings, two-click confirm) =====================
-const clearDataBtn = document.getElementById("clearDataBtn");
-const CLEAR_DATA_CONFIRM_WINDOW_MS = 4000;
-let clearDataArmed = false;
-let clearDataResetTimer = null;
-
-function armClearDataButton() {
-  clearDataArmed = true;
-  clearDataBtn.classList.add("confirm-pending");
-  clearDataBtn.textContent = "⚠️ Click again to confirm";
-  clearTimeout(clearDataResetTimer);
-  clearDataResetTimer = setTimeout(disarmClearDataButton, CLEAR_DATA_CONFIRM_WINDOW_MS);
-}
-
-function disarmClearDataButton() {
-  clearDataArmed = false;
-  clearDataBtn.classList.remove("confirm-pending");
-  clearDataBtn.textContent = "🗑️ Clear All Data";
-  clearTimeout(clearDataResetTimer);
-}
-
-function performClearAllData() {
-  // Wipe EVERYTHING stored under this origin — not just the keys VUS Hub
-  // itself happens to know about. Any embedded app (games, Notes, YouTube
-  // key/playlist data, cached fetches, etc.) that ever wrote to localStorage,
-  // sessionStorage, IndexedDB, or the Cache API on this same origin gets
-  // cleared too, so nobody's stuck on stale data from before an update —
-  // regardless of which app on the hub actually wrote it.
-  const wipeTasks = [];
-
-  try {
-    localStorage.clear();
-  } catch (e) {
-    showToast("Failed to clear data — storage unavailable", "err");
-    return;
-  }
-
-  try {
-    sessionStorage.clear();
-  } catch (e) { /* non-critical — continue clearing the rest */ }
-
-  if (window.indexedDB && indexedDB.databases) {
-    wipeTasks.push(
-      indexedDB.databases()
-        .then(dbs => Promise.all(dbs.map(db => new Promise(resolve => {
-          const req = indexedDB.deleteDatabase(db.name);
-          req.onsuccess = req.onerror = req.onblocked = () => resolve();
-        }))))
-        .catch(() => {})
-    );
-  }
-
-  if (window.caches && caches.keys) {
-    wipeTasks.push(
-      caches.keys()
-        .then(names => Promise.all(names.map(name => caches.delete(name))))
-        .catch(() => {})
-    );
-  }
-
-  showToast("All data cleared — reloading...", "ok");
-  Promise.all(wipeTasks).finally(() => {
-    setTimeout(() => {
-      window.location.reload();
-    }, 900);
-  });
-}
-
-clearDataBtn.onclick = () => {
-  if (!clearDataArmed) {
-    armClearDataButton();
-    return;
-  }
-  disarmClearDataButton();
-  performClearAllData();
-};
-
-// If the person navigates away from the confirm state (closes Settings,
-// switches tabs within it, etc.) without clicking again, silently disarm
-// so a stray click later doesn't accidentally wipe everything.
-settingsClose.addEventListener("click", disarmClearDataButton);
-
-// ===================== Q/A MODAL =====================
-const qaOverlay = document.getElementById("qaOverlay");
-const qaBody = document.getElementById("qaBody");
-
-function renderQA() {
-  const filled = qaEntries.filter(item => (item.q && item.q.trim() !== "") || (item.a && item.a.trim() !== ""));
-
-  if (filled.length === 0) {
-    qaBody.innerHTML = '<div class="qa-empty">Nothing here yet.</div>';
-    return;
-  }
-
-  qaBody.innerHTML = filled.map((item, i) => `
-    <div class="qa-row">
-      <div class="qa-num">${i + 1}</div>
-      <div class="qa-content">
-        <div class="qa-line"><span class="qa-label">Q:</span> <span class="qa-text">${escapeHtml(item.q)}</span></div>
-        <div class="qa-line"><span class="qa-label qa-answer-label">A:</span> <span class="qa-text">${escapeHtml(item.a)}</span></div>
-      </div>
-    </div>
-  `).join("");
-}
-
+// ---------- Q/A ----------
 function openQA() {
-  renderQA();
-  qaOverlay.classList.add("open");
-  document.getElementById("qaClose").focus();
+  const rows = qaEntries.filter(i => (i.q && i.q.trim()) || (i.a && i.a.trim()));
+  $("qaBody").innerHTML = rows.length ? rows.map(i => '<div class="qa"><div><b>Q:</b>' + esc(i.q) + '</div><div class="a"><b>A:</b>' + esc(i.a) + "</div></div>").join("")
+    : '<div class="empty">Nothing here yet.</div>';
+  $("qaOv").classList.add("open"); $("qaX").focus();
 }
+const closeQA = () => { $("qaOv").classList.remove("open"); $("qaBtn").focus(); };
+$("qaBtn").onclick = openQA; $("qaX").onclick = closeQA;
 
-function closeQA() {
-  qaOverlay.classList.remove("open");
-  document.getElementById("qaBtn").focus();
+// ---------- Settings modal ----------
+function group(wrap, opts, get, set) {
+  wrap.innerHTML = "";
+  const paint = () => [...wrap.children].forEach(b => b.classList.toggle("active", b._v === get()));
+  opts.forEach(([v, l]) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "opt"; b.textContent = l; b._v = v;
+    b.onclick = () => { set(v); paint(); };
+    wrap.appendChild(b);
+  });
+  paint();
 }
+function buildSettingsUI() {
+  $("sName").value = draft.siteName; $("sColor").value = draft.backgroundColor;
+  $("sColorWrap").hidden = draft.backgroundMode !== "block";
+  group($("sTab"), Object.entries(tabLabels), () => draft.defaultTab, v => draft.defaultTab = v);
+  group($("sBg"), [["default", "Default"], ["block", "Solid Color"]], () => draft.backgroundMode, v => { draft.backgroundMode = v; $("sColorWrap").hidden = v !== "block"; });
+  group($("sAnim"), [[true, "On"], [false, "Off"]], () => draft.animationsEnabled !== false, v => draft.animationsEnabled = v);
+  group($("sSize"), [[false, "Normal"], [true, "Compact"]], () => draft.compactView === true, v => draft.compactView = v);
+}
+function openSettings() { draft = { ...cur }; buildSettingsUI(); $("setOv").classList.add("open"); $("setX").focus(); }
+function closeSettings() { disarmClear(); $("setOv").classList.remove("open"); $("settingsBtn").focus(); }
+$("settingsBtn").onclick = openSettings; $("setX").onclick = closeSettings;
+$("sColor").addEventListener("input", e => draft.backgroundColor = e.target.value);
+$("sReset").onclick = () => { draft = { ...DEF }; buildSettingsUI(); };
+$("sSave").onclick = () => {
+  draft.siteName = $("sName").value.trim() || DEF.siteName;
+  try { localStorage.setItem(SKEY, JSON.stringify(draft)); } catch (e) { toast("Failed to save settings", "err"); return; }
+  cur = { ...draft }; applySettings(cur); toast("Settings saved"); closeSettings();
+};
 
-document.getElementById("qaBtn").onclick = openQA;
-document.getElementById("qaClose").onclick = closeQA;
+// Dev info
+$("devBtn").onclick = () => {
+  const win = window.open("about:blank", "_blank");
+  if (!win) { toast("Popup blocked. Allow popups for this site", "err"); return; }
+  toast("Loading analytics...", "load");
+  fetch(bust(ANALYTICS_URL), { cache: "no-store" }).then(r => { if (!r.ok) throw 0; return r.text(); })
+    .then(t => { win.document.open(); win.document.write(t); win.document.close(); })
+    .catch(() => { win.close(); toast("Failed to load analytics", "err"); });
+};
 
-// Click-outside-to-close intentionally disabled — only the X button closes this modal.
+// Clear all data (two-click confirm)
+let clearArmed = false, clearTimer = null;
+function disarmClear() { clearArmed = false; $("clearBtn").classList.remove("arm"); $("clearBtn").textContent = "🗑️ Clear All Data"; clearTimeout(clearTimer); }
+$("clearBtn").onclick = () => {
+  if (!clearArmed) { clearArmed = true; $("clearBtn").classList.add("arm"); $("clearBtn").textContent = "⚠️ Click again to confirm"; clearTimer = setTimeout(disarmClear, 4000); return; }
+  disarmClear();
+  try { localStorage.clear(); } catch (e) { toast("Failed to clear data", "err"); return; }
+  try { sessionStorage.clear(); } catch (e) {}
+  const jobs = [];
+  if (indexedDB && indexedDB.databases) jobs.push(indexedDB.databases().then(dbs => Promise.all(dbs.map(d => new Promise(r => { const q = indexedDB.deleteDatabase(d.name); q.onsuccess = q.onerror = q.onblocked = r; })))).catch(() => {}));
+  if (window.caches) jobs.push(caches.keys().then(n => Promise.all(n.map(k => caches.delete(k)))).catch(() => {}));
+  toast("All data cleared. Restarting...");
+  Promise.all(jobs).finally(() => setTimeout(fetchAndSwap, 900)); // fresh start, same tab
+};
 
-// ===================== UPDATE LOG MODAL =====================
-const updateLogOverlay = document.getElementById("updateLogOverlay");
-const updateLogBody = document.getElementById("updateLogBody");
-const updateLogClose = document.getElementById("updateLogClose");
-const logTabUpcoming = document.getElementById("logTabUpcoming");
-const logTabReleases = document.getElementById("logTabReleases");
-const LOGS_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Logs";
-
-let parsedLogData = null;
-let activeLogTab = "upcoming"; // always defaults back to Upcoming each time the modal opens
-
-// Same parsing rules as home.html's preview: a header line "Upcoming-69101"
-// or "Releases-69101" starts that section, a row of dashes ends it, and
-// within a section every real entry is its own line starting with "/".
-function parseLogText(text) {
-  const lines = text.split("\n").map(l => l.trim());
-  const result = { upcoming: [], releases: [] };
-  let section = null;
-
-  for (const line of lines) {
-    if (/^Upcoming-\d+/.test(line)) { section = "upcoming"; continue; }
-    if (/^Releases-\d+/.test(line)) { section = "releases"; continue; }
-    if (/^-{3,}/.test(line)) { continue; }
-    if (!line) continue;
-    if (line.startsWith("/") && section) {
-      result[section].push(line.slice(1).trim());
-    }
+// ---------- Keyboard ----------
+document.addEventListener("keydown", e => {
+  const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);
+  if (e.key === "/" && !typing) { e.preventDefault(); searchInput.focus(); }
+  if (e.key === "Escape") {
+    if ($("setOv").classList.contains("open")) closeSettings();
+    else if ($("qaOv").classList.contains("open")) closeQA();
+    else if (document.activeElement === searchInput) { searchInput.blur(); searchInput.value = ""; searchQuery = ""; render(); }
   }
-  return result;
-}
-
-function renderUpdateLogTab() {
-  logTabUpcoming.classList.toggle("active", activeLogTab === "upcoming");
-  logTabReleases.classList.toggle("active", activeLogTab === "releases");
-
-  if (!parsedLogData) {
-    updateLogBody.innerHTML = '<div class="qa-empty">Loading…</div>';
-    return;
+  if (e.key === "Tab") { // keep focus inside an open modal
+    const m = document.querySelector(".ov.open .modal"); if (!m) return;
+    const f = [...m.querySelectorAll("button, input, a[href]")].filter(x => x.offsetParent !== null);
+    if (!f.length) return;
+    if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
+    else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
   }
-
-  const entries = (parsedLogData[activeLogTab] || []).slice().reverse(); // newest-added first
-
-  if (entries.length === 0) {
-    updateLogBody.innerHTML = '<div class="qa-empty">Nothing here yet.</div>';
-    return;
-  }
-
-  updateLogBody.innerHTML = entries.map(entry => `
-    <div class="log-entry">${escapeHtml(entry)}</div>
-  `).join("");
-}
-
-logTabUpcoming.onclick = () => { activeLogTab = "upcoming"; renderUpdateLogTab(); };
-logTabReleases.onclick = () => { activeLogTab = "releases"; renderUpdateLogTab(); };
-
-function loadUpdateLogData() {
-  updateLogBody.innerHTML = '<div class="qa-empty">Loading…</div>';
-  fetch(LOGS_URL + "?v=" + Date.now())
-    .then(r => {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.text();
-    })
-    .then(text => {
-      parsedLogData = parseLogText(text);
-      renderUpdateLogTab();
-    })
-    .catch(() => {
-      updateLogBody.innerHTML = '<div class="qa-empty">Couldn\u2019t load the update log.</div>';
-    });
-}
-
-// Exposed globally so home.html's iframe (a separate document) can trigger
-// this modal via window.parent.openUpdateLog() — same pattern used for
-// openApp() being called from Home's Recently Used/Favorites widgets.
-function openUpdateLog() {
-  activeLogTab = "upcoming"; // always opens on Upcoming, per spec
-  loadUpdateLogData();
-  renderUpdateLogTab();
-  updateLogOverlay.classList.add("open");
-  updateLogClose.focus();
-}
-window.openUpdateLog = openUpdateLog;
-
-function closeUpdateLog() {
-  updateLogOverlay.classList.remove("open");
-}
-
-updateLogClose.onclick = closeUpdateLog;
-
-// Click-outside-to-close intentionally disabled — only the X button closes this modal.
-
-// ===================== LOAD DATA & INIT =====================
-function loadApps() {
-  return fetch("https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/apps.json?v=" + Date.now())
-    .then(r => {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.json();
-    })
-    .then(data => {
-      apps = {
-        home: data.home || [],
-        apps: data.apps || [],
-        hubs: data.hubs || [],
-        tools: data.tools || [],
-        links: data.links || []
-      };
-      qaEntries = data.qa || [];
-    })
-    .catch(() => {
-      showToast("Failed to load app list", "err");
-      apps = { home: [], apps: [], hubs: [], tools: [], links: [] };
-      qaEntries = [];
-    });
-}
-
-loadApps().then(() => {
-  buildTabs();
-  requestAnimationFrame(() => updateIndicator());
-  render();
 });
-</script>
 
-<!-- Firebase connection + online presence tracking (runs globally, all tabs) -->
-<script>
-// raw.githubusercontent.com always serves Content-Type: text/plain, and browsers
-// enforce strict MIME type checking on <script type="module">, so pointing src=
-// directly at the raw URL gets silently blocked. Instead: fetch the source as
-// text, wrap it in a Blob with the correct JS MIME type, and load *that* as the
-// module. This lets Firebase presence tracking work even when index.html itself
-// is opened via document.write() from a raw-fetch (e.g. the "Open" cloak button),
-// where there's no real page origin to resolve a relative "firebase.js" against.
-(function loadFirebaseModule() {
-  fetch("https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/firebase.js?v=" + Date.now())
-    .then(r => {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.text();
-    })
-    .then(code => {
-      const blob = new Blob([code], { type: "application/javascript" });
-      const blobUrl = URL.createObjectURL(blob);
-      const script = document.createElement("script");
-      script.type = "module";
-      script.src = blobUrl;
-      document.body.appendChild(script);
-    })
-    .catch(() => {
-      // Non-critical: online presence tracking just won't run this session.
-      console.warn("VUS Hub: failed to load firebase.js for presence tracking.");
-    });
-})();
-</script>
-</body>
-</html>
+// ---------- Start ----------
+$("grid").innerHTML = '<div class="skel"></div>'.repeat(6);
+loadApps().then(() => {
+  syncAll();
+  buildTabs();
+  requestAnimationFrame(updateIndicator);
+  if (resume && resume.q) { searchInput.value = resume.q; searchQuery = resume.q.toLowerCase().trim(); }
+  render();
+  if (resume) scrollTo(0, resume.y || 0);
+});
 
-
-<!-- Firebase connection + online presence tracking (runs globally, all tabs) -->
-<script>
-// raw.githubusercontent.com always serves Content-Type: text/plain, and browsers
-// enforce strict MIME type checking on <script type="module">, so pointing src=
-// directly at the raw URL gets silently blocked. Instead: fetch the source as
-// text, wrap it in a Blob with the correct JS MIME type, and load *that* as the
-// module. This lets Firebase presence tracking work even when index.html itself
-// is opened via document.write() from a raw-fetch (e.g. the "Open" cloak button),
-// where there's no real page origin to resolve a relative "firebase.js" against.
-(function loadFirebaseModule() {
-  fetch("https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/firebase.js?v=" + Date.now())
-    .then(r => {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.text();
-    })
-    .then(code => {
-      const blob = new Blob([code], { type: "application/javascript" });
-      const blobUrl = URL.createObjectURL(blob);
-      const script = document.createElement("script");
-      script.type = "module";
-      script.src = blobUrl;
-      document.body.appendChild(script);
-    })
-    .catch(() => {
-      // Non-critical: online presence tracking just won't run this session.
-      console.warn("VUS Hub: failed to load firebase.js for presence tracking.");
-    });
-})();
+// Firebase presence/analytics (Blob module, since raw GitHub serves text/plain)
+fetch(bust(BASE + "firebase.js"), { cache: "no-store" }).then(r => { if (!r.ok) throw 0; return r.text(); })
+  .then(code => { const s = document.createElement("script"); s.type = "module"; s.src = URL.createObjectURL(new Blob([code], { type: "application/javascript" })); document.body.appendChild(s); })
+  .catch(() => console.warn("VUS Hub: presence tracking unavailable."));
 </script>
 </body>
 </html>
