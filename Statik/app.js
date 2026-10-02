@@ -1,212 +1,150 @@
-// ===== Firebase refs (Realtime Database) =====
+// ===== Statik viewer (read-only + like / comment / report) =====
+// Posting lives in submit.html; approval lives in admin.html.
 const db = firebase.database();
+const auth = firebase.auth();
 
-// ===== Config =====
-const MIN_ASPECT = 0.4;   // tallest allowed (portrait) ~ 2:5
-const MAX_ASPECT = 2.5;   // widest allowed (landscape) ~ 5:2
-const MAX_IMAGE_DIMENSION = 1280; // images get resized to fit within this, longest side
-const IMAGE_JPEG_QUALITY = 0.72;  // compression quality for stored base64 images
+const COOLDOWNS = { comment: 5000, reply: 5000 };
+const lastAction = {};
+function cooldownLeft(k) {
+  const w = (lastAction[k] || 0) + COOLDOWNS[k] - Date.now();
+  return w > 0 ? Math.ceil(w / 1000) : 0;
+}
 
-const RESET_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-
-// Client-side cooldowns to slow down accidental/rapid-fire spam.
-// NOTE: enforced in the browser only, not on the server — since there's no
-// auth, there's no real identity to rate-limit against. A determined person
-// could bypass this by editing the JS. It still stops normal double-clicks
-// and casual spam, which is what it's for.
-const POST_COOLDOWN_MS = 15000;
-const COMMENT_COOLDOWN_MS = 5000;
-const REPLY_COOLDOWN_MS = 5000;
-
-let lastPostTime = 0;
-let lastCommentTime = 0;
-let lastReplyTime = 0;
-
-// ===== Anonymous session identity =====
-// One random Anonymous #0001-9999 per browser session (sessionStorage),
-// so it's consistent while you're on the site but resets on a new session.
-function getSessionIdentity() {
-  let stored = sessionStorage.getItem('statik_anon_id');
-  if (!stored) {
-    const num = Math.floor(Math.random() * 9999) + 1;
-    stored = String(num).padStart(4, '0');
-    sessionStorage.setItem('statik_anon_id', stored);
+// ===== Identity =====
+const MY_NAME = (() => {
+  let n = sessionStorage.getItem('statik_anon_id');
+  if (!n) {
+    n = String(Math.floor(Math.random() * 9999) + 1).padStart(4, '0');
+    sessionStorage.setItem('statik_anon_id', n);
   }
-  return `Anonymous #${stored}`;
-}
-const MY_NAME = getSessionIdentity();
+  return `Anonymous #${n}`;
+})();
+let MY_UID = null;
 
-// A per-browser-tab-session random id, used only to track "did I like this"
-// client-side. Not identity, not security — just prevents obvious double-click
-// double-likes within the same tab session. Also used as the Realtime
-// Database key for a like entry (DB keys can't contain most special chars,
-// so this is kept alphanumeric).
-function getSessionUid() {
-  let uid = sessionStorage.getItem('statik_session_uid');
-  if (!uid) {
-    uid = 'anon' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-    sessionStorage.setItem('statik_session_uid', uid);
-  }
-  return uid;
-}
-const SESSION_UID = getSessionUid();
-
-// ===== Own posts tracking (for the 60s self-delete window) =====
-// sessionStorage only — "same account as post" has no real meaning without
-// auth, so this is scoped to "same browser session that made the post",
-// matching how the Anonymous # tag already works. Stored as
-// { postId: createdAtMs } so we can check elapsed time without re-reading
-// the post itself.
-const OWN_POSTS_KEY = 'statik_own_posts';
-const DELETE_WINDOW_MS = 60 * 1000;
-
-function getOwnPostsMap() {
-  try {
-    return JSON.parse(sessionStorage.getItem(OWN_POSTS_KEY) || '{}');
-  } catch (e) {
-    return {};
-  }
-}
-function markOwnPost(postId, createdAtMs) {
-  const map = getOwnPostsMap();
-  map[postId] = createdAtMs;
-  sessionStorage.setItem(OWN_POSTS_KEY, JSON.stringify(map));
-}
-function isOwnPostDeletable(postId) {
-  const map = getOwnPostsMap();
-  const createdAt = map[postId];
-  if (!createdAt) return false;
-  return (Date.now() - createdAt) < DELETE_WINDOW_MS;
-}
-
-// ===== Reported posts tracking (dedupe — one report per session per post) =====
-const REPORTED_KEY = 'statik_reported_posts';
-function getReportedSet() {
-  try {
-    return JSON.parse(sessionStorage.getItem(REPORTED_KEY) || '{}');
-  } catch (e) {
-    return {};
-  }
-}
-function markReported(postId) {
-  const set = getReportedSet();
-  set[postId] = true;
-  sessionStorage.setItem(REPORTED_KEY, JSON.stringify(set));
-}
-
-// ===== Viewed posts tracking (localStorage, persists across visits) =====
-// Stored as a plain object { postId: true } under one key, since
-// localStorage has no native set type. This lets "Skip viewed" filter
-// posts out across browser restarts, not just the current session.
-//
-// admin-reset.html can only wipe the database, not every visitor's
-// localStorage directly. To work around that, it bumps /meta/resetGen
-// (a counter) whenever it wipes posts. Each client compares that value
-// against what it last saw locally — if it's newer, the local viewed-list
-// (which refers to now-deleted posts anyway) gets cleared automatically.
+// ===== Viewed tracking =====
 const VIEWED_KEY = 'statik_viewed_posts';
 const RESET_GEN_KEY = 'statik_last_reset_gen';
-
-function getViewedSet() {
-  try {
-    return JSON.parse(localStorage.getItem(VIEWED_KEY) || '{}');
-  } catch (e) {
-    return {};
-  }
+const getViewedSet = () => { try { return JSON.parse(localStorage.getItem(VIEWED_KEY) || '{}'); } catch (e) { return {}; } };
+function markViewed(id) {
+  const v = getViewedSet();
+  if (v[id]) return;
+  v[id] = true;
+  localStorage.setItem(VIEWED_KEY, JSON.stringify(v));
 }
-function markViewed(postId) {
-  const viewed = getViewedSet();
-  if (viewed[postId]) return;
-  viewed[postId] = true;
-  localStorage.setItem(VIEWED_KEY, JSON.stringify(viewed));
-}
-function clearViewedIfResetHappened(currentGen) {
-  if (currentGen == null) return;
-  const lastSeenGen = parseInt(localStorage.getItem(RESET_GEN_KEY) || '0', 10);
-  if (currentGen > lastSeenGen) {
+db.ref('meta/resetGen').on('value', (s) => {
+  const gen = s.val();
+  if (gen == null) return;
+  if (gen > parseInt(localStorage.getItem(RESET_GEN_KEY) || '0', 10)) {
     localStorage.removeItem(VIEWED_KEY);
-    localStorage.setItem(RESET_GEN_KEY, String(currentGen));
+    localStorage.setItem(RESET_GEN_KEY, String(gen));
   }
-}
-db.ref('meta/resetGen').on('value', (snapshot) => {
-  clearViewedIfResetHappened(snapshot.val());
 });
 
-// ===== DOM refs =====
-const searchInput = document.getElementById('search-input');
-const newPostBtn = document.getElementById('new-post-btn');
-const postStage = document.getElementById('post-stage');
-const loadingState = document.getElementById('loading-state');
-const emptyState = document.getElementById('empty-state');
-const endPage = document.getElementById('end-page');
-const endPageRefreshBtn = document.getElementById('end-page-refresh-btn');
-const refreshBtn = document.getElementById('refresh-btn');
-const sortSelect = document.getElementById('sort-select');
-const skipViewedCheckbox = document.getElementById('skip-viewed-checkbox');
-const prevBtn = document.getElementById('prev-btn');
-const nextBtn = document.getElementById('next-btn');
-const postCounter = document.getElementById('post-counter');
-const resetTimerEl = document.getElementById('reset-timer');
-const totalCountEl = document.getElementById('total-count');
-const toastEl = document.getElementById('toast');
+// ===== DOM =====
+const $ = (id) => document.getElementById(id);
+const searchInput = $('search-input'), postStage = $('post-stage'), loadingState = $('loading-state');
+const emptyState = $('empty-state'), endPage = $('end-page'), refreshBtn = $('refresh-btn');
+const sortSelect = $('sort-select'), skipViewedCheckbox = $('skip-viewed-checkbox');
+const prevBtn = $('prev-btn'), nextBtn = $('next-btn'), postCounter = $('post-counter');
+const resetTimerEl = $('reset-timer'), totalCountEl = $('total-count'), toastEl = $('toast');
+const commentsList = $('comments-list'), commentsCount = $('comments-count');
+const commentForm = $('comment-form'), commentInput = $('comment-input'), commentCounter = $('comment-counter');
+const fullscreenOverlay = $('fullscreen-overlay'), fullscreenImg = $('fullscreen-img');
 
-const commentsList = document.getElementById('comments-list');
-const commentsCount = document.getElementById('comments-count');
-const commentForm = document.getElementById('comment-form');
-const commentInput = document.getElementById('comment-input');
-const commentCounter = document.getElementById('comment-counter');
+// ===== UI fixes (injected here so style.css doesn't need touching) =====
+const fixStyle = document.createElement('style');
+fixStyle.textContent = `
+:root{color-scheme:dark}
+*{scrollbar-width:thin;scrollbar-color:#3a3a3a transparent}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#new-post-btn{display:inline-block;text-decoration:none;white-space:nowrap}
+#dev-panel-btn,#dev-panel-modal,#post-modal{display:none!important}
+.comments-panel{top:var(--topbar-h,53px)}
+.post-media img{position:absolute;inset:0;width:100%;height:100%;max-width:none;max-height:none;object-fit:contain;z-index:1}
+.post-media img.bg{object-fit:cover;filter:blur(28px) brightness(.4);transform:scale(1.15);z-index:0}
+.post-media .no-image-text{position:relative;z-index:1;color:var(--text-dim)}
+.expand-btn{z-index:2}
+.post-card.text-only .post-media{display:none}
+.post-card.text-only .post-info{max-width:680px;margin:0 auto;justify-content:center}
+.post-card.text-only .title{font-size:32px;line-height:1.2}
+.post-card.text-only .desc{flex:0 1 auto;max-height:50vh;font-size:17px;line-height:1.55}
+.post-info .title,.post-info .desc,.comment .c-text{overflow-wrap:anywhere}
+@media (max-width:1200px) and (min-width:901px){.post-stage{padding:24px 20px 24px 70px}.post-card{gap:18px}.post-media{flex-basis:55%}}
+@media (max-width:900px){
+.topbar{padding:8px 10px;gap:8px}
+.search-wrap{order:10;flex:1 1 100%;max-width:none}
+.reset-timer,.total-count{font-size:11px}
+.viewer{margin-bottom:36vh}
+.comments-panel{top:auto;height:36vh}
+.post-stage{padding:12px 12px 12px 56px}
+.post-card{gap:12px}
+.post-info .title{font-size:20px}
+.post-card.text-only .title{font-size:24px}
+input,select,textarea{font-size:16px!important}
+}`;
+document.head.appendChild(fixStyle);
+emptyState.querySelector('p').textContent = 'No posts yet. Submit one with ＋ New Post.';
 
-const postModal = document.getElementById('post-modal');
-const unsavedWarning = document.getElementById('unsaved-warning');
-const titleInput = document.getElementById('title-input');
-const titleCounter = document.getElementById('title-counter');
-const descInput = document.getElementById('desc-input');
-const descCounter = document.getElementById('desc-counter');
-const fileInput = document.getElementById('file-input');
-const fileLabelText = document.getElementById('file-label-text');
-const previewImg = document.getElementById('preview-img');
-const cancelPostBtn = document.getElementById('cancel-post-btn');
-const submitPostBtn = document.getElementById('submit-post-btn');
-const postStatus = document.getElementById('post-status');
+const topbarEl = document.querySelector('.topbar');
+const syncTopbar = () => document.documentElement.style.setProperty('--topbar-h', topbarEl.offsetHeight + 'px');
+syncTopbar();
+if (window.ResizeObserver) new ResizeObserver(syncTopbar).observe(topbarEl); else window.addEventListener('resize', syncTopbar);
 
-const fullscreenOverlay = document.getElementById('fullscreen-overlay');
-const fullscreenImg = document.getElementById('fullscreen-img');
-const fullscreenCloseBtn = document.getElementById('fullscreen-close-btn');
-
-const devPanelBtn = document.getElementById('dev-panel-btn');
-const devPanelModal = document.getElementById('dev-panel-modal');
-const devPanelCloseBtn = document.getElementById('dev-panel-close-btn');
-const devPanelList = document.getElementById('dev-panel-list');
-const devPanelEmpty = document.getElementById('dev-panel-empty');
+const newPostEl = $('new-post-btn');
+if (newPostEl && newPostEl.tagName === 'BUTTON') newPostEl.addEventListener('click', () => window.open('submit.html', '_blank', 'noopener'));
 
 // ===== State =====
-let allPosts = [];      // full loaded post list from DB (unfiltered), newest first
-let visiblePosts = [];  // after search + sort + skip-viewed applied
-let currentIndex = 0;
-let selectedImageDataUrl = null; // base64 data URL, after compression
-let commentsRef = null;
-let commentsHandler = null;
-let repliesUnsubs = []; // list of {ref, handler} to detach when switching posts
+let allPosts = [], visiblePosts = [], currentIndex = 0, currentId = null;
+let shuffleOrder = [], advancedSinceShuffle = 0;
+let listeners = [];
+let cData = { comments: {}, replies: {}, clikes: {}, likes: {} };
+const imageCache = new Map();
 
-let shuffleOrder = [];      // array of post ids in current shuffle order
-let postsAdvancedSinceShuffle = 0; // counter to trigger a reshuffle every 5 posts
+// ===== Helpers =====
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function timeAgo(ms) {
+  const s = Math.floor((Date.now() - ms) / 1000);
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+function showToast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.remove('hidden');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => toastEl.classList.add('hidden'), 2500);
+}
+function shuffleArray(a) {
+  const c = a.slice();
+  for (let i = c.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [c[i], c[j]] = [c[j], c[i]]; }
+  return c;
+}
 
-// ===== Load posts (real-time) =====
-// Stored at /posts/{postId} = { authorName, title, description, imageData, likes: {uid: true}, createdAt }
-let hasLoadedOnce = false;
-db.ref('posts').orderByChild('createdAt').limitToLast(200)
-  .on('value', (snapshot) => {
-    const val = snapshot.val() || {};
-    allPosts = Object.keys(val)
-      .map(id => ({ id, ...val[id] }))
-      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)); // newest first
+// ===== Auth (silent anonymous — no user-facing sign-in) =====
+let started = false;
+auth.onAuthStateChanged((u) => {
+  if (!u) {
+    auth.signInAnonymously().catch((e) => {
+      console.error(e);
+      loadingState.querySelector('p').textContent = 'Could not connect.';
+    });
+    return;
+  }
+  const changed = MY_UID && MY_UID !== u.uid;
+  MY_UID = u.uid;
+  if (!started) { started = true; startPosts(); } else if (changed) renderCurrentPost();
+});
 
-    if (!hasLoadedOnce) {
-      hasLoadedOnce = true;
-      loadingState.classList.add('hidden');
-    }
+// ===== Posts (metadata only; images load one at a time) =====
+function startPosts() {
+  db.ref('posts').orderByChild('createdAt').limitToLast(200).on('value', (snap) => {
+    const val = snap.val() || {};
+    allPosts = Object.keys(val).map(id => ({ id, ...val[id] })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    loadingState.classList.add('hidden');
     totalCountEl.textContent = allPosts.length === 1 ? '1 post' : `${allPosts.length} posts`;
-
     rebuildVisiblePosts();
   }, (err) => {
     console.error(err);
@@ -214,755 +152,308 @@ db.ref('posts').orderByChild('createdAt').limitToLast(200)
     emptyState.classList.remove('hidden');
     emptyState.querySelector('p').textContent = 'Could not load posts.';
   });
-
-function shuffleArray(arr) {
-  const copy = arr.slice();
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
 }
 
-// Rebuilds visiblePosts from allPosts, applying search text, sort mode,
-// and the skip-viewed filter, then re-renders the current position.
-// Called on: initial load, search input, sort mode change, skip-viewed
-// toggle, and manual refresh.
 function rebuildVisiblePosts({ resetIndex = false, forceReshuffle = false } = {}) {
   const q = searchInput.value.trim().toLowerCase();
-  let base = q
-    ? allPosts.filter(p => (p.title || '').toLowerCase().includes(q))
-    : allPosts.slice();
-
-  if (skipViewedCheckbox.checked) {
-    const viewed = getViewedSet();
-    base = base.filter(p => !viewed[p.id]);
-  }
+  const viewed = getViewedSet();
+  const skip = skipViewedCheckbox.checked;
+  // The post you're looking at is never filtered out from under you.
+  let base = allPosts.filter(p =>
+    (!q || (p.title || '').toLowerCase().includes(q)) &&
+    (!skip || !viewed[p.id] || p.id === currentId));
 
   const mode = sortSelect.value;
-  if (mode === 'newest') {
-    base.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  } else if (mode === 'oldest') {
-    base.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-  } else if (mode === 'shuffle') {
-    // Re-shuffle either on demand, or every 5 posts advanced, so newly
-    // uploaded posts eventually enter the rotation without a full reload.
-    if (forceReshuffle || shuffleOrder.length === 0 || postsAdvancedSinceShuffle >= 5) {
+  if (mode === 'newest') base.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  else if (mode === 'oldest') base.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  else {
+    if (forceReshuffle || shuffleOrder.length === 0 || advancedSinceShuffle >= 5) {
       shuffleOrder = shuffleArray(base.map(p => p.id));
-      postsAdvancedSinceShuffle = 0;
+      advancedSinceShuffle = 0;
+      const at = shuffleOrder.indexOf(currentId);
+      if (!resetIndex && at > 0) { shuffleOrder.splice(at, 1); shuffleOrder.unshift(currentId); }
     } else {
-      // Between reshuffles, append any brand-new post ids (not yet in the
-      // shuffle order) to the end, so they're reachable without waiting.
-      const knownIds = new Set(shuffleOrder);
-      const newIds = base.map(p => p.id).filter(id => !knownIds.has(id));
-      shuffleOrder = shuffleOrder.concat(newIds);
+      const known = new Set(shuffleOrder);
+      shuffleOrder = shuffleOrder.concat(base.map(p => p.id).filter(id => !known.has(id)));
     }
     const byId = {};
     base.forEach(p => { byId[p.id] = p; });
-    // Drop any shuffled ids that no longer exist in base (deleted, or
-    // filtered out by search/skip-viewed since the last shuffle).
     base = shuffleOrder.map(id => byId[id]).filter(Boolean);
   }
-
   visiblePosts = base;
 
-  if (resetIndex || currentIndex >= visiblePosts.length) currentIndex = 0;
+  if (resetIndex) currentIndex = 0;
+  else {
+    const i = visiblePosts.findIndex(p => p.id === currentId);
+    currentIndex = i >= 0 ? i : Math.min(currentIndex, Math.max(visiblePosts.length - 1, 0));
+  }
+  currentId = visiblePosts[currentIndex] ? visiblePosts[currentIndex].id : null;
   renderCurrentPost();
 }
 
 searchInput.addEventListener('input', () => rebuildVisiblePosts({ resetIndex: true }));
 sortSelect.addEventListener('change', () => rebuildVisiblePosts({ resetIndex: true, forceReshuffle: true }));
 skipViewedCheckbox.addEventListener('change', () => rebuildVisiblePosts({ resetIndex: true }));
-
-function doRefresh(btnEl) {
-  if (btnEl) {
-    btnEl.classList.add('spinning');
-    setTimeout(() => btnEl.classList.remove('spinning'), 600);
-  }
-  // Data is already live via the .on('value') listener above, so there's
-  // nothing stale to refetch — this re-runs filtering/sort/shuffle and
-  // re-renders, which is what "stuck on the end page" actually needs.
+function doRefresh() {
+  refreshBtn.classList.add('spinning');
+  setTimeout(() => refreshBtn.classList.remove('spinning'), 600);
   rebuildVisiblePosts({ resetIndex: true, forceReshuffle: true });
 }
-refreshBtn.addEventListener('click', () => doRefresh(refreshBtn));
-endPageRefreshBtn.addEventListener('click', () => doRefresh(refreshBtn));
+refreshBtn.addEventListener('click', doRefresh);
+$('end-page-refresh-btn').addEventListener('click', doRefresh);
 
-// ===== Reset countdown timer =====
-// Stored at /meta/nextReset = timestamp (ms). Shared across everyone.
-// Days/hours only (no minutes) per design — sits at "0d 0h" once passed,
-// since reset is manual (see admin-reset.html), not automatic.
+// ===== Reset timer =====
 let nextResetTime = null;
-db.ref('meta/nextReset').on('value', (snapshot) => {
-  nextResetTime = snapshot.val();
-  updateResetTimerDisplay();
-});
-
-function updateResetTimerDisplay() {
-  if (!nextResetTime) {
-    resetTimerEl.textContent = '';
-    return;
-  }
-  const remaining = nextResetTime - Date.now();
-  if (remaining <= 0) {
-    resetTimerEl.textContent = 'Reset due — 0d 0h';
-    resetTimerEl.classList.add('due');
-    return;
-  }
+db.ref('meta/nextReset').on('value', (s) => { nextResetTime = s.val(); updateResetTimer(); });
+function updateResetTimer() {
+  if (!nextResetTime) { resetTimerEl.textContent = ''; return; }
+  const rem = nextResetTime - Date.now();
+  if (rem <= 0) { resetTimerEl.textContent = 'Reset due — 0d 0h'; resetTimerEl.classList.add('due'); return; }
   resetTimerEl.classList.remove('due');
-  const totalHours = Math.floor(remaining / (60 * 60 * 1000));
-  const days = Math.floor(totalHours / 24);
-  const hours = totalHours % 24;
-  resetTimerEl.textContent = `Next reset: ${days}d ${hours}h`;
+  const th = Math.floor(rem / 3600000);
+  resetTimerEl.textContent = `Next reset: ${Math.floor(th / 24)}d ${th % 24}h`;
 }
-setInterval(updateResetTimerDisplay, 60 * 1000); // refresh display every minute
-
-// Re-render the current post once the 60s delete window closes, so the
-// Delete button disappears on its own rather than staying visible until
-// the next navigation. Checked frequently but only triggers a re-render
-// when the button is actually showing, so it's cheap the rest of the time.
-setInterval(() => {
-  if (visiblePosts.length === 0) return;
-  const post = visiblePosts[currentIndex];
-  if (!post) return;
-  const hasDeleteBtn = !!document.getElementById('post-delete-btn');
-  if (hasDeleteBtn && !isOwnPostDeletable(post.id)) {
-    renderCurrentPost();
-  }
-}, 5000);
+setInterval(updateResetTimer, 60000);
 
 // ===== Navigation =====
-prevBtn.addEventListener('click', () => goTo(currentIndex - 1));
-nextBtn.addEventListener('click', () => goTo(currentIndex + 1));
-
-document.addEventListener('keydown', (e) => {
-  const tag = document.activeElement.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA') return; // don't hijack while typing
-
-  if (e.key === 'ArrowUp') { e.preventDefault(); goTo(currentIndex - 1); }
-  if (e.key === 'ArrowDown') { e.preventDefault(); goTo(currentIndex + 1); }
-});
-
-document.getElementById('viewer').addEventListener('wheel', (e) => {
-  e.preventDefault();
-  if (e.deltaY > 20) goTo(currentIndex + 1);
-  else if (e.deltaY < -20) goTo(currentIndex - 1);
-}, { passive: false });
-
+let navLock = false;
 function goTo(index) {
   if (index < 0 || index >= visiblePosts.length) return;
   currentIndex = index;
-
-  if (sortSelect.value === 'shuffle') {
-    postsAdvancedSinceShuffle++;
-    if (postsAdvancedSinceShuffle >= 5) {
-      // Trigger a reshuffle on the *next* render pass rather than mutating
-      // visiblePosts mid-navigation, which would shift currentIndex under us.
-      rebuildVisiblePosts({ forceReshuffle: true });
-      return;
-    }
+  currentId = visiblePosts[index].id;
+  if (sortSelect.value === 'shuffle' && ++advancedSinceShuffle >= 5) {
+    rebuildVisiblePosts({ forceReshuffle: true });
+    return;
   }
-
   renderCurrentPost();
 }
+prevBtn.addEventListener('click', () => goTo(currentIndex - 1));
+nextBtn.addEventListener('click', () => goTo(currentIndex + 1));
+document.addEventListener('keydown', (e) => {
+  if (!fullscreenOverlay.classList.contains('hidden')) { if (e.key === 'Escape') closeFullscreen(); return; }
+  const tag = document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (e.key === 'ArrowUp') { e.preventDefault(); goTo(currentIndex - 1); }
+  if (e.key === 'ArrowDown') { e.preventDefault(); goTo(currentIndex + 1); }
+});
+$('viewer').addEventListener('wheel', (e) => {
+  if (e.ctrlKey) return; // browser zoom
+  const d = e.target.closest && e.target.closest('.desc');
+  if (d && d.scrollHeight > d.clientHeight) return; // long description scrolls instead of navigating
+  e.preventDefault();
+  if (navLock || Math.abs(e.deltaY) < 20) return;
+  navLock = true;
+  setTimeout(() => { navLock = false; }, 400);
+  goTo(currentIndex + (e.deltaY > 0 ? 1 : -1));
+}, { passive: false });
 
-// ===== Render the current post =====
+let touchY = null;
+postStage.addEventListener('touchstart', (e) => { touchY = e.target.closest('.desc') ? null : e.touches[0].clientY; }, { passive: true });
+postStage.addEventListener('touchend', (e) => {
+  if (touchY == null) return;
+  const d = touchY - e.changedTouches[0].clientY;
+  touchY = null;
+  if (Math.abs(d) > 60) goTo(currentIndex + (d > 0 ? 1 : -1));
+}, { passive: true });
+
+// ===== Render post =====
+function getImage(id) {
+  if (imageCache.has(id)) return Promise.resolve(imageCache.get(id));
+  return db.ref(`images/${id}`).once('value').then((s) => {
+    imageCache.set(id, s.val());
+    if (imageCache.size > 8) imageCache.delete(imageCache.keys().next().value); // keep memory bounded
+    return s.val();
+  }).catch(() => null);
+}
+
 function renderCurrentPost() {
-  const existingCard = postStage.querySelector('.post-card');
-  if (existingCard) existingCard.remove();
+  detachLive();
+  const old = postStage.querySelector('.post-card');
+  if (old) old.remove();
   endPage.classList.add('hidden');
   emptyState.classList.add('hidden');
 
   if (visiblePosts.length === 0) {
-    if (allPosts.length === 0) {
-      // Truly no posts exist anywhere
-      emptyState.classList.remove('hidden');
-    } else {
-      // Posts exist, but filters (search / skip-viewed) hid them all
-      endPage.classList.remove('hidden');
-    }
+    (allPosts.length === 0 ? emptyState : endPage).classList.remove('hidden');
     postCounter.textContent = '';
-    prevBtn.disabled = true;
-    nextBtn.disabled = true;
+    prevBtn.disabled = nextBtn.disabled = true;
     commentsList.innerHTML = '';
     commentsCount.textContent = '';
-    detachComments();
     return;
   }
 
   const post = visiblePosts[currentIndex];
   markViewed(post.id);
-
   postCounter.textContent = `${currentIndex + 1} / ${visiblePosts.length}`;
   prevBtn.disabled = currentIndex === 0;
   nextBtn.disabled = currentIndex === visiblePosts.length - 1;
 
   const card = document.createElement('div');
-  card.className = 'post-card';
-
-  const likesObj = post.likes || {};
-  const likeCount = Object.keys(likesObj).length;
-  const liked = !!likesObj[SESSION_UID];
-  const time = post.createdAt ? new Date(post.createdAt).toLocaleString() : 'just now';
-
-  const reportCount = post.reports || 0;
-  const alreadyReported = !!getReportedSet()[post.id];
-  const reportsDisabled = !!post.reportsDisabled;
-  const canDelete = isOwnPostDeletable(post.id);
-
-  const mediaHtml = post.imageData
-    ? `<img src="${post.imageData}" alt="">
-       <button class="expand-btn" id="expand-btn">⛶ Fullscreen</button>`
-    : `<div class="no-image-text">
-         <div class="np-title">${escapeHtml(post.title)}</div>
-         <div class="np-desc">${escapeHtml(post.description || '')}</div>
-       </div>`;
-
+  card.className = `post-card${post.hasImage ? '' : ' text-only'}`;
   card.innerHTML = `
-    <div class="post-media ${post.imageData ? '' : 'no-image'}">${mediaHtml}</div>
+    ${post.hasImage ? '<div class="post-media"><div class="no-image-text">Loading…</div></div>' : ''}
     <div class="post-info">
       <div class="author">${escapeHtml(post.authorName || 'Anonymous')}</div>
       <div class="title">${escapeHtml(post.title)}</div>
-      <div class="desc">${escapeHtml(post.description || '')}</div>
-      <div class="timestamp">${time}</div>
+      <div class="desc">${escapeHtml(post.description)}</div>
+      <div class="timestamp">${post.createdAt ? new Date(post.createdAt).toLocaleString() : ''}</div>
       <div class="like-row">
-        <button class="like-btn ${liked ? 'liked' : ''}" id="post-like-btn">
-          ${liked ? '♥' : '♡'} <span id="post-like-count">${likeCount}</span>
-        </button>
-        <button class="report-btn ${alreadyReported ? 'reported' : ''}" id="post-report-btn"
-          ${(alreadyReported || reportsDisabled) ? 'disabled' : ''}
-          title="${reportsDisabled ? 'This post has been reviewed' : ''}">
-          🚩 ${reportCount > 0 ? reportCount : ''}
-        </button>
-        ${canDelete ? `<button class="delete-own-btn" id="post-delete-btn">Delete</button>` : ''}
+        <button class="like-btn" id="post-like-btn">♡ <span id="post-like-count">0</span></button>
+        <button class="report-btn" id="post-report-btn">🚩 Report</button>
       </div>
-    </div>
-  `;
+    </div>`;
   postStage.appendChild(card);
 
-  if (post.imageData) {
-    card.querySelector('.post-media').addEventListener('click', () => openFullscreen(post.imageData));
-  }
-
-  card.querySelector('#post-like-btn').addEventListener('click', (e) => {
-    e.stopPropagation();
-    togglePostLike(post.id, liked);
-  });
-
-  card.querySelector('#post-report-btn').addEventListener('click', (e) => {
-    e.stopPropagation();
-    reportPost(post.id);
-  });
-
-  const deleteBtn = card.querySelector('#post-delete-btn');
-  if (deleteBtn) {
-    deleteBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      deleteOwnPost(post.id);
+  if (post.hasImage) {
+    const media = card.querySelector('.post-media');
+    getImage(post.id).then((data) => {
+      if (currentId !== post.id) return;
+      if (!data) { media.remove(); card.classList.add('text-only'); return; }
+      // Built via DOM properties (never innerHTML) so image data can't inject markup.
+      const bg = new Image(), fg = new Image(), btn = document.createElement('button');
+      bg.className = 'bg'; fg.className = 'fg'; bg.alt = fg.alt = '';
+      bg.src = fg.src = data;
+      btn.className = 'expand-btn'; btn.textContent = '⛶ Fullscreen';
+      media.textContent = '';
+      media.append(bg, fg, btn);
+      media.onclick = () => openFullscreen(data);
     });
+    const nxt = visiblePosts[currentIndex + 1];
+    if (nxt && nxt.hasImage) getImage(nxt.id); // prefetch for snappy navigation
   }
 
-  loadComments(post.id);
+  card.querySelector('#post-like-btn').addEventListener('click', () => {
+    const ref = db.ref(`likes/${post.id}/${MY_UID}`);
+    (cData.likes[MY_UID] ? ref.remove() : ref.set(true)).catch(() => showToast('Could not like.'));
+  });
+
+  const reportBtn = card.querySelector('#post-report-btn');
+  const markReported = () => { reportBtn.disabled = true; reportBtn.classList.add('reported'); reportBtn.textContent = '🚩 Reported'; };
+  db.ref(`reports/${post.id}/${MY_UID}`).once('value').then(s => { if (s.val() && currentId === post.id) markReported(); }).catch(() => {});
+  reportBtn.addEventListener('click', () => {
+    db.ref(`reports/${post.id}/${MY_UID}`).set(true)
+      .then(() => { markReported(); showToast('Reported. Thanks for flagging it.'); })
+      .catch(() => showToast('Could not report.'));
+  });
+
+  attachLive(post.id);
 }
 
-async function togglePostLike(postId, currentlyLiked) {
-  const ref = db.ref(`posts/${postId}/likes/${SESSION_UID}`);
-  if (currentlyLiked) await ref.remove();
-  else await ref.set(true);
+// ===== Live per-post data: likes, comments, replies, comment likes =====
+function detachLive() {
+  listeners.forEach(([ref, h]) => ref.off('value', h));
+  listeners = [];
+}
+function attachLive(postId) {
+  cData = { comments: {}, replies: {}, clikes: {}, likes: {} };
+  const on = (path, key) => {
+    const ref = db.ref(path);
+    const h = ref.on('value', (s) => {
+      cData[key] = s.val() || {};
+      if (key === 'likes') updateLikeUI(); else renderComments();
+    }, () => {});
+    listeners.push([ref, h]);
+  };
+  on(`likes/${postId}`, 'likes');
+  on(`comments/${postId}`, 'comments');
+  on(`replies/${postId}`, 'replies');
+  on(`commentLikes/${postId}`, 'clikes');
+  replyTo = null;
+  commentsList.innerHTML = '';
+  commentsCount.textContent = '';
+}
+function updateLikeUI() {
+  const btn = $('post-like-btn');
+  if (!btn) return;
+  const liked = !!cData.likes[MY_UID];
+  btn.classList.toggle('liked', liked);
+  btn.innerHTML = `${liked ? '♥' : '♡'} <span id="post-like-count">${Object.keys(cData.likes).length}</span>`;
 }
 
-async function reportPost(postId) {
-  if (getReportedSet()[postId]) return; // already reported this session
-  const post = allPosts.find(p => p.id === postId);
-  if (post && post.reportsDisabled) return; // resolved — no more reports accepted
-  markReported(postId);
-  const ref = db.ref(`posts/${postId}/reports`);
-  await ref.transaction((current) => (current || 0) + 1);
-  showToast('Reported. Thanks for flagging it.');
-  renderCurrentPost(); // refresh button state
+let replyTo = null; // id of the comment whose reply box is open
+
+function itemHtml(x, id, isTop) {
+  const likes = cData.clikes[id] || {};
+  const liked = !!likes[MY_UID];
+  const sid = escapeHtml(id);
+  return `<div><span class="c-author">${escapeHtml(x.authorName)}</span><span class="c-text">${escapeHtml(x.text)}</span></div>
+    <div class="c-meta"><span class="c-time">${x.createdAt ? timeAgo(x.createdAt) : 'now'}</span>
+      <button class="c-like-btn ${liked ? 'liked' : ''}" data-like="${sid}">${liked ? '♥' : '♡'} ${Object.keys(likes).length}</button>
+      ${isTop ? `<button class="c-reply-btn" data-reply="${sid}">Reply</button>` : ''}</div>`;
 }
 
-async function deleteOwnPost(postId) {
-  if (!isOwnPostDeletable(postId)) {
-    showToast('Delete window has expired.');
-    renderCurrentPost();
+function renderComments() {
+  // Keep an in-progress reply (text + focus) across live re-renders.
+  const old = commentsList.querySelector('.reply-form input');
+  const draft = old && old.form.dataset.cid === replyTo ? { v: old.value, focus: document.activeElement === old } : null;
+
+  const list = Object.entries(cData.comments).map(([id, c]) => ({ id, ...c })).sort((x, y) => (x.createdAt || 0) - (y.createdAt || 0));
+  commentsCount.textContent = list.length ? `(${list.length})` : '';
+  if (!list.length) { commentsList.innerHTML = '<p style="color:#9a9a9a;font-size:13px;">No comments yet.</p>'; return; }
+  commentsList.innerHTML = list.map((c) => {
+    const reps = Object.entries(cData.replies[c.id] || {}).map(([id, r]) => ({ id, ...r })).sort((x, y) => (x.createdAt || 0) - (y.createdAt || 0));
+    const form = replyTo === c.id
+      ? `<form class="reply-form" data-cid="${escapeHtml(c.id)}"><input type="text" placeholder="Reply as ${MY_NAME}..." maxlength="500" required><button type="submit">Send</button></form>` : '';
+    return `<div class="comment">${itemHtml(c, c.id, true)}
+      <div class="replies">${reps.map(r => `<div class="comment">${itemHtml(r, r.id, false)}</div>`).join('')}</div>${form}</div>`;
+  }).join('');
+
+  const inp = commentsList.querySelector('.reply-form input');
+  if (inp && draft) { inp.value = draft.v; if (draft.focus) { inp.focus(); inp.setSelectionRange(draft.v.length, draft.v.length); } }
+}
+
+commentsList.addEventListener('click', (e) => {
+  const like = e.target.closest('[data-like]');
+  if (like) {
+    const tid = like.dataset.like;
+    const ref = db.ref(`commentLikes/${currentId}/${tid}/${MY_UID}`);
+    ((cData.clikes[tid] || {})[MY_UID] ? ref.remove() : ref.set(true)).catch(() => showToast('Could not like.'));
     return;
   }
-  const sure = confirm('Delete this post? This cannot be undone.');
-  if (!sure) return;
-
-  try {
-    await db.ref(`posts/${postId}`).remove();
-    showToast('Post deleted.');
-    // The .on('value') listener will pick up the removal and re-render.
-  } catch (err) {
-    console.error(err);
-    showToast('Could not delete — try again.');
+  const reply = e.target.closest('[data-reply]');
+  if (reply) {
+    replyTo = replyTo === reply.dataset.reply ? null : reply.dataset.reply;
+    renderComments();
+    const inp = commentsList.querySelector('.reply-form input');
+    if (inp) inp.focus();
   }
-}
-
-// ===== Fullscreen image view =====
-function openFullscreen(dataUrl) {
-  fullscreenImg.src = dataUrl;
-  fullscreenOverlay.classList.remove('hidden');
-}
-function closeFullscreen() {
-  fullscreenOverlay.classList.add('hidden');
-  fullscreenImg.src = '';
-}
-fullscreenCloseBtn.addEventListener('click', closeFullscreen);
-fullscreenOverlay.addEventListener('click', (e) => {
-  if (e.target === fullscreenOverlay) closeFullscreen();
-});
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !fullscreenOverlay.classList.contains('hidden')) closeFullscreen();
 });
 
-// ===== Dev panel (reported posts, view-only) =====
-// Open to anyone who clicks it — report counts aren't sensitive, and no
-// action can be taken from here. Actual deletion happens manually in the
-// Firebase console; this just makes it fast to find which post ID to
-// search for there.
-devPanelBtn.addEventListener('click', () => {
-  renderDevPanel();
-  devPanelModal.classList.remove('hidden');
-});
-devPanelCloseBtn.addEventListener('click', () => devPanelModal.classList.add('hidden'));
-devPanelModal.addEventListener('click', (e) => {
-  if (e.target === devPanelModal) devPanelModal.classList.add('hidden');
-});
-
-function renderDevPanel() {
-  const reported = allPosts
-    .filter(p => (p.reports || 0) > 0)
-    .sort((a, b) => (b.reports || 0) - (a.reports || 0));
-
-  devPanelList.innerHTML = '';
-  devPanelEmpty.classList.toggle('hidden', reported.length > 0);
-
-  reported.forEach(post => {
-    const item = document.createElement('div');
-    item.className = 'dev-panel-item';
-    item.innerHTML = `
-      <div class="dev-panel-item-top">
-        <span class="dev-panel-item-title">${escapeHtml(post.title || '(untitled)')}</span>
-        <span class="dev-panel-item-reports">🚩 ${post.reports}</span>
-      </div>
-      <div class="dev-panel-id-row">
-        <span class="dev-panel-id">${escapeHtml(post.id)}</span>
-        <button class="dev-panel-copy-btn" type="button">Copy</button>
-      </div>
-    `;
-    const copyBtn = item.querySelector('.dev-panel-copy-btn');
-    copyBtn.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(post.id);
-        copyBtn.textContent = 'Copied';
-        copyBtn.classList.add('copied');
-        setTimeout(() => {
-          copyBtn.textContent = 'Copy';
-          copyBtn.classList.remove('copied');
-        }, 1500);
-      } catch (err) {
-        // Clipboard API can fail without HTTPS or user permission —
-        // the ID is still visible/selectable in the box either way.
-        copyBtn.textContent = 'Select ID';
-      }
+commentsList.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.target, text = form.querySelector('input').value.trim();
+  if (!text) return;
+  const wait = cooldownLeft('reply');
+  if (wait) { showToast(`Please wait ${wait}s before replying again.`); return; }
+  try {
+    await db.ref(`replies/${currentId}/${form.dataset.cid}`).push({
+      authorName: MY_NAME, text, uid: MY_UID, createdAt: firebase.database.ServerValue.TIMESTAMP
     });
-    devPanelList.appendChild(item);
-  });
-}
-
-// ===== Comments =====
-// Stored at /posts/{postId}/comments/{commentId} = { authorName, text, likes: {uid:true}, createdAt }
-// Replies at /posts/{postId}/comments/{commentId}/replies/{replyId} = same shape
-
-function detachComments() {
-  if (commentsRef && commentsHandler) commentsRef.off('value', commentsHandler);
-  commentsRef = null;
-  commentsHandler = null;
-  repliesUnsubs.forEach(({ ref, handler }) => ref.off('value', handler));
-  repliesUnsubs = [];
-}
-
-function loadComments(postId) {
-  detachComments();
-  commentsRef = db.ref(`posts/${postId}/comments`).orderByChild('createdAt');
-  commentsHandler = commentsRef.on('value', (snapshot) => {
-    const val = snapshot.val() || {};
-    const comments = Object.keys(val)
-      .map(id => ({ id, ...val[id] }))
-      .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-
-    commentsList.innerHTML = '';
-    commentsCount.textContent = comments.length ? `(${comments.length})` : '';
-    if (comments.length === 0) {
-      commentsList.innerHTML = '<p style="color:#9a9a9a;font-size:13px;">No comments yet.</p>';
-      return;
-    }
-    comments.forEach(c => renderComment(postId, c.id, c));
-  });
-}
-
-function renderComment(postId, commentId, comment) {
-  const el = document.createElement('div');
-  el.className = 'comment';
-
-  const likesObj = comment.likes || {};
-  const likeCount = Object.keys(likesObj).length;
-  const liked = !!likesObj[SESSION_UID];
-  const time = comment.createdAt ? timeAgo(comment.createdAt) : 'now';
-
-  el.innerHTML = `
-    <div><span class="c-author">${escapeHtml(comment.authorName)}</span><span class="c-text">${escapeHtml(comment.text)}</span></div>
-    <div class="c-meta">
-      <span class="c-time">${time}</span>
-      <button class="c-like-btn ${liked ? 'liked' : ''}">${liked ? '♥' : '♡'} ${likeCount}</button>
-      <button class="c-reply-btn">Reply</button>
-    </div>
-    <div class="replies" id="replies-${commentId}"></div>
-  `;
-
-  el.querySelector('.c-like-btn').addEventListener('click', () => toggleCommentLike(postId, commentId, liked));
-  el.querySelector('.c-reply-btn').addEventListener('click', () => showReplyForm(postId, commentId, el));
-
-  commentsList.appendChild(el);
-
-  // Load replies (one level only)
-  const repliesRef = db.ref(`posts/${postId}/comments/${commentId}/replies`).orderByChild('createdAt');
-  const repliesHandler = repliesRef.on('value', (snapshot) => {
-    const val = snapshot.val() || {};
-    const replies = Object.keys(val)
-      .map(id => ({ id, ...val[id] }))
-      .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-
-    const repliesEl = el.querySelector(`#replies-${commentId}`);
-    if (!repliesEl) return; // comment element may have been re-rendered
-    repliesEl.innerHTML = '';
-    replies.forEach(r => renderReply(postId, commentId, r.id, r, repliesEl));
-  });
-  repliesUnsubs.push({ ref: repliesRef, handler: repliesHandler });
-}
-
-function renderReply(postId, commentId, replyId, reply, container) {
-  const el = document.createElement('div');
-  el.className = 'comment';
-  const likesObj = reply.likes || {};
-  const likeCount = Object.keys(likesObj).length;
-  const liked = !!likesObj[SESSION_UID];
-  const time = reply.createdAt ? timeAgo(reply.createdAt) : 'now';
-
-  el.innerHTML = `
-    <div><span class="c-author">${escapeHtml(reply.authorName)}</span><span class="c-text">${escapeHtml(reply.text)}</span></div>
-    <div class="c-meta">
-      <span class="c-time">${time}</span>
-      <button class="c-like-btn ${liked ? 'liked' : ''}">${liked ? '♥' : '♡'} ${likeCount}</button>
-    </div>
-  `;
-  el.querySelector('.c-like-btn').addEventListener('click', async () => {
-    const ref = db.ref(`posts/${postId}/comments/${commentId}/replies/${replyId}/likes/${SESSION_UID}`);
-    if (liked) await ref.remove();
-    else await ref.set(true);
-  });
-  container.appendChild(el);
-}
-
-async function toggleCommentLike(postId, commentId, currentlyLiked) {
-  const ref = db.ref(`posts/${postId}/comments/${commentId}/likes/${SESSION_UID}`);
-  if (currentlyLiked) await ref.remove();
-  else await ref.set(true);
-}
-
-function showReplyForm(postId, commentId, commentEl) {
-  const existing = commentEl.querySelector('.reply-form');
-  if (existing) { existing.remove(); return; }
-
-  const form = document.createElement('form');
-  form.className = 'reply-form';
-  form.innerHTML = `
-    <input type="text" placeholder="Reply as ${MY_NAME}..." maxlength="500" required>
-    <button type="submit">Send</button>
-  `;
-  const replyStatusEl = document.createElement('div');
-  replyStatusEl.style.cssText = 'color:#ff8a8a;font-size:11px;margin-left:16px;margin-top:4px;';
-  form.after(replyStatusEl);
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const input = form.querySelector('input');
-    const text = input.value.trim();
-    if (!text) return;
-
-    const wait = checkCooldown(lastReplyTime, REPLY_COOLDOWN_MS);
-    if (wait !== null) {
-      replyStatusEl.textContent = `Please wait ${wait}s before replying again.`;
-      return;
-    }
-
-    await db.ref(`posts/${postId}/comments/${commentId}/replies`).push({
-      authorName: MY_NAME,
-      text,
-      likes: {},
-      createdAt: firebase.database.ServerValue.TIMESTAMP
-    });
-    lastReplyTime = Date.now();
-    form.remove();
-    replyStatusEl.remove();
-  });
-  commentEl.appendChild(form);
-  form.querySelector('input').focus();
-}
+    lastAction.reply = Date.now();
+    replyTo = null;
+    renderComments();
+  } catch (err) { showToast('Could not reply.'); }
+});
 
 commentForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = commentInput.value.trim();
-  if (!text || visiblePosts.length === 0) return;
-
-  const wait = checkCooldown(lastCommentTime, COMMENT_COOLDOWN_MS);
-  if (wait !== null) {
-    showCommentCooldownMessage(wait);
-    return;
-  }
-
-  const postId = visiblePosts[currentIndex].id;
-
-  await db.ref(`posts/${postId}/comments`).push({
-    authorName: MY_NAME,
-    text,
-    likes: {},
-    createdAt: firebase.database.ServerValue.TIMESTAMP
-  });
-  lastCommentTime = Date.now();
-  commentInput.value = '';
-});
-
-let commentCooldownMsgEl = null;
-function showCommentCooldownMessage(seconds) {
-  if (commentCooldownMsgEl) commentCooldownMsgEl.remove();
-  commentCooldownMsgEl = document.createElement('div');
-  commentCooldownMsgEl.style.cssText = 'color:#ff8a8a;font-size:12px;padding:0 16px 8px;';
-  commentCooldownMsgEl.textContent = `Please wait ${seconds}s before commenting again.`;
-  commentForm.parentElement.insertBefore(commentCooldownMsgEl, commentForm);
-  setTimeout(() => { if (commentCooldownMsgEl) { commentCooldownMsgEl.remove(); commentCooldownMsgEl = null; } }, seconds * 1000);
-}
-
-// ===== New Post modal =====
-newPostBtn.addEventListener('click', () => {
-  postModal.classList.remove('hidden');
-  unsavedWarning.classList.add('hidden');
-});
-
-let cancelArmed = false; // requires a second click to discard if there's unsaved text
-
-cancelPostBtn.addEventListener('click', () => {
-  const hasUnsaved = titleInput.value.trim() || descInput.value.trim() || selectedImageDataUrl;
-  if (hasUnsaved && !cancelArmed) {
-    unsavedWarning.classList.remove('hidden');
-    cancelArmed = true;
-    return;
-  }
-  closePostModal();
-});
-
-function closePostModal() {
-  postModal.classList.add('hidden');
-  unsavedWarning.classList.add('hidden');
-  cancelArmed = false;
-  titleInput.value = '';
-  descInput.value = '';
-  fileInput.value = '';
-  fileLabelText.textContent = 'Attach image (optional)';
-  previewImg.classList.add('hidden');
-  postStatus.textContent = '';
-  selectedImageDataUrl = null;
-  updateCharCounter(titleInput, titleCounter, 100);
-  updateCharCounter(descInput, descCounter, 1000);
-}
-
-function updateCharCounter(inputEl, counterEl, max) {
-  const len = inputEl.value.length;
-  counterEl.textContent = `${len}/${max}`;
-  counterEl.classList.toggle('near-limit', len >= max * 0.9);
-}
-titleInput.addEventListener('input', () => {
-  updateCharCounter(titleInput, titleCounter, 100);
-  cancelArmed = false;
-  unsavedWarning.classList.add('hidden');
-});
-descInput.addEventListener('input', () => {
-  updateCharCounter(descInput, descCounter, 1000);
-  cancelArmed = false;
-  unsavedWarning.classList.add('hidden');
-});
-
-commentInput.addEventListener('input', () => updateCharCounter(commentInput, commentCounter, 500));
-
-function showToast(message) {
-  toastEl.textContent = message;
-  toastEl.classList.remove('hidden');
-  clearTimeout(showToast._t);
-  showToast._t = setTimeout(() => toastEl.classList.add('hidden'), 2500);
-}
-
-// Resize + compress an image file client-side, then convert to a JPEG data
-// URL. This keeps what we store in Realtime Database (base64, no Storage/
-// Blaze needed) reasonably small — full camera photos would otherwise burn
-// through the 1GB free quota fast. Shared by the file input and clipboard
-// paste, since both start from a File/Blob and need identical handling.
-function processImageFile(file, sourceLabel) {
-  if (!file.type.startsWith('image/')) {
-    postStatus.textContent = 'Please choose an image file.';
-    return;
-  }
-
-  const img = new Image();
-  img.onload = () => {
-    const ratio = img.width / img.height;
-    if (ratio < MIN_ASPECT || ratio > MAX_ASPECT) {
-      postStatus.textContent = `Image aspect ratio too extreme. Please crop it closer to square/standard proportions.`;
-      previewImg.classList.add('hidden');
-      return;
-    }
-
-    // Resize down to MAX_IMAGE_DIMENSION on the longest side
-    let { width, height } = img;
-    if (width > height && width > MAX_IMAGE_DIMENSION) {
-      height = Math.round(height * (MAX_IMAGE_DIMENSION / width));
-      width = MAX_IMAGE_DIMENSION;
-    } else if (height >= width && height > MAX_IMAGE_DIMENSION) {
-      width = Math.round(width * (MAX_IMAGE_DIMENSION / height));
-      height = MAX_IMAGE_DIMENSION;
-    }
-
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0, width, height);
-
-    const dataUrl = canvas.toDataURL('image/jpeg', IMAGE_JPEG_QUALITY);
-
-    // Realtime Database has a 16MB per-node hard cap and this app has no
-    // Storage fallback, so keep a sane ceiling on the stored size too.
-    const approxBytes = Math.round((dataUrl.length * 3) / 4);
-    if (approxBytes > 2 * 1024 * 1024) {
-      postStatus.textContent = 'Image is still too large after compression — try a smaller or simpler image.';
-      previewImg.classList.add('hidden');
-      return;
-    }
-
-    postStatus.textContent = '';
-    selectedImageDataUrl = dataUrl;
-    fileLabelText.textContent = sourceLabel || file.name || 'Pasted image';
-    previewImg.src = dataUrl;
-    previewImg.classList.remove('hidden');
-  };
-  img.onerror = () => {
-    postStatus.textContent = 'Could not read that image.';
-  };
-  img.src = URL.createObjectURL(file);
-}
-
-fileInput.addEventListener('change', () => {
-  const file = fileInput.files[0];
-  if (!file) return;
-  processImageFile(file);
-});
-
-// ===== Clipboard paste-to-attach =====
-// Pasting an image (Ctrl/Cmd+V) anywhere on the page attaches it as the
-// post image — opens the New Post modal automatically if it wasn't already
-// open, so a paste never gets silently lost.
-document.addEventListener('paste', (e) => {
-  const items = e.clipboardData && e.clipboardData.items;
-  if (!items) return;
-
-  let imageFile = null;
-  for (const item of items) {
-    if (item.type && item.type.startsWith('image/')) {
-      imageFile = item.getAsFile();
-      break;
-    }
-  }
-  if (!imageFile) return; // no image in clipboard — let normal paste behavior continue
-
-  e.preventDefault();
-
-  const wasClosed = postModal.classList.contains('hidden');
-  if (wasClosed) {
-    postModal.classList.remove('hidden');
-    unsavedWarning.classList.add('hidden');
-  }
-
-  processImageFile(imageFile, 'Pasted image');
-  if (wasClosed) showToast('Image pasted — finish your post');
-});
-
-submitPostBtn.addEventListener('click', async () => {
-  const title = titleInput.value.trim();
-  const description = descInput.value.trim();
-
-  if (!title) {
-    postStatus.textContent = 'Title is required.';
-    return;
-  }
-
-  const wait = checkCooldown(lastPostTime, POST_COOLDOWN_MS);
-  if (wait !== null) {
-    postStatus.textContent = `Please wait ${wait}s before posting again.`;
-    return;
-  }
-
-  submitPostBtn.disabled = true;
-  postStatus.textContent = 'Posting...';
-
+  if (!text || !currentId) return;
+  const wait = cooldownLeft('comment');
+  if (wait) { showToast(`Please wait ${wait}s before commenting again.`); return; }
   try {
-    const newRef = await db.ref('posts').push({
-      authorName: MY_NAME,
-      title,
-      description,
-      imageData: selectedImageDataUrl || null,
-      likes: {},
-      createdAt: firebase.database.ServerValue.TIMESTAMP
+    await db.ref(`comments/${currentId}`).push({
+      authorName: MY_NAME, text, uid: MY_UID, createdAt: firebase.database.ServerValue.TIMESTAMP
     });
-
-    markOwnPost(newRef.key, Date.now());
-
-    lastPostTime = Date.now();
-    closePostModal();
-    showToast('Posted!');
-    // The .on('value') listener will pick up this new post and call
-    // rebuildVisiblePosts automatically — no need to force currentIndex
-    // here, since in shuffle/oldest mode "jump to index 0" wouldn't
-    // reliably land on the post we just made anyway.
-  } catch (err) {
-    console.error(err);
-    postStatus.textContent = 'Post failed. Try again.';
-  } finally {
-    submitPostBtn.disabled = false;
-  }
+    lastAction.comment = Date.now();
+    commentInput.value = '';
+    commentCounter.textContent = '0/500';
+  } catch (err) { showToast('Could not comment.'); }
 });
+commentInput.addEventListener('input', () => { commentCounter.textContent = `${commentInput.value.length}/500`; });
 
-// ===== Helpers =====
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str || '';
-  return div.innerHTML;
-}
-
-// Returns null if allowed, or the number of seconds remaining if still on cooldown.
-function checkCooldown(lastTime, cooldownMs) {
-  const elapsed = Date.now() - lastTime;
-  if (elapsed >= cooldownMs) return null;
-  return Math.ceil((cooldownMs - elapsed) / 1000);
-}
-
-function timeAgo(ms) {
-  const seconds = Math.floor((Date.now() - ms) / 1000);
-  if (seconds < 60) return 'just now';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
+// ===== Fullscreen =====
+function openFullscreen(src) { fullscreenImg.src = src; fullscreenOverlay.classList.remove('hidden'); }
+function closeFullscreen() { fullscreenOverlay.classList.add('hidden'); fullscreenImg.src = ''; }
+$('fullscreen-close-btn').addEventListener('click', closeFullscreen);
+fullscreenOverlay.addEventListener('click', closeFullscreen);
