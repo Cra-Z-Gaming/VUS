@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Statik — Submit</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root { color-scheme: dark; }
+  input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 2px solid #4da3ff; outline-offset: 2px; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0e0e0e; color: #f2f2f2; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .box { background: #161616; border: 1px solid #2a2a2a; border-radius: 12px; padding: 24px; width: 440px; max-width: 100%; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .note { color: #9a9a9a; font-size: 13px; margin-bottom: 16px; }
+  input[type=text], textarea { width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #2a2a2a; background: #1f1f1f; color: #f2f2f2; font: inherit; font-size: 16px; margin-bottom: 4px; }
+  textarea { min-height: 90px; resize: vertical; }
+  .ctr { font-size: 11px; color: #9a9a9a; text-align: right; margin-bottom: 10px; }
+  .file { display: block; border: 1px dashed #2a2a2a; border-radius: 8px; padding: 14px; text-align: center; font-size: 13px; color: #9a9a9a; cursor: pointer; margin-bottom: 12px; }
+  .file:hover { border-color: #4da3ff; }
+  .file input { display: none; }
+  #preview { width: 100%; max-height: 220px; object-fit: contain; background: #000; border-radius: 8px; margin-bottom: 12px; display: none; }
+  button { width: 100%; background: #4da3ff; color: #06172b; border: none; border-radius: 6px; padding: 11px; font-weight: 700; font-size: 14px; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  #status { margin-top: 10px; font-size: 13px; color: #9a9a9a; min-height: 18px; }
+  #status.ok { color: #4dff9a; } #status.err { color: #ff8a9e; }
+</style>
+</head>
+<body>
+<main class="box">
+  <h1>Submit a post</h1>
+  <p class="note">Submissions are reviewed before anything goes live. Paste (Ctrl/Cmd+V) works for images.</p>
+  <input type="text" id="title" placeholder="Title" maxlength="100">
+  <div class="ctr" id="title-ctr">0/100</div>
+  <textarea id="desc" placeholder="Description (optional)" maxlength="1000"></textarea>
+  <div class="ctr" id="desc-ctr">0/1000</div>
+  <label class="file"><input type="file" id="file" accept="image/*"><span id="file-text">Attach image (optional)</span></label>
+  <img id="preview" alt="">
+  <button id="submit">Submit for review</button>
+  <p id="status"></p>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<script>
+firebase.initializeApp({
+  apiKey: "AIzaSyB4jCgU3rD5wDhOSJaGCAXC4ESIIuhFa0E",
+  authDomain: "vus-static.firebaseapp.com",
+  databaseURL: "https://vus-static-default-rtdb.firebaseio.com",
+  projectId: "vus-static",
+  appId: "1:1056211291218:web:9e8e9c5874264ed78fe38b"
+});
+const db = firebase.database(), auth = firebase.auth();
+const $ = (id) => document.getElementById(id);
+const MIN_ASPECT = 0.4, MAX_ASPECT = 2.5, MAX_DIM = 1280, QUALITY = 0.72, COOLDOWN_MS = 15000;
+let imageData = null;
+
+const ready = new Promise((res, rej) => auth.onAuthStateChanged((u) => {
+  if (u) res(u); else auth.signInAnonymously().catch(rej);
+}));
+ready.catch(() => {}); // the submit handler reports a failed connection
+
+function setStatus(msg, cls) { $('status').textContent = msg; $('status').className = cls || ''; }
+$('title').addEventListener('input', () => { $('title-ctr').textContent = `${$('title').value.length}/100`; });
+$('desc').addEventListener('input', () => { $('desc-ctr').textContent = `${$('desc').value.length}/1000`; });
+
+function processImage(file, label) {
+  if (!file.type.startsWith('image/')) return setStatus('Please choose an image file.', 'err');
+  const img = new Image();
+  img.onload = () => {
+    const ratio = img.width / img.height;
+    if (ratio < MIN_ASPECT || ratio > MAX_ASPECT) return setStatus('Aspect ratio too extreme — please crop it.', 'err');
+    let w = img.width, h = img.height;
+    if (w > h && w > MAX_DIM) { h = Math.round(h * MAX_DIM / w); w = MAX_DIM; }
+    else if (h >= w && h > MAX_DIM) { w = Math.round(w * MAX_DIM / h); h = MAX_DIM; }
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); // JPEG has no alpha: transparent PNGs would turn black
+    ctx.drawImage(img, 0, 0, w, h);
+    URL.revokeObjectURL(img.src);
+    const data = c.toDataURL('image/jpeg', QUALITY);
+    if (data.length >= 2800000) return setStatus('Image is too large even after compression.', 'err');
+    imageData = data;
+    $('preview').src = data; $('preview').style.display = 'block';
+    $('file-text').textContent = label || file.name || 'Pasted image';
+    setStatus('');
+  };
+  img.onerror = () => setStatus('Could not read that image.', 'err');
+  img.src = URL.createObjectURL(file);
+}
+$('file').addEventListener('change', () => { if ($('file').files[0]) processImage($('file').files[0]); });
+document.addEventListener('paste', (e) => {
+  for (const it of (e.clipboardData && e.clipboardData.items) || []) {
+    if (it.type.startsWith('image/')) { e.preventDefault(); processImage(it.getAsFile(), 'Pasted image'); return; }
+  }
+});
+
+$('submit').addEventListener('click', async () => {
+  const title = $('title').value.trim(), description = $('desc').value.trim();
+  if (!title) return setStatus('Title is required.', 'err');
+  const wait = Math.ceil((+localStorage.getItem('statik_last_submit') + COOLDOWN_MS - Date.now()) / 1000);
+  if (wait > 0) return setStatus(`Please wait ${wait}s before submitting again.`, 'err');
+
+  $('submit').disabled = true;
+  setStatus('Submitting…');
+  try {
+    const user = await ready;
+    const data = { title, description, authorUid: user.uid, createdAt: firebase.database.ServerValue.TIMESTAMP };
+    if (imageData) data.imageData = imageData;
+    await db.ref('submissions').push(data);
+    localStorage.setItem('statik_last_submit', String(Date.now()));
+    $('title').value = ''; $('desc').value = ''; $('file').value = '';
+    $('title-ctr').textContent = '0/100'; $('desc-ctr').textContent = '0/1000';
+    $('preview').style.display = 'none'; $('file-text').textContent = 'Attach image (optional)';
+    imageData = null;
+    setStatus('Submitted! It will appear once it has been reviewed.', 'ok');
+  } catch (err) {
+    console.error(err);
+    setStatus('Submission failed. Try again.', 'err');
+  } finally { $('submit').disabled = false; }
+});
+</script>
+</body>
+</html>
