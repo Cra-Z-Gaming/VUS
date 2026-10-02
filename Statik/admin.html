@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Statik — Admin</title>
+<meta name="robots" content="noindex">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root { color-scheme: dark; }
+  button:focus-visible { outline: 2px solid #4da3ff; outline-offset: 2px; }
+  @media (max-width: 600px) { body { padding: 12px; } }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0e0e0e; color: #f2f2f2; padding: 20px; }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; gap: 10px; }
+  h1 { font-size: 20px; }
+  .dim { color: #9a9a9a; font-size: 13px; }
+  button { border: none; border-radius: 6px; padding: 8px 14px; font-weight: 700; font-size: 13px; cursor: pointer; background: #2a2a2a; color: #f2f2f2; }
+  button.primary { background: #4da3ff; color: #06172b; }
+  button.ok { background: #1f6f43; } button.bad { background: #8a2338; }
+  button:disabled { opacity: .5; cursor: default; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tabs button.active { background: #4da3ff; color: #06172b; }
+  .card { background: #161616; border: 1px solid #2a2a2a; border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+  .card img { width: 100%; max-height: 360px; object-fit: contain; background: #000; border-radius: 8px; margin-bottom: 10px; }
+  .card h3 { font-size: 16px; margin-bottom: 6px; word-break: break-word; }
+  .card p { font-size: 14px; color: #d8d8d8; white-space: pre-wrap; margin-bottom: 10px; word-break: break-word; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .flag { color: #ffb84d; font-size: 13px; font-weight: 700; }
+  code { background: #1f1f1f; padding: 3px 6px; border-radius: 4px; font-size: 12px; user-select: all; word-break: break-all; }
+  .hidden { display: none !important; }
+  .center { text-align: center; margin-top: 60px; }
+  .center p { margin-bottom: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="login" class="center hidden">
+    <h1 style="margin-bottom:14px">Statik Admin</h1>
+    <button class="primary" id="login-btn">Sign in with Google</button>
+  </div>
+
+  <div id="denied" class="center hidden">
+    <p>This Google account isn't an approved reviewer.</p>
+    <p class="dim">Give this UID to an existing admin to add under <b>admins</b> in the database:</p>
+    <p><code id="my-uid"></code></p>
+    <button id="logout-denied">Sign out</button>
+  </div>
+
+  <div id="app" class="hidden">
+    <header>
+      <h1>Statik Admin</h1>
+      <div class="row"><span class="dim" id="who"></span><button id="logout-btn">Sign out</button></div>
+    </header>
+    <div class="tabs">
+      <button id="tab-pending" class="active">Pending (<span id="pending-n">0</span>)</button>
+      <button id="tab-reports">Reported (<span id="reports-n">0</span>)</button>
+    </div>
+    <div id="pending-list"></div>
+    <div id="reports-list" class="hidden"></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<script>
+firebase.initializeApp({
+  apiKey: "AIzaSyB4jCgU3rD5wDhOSJaGCAXC4ESIIuhFa0E",
+  authDomain: "vus-static.firebaseapp.com",
+  databaseURL: "https://vus-static-default-rtdb.firebaseio.com",
+  projectId: "vus-static",
+  appId: "1:1056211291218:web:9e8e9c5874264ed78fe38b"
+});
+const db = firebase.database(), auth = firebase.auth();
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const show = (id) => ['login', 'denied', 'app'].forEach(x => $(x).classList.toggle('hidden', x !== id));
+
+$('login-btn').onclick = () => auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(e => alert(e.message));
+$('logout-btn').onclick = $('logout-denied').onclick = () => auth.signOut();
+
+let attached = false;
+// Permission errors cancel listeners, so detach on sign-out and re-attach on the next admin sign-in.
+function stopWatching() { if (!attached) return; attached = false; pendingQ.off(); db.ref('reports').off(); }
+auth.onAuthStateChanged(async (u) => {
+  if (!u || u.isAnonymous) { stopWatching(); return show('login'); }
+  let isAdmin = false;
+  try { isAdmin = (await db.ref('admins/' + u.uid).once('value')).val() === true; } catch (e) {}
+  if (!isAdmin) { stopWatching(); $('my-uid').textContent = u.uid; return show('denied'); }
+  $('who').textContent = u.email || u.uid;
+  show('app');
+  if (!attached) { attached = true; watchPending(); watchReports(); }
+});
+
+// ----- tabs -----
+function tab(which) {
+  $('pending-list').classList.toggle('hidden', which !== 'pending');
+  $('reports-list').classList.toggle('hidden', which !== 'reports');
+  $('tab-pending').classList.toggle('active', which === 'pending');
+  $('tab-reports').classList.toggle('active', which === 'reports');
+}
+$('tab-pending').onclick = () => tab('pending');
+$('tab-reports').onclick = () => tab('reports');
+
+// ----- pending submissions -----
+let submissions = {};
+const PENDING_LIMIT = 10; // submissions can be ~2MB each, so keep the queue small
+const pendingQ = db.ref('submissions').orderByChild('createdAt').limitToFirst(PENDING_LIMIT);
+function watchPending() {
+  pendingQ.on('value', (snap) => {
+    submissions = snap.val() || {};
+    const ids = Object.keys(submissions).sort((a, b) => submissions[a].createdAt - submissions[b].createdAt);
+    $('pending-n').textContent = ids.length >= PENDING_LIMIT ? PENDING_LIMIT + '+' : ids.length;
+    $('pending-list').innerHTML = ids.length ? ids.map((id) => {
+      const s = submissions[id];
+      return `<div class="card" data-id="${esc(id)}">
+        ${s.imageData ? '<img class="pic" alt="">' : ''}
+        <h3>${esc(s.title)}</h3><p>${esc(s.description)}</p>
+        <div class="row"><span class="dim">${new Date(s.createdAt).toLocaleString()}</span>
+          <span style="flex:1"></span>
+          <button class="bad" data-act="reject">Reject</button>
+          <button class="ok" data-act="approve">Approve</button></div></div>`;
+    }).join('') : '<p class="dim">Nothing waiting for review.</p>';
+    document.querySelectorAll('#pending-list .card').forEach((c) => {
+      const pic = c.querySelector('.pic'), s = submissions[c.dataset.id];
+      if (pic && s) pic.src = s.imageData;   // untrusted data goes in via DOM property, never markup
+    });
+  });
+}
+$('pending-list').addEventListener('click', async (e) => {
+  const act = e.target.dataset.act;
+  if (!act) return;
+  const id = e.target.closest('.card').dataset.id, s = submissions[id];
+  e.target.disabled = true;
+  try {
+    if (act === 'approve') {
+      const u = {};
+      u['posts/' + id] = {
+        authorName: 'Anonymous', title: s.title, description: s.description || '',
+        hasImage: !!s.imageData, createdAt: firebase.database.ServerValue.TIMESTAMP
+      };
+      if (s.imageData) u['images/' + id] = s.imageData;
+      u['submissions/' + id] = null;
+      await db.ref().update(u);
+    } else {
+      if (!confirm('Reject and delete this submission?')) { e.target.disabled = false; return; }
+      await db.ref('submissions/' + id).remove();
+    }
+  } catch (err) { alert(err.message); e.target.disabled = false; }
+});
+
+// ----- reported posts -----
+function watchReports() {
+  db.ref('reports').on('value', async (snap) => {
+    const val = snap.val() || {};
+    const ids = Object.keys(val).sort((a, b) => Object.keys(val[b]).length - Object.keys(val[a]).length);
+    $('reports-n').textContent = ids.length;
+    if (!ids.length) { $('reports-list').innerHTML = '<p class="dim">No reported posts.</p>'; return; }
+    const items = await Promise.all(ids.map(async (id) => {
+      const [p, i] = await Promise.all([db.ref('posts/' + id).once('value'), db.ref('images/' + id).once('value')]);
+      return { id, count: Object.keys(val[id]).length, post: p.val(), img: i.val() };
+    }));
+    $('reports-list').innerHTML = items.map(({ id, count, post, img }) => `
+      <div class="card" data-id="${esc(id)}">
+        <div class="flag" style="margin-bottom:8px">🚩 ${count} report${count === 1 ? '' : 's'}</div>
+        ${post ? `${img ? '<img class="pic" alt="">' : ''}<h3>${esc(post.title)}</h3><p>${esc(post.description)}</p>`
+               : '<p class="dim">Post no longer exists.</p>'}
+        <div class="row"><span style="flex:1"></span>
+          <button data-act="dismiss">Dismiss reports</button>
+          <button class="bad" data-act="delete">Delete post</button></div></div>`).join('');
+    document.querySelectorAll('#reports-list .card').forEach((c) => {
+      const it = items.find((x) => x.id === c.dataset.id), pic = c.querySelector('.pic');
+      if (pic && it) pic.src = it.img;   // untrusted data goes in via DOM property, never markup
+    });
+  });
+}
+$('reports-list').addEventListener('click', async (e) => {
+  const act = e.target.dataset.act;
+  if (!act) return;
+  const id = e.target.closest('.card').dataset.id;
+  try {
+    if (act === 'dismiss') {
+      await db.ref('reports/' + id).remove();
+    } else {
+      if (!confirm('Permanently delete this post and its comments/likes?')) return;
+      const u = {};
+      ['posts', 'images', 'likes', 'comments', 'replies', 'commentLikes', 'reports'].forEach(n => { u[`${n}/${id}`] = null; });
+      await db.ref().update(u);
+    }
+  } catch (err) { alert(err.message); }
+});
+</script>
+</body>
+</html>
