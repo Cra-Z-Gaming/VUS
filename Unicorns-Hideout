@@ -1,1 +1,554 @@
-temp
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unicorn's Hideout 🦄</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦄</text></svg>">
+<style>
+  :root{--bg:#0f0d16;--card:#191625;--card2:#221e33;--line:#2e2942;--text:#efeaff;--muted:#9a8fb8;--accent1:#8b5cf6;--accent2:#ec4899;--danger:#f87171;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;}
+  header{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:12px;padding:12px 20px;background:rgba(15,13,22,.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);}
+  .brand-chip{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);padding:6px 14px 6px 6px;border-radius:999px;cursor:pointer;transition:border-color .2s;}
+  .brand-chip:hover{border-color:var(--accent1);}
+  .brand-chip .avatar{width:32px;height:32px;font-size:14px;}
+  .brand-chip .name{font-size:14px;font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .spacer{flex:1;}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;user-select:none;background:linear-gradient(90deg,var(--accent1),var(--accent2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+  .logo .horn{width:38px;height:38px;display:grid;place-items:center;font-size:20px;background:linear-gradient(135deg,var(--accent1),var(--accent2));border-radius:12px;-webkit-text-fill-color:initial;}
+  nav{position:sticky;top:63px;z-index:40;display:flex;gap:6px;justify-content:center;padding:8px 12px;background:rgba(15,13,22,.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);}
+  nav a{color:var(--muted);text-decoration:none;padding:8px 16px;border-radius:999px;font-size:14px;font-weight:600;position:relative;}
+  nav a.active{background:var(--accent1);color:#fff;}
+  nav a:hover:not(.active){color:var(--text);}
+  main{max-width:680px;margin:20px auto;padding:0 16px;display:flex;flex-direction:column;gap:16px;}
+  .page{display:none;flex-direction:column;gap:16px;}
+  .page.show{display:flex;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;}
+  h3.title{font-size:16px;color:var(--muted);font-weight:600;}
+  .composer textarea{width:100%;background:var(--card2);border:1px solid var(--line);color:var(--text);border-radius:12px;padding:12px;font-size:15px;font-family:inherit;resize:vertical;min-height:64px;outline:none;}
+  textarea:focus,input:focus{border-color:var(--accent1)!important;}
+  .composer-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;}
+  input[type=text],input[type=url]{background:var(--card2);border:1px solid var(--line);color:var(--text);border-radius:999px;padding:10px 14px;font-size:14px;outline:none;font-family:inherit;}
+  .composer-row input[type=text]{flex:1;min-width:180px;}
+  .btn{border:none;border-radius:999px;padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer;transition:.2s;font-family:inherit;color:var(--text);}
+  .btn-ghost{background:var(--card2);border:1px solid var(--line);}
+  .btn-ghost:hover{border-color:var(--accent1);}
+  .btn-primary{background:linear-gradient(90deg,var(--accent1),var(--accent2));color:#fff;}
+  .btn-primary:hover{filter:brightness(1.1);}
+  .btn-sm{padding:7px 14px;font-size:13px;}
+  .btn.on{border-color:var(--accent2);color:var(--accent2);}
+  .image-preview{position:relative;margin-top:12px;display:none;}
+  .image-preview.show{display:block;}
+  .image-preview img{width:100%;max-height:420px;object-fit:cover;border-radius:12px;border:1px solid var(--line);display:block;}
+  .image-preview .remove{position:absolute;top:10px;right:10px;width:30px;height:30px;border-radius:50%;border:none;background:rgba(0,0,0,.65);color:#fff;cursor:pointer;}
+  .post-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+  .avatar{width:42px;height:42px;border-radius:50%;overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--accent1),var(--accent2));display:grid;place-items:center;font-weight:700;color:#fff;font-size:17px;}
+  .avatar img{width:100%;height:100%;object-fit:cover;}
+  .post-author{font-weight:600;font-size:15px;}
+  .post-time{font-size:12px;color:var(--muted);margin-top:2px;}
+  .post-caption{font-size:15px;line-height:1.5;margin-bottom:10px;white-space:pre-wrap;word-wrap:break-word;}
+  .post-img{width:100%;border-radius:12px;border:1px solid var(--line);display:block;margin-bottom:10px;max-height:520px;object-fit:cover;}
+  .actions{display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:12px;}
+  .action-btn{display:flex;align-items:center;gap:7px;background:var(--card2);border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit;transition:.2s;}
+  .action-btn:hover{color:var(--text);border-color:var(--accent1);}
+  .action-btn.liked{color:#ff6b8d;border-color:#ff6b8d;}
+  .action-btn.reported{color:var(--danger);border-color:var(--danger);}
+  .comments{margin-top:12px;display:flex;flex-direction:column;gap:10px;}
+  .comment{display:flex;gap:10px;background:var(--card2);border-radius:12px;padding:10px 12px;}
+  .comment .avatar{width:30px;height:30px;font-size:13px;}
+  .comment-body{flex:1;min-width:0;}
+  .comment-meta{font-size:12px;color:var(--muted);}
+  .comment-meta b{color:var(--text);font-size:13px;margin-right:6px;}
+  .comment-text{font-size:14px;line-height:1.45;word-wrap:break-word;margin-top:2px;}
+  .comment-form{display:flex;gap:8px;margin-top:12px;}
+  .comment-form input{flex:1;min-width:0;}
+  .empty{text-align:center;color:var(--muted);padding:44px 20px;font-size:15px;line-height:1.7;}
+  .empty .big{font-size:44px;display:block;margin-bottom:8px;}
+  /* people / conversations */
+  .person-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);}
+  .person-row:last-child{border-bottom:0;}
+  .person-info{flex:1;min-width:0;}
+  .person-name{font-weight:700;}
+  .person-sub{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .convo{cursor:pointer;}
+  .convo:hover .person-name{color:var(--accent1);}
+  /* chat */
+  .chat{display:flex;flex-direction:column;height:calc(100vh - 170px);min-height:380px;padding:0;overflow:hidden;}
+  .chat-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);}
+  .chat-head .avatar{width:34px;height:34px;font-size:14px;}
+  .chat-messages{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px;}
+  .bubble{max-width:78%;padding:9px 12px;border-radius:16px;background:var(--card2);align-self:flex-start;word-break:break-word;font-size:15px;line-height:1.4;}
+  .bubble.mine{align-self:flex-end;background:var(--accent1);color:#fff;}
+  .bubble img{max-width:100%;max-height:300px;border-radius:10px;display:block;margin-top:5px;}
+  .bubble .meta{font-size:10px;opacity:.6;margin-top:3px;}
+  .chat-form{display:flex;gap:7px;border-top:1px solid var(--line);padding:10px;flex-wrap:wrap;align-items:center;}
+  .chat-form #chatText{flex:1;min-width:120px;}
+  .chat-gif{display:none;width:100%;}
+  .chat-gif.show{display:block;}
+  .chat-pending{font-size:12px;color:var(--muted);width:100%;display:none;}
+  .chat-pending.show{display:block;}
+  .hint{font-size:13px;color:var(--muted);}
+  /* modal */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:100;padding:16px;}
+  .modal-overlay.show{display:flex;}
+  .modal{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:24px;width:100%;max-width:400px;}
+  .modal h2{font-size:18px;margin-bottom:18px;text-align:center;}
+  .avatar-edit{width:88px;height:88px;margin:0 auto;border-radius:50%;overflow:hidden;cursor:pointer;position:relative;background:linear-gradient(135deg,var(--accent1),var(--accent2));display:grid;place-items:center;font-size:34px;font-weight:700;color:#fff;}
+  .avatar-edit img{width:100%;height:100%;object-fit:cover;}
+  .avatar-edit .tip{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.55);font-size:10px;text-align:center;padding:3px 0;font-weight:400;}
+  .avatar-edit-label{text-align:center;font-size:12px;color:var(--muted);margin:6px 0 16px;}
+  .field label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px;}
+  .field input{width:100%;border-radius:12px;padding:12px;font-size:15px;}
+  .modal-actions{display:flex;gap:10px;margin-top:20px;}
+  .modal-actions .btn{flex:1;padding:12px;}
+  #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card2);border:1px solid var(--accent1);color:var(--text);padding:12px 20px;border-radius:999px;font-size:14px;opacity:0;transition:.3s;z-index:200;pointer-events:none;max-width:90vw;}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  @media(max-width:560px){.brand-chip .name{max-width:90px;}.logo{font-size:16px;}nav a{padding:8px 11px;font-size:13px;}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand-chip" id="brandChip" title="Edit profile">
+    <div class="avatar" id="headerAvatar"></div>
+    <span class="name" id="headerName">Set your name</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="logo"><span class="horn">🦄</span>unicornshideout</div>
+</header>
+<nav id="nav">
+  <a href="#/feed" data-page="feed">🏠 Feed</a>
+  <a href="#/people" data-page="people">👥 People</a>
+  <a href="#/following" data-page="following">⭐ Following</a>
+  <a href="#/messages" data-page="messages">💬 Messages</a>
+</nav>
+
+<main>
+  <!-- FEED -->
+  <div class="page" id="page-feed">
+    <section class="card composer">
+      <textarea id="captionInput" placeholder="What's the vibe? (caption optional)" maxlength="500"></textarea>
+      <div class="composer-row">
+        <input type="text" id="urlInput" inputmode="url" placeholder="Paste image or GIF URL...">
+        <label class="btn btn-ghost">📁 Upload<input type="file" id="fileInput" accept="image/*" hidden></label>
+        <button class="btn btn-primary" id="postBtn">Post 🦄</button>
+      </div>
+      <div class="image-preview" id="imagePreview"><img id="previewImg" alt="preview"><button class="remove" id="removePreview">✕</button></div>
+    </section>
+    <section id="feed"></section>
+  </div>
+
+  <!-- PEOPLE -->
+  <div class="page" id="page-people">
+    <h3 class="title">Everyone in the hideout</h3>
+    <section class="card" id="peopleList"></section>
+  </div>
+
+  <!-- FOLLOWING -->
+  <div class="page" id="page-following">
+    <h3 class="title">People you follow</h3>
+    <section class="card" id="followingList"></section>
+    <h3 class="title">Their posts</h3>
+    <section id="followFeed"></section>
+  </div>
+
+  <!-- MESSAGES -->
+  <div class="page" id="page-messages">
+    <h3 class="title">Your conversations</h3>
+    <section class="card" id="convoList"></section>
+  </div>
+
+  <!-- CHAT -->
+  <div class="page" id="page-chat">
+    <section class="card chat">
+      <div class="chat-head">
+        <a class="btn btn-ghost btn-sm" href="#/messages" style="text-decoration:none">←</a>
+        <div id="chatAvatar"></div>
+        <b id="chatTitle">Chat</b>
+      </div>
+      <div class="chat-messages" id="chatMessages"></div>
+      <form class="chat-form" id="chatForm">
+        <input type="text" id="chatText" maxlength="1000" placeholder="Write a message..." autocomplete="off">
+        <label class="btn btn-ghost btn-sm" title="Attach image">🖼️<input type="file" id="chatImage" accept="image/*" hidden></label>
+        <button type="button" class="btn btn-ghost btn-sm" id="gifToggle">GIF</button>
+        <button class="btn btn-primary btn-sm" type="submit">Send</button>
+        <input type="url" id="chatGif" class="chat-gif" placeholder="Paste a GIF / image URL">
+        <div class="chat-pending" id="chatPending"></div>
+      </form>
+    </section>
+  </div>
+</main>
+
+<div class="modal-overlay" id="profileModal">
+  <div class="modal">
+    <h2 id="profileTitle">Edit profile</h2>
+    <div class="avatar-edit" id="avatarEdit"><div id="avatarEditInner"></div><div class="tip">tap to change</div></div>
+    <div class="avatar-edit-label">Profile picture</div>
+    <div class="field"><label for="nameInput">Display name</label><input type="text" id="nameInput" maxlength="30" placeholder="Your name"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="cancelProfile">Cancel</button>
+      <button class="btn btn-primary" id="saveProfile">Save</button>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+<input type="file" id="avatarFile" accept="image/*" hidden>
+
+<script>
+(function(){
+  'use strict';
+  // Load Firebase dynamically (avoids the parser-blocking / document.write warning)
+  function loadScript(src){
+    return new Promise(function(res,rej){
+      var s=document.createElement('script');s.src=src;s.async=false;s.onload=res;s.onerror=function(){rej(new Error('Failed to load '+src));};
+      document.head.appendChild(s);
+    });
+  }
+  var BASE='https://www.gstatic.com/firebasejs/10.12.2/';
+  loadScript(BASE+'firebase-app-compat.js')
+    .then(function(){return loadScript(BASE+'firebase-database-compat.js');})
+    .then(start)
+    .catch(function(e){document.querySelector('main').innerHTML='<div class="card empty"><span class="big">😿</span>Could not load Firebase.<br>'+e.message+'</div>';});
+
+  function start(){
+    var firebaseConfig = {
+      apiKey: "AIzaSyDk-GnNBtB2QZpAcUBK41Ku2kfebqBVVDE",
+      authDomain: "unicorn-hideout.firebaseapp.com",
+      projectId: "unicorn-hideout",
+      storageBucket: "unicorn-hideout.firebasestorage.app",
+      messagingSenderId: "852493357918",
+      appId: "1:852493357918:web:0c66c2e69f6267798675cf",
+      measurementId: "G-CLFKM10Y47",
+      databaseURL: "https://unicorn-hideout-default-rtdb.firebaseio.com"
+    };
+    firebase.initializeApp(firebaseConfig);
+    var db = firebase.database();
+    var TS = firebase.database.ServerValue.TIMESTAMP;
+    var $ = function(id){return document.getElementById(id);};
+
+    var CLIENT_KEY='unicornshideout_client_id';
+    var clientId=null;
+    try{clientId=localStorage.getItem(CLIENT_KEY);}catch(e){}
+    if(!clientId){
+      clientId='client_'+Math.random().toString(36).slice(2)+'_'+Date.now().toString(36);
+      try{localStorage.setItem(CLIENT_KEY,clientId);}catch(e){}
+    }
+
+    var state={profile:loadProfile(),posts:[]};
+    var people={};        // id -> {name, avatar}
+    var follows={};       // id -> true (people I follow)
+    var convos={};        // id -> true (people I chat with)
+    var pendingImage=null, pendingAvatar=null;
+    var chatPerson=null, chatUnsub=null, chatImageData=null;
+    var currentRoute={page:'feed'};
+
+    function loadProfile(){
+      try{var p=JSON.parse(localStorage.getItem('unicornshideout_profile')||'null');if(p&&p.name)return{name:p.name,avatar:p.avatar||null};}catch(e){}
+      return{name:'',avatar:null};
+    }
+    function cacheProfile(){try{localStorage.setItem('unicornshideout_profile',JSON.stringify(state.profile));}catch(e){}}
+    function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+    function toast(msg){var t=$('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.remove('show');},2600);}
+    function timeAgo(ts){
+      var s=Math.floor((Date.now()-Number(ts||Date.now()))/1000);
+      if(s<10)return'just now';if(s<60)return s+'s ago';
+      var m=Math.floor(s/60);if(m<60)return m+'m ago';
+      var h=Math.floor(m/60);if(h<24)return h+'h ago';
+      return Math.floor(h/24)+'d ago';
+    }
+    function avatarHTML(who){
+      who=who||{};
+      var inner=who.avatar?'<img src="'+esc(who.avatar)+'" alt="">':esc((who.name||'?').trim().charAt(0).toUpperCase());
+      return'<div class="avatar">'+inner+'</div>';
+    }
+    function personName(id){return(people[id]&&people[id].name)||'Unknown unicorn';}
+    function convoId(a,b){return[a,b].sort().join('__');}
+
+    function readImageFile(file,maxDim,cb){
+      if(!file){toast('No image selected 🤔');return;}
+      var reader=new FileReader();
+      reader.onload=function(e){
+        var dataUrl=e.target.result;
+        if(file.type==='image/gif'){cb(dataUrl);return;}
+        var img=new Image();
+        img.onload=function(){
+          var scale=Math.min(1,maxDim/Math.max(img.width,img.height));
+          var c=document.createElement('canvas');
+          c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
+          c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+          cb(c.toDataURL('image/jpeg',0.8));
+        };
+        img.onerror=function(){cb(dataUrl);};img.src=dataUrl;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    /* ---------- Profile ---------- */
+    function renderHeader(){
+      $('headerName').textContent=state.profile.name||'Set your name';
+      $('headerAvatar').innerHTML=state.profile.avatar?'<img src="'+esc(state.profile.avatar)+'" alt="">':esc((state.profile.name||'?').charAt(0).toUpperCase());
+    }
+    function renderAvatarEdit(){
+      var name=$('nameInput').value.trim()||state.profile.name||'?';
+      $('avatarEditInner').innerHTML=pendingAvatar?'<img src="'+esc(pendingAvatar)+'" alt="">':esc(name.charAt(0).toUpperCase());
+    }
+    function openProfile(first){
+      pendingAvatar=state.profile.avatar;$('nameInput').value=state.profile.name;
+      $('profileTitle').textContent=first===true?'Welcome! Pick a name 🦄':'Edit profile';
+      renderAvatarEdit();$('profileModal').classList.add('show');
+    }
+    function requireName(){
+      if(state.profile.name)return true;
+      toast('Set your name first');openProfile(true);return false;
+    }
+    $('brandChip').addEventListener('click',openProfile);
+    $('cancelProfile').addEventListener('click',function(){$('profileModal').classList.remove('show');});
+    $('profileModal').addEventListener('click',function(e){if(e.target===$('profileModal'))$('profileModal').classList.remove('show');});
+    $('nameInput').addEventListener('input',function(){if(!pendingAvatar)renderAvatarEdit();});
+    $('avatarEdit').addEventListener('click',function(){$('avatarFile').click();});
+    $('avatarFile').addEventListener('change',function(e){readImageFile(e.target.files[0],200,function(d){pendingAvatar=d;renderAvatarEdit();});e.target.value='';});
+    $('saveProfile').addEventListener('click',function(){
+      var n=$('nameInput').value.trim();
+      if(!n){toast('Please choose a display name');return;}
+      state.profile={name:n,avatar:pendingAvatar};cacheProfile();
+      db.ref('profiles/'+clientId).set({name:n,avatar:state.profile.avatar||null,updatedAt:TS}).catch(function(e){toast('Profile sync failed: '+e.message);});
+      renderHeader();$('profileModal').classList.remove('show');toast('Profile saved 🦄');
+    });
+
+    /* ---------- Composer ---------- */
+    function showPreview(src){pendingImage=src;$('previewImg').src=src;$('imagePreview').classList.add('show');}
+    function clearPreview(){pendingImage=null;$('imagePreview').classList.remove('show');$('previewImg').src='';$('urlInput').value='';}
+    $('removePreview').addEventListener('click',clearPreview);
+    $('urlInput').addEventListener('input',function(){var v=$('urlInput').value.trim();if(/^https?:\/\//i.test(v))showPreview(v);else if(!v)clearPreview();});
+    $('previewImg').addEventListener('error',function(){if($('previewImg').getAttribute('src'))toast("Couldn't load that image 🤔");});
+    $('fileInput').addEventListener('change',function(e){readImageFile(e.target.files[0],1000,showPreview);e.target.value='';});
+    $('postBtn').addEventListener('click',function(){
+      if(!requireName())return;
+      var caption=$('captionInput').value.trim();
+      if(!pendingImage&&!caption){toast('Add an image or a caption first 🦄');return;}
+      var post={authorId:clientId,author:{name:state.profile.name,avatar:state.profile.avatar||null},caption:caption,image:pendingImage||null,ts:TS};
+      db.ref('posts').push(post).then(function(){clearPreview();$('captionInput').value='';toast('Posted! 🦄');})
+        .catch(function(e){toast('Post failed: '+e.message+' (check database rules)');});
+    });
+
+    /* ---------- Posts ---------- */
+    function normalizePosts(value){
+      var arr=[];
+      Object.keys(value||{}).forEach(function(id){
+        var p=value[id]||{},likes=p.likes||{},reports=p.reports||{},comments=p.comments||{};
+        var lc=Object.keys(likes).filter(function(k){return likes[k]===true;}).length;
+        var rc=Object.keys(reports).filter(function(k){return reports[k]===true;}).length;
+        var cs=Object.keys(comments).map(function(k){return Object.assign({id:k},comments[k]);}).sort(function(a,b){return Number(a.ts||0)-Number(b.ts||0);});
+        arr.push({id:id,authorId:p.authorId||null,author:p.author||{name:'Unknown'},caption:p.caption||'',image:p.image||null,ts:p.ts||Date.now(),
+          likes:{count:lc,liked:likes[clientId]===true},comments:cs,reports:{count:rc,reported:reports[clientId]===true}});
+      });
+      arr.sort(function(a,b){return Number(b.ts||0)-Number(a.ts||0);});
+      return arr;
+    }
+    function postHTML(p){
+      var ch=(p.comments||[]).map(function(c){return'<div class="comment">'+avatarHTML(c)+'<div class="comment-body"><div class="comment-meta"><b>'+esc(c.name)+'</b>'+timeAgo(c.ts)+'</div><div class="comment-text">'+esc(c.text)+'</div></div></div>';}).join('');
+      var isMe=p.authorId===clientId;
+      return'<article class="card post" data-id="'+esc(p.id)+'" style="margin-bottom:16px"><div class="post-head">'+avatarHTML(p.author)+'<div><div class="post-author">'+esc(p.author.name)+'</div><div class="post-time">'+timeAgo(p.ts)+'</div></div>'+
+        (isMe?'<div class="spacer"></div><button class="action-btn" data-action="delete" title="Delete post">🗑️</button>':'')+'</div>'+
+        (p.caption?'<p class="post-caption">'+esc(p.caption)+'</p>':'')+(p.image?'<img class="post-img" loading="lazy" src="'+esc(p.image)+'" alt="post image">':'')+
+        '<div class="actions"><button class="action-btn'+(p.likes.liked?' liked':'')+'" data-action="like">❤️ <span>'+p.likes.count+'</span></button><button class="action-btn" data-action="focusComment">💬 <span>'+p.comments.length+'</span></button><button class="action-btn'+(p.reports.reported?' reported':'')+'" data-action="report">'+(p.reports.reported?'🚩 Reported':'🚩 Report')+'</button></div>'+
+        '<div class="comments">'+ch+'</div><form class="comment-form"><input type="text" placeholder="Add a comment..." maxlength="300"><button class="btn btn-primary btn-sm" type="submit">Send</button></form></article>';
+    }
+    function renderFeed(){
+      var feed=$('feed');
+      if(!state.posts.length){feed.innerHTML='<div class="card empty"><span class="big">🦄</span>The hideout is empty.<br>Be the first to post something magical.</div>';return;}
+      feed.innerHTML=state.posts.map(postHTML).join('');
+    }
+    function renderFollowFeed(){
+      var box=$('followFeed');
+      var list=state.posts.filter(function(p){return p.authorId&&follows[p.authorId];});
+      box.innerHTML=list.length?list.map(postHTML).join(''):'<div class="card empty"><span class="big">⭐</span>No posts from people you follow yet.</div>';
+    }
+    function postActions(e){
+      var btn=e.target.closest('button[data-action]');if(!btn)return;
+      var post=btn.closest('.post');if(!post)return;var id=post.dataset.id;
+      var a=btn.dataset.action;
+      if(a==='like'){db.ref('posts/'+id+'/likes/'+clientId).transaction(function(c){return c===true?null:true;}).catch(function(err){toast('Like failed: '+err.message);});}
+      else if(a==='report'){db.ref('posts/'+id+'/reports/'+clientId).transaction(function(c){return c===true?null:true;}).then(function(r){toast(r.snapshot.val()===true?'Report sent 🚩':'Report withdrawn');}).catch(function(err){toast('Report failed: '+err.message);});}
+      else if(a==='focusComment'){post.querySelector('.comment-form input').focus();}
+      else if(a==='delete'){if(confirm('Delete this post?'))db.ref('posts/'+id).remove().catch(function(err){toast('Delete failed: '+err.message);});}
+    }
+    function commentSubmit(e){
+      if(!e.target.classList.contains('comment-form'))return;
+      e.preventDefault();
+      if(!requireName())return;
+      var input=e.target.querySelector('input'),text=input.value.trim(),id=e.target.closest('.post').dataset.id;
+      if(!text)return;
+      db.ref('posts/'+id+'/comments').push({name:state.profile.name,avatar:state.profile.avatar||null,text:text,ts:TS})
+        .then(function(){input.value='';}).catch(function(err){toast('Comment failed: '+err.message);});
+    }
+    ['feed','followFeed'].forEach(function(id){$(id).addEventListener('click',postActions);$(id).addEventListener('submit',commentSubmit);});
+
+    /* ---------- People ---------- */
+    function visiblePeople(){
+      return Object.keys(people).filter(function(id){return id!==clientId&&String(people[id].name||'').trim();}).map(function(id){return Object.assign({id:id},people[id]);})
+        .sort(function(a,b){return a.name.toLowerCase()<b.name.toLowerCase()?-1:1;});
+    }
+    function personRow(p){
+      var f=follows[p.id]===true;
+      return'<div class="person-row">'+avatarHTML(p)+'<div class="person-info"><div class="person-name">'+esc(p.name)+'</div></div>'+
+        '<button class="btn btn-ghost btn-sm'+(f?' on':'')+'" data-follow="'+esc(p.id)+'">'+(f?'★ Following':'☆ Follow')+'</button>'+
+        '<a class="btn btn-primary btn-sm" style="text-decoration:none" href="#/chat/'+encodeURIComponent(p.id)+'">💬 Message</a></div>';
+    }
+    function renderPeople(){
+      var list=visiblePeople();
+      $('peopleList').innerHTML=list.length?list.map(personRow).join(''):'<div class="hint">No one else is here yet. When more unicorns join they will show up here. 🦄</div>';
+    }
+    function renderFollowing(){
+      var list=visiblePeople().filter(function(p){return follows[p.id]===true;});
+      $('followingList').innerHTML=list.length?list.map(personRow).join(''):'<div class="hint">You\'re not following anyone yet. Visit the People page to find unicorns. 🦄</div>';
+      renderFollowFeed();
+    }
+    function toggleFollow(id){
+      var ref=db.ref('follows/'+clientId+'/'+id);
+      ref.set(follows[id]===true?null:true).catch(function(e){toast('Follow failed: '+e.message);});
+    }
+    document.addEventListener('click',function(e){
+      var f=e.target.closest('[data-follow]');
+      if(f)toggleFollow(f.dataset.follow);
+    });
+
+    /* ---------- Messages list ---------- */
+    var convoRenderToken=0;
+    function renderConvos(){
+      var ids=Object.keys(convos).filter(function(id){return convos[id]===true;});
+      var box=$('convoList');
+      if(!ids.length){box.innerHTML='<div class="hint">No conversations yet. Find someone on the People page and send a message. 💬</div>';return;}
+      var token=++convoRenderToken;
+      Promise.all(ids.map(function(id){
+        return db.ref('messages/'+convoId(clientId,id)).orderByChild('ts').limitToLast(1).once('value').then(function(s){
+          var last=null;s.forEach(function(c){last=c.val();});return{id:id,last:last};
+        }).catch(function(){return{id:id,last:null};});
+      })).then(function(rows){
+        if(token!==convoRenderToken)return;
+        rows.sort(function(a,b){return Number((b.last&&b.last.ts)||0)-Number((a.last&&a.last.ts)||0);});
+        box.innerHTML=rows.map(function(r){
+          var p=Object.assign({id:r.id},people[r.id]||{name:'Unknown unicorn'});
+          var preview=r.last?((r.last.sender===clientId?'You: ':'')+(r.last.text||(r.last.media?'📷 Photo':''))):'No messages yet';
+          return'<div class="person-row convo" data-open="'+esc(r.id)+'">'+avatarHTML(p)+'<div class="person-info"><div class="person-name">'+esc(p.name)+'</div><div class="person-sub">'+esc(preview)+'</div></div>'+
+            '<div class="hint">'+(r.last?timeAgo(r.last.ts):'')+'</div></div>';
+        }).join('');
+      });
+    }
+    $('convoList').addEventListener('click',function(e){
+      var row=e.target.closest('[data-open]');
+      if(row)location.hash='#/chat/'+encodeURIComponent(row.dataset.open);
+    });
+
+    /* ---------- Chat ---------- */
+    function closeChat(){if(chatUnsub){chatUnsub();chatUnsub=null;}chatPerson=null;}
+    function resetChatForm(){
+      $('chatText').value='';$('chatGif').value='';$('chatGif').classList.remove('show');
+      chatImageData=null;$('chatPending').classList.remove('show');$('chatPending').textContent='';
+    }
+    function openChat(id){
+      closeChat();resetChatForm();
+      var person=Object.assign({id:id},people[id]||{name:'Unknown unicorn'});
+      chatPerson=person;
+      $('chatTitle').textContent=person.name;$('chatAvatar').innerHTML=avatarHTML(person);
+      var cid=convoId(clientId,id);
+      var ref=db.ref('messages/'+cid).orderByChild('ts').limitToLast(200);
+      var handler=function(s){
+        var msgs=[];s.forEach(function(c){msgs.push(Object.assign({id:c.key},c.val()));});
+        msgs.sort(function(a,b){return Number(a.ts||0)-Number(b.ts||0);});
+        var box=$('chatMessages');
+        box.innerHTML=msgs.length?msgs.map(function(m){
+          var mine=m.sender===clientId;
+          return'<div class="bubble'+(mine?' mine':'')+'">'+esc(m.text||'')+(m.media?'<img src="'+esc(m.media)+'" alt="attachment">':'')+'<div class="meta">'+timeAgo(m.ts)+'</div></div>';
+        }).join(''):'<div class="hint" style="text-align:center;margin:auto">Say hi to '+esc(person.name)+' 👋</div>';
+        box.scrollTop=box.scrollHeight;
+      };
+      ref.on('value',handler,function(err){toast('Could not load messages: '+err.message);});
+      chatUnsub=function(){ref.off('value',handler);};
+    }
+    $('gifToggle').addEventListener('click',function(){$('chatGif').classList.toggle('show');if($('chatGif').classList.contains('show'))$('chatGif').focus();});
+    $('chatImage').addEventListener('change',function(e){
+      readImageFile(e.target.files[0],900,function(d){chatImageData=d;$('chatPending').textContent='📷 Image attached — press Send';$('chatPending').classList.add('show');});
+      e.target.value='';
+    });
+    $('chatForm').addEventListener('submit',function(e){
+      e.preventDefault();
+      if(!chatPerson)return;
+      if(!requireName())return;
+      var text=$('chatText').value.trim();
+      var gif=$('chatGif').value.trim();
+      var media=chatImageData||(/^https?:\/\//i.test(gif)?gif:null);
+      if(!text&&!media){toast('Write something or attach an image');return;}
+      var other=chatPerson.id;
+      db.ref('messages/'+convoId(clientId,other)).push({sender:clientId,text:text,media:media,ts:TS}).then(function(){
+        resetChatForm();
+        var u={};u['conversations/'+clientId+'/'+other]=true;u['conversations/'+other+'/'+clientId]=true;
+        return db.ref().update(u);
+      }).catch(function(err){toast('Message failed: '+err.message);});
+    });
+
+    /* ---------- Router ---------- */
+    function parseRoute(){
+      var h=(location.hash||'#/feed').replace(/^#\/?/,'').split('/');
+      var page=h[0]||'feed';
+      if(['feed','people','following','messages','chat'].indexOf(page)<0)page='feed';
+      if(page==='chat'&&!h[1])page='messages';
+      return{page:page,id:h[1]?decodeURIComponent(h[1]):null};
+    }
+    function route(){
+      var r=parseRoute();
+      if(currentRoute.page==='chat'&&r.page!=='chat')closeChat();
+      currentRoute=r;
+      document.querySelectorAll('.page').forEach(function(p){p.classList.remove('show');});
+      $('page-'+r.page).classList.add('show');
+      var navPage=r.page==='chat'?'messages':r.page;
+      document.querySelectorAll('#nav a').forEach(function(a){a.classList.toggle('active',a.dataset.page===navPage);});
+      if(r.page==='people')renderPeople();
+      if(r.page==='following')renderFollowing();
+      if(r.page==='messages')renderConvos();
+      if(r.page==='chat')openChat(r.id);
+      window.scrollTo(0,0);
+    }
+    window.addEventListener('hashchange',route);
+
+    /* ---------- Live data ---------- */
+    db.ref('profiles').on('value',function(s){
+      people=s.val()||{};
+      var p=currentRoute.page;
+      if(p==='people')renderPeople();
+      if(p==='following')renderFollowing();
+      if(p==='messages')renderConvos();
+      if(p==='chat'&&chatPerson&&people[chatPerson.id]){chatPerson=Object.assign({id:chatPerson.id},people[chatPerson.id]);$('chatTitle').textContent=chatPerson.name;$('chatAvatar').innerHTML=avatarHTML(chatPerson);}
+    },function(err){toast('Could not load people: '+err.message);});
+
+    db.ref('follows/'+clientId).on('value',function(s){
+      follows=s.val()||{};
+      if(currentRoute.page==='people')renderPeople();
+      if(currentRoute.page==='following')renderFollowing();
+    },function(err){toast('Could not load follows: '+err.message);});
+
+    db.ref('conversations/'+clientId).on('value',function(s){
+      convos=s.val()||{};
+      if(currentRoute.page==='messages')renderConvos();
+    },function(err){toast('Could not load conversations: '+err.message);});
+
+    db.ref('posts').on('value',function(s){
+      state.posts=normalizePosts(s.val());
+      renderFeed();
+      if(currentRoute.page==='following')renderFollowFeed();
+    },function(err){toast('Could not load posts: '+err.message);});
+
+    // make sure my profile exists remotely, and prompt for a name on first visit
+    renderHeader();
+    if(state.profile.name){
+      db.ref('profiles/'+clientId).set({name:state.profile.name,avatar:state.profile.avatar||null,updatedAt:TS}).catch(function(){});
+    }else{
+      openProfile(true);
+    }
+    route();
+    setInterval(function(){renderFeed();if(currentRoute.page==='following')renderFollowFeed();},60000);
+  }
+})();
+</script>
+</body>
+</html>
