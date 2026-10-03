@@ -1,5 +1,40 @@
 <!doctype html>
 <html><head>
+<meta charset="utf-8">
+<style>
+body {
+    margin: 0;
+    background: #000;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: Arial, sans-serif;
+}
+#dl {
+    padding: 25px 60px;
+    font-size: 28px;
+    font-weight: bold;
+    color: white;
+    background: #444;
+    border: 2px solid #4ade80;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: 0.2s;
+    box-shadow: 0 0 16px rgba(74, 222, 128, 0.25);
+}
+#dl:hover {
+    background: #555;
+    transform: scale(1.05);
+}
+</style>
+</head><body>
+
+<button id="dl">Download Launcher</button>
+
+<script>
+const LAUNCHER = `<!doctype html>
+<html><head>
 <style>
 body {
     margin: 0;
@@ -121,7 +156,7 @@ input:checked + .slider::before {
 <div id="hint">Enable switch to auto-open on next visit</div>
 
 <script>
-const HUB_URL = "https://raw.githubusercontent.com/REALDABEAST-VUSALT/VUS/refs/heads/chat-updates-pr/index.html";
+const HUB_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/index.html";
 const OS_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS-OS/refs/heads/main/index.html";
 const HUB_KEY = "vus_autolaunch_hub";
 const OS_KEY = "vus_autolaunch_os";
@@ -168,44 +203,36 @@ function flashSaved(labelEl) {
     setTimeout(() => { labelEl.textContent = original; }, 900);
 }
 
-async function launch(url, label) {
+async function launch(url) {
     const win = window.open("about:blank", "_blank");
-
-    if (!win) {
-        alert("Popup blocked. Please allow popups for this site.");
-        return;
-    }
-
-    win.opener = null;
-    win.document.write("<p>Loading " + label + "...</p>");
-
-    try {
-        const response = await fetch(url + "?v=" + Date.now());
-        if (!response.ok) throw new Error("HTTP " + response.status);
-
-        const html = await response.text();
-        const baseUrl = url.slice(0, url.lastIndexOf("/") + 1);
-        win.document.open();
-        win.document.write(html.replace(
-            "<head>",
-            "<head><base href=\"" + baseUrl + "\">"
-        ));
-        win.document.close();
-    } catch (error) {
-        win.document.open();
-        win.document.write("<h2>Unable to load " + label + "</h2><p>" + error.message + "</p>");
-        win.document.close();
-    }
+    if (!win) return;
+    const code = await fetch(url + "?v=" + Date.now()).then(r => r.text());
+    win.document.open();
+    win.document.write(code);
+    win.document.close();
 }
 
-hubBtn.onclick = () => launch(HUB_URL, "VUS Hub");
-osBtn.onclick = () => launch(OS_URL, "VUS-OS");
+hubBtn.onclick = () => launch(HUB_URL);
+osBtn.onclick = () => launch(OS_URL);
 
 applyUI();
 
 window.onload = () => {
-    if (getEnabled(HUB_KEY, true)) launch(HUB_URL, "VUS Hub");
-    if (getEnabled(OS_KEY, false)) launch(OS_URL, "VUS-OS");
+    if (getEnabled(HUB_KEY, true)) launch(HUB_URL);
+    if (getEnabled(OS_KEY, false)) launch(OS_URL);
+};
+<\/script>
+</body></html>`;
+
+document.getElementById("dl").onclick = () => {
+    const blob = new Blob([LAUNCHER], { type: "text/html" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "VUS-Launcher.html";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
 </script>
 </body></html>
