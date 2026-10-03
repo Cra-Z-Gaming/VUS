@@ -59,6 +59,8 @@ fixStyle.textContent = `
 button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #new-post-btn{display:inline-block;text-decoration:none;white-space:nowrap}
 #dev-panel-btn,#dev-panel-modal,#post-modal{display:none!important}
+#review-btn{display:inline-block;text-decoration:none;white-space:nowrap;background:#1f1f1f;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:9px 16px;font-weight:700;font-size:14px}
+#review-btn:hover{border-color:var(--accent)}
 .comments-panel{top:var(--topbar-h,53px)}
 .post-media img{position:absolute;inset:0;width:100%;height:100%;max-width:none;max-height:none;object-fit:contain;z-index:1}
 .post-media img.bg{object-fit:cover;filter:blur(28px) brightness(.4);transform:scale(1.15);z-index:0}
@@ -117,6 +119,19 @@ function openSubmitWindow(e) {
     .catch((err) => { shut(); showToast('Could not load the post form: ' + err.message); });
 }
 if (newPostEl) newPostEl.addEventListener('click', openSubmitWindow);
+
+// "Review" button: opens the admin page in a new tab. Anyone can click it, but only
+// Google accounts listed under /admins in the database can do anything there.
+const ADMIN_URL = 'https://cra-z-gaming.github.io/VUS/Statik/admin.html'; // swap for your Vercel link if you prefer
+if (newPostEl) {
+  const reviewEl = document.createElement('a');
+  reviewEl.id = 'review-btn';
+  reviewEl.textContent = 'Review';
+  reviewEl.href = ADMIN_URL;
+  reviewEl.target = '_blank';
+  reviewEl.rel = 'noopener';
+  newPostEl.after(reviewEl);
+}
 
 // ===== State =====
 let allPosts = [], visiblePosts = [], currentIndex = 0, currentId = null;
