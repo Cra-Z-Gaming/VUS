@@ -91,7 +91,32 @@ syncTopbar();
 if (window.ResizeObserver) new ResizeObserver(syncTopbar).observe(topbarEl); else window.addEventListener('resize', syncTopbar);
 
 const newPostEl = $('new-post-btn');
-if (newPostEl && newPostEl.tagName === 'BUTTON') newPostEl.addEventListener('click', () => window.open('submit.html', '_blank', 'noopener'));
+// New Post opens the submit form in an overlay on this same page: submit.html is fetched
+// from GitHub (same trick as the loader) and shown in an iframe, so no new tab or hosting needed.
+const SUBMIT_SRC = 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Statik/submit.html';
+function openSubmitWindow(e) {
+  if (e) e.preventDefault();
+  if (document.getElementById('submit-overlay')) return;
+  const ov = document.createElement('div');
+  ov.id = 'submit-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:150;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:16px';
+  const close = document.createElement('button');
+  close.textContent = '✕';
+  close.setAttribute('aria-label', 'Close');
+  close.style.cssText = 'position:fixed;top:14px;right:18px;z-index:151;width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;font-size:18px;cursor:pointer';
+  const frame = document.createElement('iframe');
+  frame.style.cssText = 'width:min(520px,100%);height:min(92vh,760px);border:0;border-radius:12px;background:#0e0e0e';
+  ov.append(frame, close);
+  document.body.appendChild(ov);
+  const shut = () => ov.remove();
+  close.onclick = shut;
+  ov.addEventListener('click', (ev) => { if (ev.target === ov) shut(); });
+  fetch(SUBMIT_SRC, { cache: 'no-store' })
+    .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+    .then((html) => { frame.srcdoc = html; })
+    .catch((err) => { shut(); showToast('Could not load the post form: ' + err.message); });
+}
+if (newPostEl) newPostEl.addEventListener('click', openSubmitWindow);
 
 // ===== State =====
 let allPosts = [], visiblePosts = [], currentIndex = 0, currentId = null;
@@ -257,13 +282,15 @@ postStage.addEventListener('touchend', (e) => {
 }, { passive: true });
 
 // ===== Render post =====
-function getImage(id) {
+function getImage(post) {
+  if (post.imageData) return Promise.resolve(post.imageData); // old-style posts keep the image inline
+  const id = post.id;
   if (imageCache.has(id)) return Promise.resolve(imageCache.get(id));
   return db.ref(`images/${id}`).once('value').then((s) => {
     imageCache.set(id, s.val());
     if (imageCache.size > 8) imageCache.delete(imageCache.keys().next().value); // keep memory bounded
     return s.val();
-  }).catch(() => null);
+  }).catch((err) => { console.warn('Could not load image for', id, err); return null; });
 }
 
 function renderCurrentPost() {
@@ -283,15 +310,16 @@ function renderCurrentPost() {
   }
 
   const post = visiblePosts[currentIndex];
+  const hasImg = !!(post.hasImage || post.imageData);
   markViewed(post.id);
   postCounter.textContent = `${currentIndex + 1} / ${visiblePosts.length}`;
   prevBtn.disabled = currentIndex === 0;
   nextBtn.disabled = currentIndex === visiblePosts.length - 1;
 
   const card = document.createElement('div');
-  card.className = `post-card${post.hasImage ? '' : ' text-only'}`;
+  card.className = `post-card${hasImg ? '' : ' text-only'}`;
   card.innerHTML = `
-    ${post.hasImage ? '<div class="post-media"><div class="no-image-text">Loading…</div></div>' : ''}
+    ${hasImg ? '<div class="post-media"><div class="no-image-text">Loading…</div></div>' : ''}
     <div class="post-info">
       <div class="author">${escapeHtml(post.authorName || 'Anonymous')}</div>
       <div class="title">${escapeHtml(post.title)}</div>
@@ -304,9 +332,9 @@ function renderCurrentPost() {
     </div>`;
   postStage.appendChild(card);
 
-  if (post.hasImage) {
+  if (hasImg) {
     const media = card.querySelector('.post-media');
-    getImage(post.id).then((data) => {
+    getImage(post).then((data) => {
       if (currentId !== post.id) return;
       if (!data) { media.remove(); card.classList.add('text-only'); return; }
       // Built via DOM properties (never innerHTML) so image data can't inject markup.
@@ -319,7 +347,7 @@ function renderCurrentPost() {
       media.onclick = () => openFullscreen(data);
     });
     const nxt = visiblePosts[currentIndex + 1];
-    if (nxt && nxt.hasImage) getImage(nxt.id); // prefetch for snappy navigation
+    if (nxt && (nxt.hasImage || nxt.imageData)) getImage(nxt); // prefetch for snappy navigation
   }
 
   card.querySelector('#post-like-btn').addEventListener('click', () => {
