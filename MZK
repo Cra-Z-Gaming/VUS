@@ -145,6 +145,19 @@
   dialog.modal input.txt { width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--line); background:var(--raised); color:var(--text); font:inherit; margin-bottom:16px; }
   .btnrow { display:flex; gap:10px; justify-content:center; }
 
+  #queuePanel { position:fixed; right:16px; bottom:112px; width:min(380px,calc(100% - 32px)); max-height:min(60vh,520px); overflow-y:auto; background:var(--raised); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); padding:12px; z-index:30; }
+  .qhead { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .qhead h3 { margin:0; flex:1; font:700 1.1rem Georgia,serif; }
+  .qlabel { margin:10px 8px 4px; color:var(--dim); font-size:.72rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
+  .qrow { display:flex; align-items:center; gap:8px; padding:6px 6px 6px 10px; border-radius:10px; cursor:pointer; }
+  .qrow:hover { background:var(--line); }
+  .qrow.now { color:var(--accent); cursor:default; }
+  .qrow .qt { flex:1; min-width:0; }
+  .qrow .qt span { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .qrow .qt small { display:block; color:var(--dim); font-size:.76rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .qnote { color:var(--dim); font-size:.82rem; padding:6px 10px; }
+  #qbtn.on { color:var(--accent); }
+
   /* ---------- mobile ---------- */
   @media (max-width:820px) {
     .app { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr) auto; }
@@ -161,6 +174,7 @@
     .vol { display:none; }
     #art { width:44px; height:44px; }
     #toast { bottom:150px; }
+    #queuePanel { bottom:160px; right:12px; }
   }
 </style>
 </head>
@@ -202,6 +216,7 @@
         <button class="ib" id="pp" title="Play/pause (Space)" aria-label="Play"><svg viewBox="0 0 24 24"><path id="ppi" d="M8 5v14l11-7z"/></svg></button>
         <button class="ib" id="next" title="Next (N)" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg></button>
         <button class="ib" id="rep" title="Repeat off (R)" aria-label="Repeat"></button>
+        <button class="ib" id="qbtn" title="Queue (Q)" aria-label="Queue"><svg viewBox="0 0 24 24"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18a3 3 0 101.99 2.82V8H22V6h-5z"/></svg></button>
       </div>
       <div class="seek">
         <span id="cur">0:00</span>
@@ -217,6 +232,7 @@
 </div>
 
 <div id="toast" role="status"></div>
+<div id="queuePanel" hidden role="dialog" aria-label="Queue"></div>
 <dialog id="info" class="modal"></dialog>
 <dialog id="dlg2" class="modal"></dialog>
 <audio id="audio" preload="metadata"></audio>
@@ -352,9 +368,10 @@ function load(i){
   const t=queue[i]; if(!t) return;
   qi=i; audio.src=t.url; audio.play().catch(()=>{});
   $("now").textContent=t.title; $("sub").textContent=t.group||"Single"; $("art").hidden=true;
-  document.title=t.title+" · mzk"; markPlaying();
+  document.title=t.title+" · mzk"; markPlaying(); renderQueue();
   if("mediaSession" in navigator) navigator.mediaSession.metadata=new MediaMetadata({title:t.title,artist:t.group||"",album:t.group||"mzk"});
   getMeta(t).then(m=>{
+    renderQueue();
     if(queue[qi]!==t||!m) return;
     if(m.art){ $("art").src=m.art; $("art").hidden=false; }
     if(m.artist) $("sub").textContent=m.artist+(m.album?" · "+m.album:"");
@@ -398,7 +415,7 @@ document.addEventListener("keydown",e=>{
   const k=e.key.toLowerCase();
   if(k===" "&&e.target.matches("button,[role=button],a")) return;
   if(k===" "){ e.preventDefault(); toggle(); } else if(k==="n") next(false); else if(k==="p") prev();
-  else if(k==="s") $("shuf").click(); else if(k==="r") $("rep").click(); else if(k==="m") $("mute").click();
+  else if(k==="s") $("shuf").click(); else if(k==="r") $("rep").click(); else if(k==="m") $("mute").click(); else if(k==="q") toggleQueue();
   else if(e.key==="ArrowRight") audio.currentTime+=5; else if(e.key==="ArrowLeft") audio.currentTime-=5;
 });
 if("mediaSession" in navigator){
@@ -595,8 +612,8 @@ function renderSidebar(){
 window.addEventListener("storage",e=>{ if(e.key===KEY){ loadStore(); renderSidebar(); refreshHearts(); if(activeList) render(false); } });
 
 // ---------- queue ----------
-function queueAdd(tracks){ if(!queue.length){ queue=tracks.slice(); load(0); toast("Playing "+plural(tracks.length,"song")); return; } queue.push(...tracks); toast("Added "+plural(tracks.length,"song")+" to queue"); }
-function queueNext(tracks){ if(!queue.length){ queueAdd(tracks); return; } queue.splice(qi+1,0,...tracks); toast("Playing next"); }
+function queueAdd(tracks){ if(!queue.length){ queue=tracks.slice(); load(0); toast("Playing "+plural(tracks.length,"song")); return; } queue.push(...tracks); renderQueue(); toast("Added "+plural(tracks.length,"song")+" to queue"); }
+function queueNext(tracks){ if(!queue.length){ queueAdd(tracks); return; } queue.splice(qi+1,0,...tracks); renderQueue(); toast("Playing next"); }
 
 // ---------- dialogs ----------
 function modal(build){
@@ -742,6 +759,39 @@ document.addEventListener("contextmenu",e=>{
   showMenu(items,e.clientX,e.clientY);
 });
 renderSidebar();
+
+// ---------- queue panel (shows the next 30) ----------
+const XICON='<svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
+const QMAX=30;
+function toggleQueue(){ const qp=$("queuePanel"); qp.hidden=!qp.hidden; $("qbtn").classList.toggle("on",!qp.hidden); renderQueue(); }
+$("qbtn").onclick=toggleQueue;
+function qRow(t,idx,now){
+  const d=el("div","qrow"+(now?" now":"")), box=el("div","qt");
+  box.append(el("span",null,t.title),el("small",null,(t.meta&&t.meta.artist)||t.group||"Single"));
+  d.append(box);
+  if(!now){
+    d.tabIndex=0; d.onclick=()=>load(idx);
+    d.onkeydown=e=>{ if(e.key==="Enter"&&e.target===d) load(idx); };
+    d.append(iconBtn(XICON,"Remove from queue",()=>{ queue.splice(idx,1); renderQueue(); }));
+  }
+  return d;
+}
+function renderQueue(){
+  const qp=$("queuePanel"); if(qp.hidden) return;
+  qp.innerHTML="";
+  const head=el("div","qhead"); head.append(el("h3",null,"Queue"));
+  const upcoming=qi>=0?queue.slice(qi+1):[];
+  if(upcoming.length) head.append(pill("","Clear",()=>{ queue.splice(qi+1); renderQueue(); toast("Queue cleared"); }));
+  head.append(iconBtn(XICON,"Close queue",toggleQueue));
+  qp.append(head);
+  if(qi<0||!queue[qi]){ qp.append(el("div","qnote","Nothing playing yet. Play a song, or right-click one and choose Add to queue.")); return; }
+  qp.append(el("div","qlabel","Now playing"),qRow(queue[qi],qi,true),el("div","qlabel","Next up"));
+  if(!upcoming.length) qp.append(el("div","qnote","Nothing queued next."));
+  upcoming.slice(0,QMAX).forEach((t,i)=>qp.append(qRow(t,qi+1+i,false)));
+  if(upcoming.length>QMAX) qp.append(el("div","qnote","+ "+(upcoming.length-QMAX)+" more"));
+  if(shuffle) qp.append(el("div","qnote","Shuffle is on, so songs may not play in this order."));
+}
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&!menuEl&&!$("queuePanel").hidden&&!document.querySelector("dialog[open]")) toggleQueue(); });
 
 function build(files,tab){
   const prefix=tab+"/", by=new Map();
