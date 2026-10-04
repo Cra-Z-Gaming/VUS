@@ -165,6 +165,15 @@
   @keyframes ind { from { left:0; } to { left:65%; } }
   @media (prefers-reduced-motion:reduce) { #loadbar.ind .fill { animation:none; width:100%; opacity:.2; } }
 
+  .nav img { width:22px; height:22px; border-radius:50%; object-fit:cover; flex:none; }
+  #opts.on { color:var(--accent); }
+  .err { color:#ff7a7a; min-height:1.3em; margin:0 0 10px; font-size:.85rem; }
+  .linkbtn { color:var(--dim); font-size:.82rem; margin-top:12px; text-decoration:underline; }
+  .linkbtn:hover { color:var(--text); }
+  dialog.modal .stack { display:flex; flex-direction:column; gap:10px; margin:12px 0; }
+  dialog.modal .stack input.txt { margin:0; }
+  .or { color:var(--dim); font-size:.8rem; margin:12px 0 0; }
+
   /* ---------- mobile ---------- */
   @media (max-width:820px) {
     .app { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr) auto; }
@@ -195,6 +204,7 @@
     <button class="nav" id="n-Liked"><svg viewBox="0 0 24 24"><path d="M12 21l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.18L12 21z"/></svg>Liked songs<small></small></button>
     <div class="libhead"><span>Playlists</span><button class="ib" id="newpl" title="New playlist" aria-label="New playlist"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button></div>
     <div id="pls"></div>
+    <button class="nav" id="acct" hidden></button>
     <a class="pill" href="https://docs.google.com/forms/d/e/1FAIpQLSeSM-moe9C4ZHi--AOR6JSRAn7YfZJ2JR-3mxHFkbuGmnIVEw/viewform" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M9 21h6v-1H9v1zm3-19a7 7 0 00-4 12.7V17h8v-2.3A7 7 0 0012 2z"/></svg>Suggest a song</a>
   </aside>
 
@@ -223,6 +233,7 @@
         <button class="ib" id="pp" title="Play/pause (Space)" aria-label="Play"><svg viewBox="0 0 24 24"><path id="ppi" d="M8 5v14l11-7z"/></svg></button>
         <button class="ib" id="next" title="Next (N)" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg></button>
         <button class="ib" id="rep" title="Repeat off (R)" aria-label="Repeat"></button>
+        <button class="ib" id="opts" title="Speed &amp; sleep timer" aria-label="Playback speed and sleep timer"><svg viewBox="0 0 24 24"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg></button>
         <button class="ib" id="qbtn" title="Queue (Q)" aria-label="Queue"><svg viewBox="0 0 24 24"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18a3 3 0 101.99 2.82V8H22V6h-5z"/></svg></button>
       </div>
       <div class="seek">
@@ -247,6 +258,19 @@
 
 <script>
 const OWNER="Cra-Z-Gaming", REPO="mzk", BRANCH="main";
+
+// ---- Accounts (optional): paste your Firebase web app config here to turn on Google/email sign-in + sync ----
+// const FIREBASE_CONFIG = { apiKey:"...", authDomain:"...", projectId:"...", appId:"..." };
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDyKNOMa_YnIXlqtZ8OrIePHBOhudiEoUk",
+  authDomain: "mzk-playa.firebaseapp.com",
+  projectId: "mzk-playa",
+  storageBucket: "mzk-playa.firebasestorage.app",
+  messagingSenderId: "359354025989",
+  appId: "1:359354025989:web:281bf6bd232eedfefb346c",
+  measurementId: "G-VYTSYM4VN2"
+};
+
 const TABS=["Singles","Albums"];
 const AUDIO=/\.(mp3|wav|ogg|flac|m4a|aac|opus|weba)$/i;
 const enc=p=>p.split("/").map(encodeURIComponent).join("/");
@@ -267,7 +291,7 @@ $("rep").innerHTML=ICON.rep;
 
 // data[tab] = { groups:[{name,tab,loose,tracks}], tracks:[] }
 const data={Singles:{groups:[],tracks:[]},Albums:{groups:[],tracks:[]}};
-let activeTab="Singles", openGroup=null, activeList=null, queue=[], qi=-1, shuffle=false, repeat=0, busy=false;
+let pendingSeek=0, lastSave=0, sleepEnd=false, activeTab="Singles", openGroup=null, activeList=null, queue=[], qi=-1, shuffle=false, repeat=0, busy=false;
 const albumCount=()=>data.Albums.groups.filter(g=>!g.loose).length;
 
 const fmt=s=>{ if(!isFinite(s)) return "0:00"; s=Math.floor(s); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); };
@@ -372,9 +396,10 @@ async function showAlbumInfo(g){
 
 // ---------- player ----------
 function playList(list,i){ queue=list.slice(); load(i); }
-function load(i){
+function load(i,opts){
   const t=queue[i]; if(!t) return;
-  qi=i; audio.src=t.url; audio.play().catch(()=>{});
+  qi=i; audio.src=t.url;
+  if(opts&&opts.paused) pendingSeek=opts.seek||0; else audio.play().catch(()=>{});
   $("now").textContent=t.title; $("sub").textContent=t.group||"Single"; $("art").hidden=true;
   document.title=t.title+" · mzk"; markPlaying(); renderQueue();
   if("mediaSession" in navigator) navigator.mediaSession.metadata=new MediaMetadata({title:t.title,artist:t.group||"",album:t.group||"mzk"});
@@ -404,19 +429,21 @@ function next(auto){
 function prev(){ if(!queue.length) return; if(audio.currentTime>3){ audio.currentTime=0; return; } load((qi-1+queue.length)%queue.length); }
 function toggle(){ if(qi<0){ const l=data[activeTab].tracks; if(l.length) playList(l,0); return; } audio.paused?audio.play():audio.pause(); }
 
-audio.addEventListener("ended",()=>next(true));
-audio.addEventListener("play",updatePP); audio.addEventListener("pause",updatePP);
+audio.addEventListener("ended",()=>{ if(sleepEnd){ sleepEnd=false; paintOpts(); toast("Sleep timer: stopped after this song"); return; } next(true); });
+audio.addEventListener("play",updatePP); audio.addEventListener("pause",()=>{ updatePP(); saveResume(); });
 audio.addEventListener("error",()=>{ if(qi>=0) $("sub").textContent="Couldn't play this file"; });
 function updatePP(){ $("ppi").setAttribute("d",audio.paused?"M8 5v14l11-7z":"M6 5h4v14H6zm8 0h4v14h-4z"); $("pp").setAttribute("aria-label",audio.paused?"Play":"Pause"); }
 let scrubbing=false;
-audio.addEventListener("timeupdate",()=>{ $("cur").textContent=fmt(audio.currentTime); if(!scrubbing&&audio.duration) $("seek").value=audio.currentTime/audio.duration*1000; });
-audio.addEventListener("loadedmetadata",()=>$("dur").textContent=fmt(audio.duration));
+audio.addEventListener("timeupdate",()=>{ if(Date.now()-lastSave>5000) saveResume(); $("cur").textContent=fmt(audio.currentTime); if(!scrubbing&&audio.duration) $("seek").value=audio.currentTime/audio.duration*1000; });
+audio.addEventListener("loadedmetadata",()=>{ $("dur").textContent=fmt(audio.duration); if(pendingSeek){ audio.currentTime=pendingSeek; pendingSeek=0; } });
 $("seek").addEventListener("input",e=>{ scrubbing=true; if(audio.duration) $("cur").textContent=fmt(e.target.value/1000*audio.duration); });
 $("seek").addEventListener("change",e=>{ if(audio.duration) audio.currentTime=e.target.value/1000*audio.duration; scrubbing=false; });
 $("pp").onclick=toggle; $("next").onclick=()=>next(false); $("prev").onclick=prev;
-$("shuf").onclick=()=>{ shuffle=!shuffle; $("shuf").classList.toggle("on",shuffle); $("shuf").title="Shuffle "+(shuffle?"on":"off")+" (S)"; };
-$("rep").onclick=()=>{ repeat=(repeat+1)%3; $("rep").classList.toggle("on",repeat>0); $("rep").innerHTML=repeat===2?ICON.rep1:ICON.rep; $("rep").title="Repeat "+["off","all","one"][repeat]+" (R)"; };
-$("volume").addEventListener("input",e=>{ audio.volume=e.target.value; audio.muted=false; $("mute").classList.remove("on"); });
+function paintShuffle(){ $("shuf").classList.toggle("on",shuffle); $("shuf").title="Shuffle "+(shuffle?"on":"off")+" (S)"; }
+$("shuf").onclick=()=>{ shuffle=!shuffle; paintShuffle(); savePrefs(); renderQueue(); };
+function paintRepeat(){ $("rep").classList.toggle("on",repeat>0); $("rep").innerHTML=repeat===2?ICON.rep1:ICON.rep; $("rep").title="Repeat "+["off","all","one"][repeat]+" (R)"; }
+$("rep").onclick=()=>{ repeat=(repeat+1)%3; paintRepeat(); savePrefs(); };
+$("volume").addEventListener("input",e=>{ audio.volume=e.target.value; audio.muted=false; $("mute").classList.remove("on"); prefs.vol=+e.target.value; savePrefs(); });
 $("mute").onclick=()=>{ audio.muted=!audio.muted; $("mute").classList.toggle("on",audio.muted); };
 document.addEventListener("keydown",e=>{
   if(menuEl||e.target.matches("input,textarea")||e.ctrlKey||e.metaKey||e.altKey) return;
@@ -547,17 +574,46 @@ function renderSearch(q,c){
   if(tracks.length){ c.append(el("div","label","Tracks")); c.append(trackList(tracks,tracks,true)); }
 }
 
+const SORTS={default:"Default",name:"A–Z",nameDesc:"Z–A",count:"Most tracks",sizeDesc:"Largest",sizeAsc:"Smallest"};
+const sortOpts=tab=>tab==="Albums"?["default","name","nameDesc","count","sizeDesc"]:["default","name","nameDesc","sizeDesc","sizeAsc"];
+const SORT_ICON='<svg viewBox="0 0 24 24"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"/></svg>';
+const gSize=g=>g.tracks.reduce((n,t)=>n+(t.size||0),0);
+const nameCmp=(x,y)=>x.localeCompare(y,undefined,{numeric:true,sensitivity:"base"});
+function sortGroups(arr,k){
+  const a=arr.slice();
+  if(k==="name") a.sort((x,y)=>nameCmp(x.name,y.name));
+  else if(k==="nameDesc") a.sort((x,y)=>nameCmp(y.name,x.name));
+  else if(k==="count") a.sort((x,y)=>y.tracks.length-x.tracks.length||nameCmp(x.name,y.name));
+  else if(k==="sizeDesc") a.sort((x,y)=>gSize(y)-gSize(x));
+  else if(k==="sizeAsc") a.sort((x,y)=>gSize(x)-gSize(y));
+  return a;
+}
+function sortTracks(arr,k){
+  const a=arr.slice();
+  if(k==="name") a.sort((x,y)=>nameCmp(x.title,y.title));
+  else if(k==="nameDesc") a.sort((x,y)=>nameCmp(y.title,x.title));
+  else if(k==="sizeDesc") a.sort((x,y)=>(y.size||0)-(x.size||0));
+  else if(k==="sizeAsc") a.sort((x,y)=>(x.size||0)-(y.size||0));
+  return a;
+}
 function renderBrowse(c){
   const d=data[activeTab], isAlb=activeTab==="Albums";
   c.append(el("h2","title",activeTab));
   if(!d.tracks.length){ c.append(el("p","stat","Nothing here yet.")); return; }
   c.append(el("p","stat",isAlb?`${plural(albumCount(),"album")} · ${plural(d.tracks.length,"track")} total`:plural(d.tracks.length,"track")));
+  let k=(prefs.sort&&prefs.sort[activeTab])||"default"; if(!sortOpts(activeTab).includes(k)) k="default";
+  const named=sortGroups(d.groups.filter(g=>g.name!==""),k), loose=d.groups.find(g=>g.name==="");
+  const looseTracks=loose?sortTracks(loose.tracks,k):[];
+  const order=[...named.flatMap(g=>g.tracks),...looseTracks];
   const acts=el("div","actions");
-  acts.append(bigPlay(()=>playList(d.tracks,0),"Play all"),pill(ICON.dl,`Download all (.zip)`,zipTab));
+  const sp=pill(SORT_ICON,"Sort: "+SORTS[k],()=>{
+    const r=sp.getBoundingClientRect();
+    showMenu(sortOpts(activeTab).map(o=>({label:(o===k?"✓ ":"\u2003")+SORTS[o],fn:()=>{ prefs.sort=prefs.sort||{}; prefs.sort[activeTab]=o; savePrefs(); render(false); }})),r.left,r.bottom+4);
+  });
+  acts.append(bigPlay(()=>playList(order,0),"Play all"),pill(ICON.dl,"Download all (.zip)",zipTab),sp);
   c.append(acts);
-  const named=d.groups.filter(g=>g.name!==""), loose=d.groups.find(g=>g.name==="");
   if(named.length){ const gr=el("div","grid"); c.append(gr); chunked(named,g=>tile(g),gr); }
-  if(loose){ if(named.length) c.append(el("div","label","Tracks")); c.append(trackList(loose.tracks,loose.tracks,false)); }
+  if(looseTracks.length){ if(named.length) c.append(el("div","label","Tracks")); c.append(trackList(looseTracks,looseTracks,false)); }
 }
 
 function renderList(c){
@@ -602,7 +658,8 @@ function render(resetScroll,first){
 const KEY="mzk:v1";
 let store={likes:[],playlists:[]};
 function loadStore(){ try{ const s=JSON.parse(localStorage.getItem(KEY)); if(s&&Array.isArray(s.likes)&&Array.isArray(s.playlists)) store=s; }catch(e){} }
-function saveStore(){ try{ localStorage.setItem(KEY,JSON.stringify(store)); }catch(e){ toast("Couldn't save: browser storage is unavailable"); } }
+function saveLocal(){ try{ localStorage.setItem(KEY,JSON.stringify(store)); }catch(e){ toast("Couldn't save: browser storage is unavailable"); } }
+function saveStore(){ saveLocal(); schedulePush(); }
 loadStore();
 const byPath=new Map(); let libReady=false;
 const resolve=paths=>paths.map(k=>byPath.get(k)).filter(Boolean);
@@ -778,7 +835,7 @@ function viewTracks(){
   if(activeList){ const p=getPl(activeList); return p?resolve(p.tracks):[]; }
   return openGroup?openGroup.tracks:data[activeTab].tracks;
 }
-function shuffleAll(tracks){ if(!tracks.length) return; shuffle=true; $("shuf").classList.add("on"); playList(tracks,Math.floor(Math.random()*tracks.length)); }
+function shuffleAll(tracks){ if(!tracks.length) return; shuffle=true; paintShuffle(); savePrefs(); playList(tracks,Math.floor(Math.random()*tracks.length)); }
 function genericMenu(){
   const tr=viewTracks();
   return [
@@ -798,7 +855,7 @@ document.addEventListener("contextmenu",e=>{
   if(!items){
     if(e.target.closest("#pls,.libhead")) items=[{label:"New playlist…",fn:()=>newPlaylistFlow()}];
     else if(e.target.closest("#n-Liked")){ items=[{label:"Play",fn:()=>{ const tr=resolve(store.likes.slice().reverse()); tr.length?playList(tr,0):toast("No liked songs yet"); }}]; }
-    else if(e.target.closest("#player")&&queue[qi]) items=trackMenu(queue[qi],{});
+    else if(e.target.closest("#player")&&queue[qi]) items=[...trackMenu(queue[qi],{}),{sep:1},...playerOptions()];
     else items=genericMenu();
   }
   showMenu(items,e.clientX,e.clientY);
@@ -838,6 +895,158 @@ function renderQueue(){
 }
 document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&!menuEl&&!$("queuePanel").hidden&&!document.querySelector("dialog[open]")) toggleQueue(); });
 
+// ---------- preferences + resume ----------
+let prefs={sort:{},rate:1,vol:1,shuffle:false,repeat:0};
+try{ Object.assign(prefs,JSON.parse(localStorage.getItem("mzk:prefs"))||{}); }catch(e){}
+function savePrefs(){ prefs.shuffle=shuffle; prefs.repeat=repeat; try{ localStorage.setItem("mzk:prefs",JSON.stringify(prefs)); }catch(e){} }
+let rate=prefs.rate||1;
+(function applyPrefs(){
+  shuffle=!!prefs.shuffle; repeat=prefs.repeat|0; paintShuffle(); paintRepeat();
+  audio.volume=Math.min(1,Math.max(0,+prefs.vol)); $("volume").value=audio.volume;
+  audio.defaultPlaybackRate=rate; audio.playbackRate=rate;
+})();
+function saveResume(){
+  lastSave=Date.now();
+  if(qi<0||!queue[qi]) return;
+  const start=Math.max(0,qi-20), part=queue.slice(start,start+500);
+  try{ localStorage.setItem("mzk:resume",JSON.stringify({q:part.map(t=>t.path),i:qi-start,t:pendingSeek||audio.currentTime||0})); }catch(e){}
+}
+function restoreResume(){
+  try{
+    const r=JSON.parse(localStorage.getItem("mzk:resume")); if(!r||!r.q) return;
+    const cur=r.q[r.i], list=resolve(r.q), idx=list.findIndex(t=>t.path===cur);
+    if(idx<0) return;
+    queue=list; load(idx,{paused:true,seek:r.t||0});
+  }catch(e){}
+}
+document.addEventListener("visibilitychange",()=>{ if(document.hidden) saveResume(); });
+window.addEventListener("pagehide",saveResume);
+
+// ---------- playback speed + sleep timer ----------
+let sleepTimer=null, sleepAt=0;
+function paintOpts(){ $("opts").classList.toggle("on",rate!==1||sleepEnd||!!sleepAt); }
+function setRate(r){ rate=r; prefs.rate=r; audio.defaultPlaybackRate=r; audio.playbackRate=r; savePrefs(); paintOpts(); toast(r+"× speed"); }
+function setSleep(mode){
+  clearTimeout(sleepTimer); sleepTimer=null; sleepEnd=false; sleepAt=0;
+  if(mode==="end"){ sleepEnd=true; toast("Will stop after this song"); }
+  else if(mode>0){ sleepAt=Date.now()+mode*60000; sleepTimer=setTimeout(sleepFire,mode*60000); toast("Sleep timer: "+mode+" min"); }
+  else toast("Sleep timer off");
+  paintOpts();
+}
+function sleepFire(){
+  sleepTimer=null; sleepAt=0; const v=audio.volume; let k=0;
+  const iv=setInterval(()=>{ k++; audio.volume=Math.max(0,v*(1-k/20)); if(k>=20){ clearInterval(iv); audio.pause(); audio.volume=v; paintOpts(); toast("Sleep timer: stopped"); } },200);
+}
+function playerOptions(){
+  const sl=sleepEnd?"Sleep timer (end of song)":sleepAt?`Sleep timer (${Math.max(1,Math.ceil((sleepAt-Date.now())/60000))} min left)`:"Sleep timer";
+  const mark=on=>on?"✓ ":"\u2003";
+  return [
+    {label:`Playback speed (${rate}×)`,sub:()=>[0.5,0.75,1,1.25,1.5,2].map(r=>({label:mark(r===rate)+r+"×"+(r===1?" (normal)":""),fn:()=>setRate(r)}))},
+    {label:sl,sub:()=>[
+      {label:mark(!sleepEnd&&!sleepAt)+"Off",fn:()=>setSleep(0)},
+      ...[15,30,45,60].map(m=>({label:"\u2003"+m+" minutes",fn:()=>setSleep(m)})),
+      {label:mark(sleepEnd)+"End of this song",fn:()=>setSleep("end")}
+    ]}
+  ];
+}
+$("opts").onclick=()=>{ const r=$("opts").getBoundingClientRect(); showMenu(playerOptions(),r.left,r.top-120); };
+paintOpts();
+
+// ---------- accounts + sync (Firebase: Google or email/password) ----------
+let auth=null, db=null, fbUser=null, unsubDoc=null, pushTimer=null, wasSignedIn=false;
+const PERSON='<svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 100-8 4 4 0 000 8zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
+function loadScript(src){ return new Promise((res,rej)=>{ const sc=document.createElement("script"); sc.src=src; sc.onload=res; sc.onerror=()=>rej(new Error("Couldn't load "+src)); document.head.append(sc); }); }
+function renderAccount(){
+  const b=$("acct"); b.hidden=!FIREBASE_CONFIG; if(!FIREBASE_CONFIG) return;
+  b.innerHTML=""; const u=fbUser;
+  if(u&&u.photoURL){ const im=el("img"); im.src=u.photoURL; im.alt=""; im.referrerPolicy="no-referrer"; b.append(im); } else b.insertAdjacentHTML("beforeend",PERSON);
+  b.append(el("span","name",u?(u.displayName||u.email||"Account"):"Sign in to sync"));
+}
+$("acct").onclick=()=>{
+  if(!auth){ toast("Still connecting…"); return; }
+  if(!fbUser){ authDialog(); return; }
+  const r=$("acct").getBoundingClientRect();
+  showMenu([{label:fbUser.email||fbUser.displayName||"Signed in",fn:()=>{}},{sep:1},{label:"Sign out",fn:()=>auth.signOut()}],r.left,Math.max(8,r.top-90));
+};
+function authMsg(e){
+  const m={"auth/invalid-credential":"Wrong email or password.","auth/wrong-password":"Wrong email or password.","auth/user-not-found":"Wrong email or password.",
+    "auth/email-already-in-use":"That email already has an account. Try Sign in.","auth/weak-password":"Password needs at least 6 characters.",
+    "auth/invalid-email":"That email doesn't look right.","auth/missing-password":"Enter a password.","auth/popup-closed-by-user":"","auth/cancelled-popup-request":"",
+    "auth/unauthorized-domain":"This site's domain isn't allowed in Firebase (Authentication → Settings → Authorized domains).",
+    "auth/operation-not-supported-in-this-environment":"Google sign-in needs the page served over http(s), not opened as a local file.",
+    "auth/too-many-requests":"Too many attempts. Try again in a bit."};
+  return e.code in m?m[e.code]:(e.message||"Something went wrong.");
+}
+function authDialog(){
+  return modal((d,done)=>{
+    const err=el("p","err");
+    const run=async fn=>{ err.textContent=""; err.style.color=""; try{ await fn(); done(true); }catch(e){ err.textContent=authMsg(e); } };
+    d.append(el("h2",null,"Sign in to sync"),el("p","note","Your liked songs and playlists will follow you to every device."));
+    const g=pill("","Continue with Google",()=>run(()=>auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()))); g.classList.add("primary");
+    const em=el("input","txt"); em.type="email"; em.placeholder="Email"; em.autocomplete="email"; em.setAttribute("aria-label","Email");
+    const pw=el("input","txt"); pw.type="password"; pw.placeholder="Password"; pw.autocomplete="current-password"; pw.setAttribute("aria-label","Password");
+    const signIn=()=>run(()=>auth.signInWithEmailAndPassword(em.value.trim(),pw.value));
+    pw.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); signIn(); } };
+    const stack=el("div","stack"); stack.append(em,pw);
+    const row=el("div","btnrow"); row.append(pill("","Sign in",signIn),pill("","Create account",()=>run(()=>auth.createUserWithEmailAndPassword(em.value.trim(),pw.value))));
+    const fg=el("button","linkbtn","Forgot password?");
+    fg.onclick=async()=>{ try{ await auth.sendPasswordResetEmail(em.value.trim()); err.style.color="var(--accent)"; err.textContent="Reset email sent. Check your inbox."; }catch(e){ err.style.color=""; err.textContent=authMsg(e); } };
+    const brow=el("div","btnrow"); brow.append(g);
+    d.append(brow,el("p","or","or use email"),stack,err,row,fg);
+  });
+}
+function schedulePush(){ if(!fbUser||!db) return; clearTimeout(pushTimer); pushTimer=setTimeout(pushNow,800); }
+function pushNow(){
+  clearTimeout(pushTimer); pushTimer=null; if(!fbUser||!db) return;
+  db.collection("users").doc(fbUser.uid).set({likes:store.likes,playlists:store.playlists,updated:firebase.firestore.FieldValue.serverTimestamp()})
+    .catch(e=>toast("Sync failed: "+(e.code||e.message)));
+}
+function refreshAfterSync(){ renderSidebar(); refreshHearts(); if(activeList) render(false); }
+function mergeWithCloud(cloud){
+  const likes=[...(cloud.likes||[])]; store.likes.forEach(k=>{ if(!likes.includes(k)) likes.push(k); });
+  const pls=(cloud.playlists||[]).map(p=>({...p,tracks:[...(p.tracks||[])]}));
+  store.playlists.forEach(lp=>{ const cp=pls.find(p=>p.id===lp.id); if(!cp) pls.push(lp); else lp.tracks.forEach(k=>{ if(!cp.tracks.includes(k)) cp.tracks.push(k); }); });
+  store={likes,playlists:pls}; saveLocal(); refreshAfterSync(); pushNow();
+}
+function onUser(u){
+  fbUser=u; renderAccount();
+  if(unsubDoc){ unsubDoc(); unsubDoc=null; }
+  if(!u){
+    if(wasSignedIn){ // signing out clears this browser's copy
+      wasSignedIn=false; store={likes:[],playlists:[]}; saveLocal(); try{ localStorage.removeItem("mzk:syncuid"); }catch(e){}
+      refreshAfterSync(); if(activeList) go(activeTab); toast("Signed out");
+    }
+    return;
+  }
+  wasSignedIn=true; let first=true;
+  unsubDoc=db.collection("users").doc(u.uid).onSnapshot(snap=>{
+    if(snap.metadata.hasPendingWrites||pushTimer) return;
+    const cloud=snap.exists?snap.data():null;
+    if(first){
+      first=false;
+      const synced=localStorage.getItem("mzk:syncuid")===u.uid;
+      try{ localStorage.setItem("mzk:syncuid",u.uid); }catch(e){}
+      if(!cloud){ pushNow(); toast("Signed in. Syncing your library"); }
+      else if(synced){ store={likes:cloud.likes||[],playlists:cloud.playlists||[]}; saveLocal(); refreshAfterSync(); }
+      else{ mergeWithCloud(cloud); toast("Signed in. Library merged"); }
+    }else if(cloud){
+      const next={likes:cloud.likes||[],playlists:cloud.playlists||[]};
+      if(JSON.stringify(next)!==JSON.stringify({likes:store.likes,playlists:store.playlists})){ store=next; saveLocal(); refreshAfterSync(); }
+    }
+  },e=>toast("Sync error: "+(e.code||e.message)));
+}
+async function initFirebase(){
+  renderAccount(); if(!FIREBASE_CONFIG) return;
+  try{
+    const base="https://www.gstatic.com/firebasejs/10.12.2/";
+    await loadScript(base+"firebase-app-compat.js");
+    await Promise.all([loadScript(base+"firebase-auth-compat.js"),loadScript(base+"firebase-firestore-compat.js")]);
+    firebase.initializeApp(FIREBASE_CONFIG); auth=firebase.auth(); db=firebase.firestore();
+    auth.onAuthStateChanged(onUser);
+  }catch(e){ $("acct").querySelector(".name").textContent="Sync unavailable"; }
+}
+initFirebase();
+
 function build(files,tab){
   const prefix=tab+"/", by=new Map();
   files.filter(f=>f.path.startsWith(prefix)).sort((a,b)=>a.path.localeCompare(b.path,undefined,{numeric:true})).forEach(f=>{
@@ -863,7 +1072,7 @@ function counts(){
     if(!res.ok) throw new Error(res.status===403?"GitHub rate limit reached. Try again in a few minutes.":"GitHub returned "+res.status);
     const json=await res.json();
     const files=json.tree.filter(n=>n.type==="blob"&&AUDIO.test(n.path));
-    TABS.forEach(t=>build(files,t)); [...data.Singles.tracks,...data.Albums.tracks].forEach(t=>byPath.set(t.path,t)); libReady=true; counts(); renderSidebar(); setDefaults(); render(true,true);
+    TABS.forEach(t=>build(files,t)); [...data.Singles.tracks,...data.Albums.tracks].forEach(t=>byPath.set(t.path,t)); libReady=true; restoreResume(); counts(); renderSidebar(); setDefaults(); render(true,true);
   }catch(err){ bar.hidden=true; $("content").innerHTML='<div class="msg">Couldn\'t load the library. '+err.message+'</div>'; }
 })();
 </script>
