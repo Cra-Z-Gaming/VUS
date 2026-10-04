@@ -261,6 +261,8 @@ const OWNER="Cra-Z-Gaming", REPO="mzk", BRANCH="main";
 
 // ---- Accounts (optional): paste your Firebase web app config here to turn on Google/email sign-in + sync ----
 // const FIREBASE_CONFIG = { apiKey:"...", authDomain:"...", projectId:"...", appId:"..." };
+// Sign-in methods shown in the sign-in window. Flip AUTH_GOOGLE to true once Google is enabled in Firebase.
+const AUTH_GOOGLE = false;
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDyKNOMa_YnIXlqtZ8OrIePHBOhudiEoUk",
   authDomain: "mzk-playa.firebaseapp.com",
@@ -988,11 +990,12 @@ function authDialog(){
     const signIn=()=>run(()=>auth.signInWithEmailAndPassword(em.value.trim(),pw.value));
     pw.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); signIn(); } };
     const stack=el("div","stack"); stack.append(em,pw);
-    const row=el("div","btnrow"); row.append(pill("","Sign in",signIn),pill("","Create account",()=>run(()=>auth.createUserWithEmailAndPassword(em.value.trim(),pw.value))));
+    const row=el("div","btnrow"); const sib=pill("","Sign in",signIn); sib.classList.add("primary");
+    row.append(sib,pill("","Create account",()=>run(()=>auth.createUserWithEmailAndPassword(em.value.trim(),pw.value))));
     const fg=el("button","linkbtn","Forgot password?");
     fg.onclick=async()=>{ try{ await auth.sendPasswordResetEmail(em.value.trim()); err.style.color="var(--accent)"; err.textContent="Reset email sent. Check your inbox."; }catch(e){ err.style.color=""; err.textContent=authMsg(e); } };
-    const brow=el("div","btnrow"); brow.append(g);
-    d.append(brow,el("p","or","or use email"),stack,err,row,fg);
+    if(AUTH_GOOGLE){ const brow=el("div","btnrow"); brow.append(g); d.append(brow,el("p","or","or use email")); }
+    d.append(stack,err,row,fg);
   });
 }
 function schedulePush(){ if(!fbUser||!db) return; clearTimeout(pushTimer); pushTimer=setTimeout(pushNow,800); }
@@ -1042,7 +1045,7 @@ async function initFirebase(){
     await loadScript(base+"firebase-app-compat.js");
     await Promise.all([loadScript(base+"firebase-auth-compat.js"),loadScript(base+"firebase-firestore-compat.js")]);
     firebase.initializeApp(FIREBASE_CONFIG); auth=firebase.auth(); db=firebase.firestore();
-    auth.onAuthStateChanged(onUser);
+    auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{}).then(()=>auth.onAuthStateChanged(onUser));
   }catch(e){ $("acct").querySelector(".name").textContent="Sync unavailable"; }
 }
 initFirebase();
