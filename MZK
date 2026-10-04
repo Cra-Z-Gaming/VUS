@@ -174,6 +174,53 @@
   dialog.modal .stack input.txt { margin:0; }
   .or { color:var(--dim); font-size:.8rem; margin:12px 0 0; }
 
+  /* ---------- polish ---------- */
+  #content { max-width:1180px; }
+  .topbar { padding:16px 24px 8px; gap:8px 14px; }
+  .searchbox { position:relative; flex:1 1 280px; max-width:440px; }
+  .searchbox svg { position:absolute; left:14px; top:50%; transform:translateY(-50%); width:20px; height:20px; color:var(--dim); pointer-events:none; }
+  #q { width:100%; max-width:none; padding:11px 18px 11px 44px; background:var(--raised); border-color:transparent; }
+  #q:focus { outline:2px solid var(--accent); outline-offset:0; border-color:transparent; }
+  .scopes { display:none; align-items:center; }
+  .topbar:focus-within .scopes, .scopes.show { display:flex; }
+  .sin { color:var(--dim); font-size:.78rem; margin-right:2px; }
+  h2.title { font-size:2.2rem; margin-top:14px; }
+  .tile { padding:10px; }
+  .tile h3 { margin-top:10px; }
+  li { padding:8px 8px 8px 12px; }
+  li .heart:not(.on), li .more { opacity:0; transition:opacity .12s; }
+  li:hover .heart, li:hover .more, li:focus-within .heart, li:focus-within .more, li.playing .heart, li.playing .more { opacity:1; }
+  @media (hover:none) { li .heart, li .more { opacity:1 !important; } }
+  .nav { transition:background .12s,color .12s; }
+
+  /* ---------- player ---------- */
+  #player { grid-template-columns:minmax(0,1fr) minmax(320px,2.2fr) minmax(0,1fr); grid-template-areas:"np ctr vol"; padding:12px 20px; border:1px solid var(--line); }
+  .np { grid-area:np; } .center { grid-area:ctr; gap:6px; } .vol { grid-area:vol; gap:2px; }
+  .ctrls { gap:10px; align-items:center; }
+  .ctrls .ib { width:36px; height:36px; }
+  #shuf svg, #rep svg { width:19px; height:19px; }
+  #prev, #next { width:42px; height:42px; color:var(--text); }
+  #prev svg, #next svg { width:26px; height:26px; }
+  #prev:hover, #next:hover { background:var(--raised); }
+  #pp { width:50px; height:50px; transition:transform .12s; }
+  #pp:hover { transform:scale(1.06); }
+  #pp svg { width:24px; height:24px; }
+  .seek { gap:12px; max-width:560px; font-size:.74rem; }
+  .seek span { width:2.6em; }
+  .seek span:last-child { text-align:left; }
+
+  input.rng { -webkit-appearance:none; appearance:none; background:transparent; height:18px; cursor:pointer; --p:0%; margin:0; }
+  input.rng::-webkit-slider-runnable-track { height:4px; border-radius:99px; background:linear-gradient(to right,var(--accent) var(--p),var(--line) var(--p)); }
+  input.rng::-moz-range-track { height:4px; border-radius:99px; background:var(--line); }
+  input.rng::-moz-range-progress { height:4px; border-radius:99px; background:var(--accent); }
+  input.rng::-webkit-slider-thumb { -webkit-appearance:none; width:13px; height:13px; border-radius:50%; background:var(--text); margin-top:-4.5px; border:0; opacity:0; transition:opacity .12s; }
+  input.rng::-moz-range-thumb { width:13px; height:13px; border-radius:50%; background:var(--text); border:0; opacity:0; transition:opacity .12s; }
+  input.rng:hover::-webkit-slider-thumb, input.rng:focus-visible::-webkit-slider-thumb, input.rng:active::-webkit-slider-thumb { opacity:1; }
+  input.rng:hover::-moz-range-thumb, input.rng:focus-visible::-moz-range-thumb, input.rng:active::-moz-range-thumb { opacity:1; }
+  @media (hover:none) { input.rng::-webkit-slider-thumb, input.rng::-moz-range-thumb { opacity:1; } }
+  input.rng:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:99px; }
+  #volume { width:96px; }
+
   /* ---------- mobile ---------- */
   @media (max-width:820px) {
     .app { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr) auto; }
@@ -186,8 +233,10 @@
     .libhead span { display:none; }
     aside a.pill { white-space:nowrap; margin-left:auto; padding:6px 12px; }
     .topbar, #content { padding-left:14px; padding-right:14px; }
-    #player { grid-template-columns:minmax(0,1fr); gap:6px; padding:10px 14px; }
-    .vol { display:none; }
+    #player { grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"np vol" "ctr ctr"; gap:4px 10px; padding:10px 14px; }
+    #volume, #mute { display:none; }
+    .topbar { padding-top:12px; }
+    #q { font-size:16px; }
     #art { width:44px; height:44px; }
     #toast { bottom:150px; }
     #queuePanel { bottom:160px; right:12px; }
@@ -210,8 +259,8 @@
 
   <main id="main">
     <div class="topbar">
-      <input id="q" type="search" placeholder="Search" aria-label="Search" autocomplete="off">
-      <div class="scopes">
+      <div class="searchbox"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg><input id="q" type="search" placeholder="Search songs and albums" aria-label="Search" autocomplete="off"></div>
+      <div class="scopes"><span class="sin">Search in</span>
         <label class="chip"><input type="checkbox" id="sc-at"><span>Album titles</span></label>
         <label class="chip"><input type="checkbox" id="sc-atr"><span>Album tracks</span></label>
         <label class="chip"><input type="checkbox" id="sc-st"><span>Single tracks</span></label>
@@ -233,18 +282,18 @@
         <button class="ib" id="pp" title="Play/pause (Space)" aria-label="Play"><svg viewBox="0 0 24 24"><path id="ppi" d="M8 5v14l11-7z"/></svg></button>
         <button class="ib" id="next" title="Next (N)" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg></button>
         <button class="ib" id="rep" title="Repeat off (R)" aria-label="Repeat"></button>
-        <button class="ib" id="opts" title="Speed &amp; sleep timer" aria-label="Playback speed and sleep timer"><svg viewBox="0 0 24 24"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg></button>
-        <button class="ib" id="qbtn" title="Queue (Q)" aria-label="Queue"><svg viewBox="0 0 24 24"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18a3 3 0 101.99 2.82V8H22V6h-5z"/></svg></button>
       </div>
       <div class="seek">
         <span id="cur">0:00</span>
-        <input id="seek" type="range" min="0" max="1000" value="0" aria-label="Seek">
+        <input id="seek" class="rng" type="range" min="0" max="1000" value="0" aria-label="Seek">
         <span id="dur">0:00</span>
       </div>
     </div>
     <div class="vol">
+        <button class="ib" id="opts" title="Speed &amp; sleep timer" aria-label="Playback speed and sleep timer"><svg viewBox="0 0 24 24"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg></button>
+        <button class="ib" id="qbtn" title="Queue (Q)" aria-label="Queue"><svg viewBox="0 0 24 24"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18a3 3 0 101.99 2.82V8H22V6h-5z"/></svg></button>
       <button class="ib" id="mute" title="Mute (M)" aria-label="Mute"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg></button>
-      <input id="volume" type="range" min="0" max="1" step="0.01" value="1" aria-label="Volume">
+      <input id="volume" class="rng" type="range" min="0" max="1" step="0.01" value="1" aria-label="Volume">
     </div>
   </div>
 </div>
@@ -436,17 +485,21 @@ audio.addEventListener("play",updatePP); audio.addEventListener("pause",()=>{ up
 audio.addEventListener("error",()=>{ if(qi>=0) $("sub").textContent="Couldn't play this file"; });
 function updatePP(){ $("ppi").setAttribute("d",audio.paused?"M8 5v14l11-7z":"M6 5h4v14H6zm8 0h4v14h-4z"); $("pp").setAttribute("aria-label",audio.paused?"Play":"Pause"); }
 let scrubbing=false;
-audio.addEventListener("timeupdate",()=>{ if(Date.now()-lastSave>5000) saveResume(); $("cur").textContent=fmt(audio.currentTime); if(!scrubbing&&audio.duration) $("seek").value=audio.currentTime/audio.duration*1000; });
+audio.addEventListener("timeupdate",()=>{ if(Date.now()-lastSave>5000) saveResume(); $("cur").textContent=fmt(audio.currentTime); if(!scrubbing&&audio.duration){ $("seek").value=audio.currentTime/audio.duration*1000; setFill($("seek")); } });
 audio.addEventListener("loadedmetadata",()=>{ $("dur").textContent=fmt(audio.duration); if(pendingSeek){ audio.currentTime=pendingSeek; pendingSeek=0; } });
-$("seek").addEventListener("input",e=>{ scrubbing=true; if(audio.duration) $("cur").textContent=fmt(e.target.value/1000*audio.duration); });
+$("seek").addEventListener("input",e=>{ scrubbing=true; setFill(e.target); if(audio.duration) $("cur").textContent=fmt(e.target.value/1000*audio.duration); });
 $("seek").addEventListener("change",e=>{ if(audio.duration) audio.currentTime=e.target.value/1000*audio.duration; scrubbing=false; });
 $("pp").onclick=toggle; $("next").onclick=()=>next(false); $("prev").onclick=prev;
 function paintShuffle(){ $("shuf").classList.toggle("on",shuffle); $("shuf").title="Shuffle "+(shuffle?"on":"off")+" (S)"; }
 $("shuf").onclick=()=>{ shuffle=!shuffle; paintShuffle(); savePrefs(); renderQueue(); };
 function paintRepeat(){ $("rep").classList.toggle("on",repeat>0); $("rep").innerHTML=repeat===2?ICON.rep1:ICON.rep; $("rep").title="Repeat "+["off","all","one"][repeat]+" (R)"; }
 $("rep").onclick=()=>{ repeat=(repeat+1)%3; paintRepeat(); savePrefs(); };
-$("volume").addEventListener("input",e=>{ audio.volume=e.target.value; audio.muted=false; $("mute").classList.remove("on"); prefs.vol=+e.target.value; savePrefs(); });
-$("mute").onclick=()=>{ audio.muted=!audio.muted; $("mute").classList.toggle("on",audio.muted); };
+$("volume").addEventListener("input",e=>{ audio.volume=e.target.value; audio.muted=false; $("mute").classList.remove("on"); setFill(e.target); paintMute(); prefs.vol=+e.target.value; savePrefs(); });
+const VOL_ON='<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>';
+const VOL_OFF='<svg viewBox="0 0 24 24"><path d="M16.5 12A4.5 4.5 0 0014 7.97v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.8 8.8 0 0021 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 003.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>';
+function paintMute(){ $("mute").innerHTML=(audio.muted||audio.volume===0)?VOL_OFF:VOL_ON; }
+function setFill(inp){ inp.style.setProperty("--p",((inp.value-inp.min)/(inp.max-inp.min)*100)+"%"); }
+$("mute").onclick=()=>{ audio.muted=!audio.muted; $("mute").classList.toggle("on",audio.muted); paintMute(); };
 document.addEventListener("keydown",e=>{
   if(menuEl||e.target.matches("input,textarea")||e.ctrlKey||e.metaKey||e.altKey) return;
   const k=e.key.toLowerCase();
@@ -467,14 +520,14 @@ function pill(html,label,fn){ const b=el("button","pill"); b.innerHTML=html; b.a
 function bigPlay(fn,label){ const b=el("button","bigplay"); b.innerHTML=ICON.play; b.title=label; b.setAttribute("aria-label",label); b.onclick=fn; return b; }
 
 const scope={at:$("sc-at"),atr:$("sc-atr"),st:$("sc-st")};
-function setDefaults(){ const a=activeTab==="Albums"; scope.at.checked=a; scope.atr.checked=a; scope.st.checked=!a; $("q").placeholder=a?"Search albums":"Search singles"; }
+function setDefaults(){ const a=activeTab==="Albums"; scope.at.checked=a; scope.atr.checked=a; scope.st.checked=!a; }
 function go(tab,group){ activeTab=tab; activeList=null; openGroup=group||null; $("q").value=""; setDefaults(); render(true); }
 function goList(id){ activeList=id; openGroup=null; $("q").value=""; render(true); }
 TABS.forEach(t=>$("n-"+t).onclick=()=>go(t));
 $("n-Liked").onclick=()=>goList("liked");
 $("newpl").onclick=()=>newPlaylistFlow();
 $("plike").onclick=()=>{ const t=queue[qi]; if(t) toggleLike(t); };
-$("q").addEventListener("input",()=>render(false));
+$("q").addEventListener("input",()=>{ document.querySelector(".scopes").classList.toggle("show",!!$("q").value.trim()); render(false); });
 Object.values(scope).forEach(c=>c.addEventListener("change",()=>render(false)));
 
 // ---------- throttled rendering + loading bar ----------
@@ -906,6 +959,7 @@ let rate=prefs.rate||1;
   shuffle=!!prefs.shuffle; repeat=prefs.repeat|0; paintShuffle(); paintRepeat();
   audio.volume=Math.min(1,Math.max(0,+prefs.vol)); $("volume").value=audio.volume;
   audio.defaultPlaybackRate=rate; audio.playbackRate=rate;
+  setFill($("volume")); setFill($("seek")); paintMute();
 })();
 function saveResume(){
   lastSave=Date.now();
