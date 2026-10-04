@@ -450,7 +450,7 @@ Object.values(scope).forEach(c=>c.addEventListener("change",()=>render(false)));
 
 // ---------- throttled rendering + loading bar ----------
 const BATCH=10, GAP=45;   // items per step, ms between steps
-let loadToken=0, loadTotal=0, loadDone=0, chain=Promise.resolve(), barOff=false, barHide;
+let loadToken=0, loadTotal=0, loadDone=0, throttled=false, chain=Promise.resolve(), barOff=false, barHide;
 const bar=$("loadbar");
 bar.onclick=()=>{ barOff=true; bar.hidden=true; };   // click anywhere on the bar to dismiss it
 function barShow(label,pct){
@@ -461,13 +461,14 @@ function barShow(label,pct){
   bar.setAttribute("aria-valuenow",pct==null?"":Math.round(pct));
 }
 function barDone(){ if(barOff||bar.hidden) return; bar.classList.remove("ind"); bar.querySelector(".fill").style.width="100%"; bar.querySelector(".txt").textContent="Loaded"; barHide=setTimeout(()=>{ bar.hidden=true; },500); }
-function beginLoad(){ loadToken++; loadTotal=0; loadDone=0; chain=Promise.resolve(); }
+function beginLoad(first){ loadToken++; loadTotal=0; loadDone=0; throttled=!!first; chain=Promise.resolve(); }
 function loadProgress(){
   if(loadDone>=loadTotal) barDone();
   else if(loadTotal>=30){ const pct=loadDone/loadTotal*100; barShow(`Loading ${Math.round(pct)}% · click to hide`,pct); }
 }
 // Builds items a few at a time so weaker devices stay responsive; stale renders cancel themselves.
 function chunked(items,build,host){
+  if(!throttled){ const frag=document.createDocumentFragment(); items.forEach((it,i)=>frag.append(build(it,i))); host.append(frag); return; }  // only the first load is paced
   const my=loadToken; loadTotal+=items.length;
   chain=chain.then(()=>new Promise(res=>{
     let i=0;
@@ -585,15 +586,15 @@ function markNav(){
   $("n-Liked").setAttribute("aria-current",!q&&activeList==="liked");
   document.querySelectorAll("#pls .nav").forEach(b=>b.setAttribute("aria-current",!q&&b.dataset.pl===activeList));
 }
-function render(resetScroll){
+function render(resetScroll,first){
   const c=$("content"), q=$("q").value.trim().toLowerCase();
-  beginLoad(); c.innerHTML=""; markNav();
+  beginLoad(first); c.innerHTML=""; markNav();
   if(q) renderSearch(q,c);
   else if(activeList) renderList(c);
   else if(openGroup) renderDetail(openGroup,c);
   else renderBrowse(c);
   markPlaying();
-  if(!loadTotal) barDone();
+  if(first){ if(!loadTotal) barDone(); } else { clearTimeout(barHide); bar.hidden=true; }
   if(resetScroll) $("main").scrollTop=0;
 }
 
@@ -862,7 +863,7 @@ function counts(){
     if(!res.ok) throw new Error(res.status===403?"GitHub rate limit reached. Try again in a few minutes.":"GitHub returned "+res.status);
     const json=await res.json();
     const files=json.tree.filter(n=>n.type==="blob"&&AUDIO.test(n.path));
-    TABS.forEach(t=>build(files,t)); [...data.Singles.tracks,...data.Albums.tracks].forEach(t=>byPath.set(t.path,t)); libReady=true; counts(); renderSidebar(); setDefaults(); render(true);
+    TABS.forEach(t=>build(files,t)); [...data.Singles.tracks,...data.Albums.tracks].forEach(t=>byPath.set(t.path,t)); libReady=true; counts(); renderSidebar(); setDefaults(); render(true,true);
   }catch(err){ bar.hidden=true; $("content").innerHTML='<div class="msg">Couldn\'t load the library. '+err.message+'</div>'; }
 })();
 </script>
