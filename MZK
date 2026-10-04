@@ -221,6 +221,16 @@
   input.rng:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:99px; }
   #volume { width:96px; }
 
+  .lhb { display:flex; gap:2px; }
+  .pill:disabled { opacity:.45; cursor:not-allowed; }
+  .sharebox { margin:18px 0 8px; padding:16px 18px; border:1px solid var(--line); border-radius:14px; background:var(--raised); }
+  .sharebox h4 { margin:0 0 4px; font:700 1.05rem Georgia,serif; }
+  .sharebox .stat { margin:0 0 10px; font-size:.88rem; }
+  .srow { display:flex; align-items:center; gap:12px; padding:10px 0; border-top:1px solid var(--line); flex-wrap:wrap; }
+  .srow .scode { font:700 1.5rem ui-monospace,Menlo,Consolas,monospace; letter-spacing:.25em; }
+  .srow .left { flex:1; color:var(--dim); font-size:.85rem; min-width:80px; }
+  dialog.modal input.codein { text-align:center; letter-spacing:.4em; font:700 1.6rem ui-monospace,Menlo,Consolas,monospace; text-transform:uppercase; }
+
   /* ---------- mobile ---------- */
   @media (max-width:820px) {
     .app { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr) auto; }
@@ -251,7 +261,7 @@
     <button class="nav" id="n-Albums"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 14a4 4 0 110-8 4 4 0 010 8zm0-6a2 2 0 100 4 2 2 0 000-4z"/></svg>Albums<small></small></button>
     <div class="libhead" id="lib1"><span>Library</span></div>
     <button class="nav" id="n-Liked"><svg viewBox="0 0 24 24"><path d="M12 21l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.18L12 21z"/></svg>Liked songs<small></small></button>
-    <div class="libhead"><span>Playlists</span><button class="ib" id="newpl" title="New playlist" aria-label="New playlist"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button></div>
+    <div class="libhead"><span>Playlists</span><div class="lhb"><button class="ib" id="joinpl" title="Join a shared playlist" aria-label="Join a shared playlist"><svg viewBox="0 0 24 24"><path d="M12.65 10A5.99 5.99 0 007 6c-3.31 0-6 2.69-6 6s2.69 6 6 6a5.99 5.99 0 005.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg></button><button class="ib" id="newpl" title="New playlist" aria-label="New playlist"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button></div></div>
     <div id="pls"></div>
     <button class="nav" id="acct" hidden></button>
     <a class="pill" href="https://docs.google.com/forms/d/e/1FAIpQLSeSM-moe9C4ZHi--AOR6JSRAn7YfZJ2JR-3mxHFkbuGmnIVEw/viewform" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M9 21h6v-1H9v1zm3-19a7 7 0 00-4 12.7V17h8v-2.3A7 7 0 0012 2z"/></svg>Suggest a song</a>
@@ -342,7 +352,7 @@ $("rep").innerHTML=ICON.rep;
 
 // data[tab] = { groups:[{name,tab,loose,tracks}], tracks:[] }
 const data={Singles:{groups:[],tracks:[]},Albums:{groups:[],tracks:[]}};
-let pendingSeek=0, lastSave=0, sleepEnd=false, activeTab="Singles", openGroup=null, activeList=null, queue=[], qi=-1, shuffle=false, repeat=0, busy=false;
+let userQ=[], pendingSeek=0, lastSave=0, sleepEnd=false, activeTab="Singles", openGroup=null, activeList=null, queue=[], qi=-1, shuffle=false, repeat=0, busy=false;
 const albumCount=()=>data.Albums.groups.filter(g=>!g.loose).length;
 
 const fmt=s=>{ if(!isFinite(s)) return "0:00"; s=Math.floor(s); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); };
@@ -449,8 +459,9 @@ async function showAlbumInfo(g){
 function playList(list,i){ queue=list.slice(); load(i); }
 function load(i,opts){
   const t=queue[i]; if(!t) return;
-  qi=i; audio.src=t.url;
-  if(opts&&opts.paused) pendingSeek=opts.seek||0; else audio.play().catch(()=>{});
+  qi=i;
+  if(opts&&opts.paused) pendingSeek=opts.seek||0;
+  setSource(t,!!(opts&&opts.paused));
   $("now").textContent=t.title; $("sub").textContent=t.group||"Single"; $("art").hidden=true;
   document.title=t.title+" · mzk"; markPlaying(); renderQueue();
   if("mediaSession" in navigator) navigator.mediaSession.metadata=new MediaMetadata({title:t.title,artist:t.group||"",album:t.group||"mzk"});
@@ -472,6 +483,7 @@ function markPlaying(){
 function next(auto){
   if(!queue.length) return;
   if(auto&&repeat===2){ audio.currentTime=0; audio.play(); return; }
+  if(userQ.length){ const q=userQ.shift(); queue.splice(qi+1,0,q); load(qi+1); return; }   // queued songs go before "next up"
   let n;
   if(shuffle&&queue.length>1){ do{ n=Math.floor(Math.random()*queue.length); }while(n===qi); } else n=qi+1;
   if(n>=queue.length){ if(repeat===1||!auto) n=0; else { audio.pause(); return; } }
@@ -680,15 +692,19 @@ function renderList(c){
   const head=el("div","dhead"), art=makeArt(g), info=el("div");
   if(liked){ art.style.background="linear-gradient(135deg,#3b6f66,#8fe3d0)"; art.firstChild.nodeValue="♥"; }
   const total=tracks.reduce((n,t)=>n+(t.size||0),0);
-  info.append(el("div","kind","Playlist"),el("h1",null,name),el("p","stat",[plural(tracks.length,"song"),fmtSize(total)].filter(Boolean).join(" · ")));
+  info.append(el("div","kind",p&&p.from?"Shared with you":"Playlist"),el("h1",null,name),el("p","stat",[plural(tracks.length,"song"),fmtSize(total)].filter(Boolean).join(" · ")));
   head.append(art,info);
   if(!liked) head._ctx=()=>playlistMenu(p);
   const acts=el("div","actions");
   if(tracks.length) acts.append(bigPlay(()=>playList(tracks,0),"Play "+name),pill(ICON.dl,"Download (.zip)",()=>downloadZip(tracks.map(t=>({dl:t.dl,zipPath:t.path})),name)));
-  if(!liked) acts.append(pill("","Rename",()=>renamePlaylist(p)),pill("","Delete",()=>deletePlaylist(p)));
+  if(!liked&&!p.from) acts.append(pill("","Rename",()=>renamePlaylist(p)),pill("","Delete",()=>deletePlaylist(p)));
+  else if(!liked) acts.append(pill("","Remove from library",()=>deletePlaylist(p)));
+  if(tracks.length&&window.caches) acts.append(offBtn(liked?"liked":p.id));
   c.append(head,acts);
+  if(!liked&&!p.from) c.append(sharePanel(p));
+  else if(!liked) c.append(el("p","stat","Shared playlist. It updates automatically when the owner changes it."));
   if(!tracks.length) c.append(el("p","stat",liked?"No liked songs yet. Tap the heart on any song, or right-click it.":"This playlist is empty. Right-click a song or album and choose Add to playlist."));
-  else c.append(trackList(tracks,tracks,true,{playlistId:liked?null:p.id,liked}));
+  else c.append(trackList(tracks,tracks,true,{playlistId:liked||p.from?null:p.id,liked}));
 }
 
 function markNav(){
@@ -714,7 +730,7 @@ const KEY="mzk:v1";
 let store={likes:[],playlists:[]};
 function loadStore(){ try{ const s=JSON.parse(localStorage.getItem(KEY)); if(s&&Array.isArray(s.likes)&&Array.isArray(s.playlists)) store=s; }catch(e){} }
 function saveLocal(){ try{ localStorage.setItem(KEY,JSON.stringify(store)); }catch(e){ toast("Couldn't save: browser storage is unavailable"); } }
-function saveStore(){ saveLocal(); schedulePush(); }
+function saveStore(){ saveLocal(); schedulePush(); if(window.caches&&((prefs.offline||[]).length)){ clearTimeout(offTimer); offTimer=setTimeout(syncOffline,3000); } }
 loadStore();
 const byPath=new Map(); let libReady=false;
 const resolve=paths=>paths.map(k=>byPath.get(k)).filter(Boolean);
@@ -736,23 +752,42 @@ function toggleLike(t){ isLiked(t)?unlikeTracks([t]):likeTracks([t]); }
 function libChanged(which){ renderSidebar(); refreshHearts(); if(activeList&&activeList===which&&!$("q").value.trim()) render(false); }
 
 function createPlaylist(name){ const p={id:"p"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:name.trim()||"Untitled",tracks:[]}; store.playlists.push(p); saveStore(); renderSidebar(); return p; }
+const MAX_PLAYLISTS=50, MAX_PER_PLAYLIST=500, MAX_CODES=5, CODE_MINUTES=60;
 function addToPlaylist(pid,tracks){
-  const p=getPl(pid); if(!p) return; let n=0;
-  tracks.forEach(t=>{ if(!p.tracks.includes(t.path)){ p.tracks.push(t.path); n++; } });
-  saveStore(); libChanged(pid); toast(n?`Added ${plural(n,"song")} to ${p.name}`:`Already in ${p.name}`);
+  const p=getPl(pid); if(!p) return;
+  if(p.from){ toast("Shared playlists can't be edited"); return; }
+  let n=0, full=false;
+  tracks.forEach(t=>{ if(p.tracks.includes(t.path)) return; if(p.tracks.length>=MAX_PER_PLAYLIST){ full=true; return; } p.tracks.push(t.path); n++; });
+  saveStore(); libChanged(pid);
+  toast(full?`Playlists hold up to ${MAX_PER_PLAYLIST} songs. Added ${n}.`:n?`Added ${plural(n,"song")} to ${p.name}`:`Already in ${p.name}`);
 }
 function removeFromPlaylist(pid,t){ const p=getPl(pid); if(!p) return; p.tracks=p.tracks.filter(k=>k!==t.path); saveStore(); libChanged(pid); toast("Removed from "+p.name); }
 async function newPlaylistFlow(tracks){
+  if(store.playlists.length>=MAX_PLAYLISTS){ toast(`You can have up to ${MAX_PLAYLISTS} playlists. Delete one first.`); return; }
   const name=await inputDialog("New playlist","Playlist "+(store.playlists.length+1),"Create"); if(name===null) return;
   const p=createPlaylist(name);
   if(tracks&&tracks.length) addToPlaylist(p.id,tracks); else goList(p.id);
 }
-async function renamePlaylist(p){ const name=await inputDialog("Rename playlist",p.name,"Save"); if(name===null||!name.trim()) return; p.name=name.trim(); saveStore(); renderSidebar(); if(activeList===p.id) render(false); }
+async function renamePlaylist(p){ if(p.from) return; const name=await inputDialog("Rename playlist",p.name,"Save"); if(name===null||!name.trim()) return; p.name=name.trim(); saveStore(); renderSidebar(); if(activeList===p.id) render(false); }
+async function unshare(sid){
+  try{
+    if(db&&fbUser){
+      const q=await db.collection("codes").where("owner","==",fbUser.uid).where("sid","==",sid).get();
+      const bt=db.batch(); q.forEach(d=>bt.delete(d.ref)); bt.delete(db.collection("shared").doc(sid)); await bt.commit();
+      sharedCache.delete(sid); myCodes=myCodes.filter(c=>c.sid!==sid);
+    }
+  }catch(e){ toast("Couldn't remove the shared copy: "+(e.code||e.message)); }
+}
 async function deletePlaylist(p){
-  if(!await confirmDialog(`Delete "${p.name}"?`,"This removes the playlist. The songs themselves aren't touched.","Delete")) return;
-  if(!await confirmDialog("Are you sure?","This can't be undone.","Yes, delete it")) return;
+  if(p.from){
+    if(!await confirmDialog(`Remove "${p.name}"?`,"It leaves your library. You can join it again with a new code from the owner.","Remove")) return;
+  }else{
+    if(!await confirmDialog(`Delete "${p.name}"?`,p.sid?"This also deletes it for everyone you shared it with.":"This removes the playlist. The songs themselves aren't touched.","Delete")) return;
+    if(!await confirmDialog("Are you sure?","This can't be undone.","Yes, delete it")) return;
+    if(p.sid) await unshare(p.sid);
+  }
   store.playlists=store.playlists.filter(x=>x!==p); saveStore(); renderSidebar();
-  if(activeList===p.id) go(activeTab); toast("Deleted "+p.name);
+  if(activeList===p.id) go(activeTab); toast((p.from?"Removed ":"Deleted ")+p.name);
 }
 function renderSidebar(){
   const cnt=paths=>libReady?resolve(paths).length:paths.length;
@@ -769,8 +804,14 @@ function renderSidebar(){
 window.addEventListener("storage",e=>{ if(e.key===KEY){ loadStore(); renderSidebar(); refreshHearts(); if(activeList) render(false); } });
 
 // ---------- queue ----------
-function queueAdd(tracks){ if(!queue.length){ queue=tracks.slice(); load(0); toast("Playing "+plural(tracks.length,"song")); return; } queue.push(...tracks); renderQueue(); toast("Added "+plural(tracks.length,"song")+" to queue"); }
-function queueNext(tracks){ if(!queue.length){ queueAdd(tracks); return; } queue.splice(qi+1,0,...tracks); renderQueue(); toast("Playing next"); }
+function queueAdd(tracks){
+  if(qi<0||!queue[qi]){ queue=[tracks[0]]; userQ.push(...tracks.slice(1)); load(0); toast("Playing "+plural(tracks.length,"song")); return; }
+  userQ.push(...tracks); renderQueue(); toast("Added "+plural(tracks.length,"song")+" to queue");
+}
+function queueNext(tracks){
+  if(qi<0||!queue[qi]){ queueAdd(tracks); return; }
+  userQ.unshift(...tracks); renderQueue(); toast("Playing next");
+}
 
 // ---------- dialogs ----------
 function modal(build){
@@ -791,10 +832,10 @@ function inputDialog(title,value,ok){
     d.append(inp,row); setTimeout(()=>{ inp.focus(); inp.select(); },0);
   });
 }
-async function confirmDialog(title,text,ok){
+async function confirmDialog(title,text,ok,safe){
   return (await modal((d,done)=>{
     d.append(el("h2",null,title),el("p","note",text));
-    const okb=pill("",ok,()=>done(true)); okb.classList.add("danger");
+    const okb=pill("",ok,()=>done(true)); okb.classList.add(safe?"primary":"danger");
     const row=el("div","btnrow"); row.append(pill("","Cancel",()=>done(false)),okb); d.append(row);
   }))===true;
 }
@@ -844,7 +885,7 @@ $("main").addEventListener("scroll",closeMenu); $("pls").addEventListener("scrol
 function groupOf(t){ return t.group?data[t.tab].groups.find(g=>g.name===t.group):null; }
 function playlistPicker(tracks){
   return [{label:"＋ New playlist…",fn:()=>newPlaylistFlow(tracks)}, store.playlists.length?{sep:1}:null,
-    ...store.playlists.map(p=>({label:p.name,fn:()=>addToPlaylist(p.id,tracks)}))];
+    ...store.playlists.filter(p=>!p.from).map(p=>({label:p.name,fn:()=>addToPlaylist(p.id,tracks)}))];
 }
 function trackMenu(t,ctx){
   ctx=ctx||{}; const g=groupOf(t), liked=isLiked(t);
@@ -880,9 +921,10 @@ function albumMenu(g){
 function playlistMenu(p){
   return [
     {label:"Play",fn:()=>{ const tr=resolve(p.tracks); tr.length?playList(tr,0):toast("This playlist is empty"); }},
+    window.caches?{label:isOff(p.id)?"Remove offline copy":"Save offline",fn:()=>toggleOffline(p.id)}:null,
     {sep:1},
-    {label:"Rename",fn:()=>renamePlaylist(p)},
-    {label:"Delete",danger:1,fn:()=>deletePlaylist(p)}
+    p.from?null:{label:"Rename",fn:()=>renamePlaylist(p)},
+    {label:p.from?"Remove from library":"Delete",danger:1,fn:()=>deletePlaylist(p)}
   ];
 }
 function viewTracks(){
@@ -898,6 +940,7 @@ function genericMenu(){
     tr.length?{label:"Shuffle all",fn:()=>shuffleAll(tr)}:null,
     tr.length?{sep:1}:null,
     {label:"New playlist…",fn:()=>newPlaylistFlow()},
+    {label:"Join with a code…",fn:()=>joinFlow()},
     {sep:1},
     {label:"Reload library",fn:()=>location.reload()}
   ];
@@ -908,8 +951,8 @@ document.addEventListener("contextmenu",e=>{
   let n=e.target, items=null;
   while(n&&n!==document){ if(n._ctx){ items=n._ctx(); break; } n=n.parentNode; }
   if(!items){
-    if(e.target.closest("#pls,.libhead")) items=[{label:"New playlist…",fn:()=>newPlaylistFlow()}];
-    else if(e.target.closest("#n-Liked")){ items=[{label:"Play",fn:()=>{ const tr=resolve(store.likes.slice().reverse()); tr.length?playList(tr,0):toast("No liked songs yet"); }}]; }
+    if(e.target.closest("#pls,.libhead")) items=[{label:"New playlist…",fn:()=>newPlaylistFlow()},{label:"Join with a code…",fn:()=>joinFlow()}];
+    else if(e.target.closest("#n-Liked")){ items=[{label:"Play",fn:()=>{ const tr=resolve(store.likes.slice().reverse()); tr.length?playList(tr,0):toast("No liked songs yet"); }},window.caches?{label:isOff("liked")?"Remove offline copy":"Save offline",fn:()=>toggleOffline("liked")}:null].filter(Boolean); }
     else if(e.target.closest("#player")&&queue[qi]) items=[...trackMenu(queue[qi],{}),{sep:1},...playerOptions()];
     else items=genericMenu();
   }
@@ -922,30 +965,40 @@ const XICON='<svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 
 const QMAX=30;
 function toggleQueue(){ const qp=$("queuePanel"); qp.hidden=!qp.hidden; $("qbtn").classList.toggle("on",!qp.hidden); renderQueue(); }
 $("qbtn").onclick=toggleQueue;
-function qRow(t,idx,now){
+function qRow(t,now,onPlay,onRemove){
   const d=el("div","qrow"+(now?" now":"")), box=el("div","qt");
   box.append(el("span",null,t.title),el("small",null,(t.meta&&t.meta.artist)||t.group||"Single"));
   d.append(box);
   if(!now){
-    d.tabIndex=0; d.onclick=()=>load(idx);
-    d.onkeydown=e=>{ if(e.key==="Enter"&&e.target===d) load(idx); };
-    d.append(iconBtn(XICON,"Remove from queue",()=>{ queue.splice(idx,1); renderQueue(); }));
+    d.tabIndex=0; d.onclick=onPlay;
+    d.onkeydown=e=>{ if(e.key==="Enter"&&e.target===d) onPlay(); };
+    d.append(iconBtn(XICON,"Remove from queue",onRemove));
   }
   return d;
 }
+function playFromUserQ(i){ const t=userQ.splice(i,1)[0]; if(!t) return; queue.splice(qi+1,0,t); load(qi+1); }
 function renderQueue(){
   const qp=$("queuePanel"); if(qp.hidden) return;
   qp.innerHTML="";
   const head=el("div","qhead"); head.append(el("h3",null,"Queue"));
-  const upcoming=qi>=0?queue.slice(qi+1):[];
-  if(upcoming.length) head.append(pill("","Clear",()=>{ queue.splice(qi+1); renderQueue(); toast("Queue cleared"); }));
+  if(userQ.length) head.append(pill("","Clear queue",()=>{ userQ=[]; renderQueue(); toast("Queue cleared"); }));
   head.append(iconBtn(XICON,"Close queue",toggleQueue));
   qp.append(head);
   if(qi<0||!queue[qi]){ qp.append(el("div","qnote","Nothing playing yet. Play a song, or right-click one and choose Add to queue.")); return; }
-  qp.append(el("div","qlabel","Now playing"),qRow(queue[qi],qi,true),el("div","qlabel","Next up"));
-  if(!upcoming.length) qp.append(el("div","qnote","Nothing queued next."));
-  upcoming.slice(0,QMAX).forEach((t,i)=>qp.append(qRow(t,qi+1+i,false)));
-  if(upcoming.length>QMAX) qp.append(el("div","qnote","+ "+(upcoming.length-QMAX)+" more"));
+  qp.append(el("div","qlabel","Now playing"),qRow(queue[qi],true));
+  let budget=QMAX;
+  if(userQ.length){
+    qp.append(el("div","qlabel","Next in queue"));
+    const shown=userQ.slice(0,budget);
+    shown.forEach((t,i)=>qp.append(qRow(t,false,()=>playFromUserQ(i),()=>{ userQ.splice(i,1); renderQueue(); })));
+    budget-=shown.length;
+    if(userQ.length>shown.length) qp.append(el("div","qnote","+ "+(userQ.length-shown.length)+" more in queue"));
+  }
+  const upcoming=queue.slice(qi+1);
+  qp.append(el("div","qlabel","Next up"));
+  if(!upcoming.length) qp.append(el("div","qnote",userQ.length?"Nothing after your queue.":"Nothing queued next."));
+  if(budget>0) upcoming.slice(0,budget).forEach((t,i)=>qp.append(qRow(t,false,()=>load(qi+1+i),()=>{ queue.splice(qi+1+i,1); renderQueue(); })));
+  if(upcoming.length>Math.max(0,budget)) qp.append(el("div","qnote","+ "+(upcoming.length-Math.max(0,budget))+" more"));
   if(shuffle) qp.append(el("div","qnote","Shuffle is on, so songs may not play in this order."));
 }
 document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&!menuEl&&!$("queuePanel").hidden&&!document.querySelector("dialog[open]")) toggleQueue(); });
@@ -965,14 +1018,14 @@ function saveResume(){
   lastSave=Date.now();
   if(qi<0||!queue[qi]) return;
   const start=Math.max(0,qi-20), part=queue.slice(start,start+500);
-  try{ localStorage.setItem("mzk:resume",JSON.stringify({q:part.map(t=>t.path),i:qi-start,t:pendingSeek||audio.currentTime||0})); }catch(e){}
+  try{ localStorage.setItem("mzk:resume",JSON.stringify({q:part.map(t=>t.path),i:qi-start,u:userQ.map(t=>t.path),t:pendingSeek||audio.currentTime||0})); }catch(e){}
 }
 function restoreResume(){
   try{
     const r=JSON.parse(localStorage.getItem("mzk:resume")); if(!r||!r.q) return;
     const cur=r.q[r.i], list=resolve(r.q), idx=list.findIndex(t=>t.path===cur);
     if(idx<0) return;
-    queue=list; load(idx,{paused:true,seek:r.t||0});
+    queue=list; userQ=resolve(r.u||[]); load(idx,{paused:true,seek:r.t||0});
   }catch(e){}
 }
 document.addEventListener("visibilitychange",()=>{ if(document.hidden) saveResume(); });
@@ -1055,8 +1108,10 @@ function authDialog(){
 function schedulePush(){ if(!fbUser||!db) return; clearTimeout(pushTimer); pushTimer=setTimeout(pushNow,800); }
 function pushNow(){
   clearTimeout(pushTimer); pushTimer=null; if(!fbUser||!db) return;
+  if(JSON.stringify({l:store.likes,p:store.playlists}).length>900000){ toast("Your library is too large to sync. Remove some playlists."); return; }
   db.collection("users").doc(fbUser.uid).set({likes:store.likes,playlists:store.playlists,updated:firebase.firestore.FieldValue.serverTimestamp()})
     .catch(e=>toast("Sync failed: "+(e.code||e.message)));
+  pushSharedAll();
 }
 function refreshAfterSync(){ renderSidebar(); refreshHearts(); if(activeList) render(false); }
 function mergeWithCloud(cloud){
@@ -1073,6 +1128,7 @@ function onUser(u){
       wasSignedIn=false; store={likes:[],playlists:[]}; saveLocal(); try{ localStorage.removeItem("mzk:syncuid"); }catch(e){}
       refreshAfterSync(); if(activeList) go(activeTab); toast("Signed out");
     }
+    setTimeout(refreshJoined,800);
     return;
   }
   wasSignedIn=true; let first=true;
@@ -1083,6 +1139,7 @@ function onUser(u){
       first=false;
       const synced=localStorage.getItem("mzk:syncuid")===u.uid;
       try{ localStorage.setItem("mzk:syncuid",u.uid); }catch(e){}
+      setTimeout(refreshJoined,1200);
       if(!cloud){ pushNow(); toast("Signed in. Syncing your library"); }
       else if(synced){ store={likes:cloud.likes||[],playlists:cloud.playlists||[]}; saveLocal(); refreshAfterSync(); }
       else{ mergeWithCloud(cloud); toast("Signed in. Library merged"); }
@@ -1103,6 +1160,193 @@ async function initFirebase(){
   }catch(e){ $("acct").querySelector(".name").textContent="Sync unavailable"; }
 }
 initFirebase();
+
+// ---------- sharing: temporary codes (needs an account to create, none to join) ----------
+const CODE_ALPHA="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const sharedCache=new Map(); let myCodes=[], refreshing=false;
+function rndStr(n,alpha){ const a=new Uint32Array(n); crypto.getRandomValues(a); return [...a].map(x=>alpha[x%alpha.length]).join(""); }
+const newId=()=>"p"+Date.now().toString(36)+rndStr(4,"abcdefghijklmnopqrstuvwxyz0123456789");
+const NOT_FOUND="Code not found or expired.";
+
+async function ensureShared(p){
+  const body={owner:fbUser.uid,name:p.name,tracks:p.tracks.slice(0,MAX_PER_PLAYLIST)};
+  await db.collection("shared").doc(p.sid).set({...body,updated:firebase.firestore.FieldValue.serverTimestamp()});
+  sharedCache.set(p.sid,JSON.stringify({name:body.name,tracks:body.tracks}));
+}
+function pushSharedAll(){
+  if(!fbUser||!db) return;
+  store.playlists.forEach(p=>{
+    if(!p.sid||p.from) return;
+    const body={name:p.name,tracks:p.tracks.slice(0,MAX_PER_PLAYLIST)}, j=JSON.stringify(body);
+    if(sharedCache.get(p.sid)===j) return;
+    db.collection("shared").doc(p.sid).set({owner:fbUser.uid,...body,updated:firebase.firestore.FieldValue.serverTimestamp()})
+      .then(()=>sharedCache.set(p.sid,j)).catch(e=>toast("Couldn't update the shared copy: "+(e.code||e.message)));
+  });
+}
+async function loadMyCodes(){
+  if(!fbUser||!db){ myCodes=[]; return; }
+  try{
+    const snap=await db.collection("codes").where("owner","==",fbUser.uid).get(), now=Date.now(); myCodes=[];
+    snap.forEach(d=>{ const x=d.data(), exp=x.expires.toMillis(); if(exp>now) myCodes.push({code:d.id,sid:x.sid,exp}); else d.ref.delete().catch(()=>{}); });
+  }catch(e){ myCodes=[]; }
+}
+async function makeCode(p,after){
+  if(!fbUser||!db) return;
+  if(myCodes.filter(c=>c.exp>Date.now()).length>=MAX_CODES){ toast(`All ${MAX_CODES} codes are in use. Disable one first.`); return; }
+  if(!p.tracks.length){ toast("Add some songs first"); return; }
+  try{
+    if(!p.sid){ p.sid=rndStr(20,"abcdefghijklmnopqrstuvwxyz0123456789"); saveStore(); }
+    await ensureShared(p);
+    const exp=Date.now()+CODE_MINUTES*60000; let code=null;
+    for(let i=0;i<10&&!code;i++){
+      const c=rndStr(4,CODE_ALPHA);
+      try{ await db.collection("codes").doc(c).set({sid:p.sid,owner:fbUser.uid,expires:firebase.firestore.Timestamp.fromMillis(exp),created:firebase.firestore.FieldValue.serverTimestamp()}); code=c; }
+      catch(e){ if(e.code!=="permission-denied") throw e; }
+    }
+    if(!code){ toast("Couldn't create a code. Try again, or check your Firestore rules."); return; }
+    myCodes.push({code,sid:p.sid,exp}); after(); toast("New code: "+code);
+  }catch(e){ toast("Couldn't create a code: "+(e.code||e.message)); }
+}
+async function disableCode(c,after){
+  if(!await confirmDialog(`Disable code ${c.code}?`,"Nobody new can join with it. People who already joined keep the playlist and its updates.","Disable")) return;
+  try{ await db.collection("codes").doc(c.code).delete(); myCodes=myCodes.filter(x=>x.code!==c.code); after(); toast("Code disabled"); }
+  catch(e){ toast("Couldn't disable it: "+(e.code||e.message)); }
+}
+function sharePanel(p){
+  const box=el("div","sharebox"); box.append(el("h4",null,"Share this playlist"));
+  const fill=()=>{
+    [...box.children].slice(1).forEach(x=>x.remove());
+    box.append(el("p","stat",`Anyone with a code gets a copy that updates when you change it. They can't edit it. Codes last ${CODE_MINUTES===60?"1 hour":CODE_MINUTES+" minutes"}.`));
+    if(!fbUser){ const r=el("div","srow"); r.append(pill("","Sign in to share",()=>authDialog())); box.append(r); return; }
+    const live=myCodes.filter(c=>c.exp>Date.now());
+    live.filter(c=>c.sid===p.sid).forEach(c=>{
+      const r=el("div","srow"), left=el("span","left"); left.dataset.exp=c.exp; left.textContent=timeLeft(c.exp);
+      r.append(el("span","scode",c.code),left,
+        pill("","Copy",()=>{ (navigator.clipboard?navigator.clipboard.writeText(c.code):Promise.reject()).then(()=>toast("Copied "+c.code)).catch(()=>toast("Code: "+c.code)); }),
+        pill("","Disable",()=>disableCode(c,fill)));
+      box.append(r);
+    });
+    const r=el("div","srow"), nb=pill("","New code",()=>makeCode(p,fill));
+    if(live.length>=MAX_CODES||!p.tracks.length) nb.disabled=true;
+    r.append(nb,el("span","left",`${live.length} of ${MAX_CODES} codes in use`)); box.append(r);
+  };
+  fill(); loadMyCodes().then(()=>{ if(box.isConnected) fill(); });
+  return box;
+}
+const timeLeft=exp=>{ const m=Math.ceil((exp-Date.now())/60000); return m>0?m+" min left":"Expired"; };
+setInterval(()=>document.querySelectorAll("[data-exp]").forEach(e=>{ e.textContent=timeLeft(+e.dataset.exp); }),15000);
+
+async function joinWithCode(raw){
+  const code=(raw||"").trim().toUpperCase();
+  if(!/^[A-Z0-9]{4}$/.test(code)) throw new Error("Codes are 4 letters or numbers.");
+  if(!db) throw new Error("Sharing isn't available right now.");
+  let x,sh;
+  try{
+    const c=await db.collection("codes").doc(code).get();
+    if(!c.exists) throw 0; x=c.data(); if(x.expires.toMillis()<Date.now()) throw 0;
+    sh=await db.collection("shared").doc(x.sid).get(); if(!sh.exists) throw 0;
+  }catch(e){ throw new Error(NOT_FOUND); }
+  if(store.playlists.some(p=>p.sid===x.sid)) throw new Error("That's your own playlist.");
+  const had=store.playlists.find(p=>p.from===x.sid); if(had) return had;
+  if(store.playlists.length>=MAX_PLAYLISTS) throw new Error(`You can have up to ${MAX_PLAYLISTS} playlists. Delete one first.`);
+  const d=sh.data(), p={id:newId(),name:d.name||"Shared playlist",tracks:(d.tracks||[]).slice(0,MAX_PER_PLAYLIST),from:x.sid};
+  store.playlists.push(p); saveStore(); renderSidebar(); return p;
+}
+function joinDialog(){
+  return modal((d,done)=>{
+    const err=el("p","err"), inp=el("input","txt codein"); inp.type="text"; inp.maxLength=4; inp.autocomplete="off"; inp.setAttribute("aria-label","Share code"); inp.placeholder="••••";
+    const go=async()=>{ err.textContent=""; try{ done(await joinWithCode(inp.value)); }catch(e){ err.textContent=e.message; } };
+    inp.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); go(); } };
+    const okb=pill("","Join",go); okb.classList.add("primary");
+    const row=el("div","btnrow"); row.append(pill("","Cancel",()=>done(null)),okb);
+    d.append(el("h2",null,"Join a playlist"),el("p","note","Enter the 4-character code from the playlist's owner."),inp,err,row);
+    setTimeout(()=>inp.focus(),0);
+  });
+}
+async function joinFlow(){ const p=await joinDialog(); if(p){ goList(p.id); toast("Added "+p.name); } }
+$("joinpl").onclick=joinFlow;
+
+// Joined playlists refresh from their owner each time the page opens
+async function refreshJoined(){
+  if(!db||refreshing) return; refreshing=true; let changed=false;
+  try{
+    for(const p of [...store.playlists]){
+      if(!p.from) continue;
+      try{
+        const sh=await db.collection("shared").doc(p.from).get();
+        if(!sh.exists){ store.playlists=store.playlists.filter(x=>x!==p); changed=true; toast(`"${p.name}" was removed by its owner`); continue; }
+        const d=sh.data(), t=(d.tracks||[]).slice(0,MAX_PER_PLAYLIST);
+        if(d.name!==p.name||JSON.stringify(t)!==JSON.stringify(p.tracks)){ p.name=d.name; p.tracks=t; changed=true; }
+      }catch(e){ /* offline or blocked: keep the saved copy */ }
+    }
+  } finally{ refreshing=false; }
+  if(changed){ saveStore(); refreshAfterSync(); if(activeList&&activeList!=="liked"&&!getPl(activeList)) go(activeTab); }
+}
+
+// ---------- saved offline (keeps playlist songs on this device so they don't re-download) ----------
+const OFFLINE="mzk-offline-v1", OFF_ICON='<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 15l-5-5h3V7h4v5h3l-5 5z"/></svg>';
+let offlineSet=new Set(), offState={active:false,done:0,total:0}, offTimer=null, offRun=0, srcToken=0, curBlob=null;
+const nd=t=>t._nd||(t._nd=new Request(t.dl).url);
+const isOff=id=>(prefs.offline||[]).includes(id);
+function offLabel(id){ return isOff(id)?(offState.active?`Saving ${offState.done}/${offState.total}…`:"Saved offline ✓"):"Save offline"; }
+function paintOff(){ document.querySelectorAll("[data-offbtn]").forEach(b=>{ b.lastChild.textContent=offLabel(b.dataset.offbtn); }); }
+function offBtn(id){ const b=pill(OFF_ICON,offLabel(id),()=>toggleOffline(id)); b.dataset.offbtn=id; b.title="Keep these songs on this device so they play without re-downloading"; return b; }
+function offlineTracks(){
+  const seen=new Map();
+  (prefs.offline||[]).forEach(id=>{ const paths=id==="liked"?store.likes:(getPl(id)||{tracks:[]}).tracks; resolve(paths).forEach(t=>seen.set(nd(t),t)); });
+  return [...seen.values()];
+}
+async function syncOffline(){
+  if(!window.caches||!libReady) return;
+  const run=++offRun; let cache;
+  try{ cache=await caches.open(OFFLINE); }catch(e){ return; }
+  const want=offlineTracks(), wantSet=new Set(want.map(nd));
+  const keys=await cache.keys(), have=new Set();
+  for(const r of keys){ if(wantSet.has(r.url)) have.add(r.url); else await cache.delete(r); }
+  offlineSet=new Set(have);
+  const todo=want.filter(t=>!have.has(nd(t)));
+  offState={active:todo.length>0,done:0,total:todo.length}; paintOff();
+  let i=0, failed=0, full=false;
+  const worker=async()=>{
+    while(i<todo.length&&run===offRun){
+      const t=todo[i++];
+      try{ const r=await fetch(t.dl); if(!r.ok) throw new Error("http"); await cache.put(t.dl,r); offlineSet.add(nd(t)); }
+      catch(e){ failed++; if(e&&e.name==="QuotaExceededError") full=true; }
+      offState.done++; paintOff();
+    }
+  };
+  await Promise.all([worker(),worker()]);
+  if(run!==offRun) return;
+  offState.active=false; paintOff();
+  if(todo.length){
+    if(full) toast("Out of space on this device. Some songs weren't saved.");
+    else if(failed) toast(`${plural(failed,"song")} couldn't be saved. They'll be retried next time.`);
+    else toast(`${plural(want.length,"song")} saved on this device · ${fmtSize(want.reduce((n,t)=>n+(t.size||0),0))}`);
+  }
+}
+async function toggleOffline(id){
+  if(!window.caches){ toast("Saving songs isn't supported in this browser window"); return; }
+  if(isOff(id)){ prefs.offline=prefs.offline.filter(x=>x!==id); savePrefs(); paintOff(); toast("Removing saved songs…"); syncOffline(); return; }
+  const tr=resolve(id==="liked"?store.likes:(getPl(id)||{tracks:[]}).tracks);
+  if(!tr.length){ toast("Add some songs first"); return; }
+  const need=tr.filter(t=>!offlineSet.has(nd(t))).reduce((n,t)=>n+(t.size||0),0);
+  if(need>300*1048576&&!await confirmDialog("Save about "+fmtSize(need)+"?","That's a lot of space on this device. You can remove it again any time.","Save",true)) return;
+  prefs.offline=[...(prefs.offline||[]),id]; savePrefs();
+  try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist(); }catch(e){}
+  paintOff(); syncOffline();
+}
+// plays from the saved copy when there is one, otherwise streams from GitHub
+function setSource(t,paused){
+  const tok=++srcToken;
+  const start=url=>{ if(tok!==srcToken) return; audio.src=url; if(!paused) audio.play().catch(()=>{}); };
+  const free=()=>{ if(curBlob){ URL.revokeObjectURL(curBlob); curBlob=null; } };
+  if(window.caches&&offlineSet.has(nd(t))){
+    caches.open(OFFLINE).then(c=>c.match(t.dl)).then(r=>r?r.blob():null).then(b=>{
+      if(tok!==srcToken) return; free();
+      if(b){ curBlob=URL.createObjectURL(b); start(curBlob); } else start(t.url);
+    }).catch(()=>start(t.url));
+  }else{ free(); start(t.url); }
+}
 
 function build(files,tab){
   const prefix=tab+"/", by=new Map();
@@ -1125,11 +1369,18 @@ function counts(){
 (async()=>{
   try{
     barShow("Fetching library… · click to hide",null);
-    const res=await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/git/trees/${BRANCH}?recursive=1`);
-    if(!res.ok) throw new Error(res.status===403?"GitHub rate limit reached. Try again in a few minutes.":"GitHub returned "+res.status);
-    const json=await res.json();
-    const files=json.tree.filter(n=>n.type==="blob"&&AUDIO.test(n.path));
-    TABS.forEach(t=>build(files,t)); [...data.Singles.tracks,...data.Albums.tracks].forEach(t=>byPath.set(t.path,t)); libReady=true; restoreResume(); counts(); renderSidebar(); setDefaults(); render(true,true);
+    let files;
+    try{
+      const res=await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/git/trees/${BRANCH}?recursive=1`);
+      if(!res.ok) throw new Error(res.status===403?"GitHub rate limit reached. Try again in a few minutes.":"GitHub returned "+res.status);
+      const json=await res.json();
+      files=json.tree.filter(n=>n.type==="blob"&&AUDIO.test(n.path));
+      try{ localStorage.setItem("mzk:tree",JSON.stringify(files.map(n=>({path:n.path,size:n.size,type:"blob"})))); }catch(e){}
+    }catch(e){
+      let saved=null; try{ saved=JSON.parse(localStorage.getItem("mzk:tree")||"null"); }catch(_){}
+      if(saved&&saved.length){ files=saved; toast("Couldn't reach GitHub. Showing your last saved library."); } else throw e;
+    }
+    TABS.forEach(t=>build(files,t)); [...data.Singles.tracks,...data.Albums.tracks].forEach(t=>byPath.set(t.path,t)); libReady=true; restoreResume(); counts(); renderSidebar(); setDefaults(); render(true,true); setTimeout(syncOffline,2000);
   }catch(err){ bar.hidden=true; $("content").innerHTML='<div class="msg">Couldn\'t load the library. '+err.message+'</div>'; }
 })();
 </script>
