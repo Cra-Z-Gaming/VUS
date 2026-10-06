@@ -66,7 +66,7 @@
   .art { position:relative; aspect-ratio:1; border-radius:8px; overflow:hidden; display:grid; place-items:center; font:700 2.6rem Georgia,serif; color:rgba(255,255,255,.75); }
   .art img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
   .tile .pl { position:absolute; right:8px; bottom:8px; width:42px; height:42px; border-radius:50%; background:var(--accent); color:var(--accent-ink); display:grid; place-items:center; opacity:0; transform:translateY(6px); transition:.15s; box-shadow:0 6px 16px rgba(0,0,0,.4); z-index:1; }
-  .tile:hover .pl, .tile:focus-within .pl { opacity:1; transform:none; }
+  .tile:hover .pl, .tile:focus-within .pl, .tile .pl[data-playing="true"] { opacity:1; transform:none; }
   @media (hover:none) { .tile .pl { opacity:1; transform:none; } }
   .tile h3 { margin:10px 0 0; font-size:.95rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .tile p { margin:0; color:var(--dim); font-size:.82rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -188,9 +188,9 @@
   .tile { padding:10px; }
   .tile h3 { margin-top:10px; }
   li { padding:8px 8px 8px 12px; min-height:58px; }   /* fixed height so the page controls don't drift as covers load in */
-  li .heart:not(.on), li .more, li .plus { opacity:0; transition:opacity .12s; }
-  li:hover .heart, li:hover .more, li:hover .plus, li:focus-within .heart, li:focus-within .more, li:focus-within .plus, li.playing .heart, li.playing .more, li.playing .plus { opacity:1; }
-  @media (hover:none) { li .heart, li .more, li .plus { opacity:1 !important; } }
+  li .heart:not(.on), li .more, li .plus, li .dlbtn { opacity:0; transition:opacity .12s; }
+  li:hover .heart, li:hover .more, li:hover .plus, li:hover .dlbtn, li:focus-within .dlbtn, li.playing .dlbtn, li:focus-within .heart, li:focus-within .more, li:focus-within .plus, li.playing .heart, li.playing .more, li.playing .plus { opacity:1; }
+  @media (hover:none) { li .heart, li .more, li .plus, li .dlbtn { opacity:1 !important; } }
   .nav { transition:background .12s,color .12s; }
 
   /* ---------- player ---------- */
@@ -428,6 +428,7 @@ const audio=$("audio");
 const ICON={
   dl:'<svg viewBox="0 0 24 24"><path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/></svg>',
   play:'<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>',
+  pause:'<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>',
   info:'<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>',
   back:'<svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6V6z"/></svg>',
   rep:'<svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>',
@@ -437,7 +438,7 @@ $("rep").innerHTML=ICON.rep;
 
 // data[tab] = { groups:[{name,tab,loose,tracks}], tracks:[] }
 const data={All:{groups:[],tracks:[]},Singles:{groups:[],tracks:[]},Albums:{groups:[],tracks:[]},Downloaded:{groups:[],tracks:[]}};
-let failStreak=0, wantPlay=false, skipTimer=null, userQ=[], pendingSeek=0, lastSave=0, sleepEnd=false, activeTab="All", openGroup=null, activeList=null, queue=[], qi=-1, shuffle=false, repeat=0, busy=false;
+let ctxKey=null, failStreak=0, wantPlay=false, skipTimer=null, userQ=[], pendingSeek=0, lastSave=0, sleepEnd=false, activeTab="All", openGroup=null, activeList=null, queue=[], qi=-1, shuffle=false, repeat=0, busy=false;
 const albumCount=()=>data.Albums.groups.filter(g=>!g.loose).length;
 
 const fmt=s=>{ if(!isFinite(s)) return "0:00"; s=Math.floor(s); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); };
@@ -543,7 +544,7 @@ async function showAlbumInfo(g){
 }
 
 // ---------- player ----------
-function playList(list,i){ queue=list.slice(); load(i); }
+function playList(list,i,key){ queue=list.slice(); ctxKey=key||null; load(i); }
 function load(i,opts){
   const t=queue[i]; if(!t) return;
   qi=i; credited=false;
@@ -569,7 +570,7 @@ function markPlaying(){
     const on=queue[qi]&&li.dataset.url===queue[qi].url;
     li.classList.toggle("playing",on); li.querySelector(".i").textContent=on?"▶":li.dataset.n;
   });
-  refreshHearts();
+  refreshHearts(); paintPlayButtons();
 }
 function next(auto){
   if(!queue.length) return;
@@ -595,7 +596,7 @@ audio.addEventListener("error",()=>{
 });
 audio.addEventListener("playing",()=>{ failStreak=0; });
 audio.addEventListener("play",()=>{ wantPlay=true; });
-function updatePP(){ $("ppi").setAttribute("d",audio.paused?"M8 5v14l11-7z":"M6 5h4v14H6zm8 0h4v14h-4z"); $("pp").setAttribute("aria-label",audio.paused?"Play":"Pause"); syncNP(); }
+function updatePP(){ $("ppi").setAttribute("d",audio.paused?"M8 5v14l11-7z":"M6 5h4v14H6zm8 0h4v14h-4z"); $("pp").setAttribute("aria-label",audio.paused?"Play":"Pause"); syncNP(); paintPlayButtons(); }
 let scrubbing=false;
 audio.addEventListener("timeupdate",()=>{ creditCheck(); syncNPTime(); if(Date.now()-lastSave>5000) saveResume(); $("cur").textContent=fmt(audio.currentTime); if(!scrubbing&&audio.duration){ $("seek").value=audio.currentTime/audio.duration*1000; setFill($("seek")); } });
 audio.addEventListener("loadedmetadata",()=>{ $("dur").textContent=fmt(audio.duration); syncNPTime(); if(pendingSeek){ audio.currentTime=pendingSeek; pendingSeek=0; } });
@@ -629,7 +630,21 @@ if("mediaSession" in navigator){
 // ---------- UI ----------
 function iconBtn(html,title,fn){ const b=el("button","ib"); b.innerHTML=html; b.title=title; b.setAttribute("aria-label",title); b.onclick=e=>{ e.stopPropagation(); fn(); }; return b; }
 function pill(html,label,fn){ const b=el("button","pill"); b.innerHTML=html; b.append(el("span",null,label)); b.onclick=fn; return b; }
-function bigPlay(fn,label){ const b=el("button","bigplay"); b.innerHTML=ICON.play; b.title=label; b.setAttribute("aria-label",label); b.onclick=fn; return b; }
+// A play button belongs to a "context" (an album, playlist, list...). While that context is playing it shows pause, and clicking pauses/resumes instead of restarting.
+function ctxPlay(key,start){ if(key&&ctxKey===key&&qi>=0&&queue[qi]) toggle(); else start(); }
+function paintPlayButtons(){
+  const playing=qi>=0&&!audio.paused;
+  document.querySelectorAll("[data-ctx]").forEach(b=>{
+    const on=playing&&ctxKey===b.dataset.ctx;
+    b.dataset.playing=on; b.innerHTML=on?ICON.pause:ICON.play;
+    b.title=(on?"Pause ":"Play ")+(b.dataset.label||""); b.setAttribute("aria-label",b.title);
+  });
+}
+function bigPlay(fn,label,key){
+  const b=el("button","bigplay"); b.dataset.label=label.replace(/^Play\s*/,""); if(key) b.dataset.ctx=key;
+  b.innerHTML=ICON.play; b.title=label; b.setAttribute("aria-label",label);
+  b.onclick=()=>ctxPlay(key,fn); return b;
+}
 
 const scope={at:$("sc-at"),atr:$("sc-atr"),st:$("sc-st"),dl:$("sc-dl")};
 function setDefaults(){ const a=activeTab==="Albums", mix=activeTab==="All"||activeTab==="Downloaded"; scope.at.checked=a; scope.atr.checked=a||mix; scope.st.checked=!a; scope.dl.checked=activeTab==="Downloaded"; }
@@ -692,12 +707,13 @@ function pagerEl(key,total){
 
 // ---------- playlists page (always reachable from the sidebar) ----------
 const JOIN_ICON='<svg viewBox="0 0 24 24"><path d="M12.65 10A5.99 5.99 0 007 6c-3.31 0-6 2.69-6 6s2.69 6 6 6a5.99 5.99 0 005.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>';
-function plTile(name,tracks,sub,onOpen,ctx,heart){
+function plTile(name,tracks,sub,onOpen,ctx,heart,key){
   const b=el("div","tile"); b.tabIndex=0; b.setAttribute("role","button");
   const art=makeArt({name,tracks});
   if(heart){ art.style.background="linear-gradient(135deg,#3b6f66,#8fe3d0)"; art.firstChild.nodeValue="♥"; }
   const pl=el("button","pl"); pl.innerHTML=ICON.play; pl.title="Play "+name; pl.setAttribute("aria-label","Play "+name);
-  pl.onclick=e=>{ e.stopPropagation(); tracks.length?playList(tracks,0):toast("This playlist is empty"); };
+  pl.dataset.ctx=key; pl.dataset.label=name;
+  pl.onclick=e=>{ e.stopPropagation(); tracks.length?ctxPlay(key,()=>playList(tracks,0,key)):toast("This playlist is empty"); };
   art.append(pl);
   b.append(art,el("h3",null,name),el("p",null,sub));
   b.onclick=onOpen; b.onkeydown=e=>{ if(e.key==="Enter"&&e.target===b){ e.preventDefault(); onOpen(); } };
@@ -711,9 +727,9 @@ function renderPlaylistsPage(c){
   const items=[{liked:true},...store.playlists.map(p=>({p}))];
   const pt=pageOf("pls",items.length), gr=el("div","grid"); c.append(gr);
   chunked(items.slice(pt.start,pt.end),it=>{
-    if(it.liked) return plTile("Liked songs",liked,plural(liked.length,"song"),()=>goList("liked"),null,true);
+    if(it.liked) return plTile("Liked songs",liked,plural(liked.length,"song"),()=>goList("liked"),null,true,"pl:liked");
     const p=it.p, tr=resolve(p.tracks);
-    return plTile(p.name,tr,plural(tr.length,"song")+(p.from?" · shared with you":""),()=>goList(p.id),()=>playlistMenu(p),false);
+    return plTile(p.name,tr,plural(tr.length,"song")+(p.from?" · shared with you":""),()=>goList(p.id),()=>playlistMenu(p),false,"pl:"+p.id);
   },gr);
   const pe=pagerEl("pls",items.length); if(pe) c.append(pe);
   if(!store.playlists.length) c.append(el("p","stat","You haven't made any playlists yet. Press New playlist to start one."));
@@ -761,13 +777,15 @@ function buildRow(t,i,ctx,queueList,showGroup){
   if(ctx.reorder){
     const gp=el("span","grip"); gp.innerHTML=GRIP; gp.title="Drag to reorder"; li.prepend(gp); li.classList.add("reordering"); li.append(dm);
   }else{
-    li.append(dm,hb,plusBtn(()=>[t]),moreBtn(()=>trackMenu(t,ctx)));
+    const db=window.caches?iconBtn(ICON.dl,"Download to browser",()=>downloadSet([t],"t:"+t.path)):null;
+    if(db){ db.classList.add("dlbtn"); db.hidden=isDl(t); }
+    li.append(dm,...(db?[db]:[]),hb,plusBtn(()=>[t]),moreBtn(()=>trackMenu(t,ctx)));
     li._ctx=()=>trackMenu(t,ctx);
   }
   const on=queue[qi]&&queue[qi].url===t.url;
   li.classList.toggle("playing",!!on); li.querySelector(".i").textContent=on?"▶":(ctx.offset||0)+i+1;
   applyRow(li,t); io.observe(li);
-  const run=()=>playList(queueList,queueList.indexOf(t));
+  const run=()=>playList(queueList,queueList.indexOf(t),ctx.key);
   if(!ctx.reorder){ li.onclick=run; li.onkeydown=e=>{ if(e.key==="Enter"&&e.target===li){ e.preventDefault(); run(); } }; }
   return li;
 }
@@ -782,7 +800,8 @@ function tile(g){
   const b=el("div","tile"); b.tabIndex=0; b.setAttribute("role","button");
   const art=makeArt(g);
   const pl=el("button","pl"); pl.innerHTML=ICON.play; pl.title="Play "+g.name; pl.setAttribute("aria-label","Play "+g.name);
-  pl.onclick=e=>{ e.stopPropagation(); playList(g.tracks,0); };
+  const gkey="g:"+g.tab+"/"+g.name; pl.dataset.ctx=gkey; pl.dataset.label=g.name;
+  pl.onclick=e=>{ e.stopPropagation(); ctxPlay(gkey,()=>playList(g.tracks,0,gkey)); };
   const mb=moreBtn(()=>albumMenu(g)); mb.classList.add("tmore");
   const bdg=el("span","dlbadge"); bdg.innerHTML=CHECK; bdg.title="Downloaded to this browser"; bdg.hidden=!g.tracks.every(isDl);
   art.append(pl,mb,bdg); b._g=g;
@@ -801,11 +820,11 @@ function renderDetail(g,c){
   info.append(el("div","kind",g.loose?"Tracks":g.tab==="Albums"?"Album":"Folder"),el("h1",null,g.name),line,dmf);
   head.append(art,info); head._ctx=()=>albumMenu(g);
   const acts=el("div","actions");
-  acts.append(bigPlay(()=>playList(g.tracks,0),"Play "+g.name),
+  acts.append(bigPlay(()=>playList(g.tracks,0,"g:"+g.tab+"/"+g.name),"Play "+g.name,"g:"+g.tab+"/"+g.name),
     pill(ICON.dl,"Save as .zip",()=>zipGroup(g)),
-    pill(ICON.info,"Info",()=>showAlbumInfo(g)),moreBtn(()=>albumMenu(g)));
+    pill(ICON.info,"Info",()=>showAlbumInfo(g)),...(window.caches?[offBtn("g:"+g.tab+"/"+g.name)]:[]),moreBtn(()=>albumMenu(g)));
   const pt=pageOf("tracks",g.tracks.length), pe=pagerEl("tracks",g.tracks.length);
-  c.append(back,head,acts,trackList(g.tracks.slice(pt.start,pt.end),g.tracks,false,{offset:pt.start}));
+  c.append(back,head,acts,trackList(g.tracks.slice(pt.start,pt.end),g.tracks,false,{offset:pt.start,key:"g:"+g.tab+"/"+g.name}));
   if(pe) c.append(pe);
   Promise.all(g.tracks.map(getMeta)).then(()=>{
     if(openGroup!==g) return;
@@ -863,7 +882,7 @@ function sortTracks(arr,k){
 function renderBrowse(c){
   const d=data[activeTab], isAlb=activeTab==="Albums";
   c.append(el("h2","title",activeTab));
-  if(!d.tracks.length){ c.append(el("p","stat",activeTab==="Downloaded"?"Nothing downloaded yet. Open a playlist and press Download to browser.":"Nothing here yet.")); return; }
+  if(!d.tracks.length){ c.append(el("p","stat",activeTab==="Downloaded"?"Nothing downloaded yet. Tap the download arrow on any song, or use Download to browser on an album or playlist.":"Nothing here yet.")); return; }
   c.append(el("p","stat",isAlb?`${plural(albumCount(),"album")} · ${plural(d.tracks.length,"track")} total`:plural(d.tracks.length,"track")));
   let k=(prefs.sort&&prefs.sort[activeTab])||"default"; if(!sortOpts(activeTab).includes(k)) k="default";
   const named=sortGroups(d.groups.filter(g=>g.name!==""),k), loose=d.groups.find(g=>g.name==="");
@@ -874,7 +893,7 @@ function renderBrowse(c){
     const r=sp.getBoundingClientRect();
     showMenu(sortOpts(activeTab).map(o=>({label:(o===k?"✓ ":"\u2003")+SORTS[o],fn:()=>{ prefs.sort=prefs.sort||{}; prefs.sort[activeTab]=o; savePrefs(); pages={}; render(false); }})),r.left,r.bottom+4);
   });
-  acts.append(bigPlay(()=>playList(order,0),"Play all"),pill(ICON.dl,"Save all as .zip",zipTab),sp);
+  acts.append(bigPlay(()=>playList(order,0,"tab:"+activeTab),"Play all","tab:"+activeTab),pill(ICON.dl,"Save all as .zip",zipTab),sp);
   c.append(acts);
   if(named.length){
     const pt=pageOf("tiles",named.length), gr=el("div","grid"); c.append(gr); chunked(named.slice(pt.start,pt.end),g=>tile(g),gr);
@@ -883,7 +902,7 @@ function renderBrowse(c){
   if(looseTracks.length){
     if(named.length) c.append(el("div","label","Tracks"));
     const pt=pageOf("tracks",looseTracks.length);
-    c.append(trackList(looseTracks.slice(pt.start,pt.end),looseTracks,activeTab==="All"||activeTab==="Downloaded",{offset:pt.start}));
+    c.append(trackList(looseTracks.slice(pt.start,pt.end),looseTracks,activeTab==="All"||activeTab==="Downloaded",{offset:pt.start,key:"tab:"+activeTab}));
     const pe=pagerEl("tracks",looseTracks.length); if(pe) c.append(pe);
   }
 }
@@ -901,7 +920,7 @@ function renderList(c){
   head.append(art,info);
   if(!liked) head._ctx=()=>playlistMenu(p);
   const acts=el("div","actions");
-  if(tracks.length) acts.append(bigPlay(()=>playList(tracks,0),"Play "+name),pill(ICON.dl,"Save as .zip",()=>downloadZip(tracks.map(t=>({dl:t.dl,zipPath:t.path})),name)));
+  if(tracks.length) acts.append(bigPlay(()=>playList(tracks,0,liked?"pl:liked":"pl:"+p.id),"Play "+name,liked?"pl:liked":"pl:"+p.id),pill(ICON.dl,"Save as .zip",()=>downloadZip(tracks.map(t=>({dl:t.dl,zipPath:t.path})),name)));
   if(!liked&&!p.from) acts.append(pill("","Rename",()=>renamePlaylist(p)),pill("","Delete",()=>deletePlaylist(p)));
   else if(!liked) acts.append(pill("","Remove from library",()=>deletePlaylist(p)));
   const sb=(!liked&&!p.from)?sharePanel(p):null;
@@ -917,7 +936,7 @@ function renderList(c){
   if(!tracks.length) c.append(el("p","stat",liked?"No liked songs yet. Tap the heart on any song, or right-click it.":"This playlist is empty. Right-click a song or album and choose Add to playlist."));
   else{
     const pt=pageOf("tracks",tracks.length);
-    c.append(trackList(tracks.slice(pt.start,pt.end),tracks,true,{playlistId:liked||p.from?null:p.id,liked,offset:pt.start,reorder:reorder&&canReorder,onReorder:items=>savePlaylistOrder(p.id,pt.start,items)}));
+    c.append(trackList(tracks.slice(pt.start,pt.end),tracks,true,{playlistId:liked||p.from?null:p.id,liked,key:liked?"pl:liked":"pl:"+p.id,offset:pt.start,reorder:reorder&&canReorder,onReorder:items=>savePlaylistOrder(p.id,pt.start,items)}));
     const pe=pagerEl("tracks",tracks.length); if(pe) c.append(pe);
   }
 }
@@ -1025,7 +1044,7 @@ window.addEventListener("storage",e=>{ if(e.key===KEY){ loadStore(); renderSideb
 
 // ---------- queue ----------
 function queueAdd(tracks){
-  if(qi<0||!queue[qi]){ queue=[tracks[0]]; userQ.push(...tracks.slice(1)); load(0); toast("Playing "+plural(tracks.length,"song")); return; }
+  if(qi<0||!queue[qi]){ queue=[tracks[0]]; ctxKey=null; userQ.push(...tracks.slice(1)); load(0); toast("Playing "+plural(tracks.length,"song")); return; }
   userQ.push(...tracks); renderQueue(); toast("Added "+plural(tracks.length,"song")+" to queue");
 }
 function queueNext(tracks){
@@ -1120,7 +1139,7 @@ function playlistPicker(tracks){
 function trackMenu(t,ctx){
   ctx=ctx||{}; const g=groupOf(t), liked=isLiked(t);
   return [
-    {label:"Play",fn:()=>ctx.queue&&ctx.queue.includes(t)?playList(ctx.queue,ctx.queue.indexOf(t)):playList([t],0)},
+    {label:"Play",fn:()=>ctx.queue&&ctx.queue.includes(t)?playList(ctx.queue,ctx.queue.indexOf(t),ctx.key):playList([t],0)},
     {label:"Play next",fn:()=>queueNext([t])},
     {label:"Add to queue",fn:()=>queueAdd([t])},
     {sep:1},
@@ -1137,7 +1156,7 @@ function trackMenu(t,ctx){
 function albumMenu(g){
   const all=g.tracks.every(isLiked);
   return [
-    {label:"Play",fn:()=>playList(g.tracks,0)},
+    {label:"Play",fn:()=>playList(g.tracks,0,"g:"+g.tab+"/"+g.name)},
     {label:"Play next",fn:()=>queueNext(g.tracks)},
     {label:"Add to queue",fn:()=>queueAdd(g.tracks)},
     {sep:1},
@@ -1146,14 +1165,14 @@ function albumMenu(g){
     {sep:1},
     openGroup!==g?{label:"Open",fn:()=>go(g.tab,g)}:null,
     {label:"Info",fn:()=>showAlbumInfo(g)},
-    window.caches?{label:"Download to browser",fn:()=>downloadSet(g.tracks,"g:"+g.name)}:null,
+    window.caches?{label:"Download to browser",fn:()=>downloadSet(g.tracks,"g:"+g.tab+"/"+g.name)}:null,
     window.caches&&g.tracks.some(isDl)?{label:"Remove downloads",fn:()=>removeDownloads(g.tracks,"This album")}:null,
     {label:"Save as .zip",fn:()=>zipGroup(g)}
   ];
 }
 function playlistMenu(p){
   return [
-    {label:"Play",fn:()=>{ const tr=resolve(p.tracks); tr.length?playList(tr,0):toast("This playlist is empty"); }},
+    {label:"Play",fn:()=>{ const tr=resolve(p.tracks); tr.length?playList(tr,0,"pl:"+p.id):toast("This playlist is empty"); }},
     window.caches?{label:"Download to browser",fn:()=>downloadPlaylist(p.id)}:null,
     window.caches&&listTracks(p.id).some(isDl)?{label:"Remove downloads",fn:()=>removeDownloads(listTracks(p.id),"This playlist")}:null,
     {sep:1},
@@ -1163,7 +1182,7 @@ function playlistMenu(p){
 }
 function likedMenu(){
   return [
-    {label:"Play",fn:()=>{ const tr=resolve(store.likes.slice().reverse()); tr.length?playList(tr,0):toast("No liked songs yet"); }},
+    {label:"Play",fn:()=>{ const tr=resolve(store.likes.slice().reverse()); tr.length?playList(tr,0,"pl:liked"):toast("No liked songs yet"); }},
     window.caches?{label:"Download to browser",fn:()=>downloadPlaylist("liked")}:null,
     window.caches&&listTracks("liked").some(isDl)?{label:"Remove downloads",fn:()=>removeDownloads(listTracks("liked"),"Your liked songs")}:null
   ];
@@ -1562,7 +1581,13 @@ const OFFLINE="mzk-offline-v1", OFF_ICON='<svg viewBox="0 0 24 24"><path d="M12 
 let offlineSet=new Set(), offState={active:false,id:null,done:0,total:0}, srcToken=0, curBlob=null, offChangedTimer=null;
 const nd=t=>t._nd||(t._nd=new Request(t.dl).url);
 const isDl=t=>offlineSet.has(nd(t));
-function listTracks(id){ return resolve(id==="liked"?store.likes:(getPl(id)||{tracks:[]}).tracks); }
+function listTracks(id){
+  if(id.startsWith("g:")){   // "g:<tab>/<album name>": an album or folder, no playlist needed
+    const rest=id.slice(2), i=rest.indexOf("/"), g=((data[rest.slice(0,i)]||{groups:[]}).groups).find(x=>x.name===rest.slice(i+1));
+    return g?g.tracks:[];
+  }
+  return resolve(id==="liked"?store.likes:(getPl(id)||{tracks:[]}).tracks);
+}
 function offLabel(id){
   if(offState.active&&offState.id===id) return `Downloading ${offState.done}/${offState.total}…`;
   const tr=listTracks(id); if(!tr.length) return "Download to browser";
@@ -1574,7 +1599,7 @@ function offBtn(id){ const b=pill(OFF_ICON,offLabel(id),()=>downloadPlaylist(id)
 async function refreshOfflineSet(){ if(!window.caches) return; try{ const c=await caches.open(OFFLINE); offlineSet=new Set((await c.keys()).map(r=>r.url)); }catch(e){} }
 function refreshDownloaded(){ const list=data.All.tracks.filter(isDl); data.Downloaded={groups:[{name:"",tab:"Downloaded",loose:false,tracks:list}],tracks:list}; }
 function paintDownloaded(){
-  document.querySelectorAll("li").forEach(li=>{ const m=li.querySelector(".dlmark"); if(m&&li._t) m.hidden=!isDl(li._t); });
+  document.querySelectorAll("li").forEach(li=>{ if(!li._t) return; const d=isDl(li._t), m=li.querySelector(".dlmark"), b=li.querySelector(".dlbtn"); if(m) m.hidden=!d; if(b) b.hidden=d; });
   document.querySelectorAll(".tile").forEach(tl=>{ const b=tl.querySelector(".dlbadge"); if(b&&tl._g) b.hidden=!tl._g.tracks.every(isDl); });
   document.querySelectorAll(".dlfull").forEach(e=>{ if(e._g) e.hidden=!e._g.tracks.length||!e._g.tracks.every(isDl); });
 }
@@ -1586,9 +1611,15 @@ function offChanged(){
   },250);
 }
 // Only ever adds songs. Re-checks what's stored first and skips anything already downloaded.
-async function downloadSet(tracks,id){
-  if(!window.caches){ toast("Downloading to the browser isn't supported in this window"); return; }
-  if(offState.active){ toast("A download is already running"); return; }
+let dlChain=Promise.resolve(), dlPending=0;
+function downloadSet(tracks,id){
+  if(!window.caches){ toast("Downloading to the browser isn't supported in this window"); return Promise.resolve(); }
+  if(dlPending) toast("Added to the download queue");
+  dlPending++;
+  dlChain=dlChain.then(()=>downloadSetNow(tracks,id)).catch(()=>{}).then(()=>{ dlPending--; });
+  return dlChain;
+}
+async function downloadSetNow(tracks,id){
   if(!tracks.length){ toast("Nothing to download"); return; }
   await refreshOfflineSet();
   const fresh=tracks.filter(t=>!isDl(t));
@@ -1773,7 +1804,7 @@ function renderRecent(c){
     : resolve(hist.recent);
   c.append(el("h2","title","Recently played"),el("p","stat",list.length?plural(list.length,"song"):"Nothing here yet."));
   const acts=el("div","actions");
-  if(list.length) acts.append(bigPlay(()=>playList(list,0),"Play all"));
+  if(list.length) acts.append(bigPlay(()=>playList(list,0,"recent:"+histView),"Play all","recent:"+histView));
   const seg=el("div","seg");
   [["recent","Recent"],["top","Most played"]].forEach(([k,l])=>{ const b=el("button",null,l); b.setAttribute("aria-pressed",histView===k); b.onclick=()=>{ histView=k; pages={}; render(false); }; seg.append(b); });
   acts.append(seg);
@@ -1781,7 +1812,7 @@ function renderRecent(c){
   c.append(acts);
   if(!list.length){ c.append(el("p","stat","Songs you listen to show up here. This list is saved only in this browser.")); return; }
   const pt=pageOf("tracks",list.length);
-  c.append(trackList(list.slice(pt.start,pt.end),list,true,{offset:pt.start,counts:histView==="top"?hist.counts:null}));
+  c.append(trackList(list.slice(pt.start,pt.end),list,true,{offset:pt.start,key:"recent:"+histView,counts:histView==="top"?hist.counts:null}));
   const pe=pagerEl("tracks",list.length); if(pe) c.append(pe);
 }
 
