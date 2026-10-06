@@ -437,7 +437,7 @@ $("rep").innerHTML=ICON.rep;
 
 // data[tab] = { groups:[{name,tab,loose,tracks}], tracks:[] }
 const data={All:{groups:[],tracks:[]},Singles:{groups:[],tracks:[]},Albums:{groups:[],tracks:[]},Downloaded:{groups:[],tracks:[]}};
-let userQ=[], pendingSeek=0, lastSave=0, sleepEnd=false, activeTab="All", openGroup=null, activeList=null, queue=[], qi=-1, shuffle=false, repeat=0, busy=false;
+let failStreak=0, wantPlay=false, skipTimer=null, userQ=[], pendingSeek=0, lastSave=0, sleepEnd=false, activeTab="All", openGroup=null, activeList=null, queue=[], qi=-1, shuffle=false, repeat=0, busy=false;
 const albumCount=()=>data.Albums.groups.filter(g=>!g.loose).length;
 
 const fmt=s=>{ if(!isFinite(s)) return "0:00"; s=Math.floor(s); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); };
@@ -585,7 +585,16 @@ function toggle(){ if(qi<0){ const l=(data[activeTab]||data.All).tracks; if(l.le
 
 audio.addEventListener("ended",()=>{ creditCheck(true); credited=false; if(sleepEnd){ sleepEnd=false; paintOpts(); toast("Sleep timer: stopped after this song"); return; } next(true); });
 audio.addEventListener("play",updatePP); audio.addEventListener("pause",()=>{ updatePP(); saveResume(); });
-audio.addEventListener("error",()=>{ if(qi>=0) $("sub").textContent="Couldn't play this file"; });
+audio.addEventListener("error",()=>{
+  const t=queue[qi]; if(!t||!audio.getAttribute("src")) return;
+  if(audio.src.startsWith("blob:")&&!t._retried){ t._retried=true; audio.src=t.url; audio.play().catch(()=>{}); return; }   // a downloaded copy failed: try streaming it instead
+  $("sub").textContent="Couldn't play this file";
+  if(!wantPlay) return;                                   // a restored (paused) song shouldn't start anything on its own
+  toast(`Couldn't play "${t.title}". Skipping…`);
+  clearTimeout(skipTimer); skipTimer=setTimeout(()=>{ if(queue[qi]===t&&audio.error) skipBroken(); },1000);
+});
+audio.addEventListener("playing",()=>{ failStreak=0; });
+audio.addEventListener("play",()=>{ wantPlay=true; });
 function updatePP(){ $("ppi").setAttribute("d",audio.paused?"M8 5v14l11-7z":"M6 5h4v14H6zm8 0h4v14h-4z"); $("pp").setAttribute("aria-label",audio.paused?"Play":"Pause"); syncNP(); }
 let scrubbing=false;
 audio.addEventListener("timeupdate",()=>{ creditCheck(); syncNPTime(); if(Date.now()-lastSave>5000) saveResume(); $("cur").textContent=fmt(audio.currentTime); if(!scrubbing&&audio.duration){ $("seek").value=audio.currentTime/audio.duration*1000; setFill($("seek")); } });
@@ -1286,19 +1295,27 @@ document.addEventListener("visibilitychange",()=>{ if(document.hidden) saveResum
 window.addEventListener("pagehide",saveResume);
 
 // ---------- playback speed + sleep timer ----------
-let sleepTimer=null, sleepAt=0;
+let sleepTimer=null, sleepAt=0, sleepMin=0;
+const fmtMin=m=>m<60?m+" min":Math.floor(m/60)+" h"+(m%60?" "+(m%60)+" min":"");
 function paintOpts(){ $("opts").classList.toggle("on",rate!==1||sleepEnd||!!sleepAt); }
 function setRate(r){ rate=r; prefs.rate=r; audio.defaultPlaybackRate=r; audio.playbackRate=r; savePrefs(); paintOpts(); toast(r+"× speed"); }
 function setSleep(mode){
-  clearTimeout(sleepTimer); sleepTimer=null; sleepEnd=false; sleepAt=0;
+  clearTimeout(sleepTimer); sleepTimer=null; sleepEnd=false; sleepAt=0; sleepMin=0;
   if(mode==="end"){ sleepEnd=true; toast("Will stop after this song"); }
-  else if(mode>0){ sleepAt=Date.now()+mode*60000; sleepTimer=setTimeout(sleepFire,mode*60000); toast("Sleep timer: "+mode+" min"); }
+  else if(mode>0){ sleepMin=mode; sleepAt=Date.now()+mode*60000; sleepTimer=setTimeout(sleepFire,mode*60000); toast("Sleep timer: "+fmtMin(mode)); }
   else toast("Sleep timer off");
   paintOpts();
 }
 function sleepFire(){
   sleepTimer=null; sleepAt=0; const v=audio.volume; let k=0;
   const iv=setInterval(()=>{ k++; audio.volume=Math.max(0,v*(1-k/20)); if(k>=20){ clearInterval(iv); audio.pause(); audio.volume=v; paintOpts(); toast("Sleep timer: stopped"); } },200);
+}
+async function customSleep(){
+  const v=await inputDialog("Sleep timer (minutes)",String(prefs.sleepCustom||20),"Start");
+  if(v===null) return;
+  const m=Math.round(parseFloat(v));
+  if(!(m>=1&&m<=720)){ toast("Enter a number from 1 to 720 minutes"); return; }
+  prefs.sleepCustom=m; savePrefs(); setSleep(m);
 }
 function playerOptions(){
   const sl=sleepEnd?"Sleep timer (end of song)":sleepAt?`Sleep timer (${Math.max(1,Math.ceil((sleepAt-Date.now())/60000))} min left)`:"Sleep timer";
@@ -1307,7 +1324,8 @@ function playerOptions(){
     {label:`Playback speed (${rate}×)`,sub:()=>[0.5,0.75,1,1.25,1.5,2].map(r=>({label:mark(r===rate)+r+"×"+(r===1?" (normal)":""),fn:()=>setRate(r)}))},
     {label:sl,sub:()=>[
       {label:mark(!sleepEnd&&!sleepAt)+"Off",fn:()=>setSleep(0)},
-      ...[15,30,45,60].map(m=>({label:"\u2003"+m+" minutes",fn:()=>setSleep(m)})),
+      ...[15,30,45,60].map(m=>({label:mark(sleepAt&&sleepMin===m)+m+" minutes",fn:()=>setSleep(m)})),
+      {label:mark(sleepAt&&![15,30,45,60].includes(sleepMin))+"Custom…",fn:customSleep},
       {label:mark(sleepEnd)+"End of this song",fn:()=>setSleep("end")}
     ]}
   ];
@@ -1627,9 +1645,17 @@ async function clearAllData(){
   prefs={sort:{},rate:1,vol:1,shuffle:false,repeat:0,perPage:20}; rate=1; applyPrefs(); paintOpts();
   renderSidebar(); refreshHearts(); renderQueue(); counts(); go("All"); toast("All data cleared");
 }
+// Moves past a song that can't be played. Ignores repeat-one, and gives up if several in a row fail.
+function skipBroken(){
+  failStreak++;
+  if(failStreak>=Math.min(8,Math.max(2,queue.length+userQ.length))){ failStreak=0; audio.pause(); toast("Couldn't play these songs. Playback stopped."); return; }
+  const r=repeat; if(repeat===2) repeat=0;
+  next(true);
+  repeat=r;
+}
 // plays from the downloaded copy when there is one, otherwise streams from GitHub
 function setSource(t,paused){
-  const tok=++srcToken;
+  const tok=++srcToken; wantPlay=!paused;
   const start=url=>{ if(tok!==srcToken) return; audio.src=url; if(!paused) audio.play().catch(()=>{}); };
   const free=()=>{ if(curBlob){ URL.revokeObjectURL(curBlob); curBlob=null; } };
   if(window.caches&&isDl(t)){
