@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Game hub</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap">
+<style>
+:root{--bg:#1a1330;--panel:#261b47;--line:#3a2d66;--ink:#f3eeff;--mute:#a99cd0;--hot:#ff5d8f;--sun:#ffc857}
+*{box-sizing:border-box;margin:0}
+html{color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font:400 16px/1.4 Fredoka,"Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-serif;min-height:100vh}
+:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+header,main{max-width:1200px;margin:auto;padding-inline:clamp(16px,5vw,56px)}
+header{padding-top:clamp(24px,6vw,64px)}
+h1{font-size:clamp(36px,7vw,68px);font-weight:600;letter-spacing:-.02em;line-height:1}
+.sub{margin-top:10px;color:var(--mute);max-width:60ch}
+#q{display:block;width:100%;margin-top:22px;font:inherit;font-size:20px;color:var(--ink);background:var(--panel);border:2px solid var(--line);border-radius:16px;padding:16px 20px}
+#q::placeholder{color:var(--mute)}
+#q:focus{border-color:var(--hot);outline:0}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.row:empty{display:none}
+.row button{font:inherit;color:var(--ink);background:var(--panel);border:2px solid var(--line);border-radius:99px;padding:5px 14px;cursor:pointer}
+.row button.on{background:var(--hot);border-color:var(--hot);color:var(--bg)}
+#st{margin-top:12px;color:var(--mute);font-size:15px}
+main{padding-top:16px;padding-bottom:64px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:22px 16px}
+.grid p{grid-column:1/-1;color:var(--mute)}
+a.c{display:block;color:inherit;text-decoration:none;content-visibility:auto;contain-intrinsic-size:auto 190px}
+.t{position:relative;aspect-ratio:1;border-radius:10px;display:grid;place-items:center;font-size:34px;font-weight:600;overflow:hidden}
+.t img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.b{position:absolute;z-index:1;left:6px;top:6px;font-size:12px;font-weight:400;background:rgba(26,19,48,.82);padding:1px 8px;border-radius:99px}
+a.c:hover .t,a.c:focus-visible .t{outline:3px solid var(--sun);outline-offset:2px}
+.n{margin-top:8px;font-size:15px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+#ov{position:fixed;inset:0;z-index:9;background:#000;display:none;flex-direction:column}
+#ov.on{display:flex}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 16px;background:var(--panel)}
+.bar span{display:flex;gap:8px;flex-wrap:wrap}
+.btn{font:inherit;font-size:14px;color:var(--ink);background:var(--line);border:0;border-radius:8px;padding:6px 12px;cursor:pointer;text-decoration:none}
+#fr{flex:1;width:100%;border:0}
+</style>
+</head>
+<body>
+<header>
+<h1>Game hub</h1>
+<p class="sub">Greeni's library, KBH Games and NautilusOS in one searchable shelf. Press / to jump to search.</p>
+<input id="q" type="search" placeholder="Search games, movies, mods and apps" autocomplete="off" aria-label="Search the hub">
+<div class="row" id="src" role="group" aria-label="Source"></div>
+<div class="row" id="gen" role="group" aria-label="Genre"></div>
+<p id="st" aria-live="polite"></p>
+</header>
+<main><div id="grid" class="grid"></div></main>
+<div id="ov" role="dialog" aria-modal="true" aria-label="Player">
+<div class="bar"><b id="ot"></b><span><a id="onew" class="btn" target="_blank" rel="noopener">Open in new tab</a><button class="btn" id="ofs">Fullscreen</button><button class="btn" id="ox">Close</button></span></div>
+<iframe id="fr" allow="fullscreen; autoplay; gamepad; clipboard-write" title="Player"></iframe>
+</div>
+<script>
+const $=s=>document.querySelector(s),G="https://cdn.jsdelivr.net/gh/greeniYT/gug@main/json/";
+const LIB=[["Games","game.json"],["Movies","movie.json"],["Mods","mc-mods.json"],["Apps","apps.json"]];
+const LBL={Games:"Games",Movies:"Movies",Mods:"Minecraft mods",Apps:"Apps",KBH:"KBH Games"};
+const TAG={Games:"Greeni",Movies:"Movie",Mods:"Mod",Apps:"App",KBH:"KBH"};
+// KBH slugs. ~ = friday-night-funkin-  ^ = fnf-
+const KBH={
+FNF:"friday-night-funkin ~the-x-event ~vs-impostor-among-us ~vs-shaggy ^vs-tabi-ex-boyfriend ~vs-agoti ~vs-bob ~pico-school ~vs-sans ~starlight-mayhem ~vs-monika-ddlc ^smg4-if-mario-was-in-fnf-mod-pack ^funkin-nights-at-freddys ^fanmade-vs-tricky-phase-3 ^vs-tricky-version-2-0 ~sarventes-mid-fight-masses ~v-s-whitty-full-week ~vs-sky-full-week ~vs-garcello ~the-tricky-mod ~vs-hex-mod-full-week ~hatsune-miku ~but-bad ~vs-tord ~hd ~neo ~b-side-remixes ~vs-matt-from-wii-sports ^v-s-tankman-high-effort-ugh-2-0 ~vs-kapi ~sonic-skin-mod ~vs-carol-v2 ~vs-annie ~duo-pack ~cg5-edition-full-week ~b3-remixed vs-zardy-ronald-mcdonald ~with-shyrell-mod ^ugh-pack ^siivagunner-corruption-pack ^friday-night-sussin ~v-s-flexy-full-week ~vs-weegee ^vs-dave-bambi-full-week friday-night-sandboxin ~vs-onek fine-night-funkout-vs-clippy ^spinel-vs-steven ^vs-shaggy-remastered ~vs-isaac ~vs-fancy-pants-2 ^minecraft-creeper-vs-steve ~vs-cheese ~vs-omori ~vs-rosie ~pico-x-boyfriend ~x-ray ^pico-night-funkin ^cuphead-a-noisy-adventure ^vs-garcello-but-bad ^vs-chara-monster-boy ^vs-crazy-girlfriend ~vs-cyrix ~mcyt-modpack ^clay-mod ~upside ~vs-dusttale-sans ~summer-vacation ^gender-swap-mod-pack ~character-test-playground friday-night-bloxxin-vs-roblox-noob ^zardy-foolhardy-mod-pack ^internets-down",
+Action:"madness-off-color stick-it-to-the-stickman drunken-table-wars castle-crashing-the-beard-hd adventure-time-break-the-worm jungle-hero-2 zombie-parade-defense-3 castle-wars-middle-ages craig-of-the-creek-recycle-squad gunner fly-this zombie-killer underneath the-fall-of-catzahstan zombie-mission-8 zombie-mission-7 pixel-samurai the-rise-of-dracula jump-forge lotus-armageddon top-outpost goldun too-fast spirit-dungeons mole boba-platformer puppet-killer",
+Puzzle:"deepest-sword red-handed sort-among-us a-taste-of-the-past game-cafe-escape conduct-this admin jumphase im-outta-here pink chill-out alice-in-the-maze laser-push one-screen-run-2 rope-slash-2 tower-of-the-scorched-sea push-the-box-3d sticky-friends scope pixel-detective shaun-the-sheep-sheep-stack flower-escape cats-n-wires telepobox fist-bump fliptris flip-n-fall millionaire-trivia rain-on-your-parade-prologue boxbob exit84 isocubes microsoft-word-twister loihtija",
+Sports:"football-legends-2021 rally-point two-ball-3d-dark stickman-supreme-duelist-2 mx-offroad-mountain-bike tic-tac-toe-mania pocket-league-3d soccer-heads fiveheads-soccer drunken-wrestle back-street-soccer basketbros big-shot-boxing cartoon-network-skate-rush top-speed-racing-3d extreme-car-stunts-3d touge-drift-and-racing cars-3-demolition-derby bike-blast connect-four",
+Shooting:"mineworld-horror-the-mansion ragdoll-fall gun-knight gun-orphan the-lost-night bullet-heaven-3 super-raft-boat noir-deinitialize pixel-crisis dick-tracy-sega bullet-force surviv-io merc-zone",
+Multiplayer:"warfare-classic assault-bots exploder-io tankroyale-io crosswords-arena little-big-snake-io tank-trouble-4 combat-reloaded crazy-stunt-cars-multiplayer",
+Adventure:"pokemon-darkfire pokemon-radical-red-version pokemon-demon-island pokemon-light-platinum pokemon-ash-gray heat-rebirth nextdoor senya-and-oscar-2 virtual-bart-redux cursed-travels-flame-of-the-banshee your-turn-to-die oregon-trail-deluxe monster-girl-maker gacha-life five-nights-freddys-2 five-nights-freddys-online",
+Strategy:"stick-war-legacy-2 castle-constructor power-the-grid fe-8-the-eligors-spear guild-of-zany",
+Retro:"sonic-the-hedgehog-1995 wink-gameboy sonic-1-exe sonic-2-anniversary-edition sonic-powered sonic-cd sonic-classic-heroes teen-sonic-in-sonic-1 street-fighter-alpha-3 dragon-ball-z-supersonic-warriors dragon-ball-z-buus-fury bleach-vs-naruto-3",
+Casual:"minecraft-classic mine-blocks-2 wild-race duck-life-battle toon-cup-2019 wolf-simulator tiger-simulator the-floor-is-lava-apple-onion super-scratch-bros vex-4 happy-room wholesome-cats troll-face-quest-video-games-2 pass-me surfs-up floating-sandbox the-world-easyest-game blob-opera pizza-tower rescue-of-titans picohot-superhot bumper-bros-tmnt super-disc-dual-2 temple-run-2-online hinotori-rhythm quantum-geometry dino-rex the-last-guy elastic-man"
+};
+
+// NautilusOS: save your NautilusOS file next to this page as nautilusos.html
+const items=[{n:"NautilusOS",s:"Apps",c:"Web desktop",u:"nautilusos.html",k:"frame"}];
+const ex=t=>t[0]=="~"?"friday-night-funkin-"+t.slice(1):t[0]=="^"?"fnf-"+t.slice(1):t;
+const SM=/^(of|the|and|in|to|a|vs|at)$/,UP=/^(fnf|tmnt|exe|cd|hd|dbz|3d|io|fe|mx)$/;
+const ttl=s=>s.split("-").map((w,i)=>UP.test(w)?w.toUpperCase():i&&SM.test(w)?w:w[0].toUpperCase()+w.slice(1)).join(" ").replace(/^Friday Night Funkin(?= )/,"FNF").replace("V S","V.S.");
+for(const[g,l]of Object.entries(KBH))for(const t of l.trim().split(/\s+/)){const s=ex(t);items.push({n:ttl(s),s:"KBH",c:g,u:"https://kbhgames.com/game/"+s,k:"link"})}
+
+let S="All",C="",cur=[],fails=[],T="",N=0,tm;
+const esc=s=>String(s).replace(/[&<>"']/g,c=>"&#"+c.charCodeAt(0)+";");
+const hue=n=>[...n].reduce((a,c)=>(a*31+c.charCodeAt(0))%360,7);
+const ini=n=>n.replace(/[^A-Za-z0-9 ]/g,"").split(/\s+/).slice(0,2).map(w=>w[0]||"").join("").toUpperCase();
+const chip=(a,k,on,t)=>`<button data-${a}="${esc(k)}"${on?' class="on"':""}>${esc(t)}</button>`;
+const byName=()=>items.sort((a,b)=>a.n.localeCompare(b.n));
+
+function render(){
+ const w=$("#q").value.toLowerCase().split(/\s+/).filter(Boolean);
+ cur=items.filter(i=>(S=="All"||i.s==S)&&(!C||i.c==C)&&w.every(x=>(i.n+" "+i.c).toLowerCase().includes(x)));
+ const n=k=>items.filter(i=>i.s==k).length;
+ $("#src").innerHTML=chip("s","All",S=="All","Everything "+items.length)+Object.keys(LBL).map(k=>chip("s",k,S==k,LBL[k]+" "+n(k))).join("");
+ $("#gen").innerHTML=S=="KBH"?chip("c","",!C,"All genres")+Object.keys(KBH).map(g=>chip("c",g,C==g,g)).join(""):"";
+ $("#st").textContent=cur.length+" of "+items.length+" titles"+(fails.length?". Greeni's "+fails.join(", ").toLowerCase()+" didn't load. Open this file from your own site or folder, not a sandboxed preview, and check your connection.":"");
+ $("#grid").innerHTML=cur.length?cur.map((i,x)=>`<a class="c" data-i="${x}" href="${esc(i.u)}" target="_blank" rel="noopener"><div class="t" style="background:hsl(${hue(i.n)} 40% 34%)">${ini(i.n)}${i.img?`<img loading="lazy" alt="" src="${esc(i.img)}" onerror="this.remove()">`:""}<span class="b">${TAG[i.s]}</span></div><div class="n">${esc(i.n)}</div></a>`).join(""):"<p>Nothing matches. Try fewer words, or switch to Everything.</p>";
+}
+
+function play(i){
+ const f=$("#fr"),id=++N;T="";f.removeAttribute("srcdoc");
+ $("#ot").textContent=i.n;$("#onew").href=i.u;$("#ov").classList.add("on");$("#ox").focus();
+ if(i.k=="frame"){f.removeAttribute("sandbox");f.src=i.u;return}
+ f.setAttribute("sandbox","allow-scripts allow-same-origin allow-forms allow-popups allow-pointer-lock allow-modals");
+ f.src="about:blank";
+ fetch(i.u,{cache:"no-store"}).then(r=>{if(!r.ok)throw 0;return r.text()}).then(t=>{if(id==N){T=t;f.srcdoc=t}}).catch(()=>{if(id==N)f.src=i.u});
+}
+function shut(){const f=$("#fr");N++;T="";f.removeAttribute("srcdoc");f.src="about:blank";$("#ov").classList.remove("on")}
+
+$("#grid").onclick=e=>{const a=e.target.closest("a.c");if(!a)return;const i=cur[a.dataset.i];if(i.k!="link"){e.preventDefault();play(i)}};
+$("header").onclick=e=>{const b=e.target.closest("button");if(!b)return;const s=b.dataset.s!==undefined;
+ if(s){S=b.dataset.s;C=""}else if(b.dataset.c!==undefined)C=b.dataset.c;else return;
+ render();$(s?`#src [data-s="${S}"]`:`#gen [data-c="${C}"]`)?.focus()};
+$("#q").oninput=()=>{clearTimeout(tm);tm=setTimeout(render,80)};
+$("#ox").onclick=shut;
+$("#ofs").onclick=()=>$("#fr").requestFullscreen?.();
+$("#onew").onclick=e=>{if(T){e.preventDefault();open(URL.createObjectURL(new Blob([T],{type:"text/html"})))}};
+addEventListener("keydown",e=>{
+ if($("#ov").classList.contains("on")){if(e.key=="Escape")shut();return}
+ if(e.key=="/"&&!/INPUT|TEXTAREA/.test(document.activeElement.tagName)){e.preventDefault();$("#q").focus()}
+});
+
+// Greeni's library loads live from its JSON files
+const abs=u=>u&&new URL(u,G).href;
+LIB.forEach(([s,f])=>fetch(G+f).then(r=>r.json()).then(d=>{
+ for(const x of d.filter(x=>x.name&&x.file))items.push({n:x.name,s,c:"Greeni's "+s.toLowerCase(),u:abs(x.file),img:abs(x.image),k:s=="Movies"?"frame":s=="Mods"?"link":"play"});
+ byName();
+}).catch(()=>fails.push(s)).finally(render));
+byName();render();
+</script>
+</body>
+</html>
