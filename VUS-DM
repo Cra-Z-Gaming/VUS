@@ -2075,7 +2075,7 @@ function watchMyGroupChats(onList) {
   unwatchMyGroupChats();
   const token = ++groupWatchToken;
   const me = currentSession.accountKey;
-  const emit = () => onList(Object.values(groupCache).filter(g => g.name && g.members));
+  const emit = () => onList(Object.values(groupCache).filter(g => g.name && g.members && g.members[me]));
 
   const attach = gcId => {
     if (groupFieldWatchers[gcId]) return;
