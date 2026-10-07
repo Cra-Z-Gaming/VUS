@@ -874,18 +874,112 @@
   }
   .role-menu-option:hover { border-color: #475569; }
   .role-menu-option .role-menu-icon { font-size: 17px; }
+
+  /* ═════════════════════════════════════════════════════════════
+     LAYOUT FIXES + PHONE LAYOUT
+     Added after measuring the real page in a browser at phone / tablet /
+     laptop sizes. Desktop looks the same as before; these fix things that
+     broke, plus a compact layout for narrow screens (there was none).
+     ═════════════════════════════════════════════════════════════ */
+
+  /* header (these were inline styles; now classes so phones can override them) */
+  .chat-header { position: relative; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; }
+  .hdr-left { position: relative; justify-self: start; display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .online-count { font-size: 14.5px; color: #64748b; margin-left: 8px; cursor: pointer; white-space: nowrap; }
+  .hdr-title { justify-self: center; white-space: nowrap; }
+  .hdr-right { font-size: 16.5px; color: #475569; display: flex; align-items: center; gap: 10px; justify-self: end; min-width: 0; }
+  #youAre { display: inline-flex; align-items: baseline; min-width: 0; }
+  #youAre .ya-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; min-width: 0; }
+  #youAre .ya-prefix, #youAre .ya-sep, #youAre .ya-role { white-space: pre; }
+
+  /* a wide sender name used to push the whole message list sideways on phones */
+  .msg-meta { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* staff menu rows: the name used to be squeezed to ~9px behind the buttons, so a
+     moderator could not even read who they were about to act on. Rows wrap now. */
+  .room-member-row { flex-wrap: wrap; row-gap: 6px; }
+  .room-member-name { flex: 1 1 150px; min-width: 0; }
+  .room-member-actions { flex-wrap: wrap; flex-shrink: 1; justify-content: flex-end; }
+
+  /* @mention list: a long name made it scroll sideways */
+  #mentionDropdown { overflow-x: hidden; max-width: calc(100vw - 36px); }
+  .mention-option { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #commandList { max-height: min(50vh, 380px); }
+
+  /* the "Close chat" button had no styling of its own and showed as a white browser button */
+  .danger-btn { border-color: #7f1d1d; color: #f87171; }
+  .danger-btn:hover { background: rgba(239,68,68,.1); color: #fca5a5; }
+
+  /* staff menu: command cheat-sheet and history fold away so the member list is what you see first */
+  .staff-details { margin-bottom: 8px; }
+  .staff-details > summary { cursor: pointer; color: #f1f5f9; font-weight: 700; font-size: 15px; padding: 6px 2px; list-style: none; user-select: none; }
+  .staff-details > summary::-webkit-details-marker { display: none; }
+  .staff-details > summary::before { content: "\25B8"; display: inline-block; width: 1.1em; color: #64748b; }
+  .staff-details[open] > summary::before { content: "\25BE"; }
+  .staff-tools { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .staff-tools > button { flex: 1 1 130px; }
+
+  /* the "you were pinged" toast sat on top of the header controls */
+  #pingToast { top: 76px; }
+
+  @media (max-width: 600px) {
+    .chat-header { display: flex; justify-content: space-between; padding: 10px 12px; font-size: 18px; gap: 8px; }
+    .hdr-left { flex: 0 0 auto; }
+    .hdr-title { flex: 0 0 auto; font-size: 18px; }
+    .hdr-right { flex: 1 1 0; justify-content: flex-end; gap: 8px; font-size: 13px; }
+    .online-count { margin-left: 4px; font-size: 13px; }
+    .oc-word { display: none; }
+    #roomsToggleBtn { font-size: 13px; padding: 4px 8px; flex: 0 0 auto; }
+    #youAre { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; flex: 0 1 auto; min-width: 0; max-width: 130px; }
+    #youAre .ya-prefix, #youAre .ya-sep { display: none; }
+    #youAre .ya-name { font-size: 13px; max-width: 100%; }
+    #youAre .ya-role { font-size: 11.5px; color: #64748b; }
+    #pingToast { top: 62px; left: 12px; right: 12px; transform: none; max-width: none; }
+
+    #messages { padding: 12px; gap: 9px; }
+    .msg { max-width: 94%; }
+    .msg-bubble { font-size: 17px; }
+    .msg-meta { font-size: 13.5px; }
+
+    #toolbar { padding: 6px 12px; gap: 6px; }
+    .toolbar-btn { font-size: 13.5px; padding: 5px 9px; }
+
+    #composer { padding: 10px 12px; gap: 8px; }
+    #settingsBtn { width: 44px; height: 44px; font-size: 20px; }
+    #composerInputWrap { min-width: 0; }
+    #msgInput { font-size: 17px; min-width: 60px; }
+    #sendBtn { font-size: 17px; padding: 0 16px; }
+
+    /* bigger, better-spaced buttons in the staff menu: Ban and Temp ban sit side by side,
+       and a thumb mis-tap there bans the wrong kind of person-sized mistake */
+    .room-member-actions { gap: 8px; }
+    .room-member-actions button { padding: 8px 12px; font-size: 13px; }
+
+    .chat-modal-overlay { padding: 10px; }
+    .chat-modal { padding: 16px; }
+    #globalClearPanel { left: 12px; }
+    #commandList, #mentionDropdown { left: 12px; }
+
+    /* Ban / Temp ban / Timeout sit side by side; on a thumb-sized screen they were small
+       and 5px apart, easy to mis-tap when moderating. Bigger and further apart. */
+    .room-member-actions { gap: 8px; }
+    .room-member-actions button { padding: 8px 12px; font-size: 13px; }
+  }
+  @media (max-width: 430px) {
+    .hdr-title { display: none; }
+  }
 </style>
 </head>
 <body>
 
-<div class="chat-header" style="position:relative;display:grid;grid-template-columns:1fr auto 1fr;align-items:center">
-  <div style="position:relative;justify-self:start;display:flex;align-items:center;gap:6px">
+<div class="chat-header" id="chatHeader">
+  <div class="hdr-left">
     <span id="onlineDot" class="chat-online-dot offline" title="Connection status" style="display:inline-block;vertical-align:middle"></span>
-    <span id="onlineCount" style="font-size:14.5px;color:#64748b;margin-left:8px;cursor:pointer"></span>
+    <span id="onlineCount" class="online-count"></span>
     <div id="onlineListPanel" style="display:none;position:absolute;top:28px;left:-10px;background:#1e293b;border:1.5px solid #334155;border-radius:10px;padding:12px;z-index:10;width:220px;font-size:14px;font-weight:400;max-height:280px;overflow-y:auto"></div>
   </div>
-  <div style="justify-self:center">VUS Chat</div>
-  <div style="font-size:16.5px;color:#475569;display:flex;align-items:center;gap:10px;justify-self:end">
+  <div class="hdr-title">VUS Chat</div>
+  <div class="hdr-right">
     <button id="roomsToggleBtn">🚪 Rooms<span class="rooms-badge-dot" id="roomsBadgeDot"></span></button>
     <span id="youAreAvatar" class="you-avatar" aria-label="Your profile picture"></span>
     <span id="youAre"></span>
@@ -1448,6 +1542,34 @@ const ROLE_IMAGE_COOLDOWNS_MS   = { unranked: 10000, normie: 5000, mod: 3000, ad
 /* Roles at or below this rank need an explicit image grant. */
 const IMAGE_GATED_MAX_RANK = ROLES.normie.rank;
 
+/* ══════════════════════════════════════════════════════════
+   NAME IMPERSONATION GUARD
+   Names used to be compared as exact text, and the one check that existed was
+   skipped for the person's own username -- while claimPresence (the code that
+   actually writes the name) never checked at all and simply overwrote whoever
+   was using it. So a second account could join "over" someone, and "yurt",
+   "YURT", "Yurt" + an invisible character, or a Cyrillic "у" all counted as
+   different names. Now names are compared by what they LOOK like.
+   ══════════════════════════════════════════════════════════ */
+// Characters that show as nothing (or flip text direction): never legitimate in a name.
+// (Emoji joiners U+200D / U+FE0F are deliberately allowed, or family/flag emoji would break.)
+const HIDDEN_CHARS = /[\u0000-\u001f\u007f-\u009f\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180e\u200b\u200c\u200e\u200f\u202a-\u202e\u2060\u2066-\u2069\u3164\ufeff\uffa0\ufff9-\ufffb]/;
+function hasHiddenChars(name) { return HIDDEN_CHARS.test(String(name || "")); }
+
+// Letters from other alphabets that are drawn like Latin letters.
+const LOOKALIKES = {
+  "\u0430":"a","\u0435":"e","\u043e":"o","\u0440":"p","\u0441":"c","\u0443":"y","\u0445":"x","\u0456":"i","\u0458":"j","\u0455":"s",
+  "\u04bb":"h","\u043a":"k","\u043c":"m","\u0442":"t","\u0432":"b","\u043d":"h","\u0501":"d","\u051b":"q","\u0261":"g","\u04cf":"l",
+  "\u03bf":"o","\u03bd":"v","\u03b9":"i","\u03b1":"a","\u03c1":"p","\u03c5":"u","\u03ba":"k","\u03c4":"t","\u03c7":"x","\u04af":"y"
+};
+// Two names with the same skeleton look the same to a person reading the chat.
+function nameSkeleton(name) {
+  let t = String(name || "").normalize("NFKC").replace(new RegExp(HIDDEN_CHARS.source + "|[\\u200d\\ufe00-\\ufe0f]", "g"), "");
+  t = t.toLowerCase();
+  t = Array.from(t).map(ch => LOOKALIKES[ch] || ch).join("");
+  return t.replace(/\s+/g, " ").trim();
+}
+
 const ChatBackend = {
   _db: null,
   _ref: null,
@@ -1479,6 +1601,11 @@ const ChatBackend = {
     firebase.initializeApp(FIREBASE_CONFIG);
     this._db = firebase.database();
     this._connectedRef = this._db.ref(".info/connected");
+    // Firebase keeps this value current (serverTime - this device's clock).
+    this._db.ref(".info/serverTimeOffset").on("value", snap => {
+      const v = Number(snap.val());
+      if (Number.isFinite(v)) this._offsetCache = v;
+    });
     this._bansRef = this._db.ref("rooms/" + MAIN_ROOM_ID + "/bannedUsers");
     this._imageAccessRef = this._db.ref("rooms/" + MAIN_ROOM_ID + "/imageAccess");
     this._chatStateRef = this._db.ref("chatState");
@@ -1494,16 +1621,27 @@ const ChatBackend = {
     });
   },
 
+  // Everything that has to AGREE between devices -- ban expiry, temporary-rank
+  // expiry, private-room timers -- is measured against SERVER time, never the raw
+  // device clock. Before this, a slow admin phone made a short ban expire the
+  // moment it arrived (the ban screen never showed and the record got deleted),
+  // a fast one turned 5 minutes into a day, and a banned player could end their
+  // own ban just by setting their clock forward.
+  _offsetCache: 0,
   async _serverOffset() {
     try {
       const snap = await this._db.ref(".info/serverTimeOffset").once("value");
-      return snap.val() || 0;
-    } catch (e) {
-      return 0;
-    }
+      const value = Number(snap.val());
+      if (Number.isFinite(value)) this._offsetCache = value;
+    } catch (e) {}
+    return this._offsetCache;
   },
   async _serverNow() {
     return Date.now() + (await this._serverOffset());
+  },
+  // The same thing without waiting, for countdowns and filters that run every second.
+  serverNowSync() {
+    return Date.now() + this._offsetCache;
   },
 
   // Live set of login IDs currently holding roleId. Temporary grants that
@@ -1511,7 +1649,7 @@ const ChatBackend = {
   watchRoleIds(roleId, onChange) {
     this._roleIdRefs[roleId].on("value", snap => {
       const val = snap.val() || {};
-      const now = Date.now();
+      const now = this.serverNowSync();
       const ids = Object.keys(val).filter(id => {
         const v = val[id];
         if (v === true) return true;
@@ -1527,7 +1665,7 @@ const ChatBackend = {
       const snap = await this._roleIdRefs[roleId].child(this._pid(loginId)).get();
       const value = snap.val();
       if (value === true) return true;
-      return !!(value && value.temporary && Number(value.expiresAt) > Date.now());
+      return !!(value && value.temporary && Number(value.expiresAt) > this.serverNowSync());
     } catch (e) { return false; }
   },
 
@@ -1713,11 +1851,15 @@ const ChatBackend = {
     } catch (e) { return false; }
   },
 
-  async isNameTaken(name) {
+  async isNameTaken(name, ownLoginId) {
     const snap = await this._presenceRef.get();
     const val = snap.val() || {};
-    const key = this._safeKey(name);
-    return Object.prototype.hasOwnProperty.call(val, key);
+    const wanted = nameSkeleton(name);
+    return Object.entries(val).some(([key, entry]) => {
+      if (!entry) return false;
+      if (ownLoginId && String(entry.loginId || "") === String(ownLoginId)) return false;   // an older session of MY account
+      return nameSkeleton(key) === wanted;
+    });
   },
 
   // NOTE: this is now async (it wasn't before) — see the role-sync section
@@ -1736,6 +1878,14 @@ const ChatBackend = {
       entry && String(entry.loginId || "") === String(loginId)
     );
     if (accountAlreadyOnline) return { ok: false, reason: "already-online" };
+    if (hasHiddenChars(name)) return { ok: false, reason: "bad-name" };
+    // The join form's check is only a courtesy. THIS is where the name is written, so this
+    // is where a different account already using it (or a lookalike of it) must be refused,
+    // instead of silently overwriting that person.
+    const wantedSkeleton = nameSkeleton(name);
+    const nameClash = Object.entries(presence).some(([key, entry]) =>
+      entry && String(entry.loginId || "") !== String(loginId) && nameSkeleton(key) === wantedSkeleton);
+    if (nameClash) return { ok: false, reason: "name-taken" };
 
     this.releasePresence();
     this._myPresenceRef = this._presenceRef.child(this._safeKey(name));
@@ -1816,7 +1966,7 @@ const ChatBackend = {
       try {
         const val = (await this._roleIdRefs[role.id].child(this._pid(loginId)).get()).val();
         if (val && val.temporary) {
-          if (Number(val.expiresAt) > Date.now()) this.scheduleTemporaryRoleExpiry(role.id, loginId, Number(val.expiresAt));
+          if (Number(val.expiresAt) > this.serverNowSync()) this.scheduleTemporaryRoleExpiry(role.id, loginId, Number(val.expiresAt));
           else { await this._roleIdRefs[role.id].child(this._pid(loginId)).remove(); }
         }
       } catch (e) {}
@@ -1984,7 +2134,7 @@ const ChatBackend = {
     try {
       const snap = await this._bansRef.child(this._safeKey(String(loginId))).get();
       const ban = snap.exists() ? snap.val() : null;
-      if (ban && ban.expiresAt && Number(ban.expiresAt) <= Date.now()) {
+      if (ban && ban.expiresAt && Number(ban.expiresAt) <= (await this._serverNow())) {
         await snap.ref.remove();
         return null;
       }
@@ -1996,12 +2146,14 @@ const ChatBackend = {
 
   async banUser(loginId, username, byLoginId, durationMs) {
     if (!loginId) throw new Error("Missing login ID");
+    // Server time, not this device's clock (see _serverOffset above).
+    const expiresAt = durationMs ? (await this._serverNow()) + durationMs : 0;
     await this._bansRef.child(this._safeKey(String(loginId))).set({
       loginId: String(loginId),
       username: username || "Unknown",
       byLoginId: byLoginId ? String(byLoginId) : null,
       bannedAt: firebase.database.ServerValue.TIMESTAMP,
-      ...(durationMs ? { expiresAt: Date.now() + durationMs } : {})
+      ...(expiresAt ? { expiresAt } : {})
     });
     const snapshot = await this._presenceRef.get();
     const entries = snapshot.val() || {};
@@ -2017,7 +2169,7 @@ const ChatBackend = {
   scheduleTemporaryRoleExpiry(roleId, loginId, expiresAt) {
     const timerKey = roleId + ":" + loginId;
     clearTimeout(this._temporaryRoleTimers[timerKey]);
-    const remaining = Math.max(0, expiresAt - Date.now());
+    const remaining = Math.max(0, expiresAt - this.serverNowSync());
     const wait = Math.min(remaining, 2147483647);
     this._temporaryRoleTimers[timerKey] = setTimeout(async () => {
       if (remaining > 2147483647) {
@@ -2027,7 +2179,7 @@ const ChatBackend = {
       try {
         const ref = this._roleIdRefs[roleId].child(this._pid(loginId));
         const current = (await ref.get()).val();
-        if (current && current.temporary && Number(current.expiresAt) <= Date.now()) {
+        if (current && current.temporary && Number(current.expiresAt) <= this.serverNowSync()) {
           await ref.remove();
               }
       } catch (e) {}
@@ -2044,7 +2196,7 @@ const ChatBackend = {
     if (!ROLES[roleId] || ROLES[roleId].implicit || roleId === "crown" || !loginId || durationMs <= 0) {
       throw new Error("Invalid temporary role grant");
     }
-    const expiresAt = Date.now() + durationMs;
+    const expiresAt = (await this._serverNow()) + durationMs;
     await this._roleIdRefs[roleId].child(this._pid(loginId)).set({
       temporary: true,
       byLoginId: byLoginId ? String(byLoginId) : null,
@@ -2225,7 +2377,7 @@ const RoomManager = {
 
   async createRoom(ownerName, roomName) {
     const code = await this._generateUniqueCode();
-    const now = Date.now();
+    const now = await ChatBackend._serverNow();
     const meta = {
       name: (roomName || "").trim().slice(0, ROOM_NAME_MAX_LENGTH) || null,
       ownerName: ownerName,
@@ -2269,7 +2421,7 @@ const RoomManager = {
 
   async extendRoom(code) {
     const ref = this._metaRootRef.child(this._safeCode(code)).child("expiresAt");
-    await ref.transaction(current => (current || Date.now()) + ROOM_EXTEND_MS);
+    await ref.transaction(current => (current || ChatBackend.serverNowSync()) + ROOM_EXTEND_MS);
   },
 
   async changeCode(oldCode, newCode, ownerName) {
@@ -2458,6 +2610,9 @@ function fillRoleBadge(row) {
   const liveId = loginIdForName(row.dataset.senderName);
   const claimedId = row.dataset.senderId;
   if (!liveId || (claimedId && claimedId !== String(liveId))) return;
+  // If two different names are both online claiming this one account, one of them is not who it
+  // says it is and we can't tell which. Better no badge on either than a crown on an impostor.
+  if (latestPresenceList.filter(e => String(e.loginId || "") === String(liveId)).length > 1) return;
   const role = ROLES[effectiveRoleForLoginId(liveId)];
   const bubble = document.createElement("div");
   bubble.className = role.bubbleClass;
@@ -2928,10 +3083,16 @@ function renderNicknamePrompt(session, message) {
       submit.disabled = false;
       return;
     }
+    if (hasHiddenChars(name)) {
+      error.textContent = "That name has hidden characters in it. Use normal letters, numbers and symbols.";
+      submit.disabled = false;
+      return;
+    }
     try {
-      const taken = await ChatBackend.isNameTaken(name);
-      if (taken && name.toLowerCase() !== session.username.toLowerCase()) {
-        error.textContent = "That username is already being used.";
+      // Lookalikes count as the same name (Yurt / yurt / a Cyrillic "u" / an invisible character).
+      // Your OWN account's older session never counts as a clash.
+      if (await ChatBackend.isNameTaken(name, session.id)) {
+        error.textContent = "That name is already in use right now (or looks too much like one that is).";
         return;
       }
       await Promise.race([
@@ -3011,6 +3172,10 @@ function logoutToNamePicker() {
   else renderDmLoginPrompt();
 }
 
+// Closes EVERY transient overlay/panel/dropdown in one call. Used on logout and,
+// importantly, the instant a ban screen appears: anything the person had open (a
+// staff menu, the rooms sidebar, a dropdown) used to stay open underneath the ban
+// screen and pop back up, stale, once they were unbanned.
 function closeAllPanels() {
   closeRoster();
   closeRankGuide();
@@ -3019,6 +3184,9 @@ function closeAllPanels() {
   closeOnlineListPanel();
   closePingYouPanel();
   closeMentionDropdown();
+  closeCommandList();
+  closeRoomsSidebar();
+  closeBanConfirm();
 }
 
 let unwatchMyProfile = null;
@@ -3041,8 +3209,18 @@ async function joinWithDmSession(session, nickname) {
   const result = await ChatBackend.claimPresence(name, false, session.id);
   if (!result.ok) {
     if (result.reason === "banned") {
-      const ban = (await ChatBackend.getBan(session.id).catch(() => null)) || {};
-      showBanScreen(ban);
+      // claimPresence already read the ban; only do a fresh read if it did not hand it back.
+      const ban = result.ban || (await ChatBackend.getBan(session.id).catch(() => null));
+      if (ban) {
+        showBanScreen(ban);
+        watchMyBan(session);   // so an unban while they sit here lets them straight back in
+      } else {
+        renderRejoinPrompt(session, "Your ban has just ended.");
+      }
+    } else if (result.reason === "name-taken" || result.reason === "bad-name") {
+      renderNicknamePrompt(session, result.reason === "name-taken"
+        ? "That name is already in use right now (or looks too much like one that is). Pick another."
+        : "That name has hidden characters in it. Use normal letters, numbers and symbols.");
     } else if (result.reason === "closed") {
       renderChatClosedPrompt();
     } else if (result.reason === "already-online") {
@@ -3097,9 +3275,16 @@ function startWatchingMyProfile() {
 // that depends on MY rank (upload button, send delay, menu items).
 // Header line: your name and your highest rank, always visible.
 function updateYouAre() {
-  if (!myName) { $youAre.textContent = ""; return; }
+  $youAre.textContent = "";
+  $youAre.title = "";
+  if (!myName) return;
   const role = ROLES[myRoleId()];
-  $youAre.textContent = "You: " + myName + "  \u00b7  " + role.icon + " " + role.label;
+  const piece = (cls, text) => { const el = document.createElement("span"); el.className = cls; el.textContent = text; return el; };
+  $youAre.appendChild(piece("ya-prefix", "You: "));
+  $youAre.appendChild(piece("ya-name", myName));
+  $youAre.appendChild(piece("ya-sep", "  \u00b7  "));
+  $youAre.appendChild(piece("ya-role", role.icon + " " + role.label));
+  $youAre.title = myName + " (" + role.label + ")";   // full name on hover/long-press when it is shortened
 }
 
 function onMyRoleMaybeChanged() {
@@ -3209,6 +3394,25 @@ function updateSendButtonState() {
   }
 }
 
+// The composer hint. Phones only have ~160px of input, so a long hint was cut
+// off mid-word ("Type a"); keep it short there and only mention commands to
+// people who actually have some.
+function isPhoneWidth() {
+  return !!(window.matchMedia && window.matchMedia("(max-width: 600px)").matches);
+}
+function defaultComposerPlaceholder() {
+  if (isPhoneWidth()) return "Message\u2026";
+  return availableSlashCommands().length
+    ? "Type a message\u2026 (@ mention, / commands)"
+    : "Type a message\u2026 (@ to mention someone)";
+}
+if (window.matchMedia) {
+  const phoneQuery = window.matchMedia("(max-width: 600px)");
+  const onPhoneChange = () => { if (myLoginId && typeof updateComposerLockState === "function") updateComposerLockState(); };
+  if (phoneQuery.addEventListener) phoneQuery.addEventListener("change", onPhoneChange);
+  else if (phoneQuery.addListener) phoneQuery.addListener(onPhoneChange);
+}
+
 function updateComposerLockState() {
   if (isSpectatorName(myName)) {
     $msgInput.disabled = true;
@@ -3224,7 +3428,7 @@ function updateComposerLockState() {
     $sendBtn.textContent = formatCountdown(myTimeoutRemainingMs);
   } else {
     $msgInput.disabled = false;
-    $msgInput.placeholder = "Type a message… (@ to mention someone)";
+    $msgInput.placeholder = defaultComposerPlaceholder();
     updateSendButtonState();
   }
 }
@@ -3283,6 +3487,7 @@ function stopBanCountdown() {
 
 function showBanScreen(ban) {
   stopBanCountdown();
+  closeAllPanels();
   $joinScreen.style.display = "none";
   $chatScreen.style.display = "none";
   $banScreen.style.display = "flex";
@@ -3295,12 +3500,12 @@ function showBanScreen(ban) {
 
   if (isTemporary) {
     const tick = () => {
-      const remaining = Number(ban.expiresAt) - Date.now();
+      const remaining = Number(ban.expiresAt) - ChatBackend.serverNowSync();
       if (remaining <= 0) {
         stopBanCountdown();
         // Ban has run out -- re-check with the server rather than trusting
         // the local clock, then drop back to the normal join flow.
-        recheckBanStatus();
+        setTimeout(recheckBanStatus, 400);   // short grace so the server's view of "over" has caught up
         return;
       }
       $banCountdown.textContent = formatBanCountdown(remaining);
@@ -3318,51 +3523,52 @@ function hideBanScreen() {
 // Re-asks the database "am I still banned?" -- used when a countdown hits
 // zero, and by the "Check again" button for a permanent ban (in case an
 // Owner just lifted it).
+let banRecheckBusy = false;
 async function recheckBanStatus() {
-  // watchMyBan clears myLoginId before showing this screen, so by the time a
-  // temp ban's countdown hits zero there is no session left to re-check with
-  // ChatBackend -- fall back to the saved account and the normal join flow
-  // instead, same as any other "come back later" entry into the app.
-  if (!myLoginId) {
-    const savedSession = loadDmSession();
-    hideBanScreen();
-    $joinScreen.style.display = "flex";
-    if (savedSession) rejoinAfterBanLifted(savedSession);
-    else autoLoginOrPrompt();
-    return;
-  }
+  if (banRecheckBusy) return;
+  banRecheckBusy = true;
   $banRefreshBtn.disabled = true;
   $banRefreshBtn.textContent = "Checking...";
   try {
-    const ban = await ChatBackend.getBan(myLoginId);
-    if (ban) {
-      showBanScreen(ban);
-    } else {
-      hideBanScreen();
-      // Ban is gone -- go back to the ordinary auto-login/name flow rather
-      // than dumping them straight into chat unannounced.
-      autoLoginOrPrompt();
+    // watchMyBan clears myLoginId when it puts this screen up, so ask about the SAVED account.
+    // (Before, this skipped the question entirely: it dropped you into the login flow, which
+    // found the ban again and flashed the ban screen back up.)
+    const saved = loadDmSession();
+    const id = myLoginId || (saved && saved.id);
+    let ban = null;
+    if (id) {
+      try { ban = await ChatBackend.getBan(id); } catch (e) { return; }   // can't reach the server: stay put
     }
-  } catch (e) {
-    // leave the screen as-is; nothing else to show here
+    if (ban) { showBanScreen(ban); return; }
+    hideBanScreen();
+    $joinScreen.style.display = "flex";
+    if (saved) rejoinAfterBanLifted(saved);
+    else autoLoginOrPrompt();
   } finally {
+    banRecheckBusy = false;
     $banRefreshBtn.disabled = false;
     $banRefreshBtn.textContent = "Check again";
   }
 }
 $banRefreshBtn.addEventListener("click", recheckBanStatus);
 
-function watchMyBan() {
+function watchMyBan(forSession) {
   if (unwatchMyBan) { unwatchMyBan(); unwatchMyBan = null; }
-  if (!myLoginId) return;
+  // forSession lets this keep watching for an unban while someone sits on the ban screen
+  // after a refresh (they never got far enough to have a login ID in memory).
+  const watchId = myLoginId || (forSession && String(forSession.id)) || "";
+  if (!watchId) return;
   // Remembers the account so that when the ban clears (lifted early, or its
   // own countdown running out and being reported by this same listener) we
   // can rejoin under it directly -- without this, unbanning someone left them
   // stuck on the ban screen forever with no session to recover with.
   const watchedSession = loadDmSession();
-  unwatchMyBan = ChatBackend.watchBan(myLoginId, ban => {
+  unwatchMyBan = ChatBackend.watchBan(watchId, ban => {
     if (ban) {
-      if (!myName) return;   // already signed out for some other reason; nothing to ban out of
+      if (!myName) {   // not in chat: if the ban screen is up, refresh it (e.g. the ban was extended)
+        if ($banScreen.style.display === "flex") showBanScreen(ban);
+        return;
+      }
       ChatBackend.releasePresenceSilently();
       myName = "";
       myLoginId = "";
@@ -4316,6 +4522,7 @@ const $banConfirmBtn = document.getElementById("banConfirmBtn");
 
 let staffMenuMode = "owner"; // "owner" | "mod" — which gate/limits currently apply
 let pendingTimeoutTarget = null;
+let pendingTempBanTarget = null;   // set while the duration dialog is picking a TEMPORARY BAN length
 let pendingTemporaryModTarget = null;
 let pendingGrantModTarget = null;
 let pendingBanTarget = null;
@@ -4447,48 +4654,85 @@ function openAdminMenuStaff() {
   $ownerMenuOverlay.style.display = "flex";
 }
 
-function renderStaffCommands() {
-  const isOwner = staffMenuMode === "owner";
-  const isAdmin = staffMenuMode === "admin";
-  $ownerMenuCommands.innerHTML = "";
+// Whether the two fold-out sections were open, so a Refresh doesn't snap them shut.
+let staffCommandsOpen = false;
+let staffHistoryOpen = false;
 
-  const heading = document.createElement("div");
-  heading.textContent = "Commands";
-  heading.style.cssText = "color:#f1f5f9;font-weight:700;font-size:15px;margin-bottom:7px";
-  $ownerMenuCommands.appendChild(heading);
+function renderStaffCommands() {
+  $ownerMenuCommands.innerHTML = "";
+  const rank = myRank();
+  const visible = SLASH_COMMANDS.filter(c => rank >= c.minRank);
+
+  // Commands: folded by default. Open, this list is taller than a phone screen and
+  // used to push the actual member list (the reason anyone opens this menu) off the bottom.
+  const cmds = document.createElement("details");
+  cmds.className = "staff-details";
+  cmds.open = staffCommandsOpen;
+  cmds.addEventListener("toggle", () => { staffCommandsOpen = cmds.open; });
+  const cmdsSummary = document.createElement("summary");
+  cmdsSummary.textContent = "Commands (" + visible.length + ")";
+  cmds.appendChild(cmdsSummary);
 
   const list = document.createElement("div");
-  list.style.cssText = "display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:6px 14px;padding:10px;background:#0f172a;border:1px solid #334155;border-radius:9px";
-  const rank = myRank();
-  const commands = SLASH_COMMANDS.map(c => [c.name + (c.args ? " " + c.args : ""), commandDescription(c, rank), rank >= c.minRank]);
-  commands.forEach(([command, description, visible]) => {
-    if (!visible) return;
+  list.style.cssText = "display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:6px 14px;padding:10px;background:#0f172a;border:1px solid #334155;border-radius:9px;margin-bottom:6px";
+  visible.forEach(c => {
     const item = document.createElement("div");
     item.style.cssText = "font-size:12.5px;line-height:1.35";
-    item.innerHTML = "<strong style='color:#4ade80;font-family:monospace'>" + esc(command) + "</strong><br><span style='color:#94a3b8'>" + esc(description) + "</span>";
+    const name = document.createElement("strong");
+    name.style.cssText = "color:#4ade80;font-family:monospace";
+    name.textContent = c.name + (c.args ? " " + c.args : "");
+    const desc = document.createElement("span");
+    desc.style.color = "#94a3b8";
+    desc.textContent = commandDescription(c, rank);
+    item.appendChild(name);
+    item.appendChild(document.createElement("br"));
+    item.appendChild(desc);
     list.appendChild(item);
   });
-  $ownerMenuCommands.appendChild(list);
-
+  cmds.appendChild(list);
   const note = document.createElement("div");
+  note.style.cssText = "font-size:12.5px;color:#64748b;line-height:1.4";
   note.textContent = "Use the name popup while typing a command. Only online VUS DM accounts can be moderated.";
-  note.style.cssText = "color:#64748b;font-size:12px;line-height:1.4;margin-top:7px";
-  $ownerMenuCommands.appendChild(note);
+  cmds.appendChild(note);
+  $ownerMenuCommands.appendChild(cmds);
 
-  const history = document.createElement("div");
-  history.style.cssText = "margin-top:12px;padding-top:10px;border-top:1px solid #334155";
-  history.innerHTML = "<strong style='color:#f1f5f9'>Recent commands</strong>";
-  const historyList = document.createElement("div");
-  historyList.style.cssText = "margin-top:6px;color:#94a3b8;font-size:12px;line-height:1.5";
-  historyList.textContent = "Loading…";
-  history.appendChild(historyList);
-  $ownerMenuCommands.appendChild(history);
-  ChatBackend.getCommandHistory().then(entries => {
-    historyList.textContent = entries.length
-      ? entries.map(entry => (entry.actorName || "Unknown") + ": " + entry.command).join("\n")
-      : "No commands logged in this room.";
-    historyList.style.whiteSpace = "pre-wrap";
-  }).catch(() => { historyList.textContent = "Command history unavailable."; });
+  // Recent commands: also folded, and only fetched when it is actually opened.
+  const hist = document.createElement("details");
+  hist.className = "staff-details";
+  const histSummary = document.createElement("summary");
+  histSummary.textContent = "Recent commands";
+  hist.appendChild(histSummary);
+  const histBody = document.createElement("div");
+  histBody.style.cssText = "font-size:12.5px;line-height:1.45;color:#94a3b8;padding:0 2px 6px";
+  hist.appendChild(histBody);
+  let histLoaded = false;
+  const loadHistory = async () => {
+    if (histLoaded) return;
+    histLoaded = true;
+    histBody.textContent = "Loading...";
+    let entries = [];
+    try { entries = await ChatBackend.getCommandHistory(); } catch (e) {}
+    histBody.textContent = "";
+    if (!entries.length) { histBody.textContent = "No commands logged in this room."; return; }
+    entries.forEach(entry => {
+      const row = document.createElement("div");
+      const who = document.createElement("span");
+      who.style.color = "#f1f5f9";
+      who.textContent = entry.actorName || "?";
+      const cmd = document.createElement("span");
+      cmd.style.cssText = "font-family:monospace;color:#4ade80";
+      cmd.textContent = entry.command || "";
+      const when = document.createElement("span");
+      when.style.color = "#64748b";
+      when.textContent = entry.ts ? new Date(entry.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+      row.appendChild(who); row.appendChild(document.createTextNode(": ")); row.appendChild(cmd); row.appendChild(document.createTextNode("  ")); row.appendChild(when);
+      histBody.appendChild(row);
+    });
+  };
+  hist.addEventListener("toggle", () => { staffHistoryOpen = hist.open; if (hist.open) loadHistory(); });
+  hist.open = staffHistoryOpen;
+  if (staffHistoryOpen) loadHistory();
+  $ownerMenuCommands.appendChild(hist);
 }
 
 function closeOwnerMenu() {
@@ -4552,7 +4796,7 @@ async function renderRoster() {
     return {
       id, role: ROLES[roleId], online: !!online,
       name: (online && online.name) || (profiles[id] && profiles[id].lastName) || "Unknown",
-      tempLeftMs: raw && typeof raw === "object" && raw.temporary ? Number(raw.expiresAt) - Date.now() : 0
+      tempLeftMs: raw && typeof raw === "object" && raw.temporary ? Number(raw.expiresAt) - ChatBackend.serverNowSync() : 0
     };
   });
 
@@ -4737,6 +4981,31 @@ function openRankGuide() {
 $rankGuideCloseBtn.addEventListener("click", closeRankGuide);
 $rankGuideOverlay.addEventListener("click", e => { if (e.target === $rankGuideOverlay) closeRankGuide(); });
 
+let staffRenderToken = 0;
+
+// Ban + Temp ban buttons for a staff-menu row. Owners and Admins both have /ban and
+// /tempban, but the menu only ever offered a permanent "Ban" (to Owners only), so a
+// temporary ban could only be typed out as a command.
+function addBanButtons(actions, entry) {
+  const { name, loginId } = entry;
+
+  const banBtn = document.createElement("button");
+  banBtn.className = "kick";
+  banBtn.textContent = "Ban";
+  banBtn.disabled = !loginId;
+  banBtn.title = loginId ? "Ban login ID #" + loginId + " permanently" : "This user has not supplied a login ID";
+  banBtn.addEventListener("click", () => { if (loginId) openBanConfirm({ name, loginId }, 0); });
+  actions.appendChild(banBtn);
+
+  const tempBanBtn = document.createElement("button");
+  tempBanBtn.className = "kick";
+  tempBanBtn.textContent = "Temp ban";
+  tempBanBtn.disabled = !loginId;
+  tempBanBtn.title = loginId ? "Ban login ID #" + loginId + " for a set time (" + limitsText(TIME_LIMITS.tempban) + ")" : "This user has not supplied a login ID";
+  tempBanBtn.addEventListener("click", () => { if (loginId) openTempBanSetModal(entry); });
+  actions.appendChild(tempBanBtn);
+}
+
 async function renderOwnerMenuList() {
   // Re-check the relevant gate every refresh too — if the role backing
   // whichever menu is open gets lost while it's open (timeout, disconnect,
@@ -4752,14 +5021,20 @@ async function renderOwnerMenuList() {
     return;
   }
 
+  // A newer render replaces an older one that is still waiting on the network, so two
+  // overlapping renders can never both add rows (which used to show everyone twice).
+  const renderToken = ++staffRenderToken;
+
   $ownerMenuList.innerHTML = "";
   renderStaffCommands();
 
   if (staffMenuMode === "owner") {
+    const staffTools = document.createElement("div");
+    staffTools.className = "staff-tools";
     const closeChatBtn = document.createElement("button");
-    closeChatBtn.className = "kick";
-    closeChatBtn.textContent = "Close Chat for Everyone";
-    closeChatBtn.style.cssText = "width:100%;margin-bottom:10px";
+    closeChatBtn.className = "toolbar-btn danger-btn";
+    closeChatBtn.textContent = "Close chat";
+    closeChatBtn.title = "Close VUS Chat for everyone";
     closeChatBtn.addEventListener("click", async () => {
       if (!confirm("Close VUS Chat for everyone? All connected users will be removed.")) return;
       closeChatBtn.disabled = true;
@@ -4772,12 +5047,12 @@ async function renderOwnerMenuList() {
         showComposerNotice("Couldn't close VUS Chat — try again.");
       }
     });
-    $ownerMenuList.appendChild(closeChatBtn);
+    staffTools.appendChild(closeChatBtn);
 
     const unbanBtn = document.createElement("button");
     unbanBtn.className = "toolbar-btn";
-    unbanBtn.style.cssText = "width:100%;margin-bottom:10px";
-    unbanBtn.textContent = "Unban username or ID";
+    unbanBtn.textContent = "Unban...";
+    unbanBtn.title = "Unban by username or 6-digit login ID";
     unbanBtn.addEventListener("click", async () => {
       const identifier = prompt("Enter the banned username or 6-digit login ID:");
       if (!identifier || !identifier.trim()) return;
@@ -4788,7 +5063,8 @@ async function renderOwnerMenuList() {
         showComposerNotice("Couldn't unban that user: " + (e && e.message ? e.message : "check your connection") + ".");
       }
     });
-    $ownerMenuList.appendChild(unbanBtn);
+    staffTools.appendChild(unbanBtn);
+    $ownerMenuList.appendChild(staffTools);
   }
 
   const others = latestPresenceList
@@ -4802,6 +5078,21 @@ async function renderOwnerMenuList() {
     $ownerMenuList.appendChild(empty);
     return;
   }
+
+  // Look everyone up at once instead of one network round trip per person. The list used
+  // to fill in one row at a time, which was slow with a lot of people online.
+  const lookups = {};
+  await Promise.all(others.map(async (entry) => {
+    if (!entry.loginId) return;
+    const result = {};
+    try {
+      result.remainingMs = await ChatBackend.getTimeoutRemainingMs(entry.loginId);
+      if (result.remainingMs > 0) result.setBy = await ChatBackend.getTimeoutSetBy(entry.loginId);
+      else if (staffMenuMode === "mod") result.cooldownMs = await ChatBackend.getModRetimeoutRemainingMs(myLoginId, entry.loginId);
+    } catch (e) {}
+    lookups[entry.loginId] = result;
+  }));
+  if (renderToken !== staffRenderToken) return;   // a newer render took over while we waited
 
   for (const entry of others) {
     const name = entry.name;
@@ -4843,15 +5134,7 @@ async function renderOwnerMenuList() {
         actions.appendChild(tempModBtn);
       }
 
-      const banBtn = document.createElement("button");
-      banBtn.className = "kick";
-      banBtn.textContent = "Ban";
-      banBtn.disabled = !loginId;
-      banBtn.title = loginId ? "Ban login ID #" + loginId : "This user has not supplied a login ID";
-      banBtn.addEventListener("click", () => {
-        if (loginId) openBanConfirm({ name, loginId }, 0);
-      });
-      actions.appendChild(banBtn);
+      addBanButtons(actions, entry);
     } else if (staffMenuMode === "admin" && !isModHolder(name)) {
       const tempModBtn = document.createElement("button");
       tempModBtn.textContent = "Temp Mod";
@@ -4863,16 +5146,14 @@ async function renderOwnerMenuList() {
       actions.appendChild(tempModBtn);
     }
 
+    // Admins can ban too (they have /ban and /tempban); Owners got theirs above.
+    if (staffMenuMode === "admin") addBanButtons(actions, entry);
+
     const timeoutBtn = document.createElement("button");
     timeoutBtn.className = "kick";
-    let remainingMs = 0;
-    let setBy = null;
-    try {
-      if (loginId) {
-        remainingMs = await ChatBackend.getTimeoutRemainingMs(loginId);
-        if (remainingMs > 0) setBy = await ChatBackend.getTimeoutSetBy(loginId);
-      }
-    } catch (e) {}
+    const found = (loginId && lookups[loginId]) || {};
+    const remainingMs = found.remainingMs || 0;
+    const setBy = found.setBy || null;
 
     if (remainingMs > 0) {
       timeoutBtn.textContent = "Timed out (" + formatCountdown(remainingMs) + ")";
@@ -4904,10 +5185,7 @@ async function renderOwnerMenuList() {
         timeoutBtn.title = "Only the mod who set this can clear it early";
       }
     } else {
-      let cooldownMs = 0;
-      if (staffMenuMode === "mod") {
-        try { cooldownMs = await ChatBackend.getModRetimeoutRemainingMs(myLoginId, loginId); } catch (e) {}
-      }
+      const cooldownMs = found.cooldownMs || 0;
       if (cooldownMs > 0) {
         timeoutBtn.textContent = "Wait " + Math.ceil(cooldownMs / 1000) + "s";
         timeoutBtn.disabled = true;
@@ -4936,6 +5214,7 @@ async function renderOwnerMenuList() {
 function openTimeoutSetModal(target) {
   pendingTimeoutTarget = target;
   pendingTemporaryModTarget = null;
+  pendingTempBanTarget = null;
   $timeoutSetConfirmBtn.textContent = "Timeout";
   $timeoutSetTitle.textContent = "Timeout " + target.name + " (#" + target.loginId + ")";
 
@@ -4958,6 +5237,7 @@ function openTimeoutSetModal(target) {
 function openTemporaryModSetModal(target) {
   pendingTemporaryModTarget = target;
   pendingTimeoutTarget = null;
+  pendingTempBanTarget = null;
   $timeoutSetTitle.textContent = "Temporary Mod for " + target.name + " (#" + target.loginId + ")";
   $timeoutMinutesInput.value = "";
   $timeoutSecondsInput.value = "";
@@ -4968,15 +5248,34 @@ function openTemporaryModSetModal(target) {
   $timeoutMinutesInput.focus();
 }
 
+// Temporary BAN length picker. Staff could only ever make a temporary ban by typing
+// /tempban; the menu's Ban button was permanent-only. Picking a length here leads to
+// the same confirmation (and the same "bans the account ID" wording) as the command.
+function openTempBanSetModal(target) {
+  pendingTempBanTarget = target;
+  pendingTimeoutTarget = null;
+  pendingTemporaryModTarget = null;
+  $timeoutSetTitle.textContent = "Temporary ban for " + target.name + " (#" + target.loginId + ")";
+  $timeoutMinutesInput.value = "";
+  $timeoutSecondsInput.value = "";
+  $timeoutSetNote.textContent = "Allowed: " + limitsText(TIME_LIMITS.tempban) + ". You will be asked to confirm next.";
+  $timeoutSetErr.textContent = "";
+  $timeoutSetConfirmBtn.textContent = "Continue";
+  $timeoutSetOverlay.style.display = "flex";
+  $timeoutMinutesInput.focus();
+}
+
 $timeoutSetCancelBtn.addEventListener("click", () => {
   pendingTimeoutTarget = null;
   pendingTemporaryModTarget = null;
+  pendingTempBanTarget = null;
   $timeoutSetOverlay.style.display = "none";
 });
 $timeoutSetOverlay.addEventListener("click", (e) => {
   if (e.target === $timeoutSetOverlay) {
     pendingTimeoutTarget = null;
     pendingTemporaryModTarget = null;
+    pendingTempBanTarget = null;
     $timeoutSetOverlay.style.display = "none";
   }
 });
@@ -4993,13 +5292,15 @@ $timeoutSecondsInput.addEventListener("input", () => {
 });
 
 $timeoutSetConfirmBtn.addEventListener("click", async () => {
-  if (!pendingTimeoutTarget && !pendingTemporaryModTarget) return;
+  if (!pendingTimeoutTarget && !pendingTemporaryModTarget && !pendingTempBanTarget) return;
   const mins = parseInt($timeoutMinutesInput.value || "0", 10) || 0;
   const secs = parseInt($timeoutSecondsInput.value || "0", 10) || 0;
   const totalMs = (mins * 60 + secs) * 1000;
-  const limits = pendingTemporaryModTarget
-    ? TIME_LIMITS.tempGrant
-    : (staffMenuMode === "mod" ? TIME_LIMITS.modTimeout : TIME_LIMITS.timeout);
+  const limits = pendingTempBanTarget
+    ? TIME_LIMITS.tempban
+    : pendingTemporaryModTarget
+      ? TIME_LIMITS.tempGrant
+      : (staffMenuMode === "mod" ? TIME_LIMITS.modTimeout : TIME_LIMITS.timeout);
   const problem = checkDurationLimits(totalMs, limits);
   if (problem) {
     $timeoutSetErr.textContent = problem;
@@ -5009,6 +5310,14 @@ $timeoutSetConfirmBtn.addEventListener("click", async () => {
   $timeoutSetConfirmBtn.disabled = true;
   $timeoutSetErr.textContent = "";
   try {
+    if (pendingTempBanTarget) {
+      const banTarget = pendingTempBanTarget;
+      pendingTempBanTarget = null;
+      $timeoutSetOverlay.style.display = "none";
+      $timeoutSetConfirmBtn.textContent = "Timeout";
+      openBanConfirm({ name: banTarget.name, loginId: banTarget.loginId }, totalMs);
+      return;
+    }
     if (pendingTemporaryModTarget) {
       const target = pendingTemporaryModTarget;
       await ChatBackend.grantTemporaryRoleToId("mod", target.loginId, totalMs, myLoginId);
@@ -5934,7 +6243,7 @@ function buildRoomCard(meta, closable) {
   card.className = "room-card" + (currentRoomCode === meta.code ? " active" : "");
 
   const hasPing = roomPingBadges.has(meta.code);
-  const remaining = (meta.expiresAt || 0) - Date.now();
+  const remaining = (meta.expiresAt || 0) - ChatBackend.serverNowSync();
   const urgent = remaining < ROOM_WARNING_MS;
 
   const displayName = meta.name || ("Room " + meta.code);
@@ -6148,7 +6457,7 @@ function onRoomMetaUpdate(meta) {
 }
 
 function updateRoomCountdownUI(meta) {
-  const remaining = (meta.expiresAt || 0) - Date.now();
+  const remaining = (meta.expiresAt || 0) - ChatBackend.serverNowSync();
 
   if (remaining <= 0) {
     RoomManager.deleteRoom(meta.code).catch(() => {});
@@ -6404,7 +6713,10 @@ $msgInput.addEventListener("paste", (e) => {
 
 function attachRoomListeners() {
   ChatBackend.watchPresenceCount(count => {
-    $onlineCount.textContent = count + " online";
+    $onlineCount.textContent = "";
+    const ocNum = document.createElement("span"); ocNum.className = "oc-num"; ocNum.textContent = String(count);
+    const ocWord = document.createElement("span"); ocWord.className = "oc-word"; ocWord.textContent = " online";
+    $onlineCount.appendChild(ocNum); $onlineCount.appendChild(ocWord);
   });
   ChatBackend.watchPresenceList(list => {
     latestPresenceList = list;
