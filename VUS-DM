@@ -862,6 +862,11 @@
     justify-content: center;
     flex-shrink: 0;
   }
+  #toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: #7f1d1d; color: #fff; padding: 10px 16px; border-radius: 10px;
+    font-size: 14px; display: none; z-index: 100; max-width: 90vw;
+  }
 </style>
 </head>
 <body>
@@ -1043,6 +1048,8 @@
 
 </div>
 
+<div id="toast"></div>
+
 <div id="modalOverlay">
   <div class="modal-box" id="modalBox"></div>
 </div>
@@ -1187,7 +1194,8 @@ async function createAccount(username, password) {
     friends: {},
     friendRequestsIncoming: {},
     friendRequestsOutgoing: {},
-    blockedUsers: {}
+    blockedUsers: {},
+    groupsIndexed: true // new accounts never need the one-time group-index scan
   };
 
   try {
@@ -1600,10 +1608,15 @@ let allThreadMessages = {}; // threadKey -> [{fromAccountKey, ts}, …], one run
 // lastRead used for math is always max(local, server), so neither a
 // slightly-stale local value nor a slightly-stale server value can make
 // the count wrong in either direction.
+const markReadTimers = {}; // per thread, so switching chats quickly never drops a write
 function markThreadRead(threadKey) {
   if (!currentSession) return;
   localLastReadMap[threadKey] = Date.now();
-  usersRef.child(currentSession.accountKey).child("lastRead").child(threadKey).set(firebase.database.ServerValue.TIMESTAMP);
+  const uid = currentSession.accountKey;
+  clearTimeout(markReadTimers[threadKey]);
+  markReadTimers[threadKey] = setTimeout(() => {
+    usersRef.child(uid).child("lastRead").child(threadKey).set(firebase.database.ServerValue.TIMESTAMP);
+  }, 500);
 }
 
 function effectiveLastRead(threadKey) {
@@ -1689,6 +1702,7 @@ function currentOpenThreadKey() {
 //   2. Any DOM re-render is routed through scheduleSidebarRender(), which
 //      coalesces bursts into a single re-render on the next animation
 //      frame instead of one re-render per event.
+const watchedDmKeys = new Set(), watchedGroupKeys = new Set(); // push IDs can contain "_", so key shape can't tell DM from group
 let unreadWatchRefs = {}; // threadKey -> ref, so watchers can be torn down on logout/friend-list changes
 function ensureUnreadWatchForFriend(friendAccountKey) {
   // Guard: this can be reached from a render pass that fires before login
@@ -1706,6 +1720,7 @@ function ensureUnreadWatchForFriend(friendAccountKey) {
     allThreadMessages[threadKey].push(snap.val());
   });
   unreadWatchRefs[threadKey] = ref;
+  watchedDmKeys.add(threadKey);
 }
 function ensureUnreadWatchForGroup(gcId) {
   if (!currentSession || !groupChatsRef) return;
@@ -1717,9 +1732,12 @@ function ensureUnreadWatchForGroup(gcId) {
     allThreadMessages[threadKey].push(snap.val());
   });
   unreadWatchRefs[threadKey] = ref;
+  watchedGroupKeys.add(threadKey);
 }
 function teardownUnreadWatch(threadKey) {
   if (unreadWatchRefs[threadKey]) {
+    watchedDmKeys.delete(threadKey);
+    watchedGroupKeys.delete(threadKey);
     unreadWatchRefs[threadKey].off("child_added");
     delete unreadWatchRefs[threadKey];
     delete allThreadMessages[threadKey];
@@ -1800,22 +1818,26 @@ async function sendDirectMessage(otherAccountKey, text, imageData) {
   }
 }
 
-let currentThreadMessagesRef = null; // the child ref currently being watched, so we can .off() it when switching threads
-
-function watchThreadMessages(otherAccountKey, onMessage) {
-  stopWatchingOpenChat();
-  const threadId = threadIdFor(currentSession.accountKey, otherAccountKey);
-  currentThreadMessagesRef = dmsRef.child(threadId).child("messages");
-  currentThreadMessagesRef.limitToLast(200).on("child_added", snap => {
-    onMessage({ id: snap.key, ...snap.val() });
-  });
-}
+// One tracked listener for whichever thread is open. Detaching passes the
+// exact handler, so only this listener goes away. (The old base-ref
+// .off("child_added") also killed the background unread watcher on the same
+// path, and group listeners were never detached at all.)
+let openMsgQuery = null, openMsgHandler = null;
 
 function stopWatchingOpenChat() {
-  if (currentThreadMessagesRef) {
-    currentThreadMessagesRef.off("child_added");
-    currentThreadMessagesRef = null;
-  }
+  if (openMsgQuery && openMsgHandler) openMsgQuery.off("child_added", openMsgHandler);
+  openMsgQuery = openMsgHandler = null;
+}
+
+function watchMessages(baseRef, onMessage) {
+  stopWatchingOpenChat();
+  openMsgQuery = baseRef.limitToLast(200);
+  openMsgHandler = snap => onMessage({ id: snap.key, ...snap.val() });
+  openMsgQuery.on("child_added", openMsgHandler);
+}
+
+function watchThreadMessages(otherAccountKey, onMessage) {
+  watchMessages(dmsRef.child(threadIdFor(currentSession.accountKey, otherAccountKey)).child("messages"), onMessage);
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -1828,6 +1850,17 @@ function stopWatchingOpenChat() {
    first, ownership randomly falls to a remaining member. Leaving
    as the last member deletes the group.
    ══════════════════════════════════════════════════════════ */
+
+// Reads only owner + members. Reading the whole group node would download
+// every message (base64 images included) just to check permissions.
+async function getGroupMeta(gcId) {
+  const [o, m] = await Promise.all([
+    groupChatsRef.child(gcId).child("ownerAccountKey").get(),
+    groupChatsRef.child(gcId).child("members").get()
+  ]);
+  const owner = o.val(), members = m.val();
+  return { val: () => (owner ? { ownerAccountKey: owner, members } : null) };
+}
 
 async function createGroupChat(name) {
   if (!currentSession) return { ok: false, error: "Not logged in." };
@@ -1849,7 +1882,10 @@ async function createGroupChat(name) {
   };
 
   try {
-    await gcRef.set(gcData);
+    await db.ref().update({
+      ["groupChats/" + gcRef.key]: gcData,
+      ["users/" + currentSession.accountKey + "/groups/" + gcRef.key]: true
+    });
     return { ok: true, gcId: gcRef.key };
   } catch (e) {
     return { ok: false, error: "Couldn't create the group — try again." };
@@ -1861,7 +1897,7 @@ async function inviteToGroupChat(gcId, friendAccountKey, friendUsername) {
 
   let gcSnap;
   try {
-    gcSnap = await groupChatsRef.child(gcId).get();
+    gcSnap = await getGroupMeta(gcId);
   } catch (e) {
     return { ok: false, error: "Couldn't reach the server — try again." };
   }
@@ -1874,9 +1910,12 @@ async function inviteToGroupChat(gcId, friendAccountKey, friendUsername) {
   if (Object.keys(members).length >= GC_MAX_MEMBERS) return { ok: false, error: "Group is full (" + GC_MAX_MEMBERS + " max)." };
 
   try {
-    await groupChatsRef.child(gcId).child("members").child(friendAccountKey).set({
-      username: friendUsername,
-      joinedAt: firebase.database.ServerValue.TIMESTAMP
+    await db.ref().update({
+      ["groupChats/" + gcId + "/members/" + friendAccountKey]: {
+        username: friendUsername,
+        joinedAt: firebase.database.ServerValue.TIMESTAMP
+      },
+      ["users/" + friendAccountKey + "/groups/" + gcId]: true
     });
     return { ok: true };
   } catch (e) {
@@ -1889,7 +1928,7 @@ async function kickFromGroupChat(gcId, targetAccountKey) {
 
   let gcSnap;
   try {
-    gcSnap = await groupChatsRef.child(gcId).get();
+    gcSnap = await getGroupMeta(gcId);
   } catch (e) {
     return { ok: false, error: "Couldn't reach the server — try again." };
   }
@@ -1899,7 +1938,10 @@ async function kickFromGroupChat(gcId, targetAccountKey) {
   if (targetAccountKey === currentSession.accountKey) return { ok: false, error: "Use transfer/leave instead of kicking yourself." };
 
   try {
-    await groupChatsRef.child(gcId).child("members").child(targetAccountKey).remove();
+    await db.ref().update({
+      ["groupChats/" + gcId + "/members/" + targetAccountKey]: null,
+      ["users/" + targetAccountKey + "/groups/" + gcId]: null
+    });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: "Couldn't remove member — try again." };
@@ -1911,7 +1953,7 @@ async function transferGroupOwnership(gcId, newOwnerAccountKey) {
 
   let gcSnap;
   try {
-    gcSnap = await groupChatsRef.child(gcId).get();
+    gcSnap = await getGroupMeta(gcId);
   } catch (e) {
     return { ok: false, error: "Couldn't reach the server — try again." };
   }
@@ -1937,7 +1979,7 @@ async function leaveGroupChat(gcId) {
 
   let gcSnap;
   try {
-    gcSnap = await groupChatsRef.child(gcId).get();
+    gcSnap = await getGroupMeta(gcId);
   } catch (e) {
     return { ok: false, error: "Couldn't reach the server — try again." };
   }
@@ -1951,17 +1993,21 @@ async function leaveGroupChat(gcId) {
   try {
     if (remainingKeys.length === 0) {
       // Last member leaving — delete the whole group.
-      await groupChatsRef.child(gcId).remove();
+      await db.ref().update({
+        ["groupChats/" + gcId]: null,
+        ["users/" + currentSession.accountKey + "/groups/" + gcId]: null
+      });
       return { ok: true };
     }
 
     const updates = {};
-    updates["members/" + currentSession.accountKey] = null;
+    updates["users/" + currentSession.accountKey + "/groups/" + gcId] = null;
+    updates["groupChats/" + gcId + "/members/" + currentSession.accountKey] = null;
     if (isOwner) {
       const randomNewOwner = remainingKeys[Math.floor(Math.random() * remainingKeys.length)];
-      updates["ownerAccountKey"] = randomNewOwner;
+      updates["groupChats/" + gcId + "/ownerAccountKey"] = randomNewOwner;
     }
-    await groupChatsRef.child(gcId).update(updates);
+    await db.ref().update(updates);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: "Couldn't leave the group — try again." };
@@ -1987,31 +2033,19 @@ async function sendGroupMessage(gcId, text, imageData) {
   }
 }
 
-let currentGroupMessagesRef = null; // watched group-message child ref, mirrors currentThreadMessagesRef for DMs
-
 function watchGroupMessages(gcId, onMessage) {
-  stopWatchingOpenChat();
-  currentGroupMessagesRef = groupChatsRef.child(gcId).child("messages");
-  currentGroupMessagesRef.limitToLast(200).on("child_added", snap => {
-    onMessage({ id: snap.key, ...snap.val() });
-  });
+  watchMessages(groupChatsRef.child(gcId).child("messages"), onMessage);
 }
 
 // Live view of a single group chat's record (membership, owner, name) —
 // watched while its thread or its manage-modal is open.
-let currentGroupInfoRef = null;
+// Served from the live groupCache (name/owner/members only, never messages).
 let currentGroupInfo = null;
 function watchGroupInfo(gcId, onChange) {
-  unwatchGroupInfo();
-  currentGroupInfoRef = groupChatsRef.child(gcId);
-  currentGroupInfoRef.on("value", snap => {
-    currentGroupInfo = snap.val();
-    onChange(currentGroupInfo);
-  });
+  currentGroupInfo = groupCache[gcId] || null;
+  onChange(currentGroupInfo);
 }
 function unwatchGroupInfo() {
-  if (currentGroupInfoRef) currentGroupInfoRef.off("value");
-  currentGroupInfoRef = null;
   currentGroupInfo = null;
 }
 
@@ -2020,17 +2054,69 @@ function unwatchGroupInfo() {
 // extra denormalized index, so this watches the whole groupChats node and
 // filters client-side — acceptable at this app's scale (same tradeoff
 // already made for search/presence elsewhere in the file).
+let groupIndexRef = null, groupIndexHandler = null, groupWatchToken = 0;
+let groupFieldWatchers = {}; // gcId -> [{ ref, cb }]
+let groupCache = {};         // gcId -> { gcId, name, ownerAccountKey, members }
+
+// One-time per older account: build users/{me}/groups from a single scan,
+// then flag the account so it never scans again. New accounts start flagged.
+async function migrateGroupIndexOnce(me) {
+  if ((await usersRef.child(me).child("groupsIndexed").get()).val()) return;
+  const all = (await groupChatsRef.get()).val() || {};
+  const updates = { ["users/" + me + "/groupsIndexed"]: true };
+  Object.entries(all).forEach(([id, gc]) => {
+    if (gc && gc.members && gc.members[me]) updates["users/" + me + "/groups/" + id] = true;
+  });
+  await db.ref().update(updates);
+}
+
+// Watches users/{me}/groups, then only name/owner/members of each group.
 function watchMyGroupChats(onList) {
-  groupChatsRef.on("value", snap => {
-    const val = snap.val() || {};
-    const mine = Object.entries(val)
-      .filter(([, gc]) => gc.members && currentSession && gc.members[currentSession.accountKey])
-      .map(([gcId, gc]) => ({ gcId, ...gc }));
-    onList(mine);
+  unwatchMyGroupChats();
+  const token = ++groupWatchToken;
+  const me = currentSession.accountKey;
+  const emit = () => onList(Object.values(groupCache).filter(g => g.name && g.members));
+
+  const attach = gcId => {
+    if (groupFieldWatchers[gcId]) return;
+    groupCache[gcId] = { gcId };
+    groupFieldWatchers[gcId] = ["name", "ownerAccountKey", "members"].map(field => {
+      const ref = groupChatsRef.child(gcId).child(field);
+      const cb = snap => {
+        if (!groupCache[gcId]) return;
+        groupCache[gcId][field] = snap.val();
+        emit();
+      };
+      ref.on("value", cb);
+      return { ref, cb };
+    });
+  };
+  const detach = gcId => {
+    (groupFieldWatchers[gcId] || []).forEach(w => w.ref.off("value", w.cb));
+    delete groupFieldWatchers[gcId];
+    delete groupCache[gcId];
+  };
+
+  migrateGroupIndexOnce(me).catch(() => {}).then(() => {
+    if (token !== groupWatchToken) return; // logged out or re-watched meanwhile
+    groupIndexRef = usersRef.child(me).child("groups");
+    groupIndexHandler = snap => {
+      const ids = Object.keys(snap.val() || {});
+      ids.forEach(attach);
+      Object.keys(groupFieldWatchers).filter(id => !ids.includes(id)).forEach(detach);
+      emit();
+    };
+    groupIndexRef.on("value", groupIndexHandler);
   });
 }
 function unwatchMyGroupChats() {
-  groupChatsRef.off("value");
+  groupWatchToken++;
+  if (groupIndexRef && groupIndexHandler) groupIndexRef.off("value", groupIndexHandler);
+  Object.values(groupFieldWatchers).forEach(ws => ws.forEach(w => w.ref.off("value", w.cb)));
+  groupIndexRef = groupIndexHandler = null;
+  groupFieldWatchers = {};
+  groupCache = {};
+  myGroupChats = []; // don't leak the previous account's groups into the next login
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -2212,7 +2298,7 @@ function renderOnlineList(list) {
       const row = document.createElement("div");
       row.className = "online-list-row";
       const isMe = currentSession && entry.accountKey === currentSession.accountKey;
-      row.innerHTML = `<span class="online-list-dot"></span><span>${entry.username}</span>` +
+      row.innerHTML = `<span class="online-list-dot"></span><span>${esc(entry.username)}</span>` +
         (isMe ? `<span class="you-tag">(you)</span>` : "");
       $onlineList.appendChild(row);
     });
@@ -2451,9 +2537,7 @@ function renderGroupsList(groups) {
     // Group thread keys are exactly the gcId — only tear down group
     // watchers here (DM watchers are managed in renderFriendsList) whose
     // group no longer appears in this list.
-    const stillAGroup = groups.some(g => g.gcId === threadKey);
-    const looksLikeDmKey = threadKey.includes("_");
-    if (!looksLikeDmKey && !stillAGroup) teardownUnreadWatch(threadKey);
+    if (watchedGroupKeys.has(threadKey) && !groups.some(g => g.gcId === threadKey)) teardownUnreadWatch(threadKey);
   });
 
   const pinned = (currentUserData && currentUserData.pinnedGroups) || {};
@@ -2518,7 +2602,11 @@ function renderGroupsList(groups) {
 
     // If this group is currently open, keep openChatGcId's live info fresh
     // for the manage modal without a separate watcher per row.
-    if (openChatGcId === gc.gcId) currentGroupInfo = gc;
+    if (openChatGcId === gc.gcId) {
+      currentGroupInfo = gc;
+      $chatThreadHeaderName.textContent = gc.name;
+      updateChatThreadHeaderStatus();
+    }
   });
 
   // If the group we're chatting in disappeared (e.g. we left, or the
@@ -2542,8 +2630,7 @@ function renderFriendsList(userData) {
   entries.forEach(([friendAccountKey]) => ensureUnreadWatchForFriend(friendAccountKey));
   const currentFriendThreadKeys = new Set(entries.map(([k]) => threadIdFor(currentSession.accountKey, k)));
   Object.keys(unreadWatchRefs).forEach(threadKey => {
-    const looksLikeDmKey = threadKey.includes("_");
-    if (looksLikeDmKey && !currentFriendThreadKeys.has(threadKey)) teardownUnreadWatch(threadKey);
+    if (watchedDmKeys.has(threadKey) && !currentFriendThreadKeys.has(threadKey)) teardownUnreadWatch(threadKey);
   });
 
   const pinned = (userData && userData.pinnedFriends) || {};
@@ -2949,9 +3036,11 @@ let composerNoticeTimer = null;
 function showComposerNotice(text) {
   // Reuses the authError element as a lightweight toast-ish notice since
   // there's no separate composer/toolbar in this app yet.
-  $authError.textContent = text;
+  const t = document.getElementById("toast");
+  t.textContent = text;
+  t.style.display = "block";
   clearTimeout(composerNoticeTimer);
-  composerNoticeTimer = setTimeout(() => { $authError.textContent = ""; }, 4000);
+  composerNoticeTimer = setTimeout(() => { t.style.display = "none"; }, 4000);
 }
 
 function showLoggedInState(session) {
@@ -3135,6 +3224,7 @@ function openChatWith(accountKey, username) {
   $chatThread.style.display = "flex";
   $chatThreadAvatar.style.display = "flex";
   $chatThreadAvatar.textContent = initialsFor(username);
+  $chatThreadPresenceBadge.style.display = "";
   $chatThreadHeaderName.textContent = username;
   $groupInfoBtn.style.display = "none";
   updateChatThreadHeaderStatus();
@@ -3164,6 +3254,7 @@ function openGroupChat(gcId) {
   $chatEmptyState.style.display = "none";
   $chatThread.style.display = "flex";
   $chatThreadAvatar.textContent = "👥";
+  $chatThreadPresenceBadge.style.display = "none";
   $chatThreadHeaderName.textContent = gc ? gc.name : "Group";
   $groupInfoBtn.style.display = "inline-block";
   watchGroupInfo(gcId, () => updateChatThreadHeaderStatus());
@@ -3367,17 +3458,23 @@ function init() {
     initFirebase();
   } catch (e) {
     document.getElementById("authCard").innerHTML =
-      `<h2>Couldn't connect</h2><p style="color:#94a3b8;font-size:14px">${(e.message || "Unknown error")}</p>`;
+      `<h2>Couldn't connect</h2><p style="color:#94a3b8;font-size:14px">${esc(e.message || "Unknown error")}</p>`;
     return;
   }
 
   const session = loadSession();
-  if (session && session.accountKey) {
+  const enterApp = () => {
     currentSession = session;
     claimPresence(session.accountKey, session.username);
     watchOwnAccount(session.accountKey, renderAllRelationshipUI);
     watchMyGroupChats(renderGroupsList);
     showLoggedInState(session);
+  };
+  if (session && session.accountKey) {
+    usersRef.child(session.accountKey).get().then(snap => {
+      if (snap.exists()) enterApp();
+      else { clearSession(); showAuthFlow(); setMode("login"); }
+    }, enterApp); // offline/read error: keep the old behaviour
   } else {
     showAuthFlow();
     setMode("login");
