@@ -1,6 +1,6 @@
 {
-"updated":"October 7, 2026",
-"message":"added multi hub app (test)",
+"updated":"October 8, 2026",
+"message":"Nova Proxy added to Hubs tab (partner)",
 "apps":[
 {"name":"VUS-OS","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS-OS/refs/heads/main/index.html","desc":"Desktop version of VUS Hub","icon":"OS","color":"white"},
 {"name":"VUS Launcher","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL","desc":"Main game hub — V17.4","icon":"🎮","color":"green"},
@@ -52,7 +52,7 @@
 {"name":"idk 10.0","url":"https://ugs-desktop-production.up.railway.app/","desc":"","icon":"idk","color":""},
 {"name":"Ghost Hub Cinema","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/other/Ghost-Cinema","desc":"collection of movies","icon":"GHC","color":"white"},
 {"name":"Nexus","url":"https://car-meow.github.io/toothbrush","desc":"","icon":"","color":""},
-{"name":"","url":"","desc":"","icon":"","color":""},
+{"name":"Nova","url":"http://Pilandok-7rzwb6.my.canva.site/unblocked-cloud1","desc":"","icon":"Nova","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
