@@ -1157,6 +1157,39 @@ async function generateUniqueId() {
   throw new Error("Couldn't generate a unique ID right now — try again.");
 }
 
+/* ── Password hashing: salted PBKDF2-SHA-256 (Web Crypto) ──
+   Stored in the existing `password` field as "pbkdf2$<iterations>$<salt>$<hash>"
+   (base64, 83 chars, fits the 100-char rule). Old plain-text passwords still
+   log in once and are upgraded to a hash automatically. */
+const PW_PREFIX = "pbkdf2$";
+const PW_ITERATIONS = 200000;
+
+function bytesToB64(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function b64ToBytes(b64) { return Uint8Array.from(atob(b64), c => c.charCodeAt(0)); }
+
+async function pbkdf2Bits(password, saltBytes, iterations) {
+  if (!window.crypto || !crypto.subtle) throw new Error("Secure password hashing needs https — open the site over https.");
+  const keyMat = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+  return crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: saltBytes, iterations }, keyMat, 256);
+}
+
+async function hashPassword(password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const bits = await pbkdf2Bits(password, salt, PW_ITERATIONS);
+  return PW_PREFIX + PW_ITERATIONS + "$" + bytesToB64(salt) + "$" + bytesToB64(bits);
+}
+
+function isHashedPassword(stored) {
+  return typeof stored === "string" && stored.startsWith(PW_PREFIX) && stored.split("$").length === 4;
+}
+
+async function verifyPassword(password, stored) {
+  if (!isHashedPassword(stored)) return stored === password; // legacy plain text
+  const [, iter, saltB64, hashB64] = stored.split("$");
+  const bits = await pbkdf2Bits(password, b64ToBytes(saltB64), parseInt(iter, 10));
+  return bytesToB64(bits) === hashB64;
+}
+
 /* ── Account creation ── */
 async function createAccount(username, password) {
   const cleanUsername = username.trim();
@@ -1168,6 +1201,10 @@ async function createAccount(username, password) {
   if (!password || password.length < 4) {
     return { ok: false, error: "Password must be at least 4 characters." };
   }
+
+  let passwordHash;
+  try { passwordHash = await hashPassword(password); }
+  catch (e) { return { ok: false, error: e.message || "Couldn't secure your password — try again." }; }
 
   // Uniqueness check against the index (case-insensitive).
   const existing = await usernameIndexRef.child(usernameKey).get();
@@ -1189,7 +1226,7 @@ async function createAccount(username, password) {
     username: cleanUsername,
     usernameLower: usernameKey,
     id: newId,
-    password: password, // see security note above — plain field by design, not encrypted/hashed
+    password: passwordHash, // salted PBKDF2 hash, never the raw password
     createdAt: firebase.database.ServerValue.TIMESTAMP,
     friends: {},
     friendRequestsIncoming: {},
@@ -1248,8 +1285,21 @@ async function login(identifier, password) {
   }
 
   const account = accountSnap.val();
-  if (!account || account.password !== password) {
+  let passwordOk = false;
+  try {
+    passwordOk = !!account && await verifyPassword(password, account.password);
+  } catch (e) {
+    return { ok: false, error: e.message || "Couldn't check your password — try again." };
+  }
+  if (!passwordOk) {
     return { ok: false, error: "Incorrect password." };
+  }
+
+  // Upgrade an old plain-text password to a hash the first time it logs in.
+  if (!isHashedPassword(account.password)) {
+    try {
+      await usersRef.child(accountKey).child("password").set(await hashPassword(password));
+    } catch (e) { /* login still works; the upgrade retries next time */ }
   }
 
   return { ok: true, accountKey, username: account.username, id: account.id };
