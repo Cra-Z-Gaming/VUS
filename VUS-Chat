@@ -3677,9 +3677,7 @@ const SLASH_COMMANDS = [
   { name: "/image",   args: "on|off username",        minRank: ROLES.admin.rank,
     desc: "Give or take away image access for someone below your rank.", insert: "/image " },
   { name: "/unban",   args: "username or ID",         minRank: ROLES.crown.rank,
-    desc: "Lift a ban by username or 6-digit account ID.", insert: "/unban " },
-  { name: "/close",   args: "",                       minRank: ROLES.crown.rank,
-    desc: "Remove everyone from VUS Chat.", insert: "/close" }
+    desc: "Lift a ban by username or 6-digit account ID.", insert: "/unban " }
 ];
 
 function commandDescription(cmd, rank) {
@@ -3784,13 +3782,7 @@ async function handleModerationCommand(text) {
   }
   ChatBackend.logCommand(text);
 
-  // ── /close, /unban (Owner) ──
-  if (command === "/close") {
-    if (parts.length !== 1) { showComposerNotice("Use /close by itself."); return true; }
-    await ChatBackend.setChatClosed(true);
-    showComposerNotice("VUS Chat was closed for everyone.");
-    return true;
-  }
+  // ── /unban (Owner) ──
   if (command === "/unban") {
     if (parts.length < 2) { showComposerNotice("Use /unban username or /unban loginID"); return true; }
     try {
@@ -4951,7 +4943,7 @@ function rankGuideLines(role) {
   if (canGrant) lines.push(["Can give out", grantable.map(r => r.icon + " " + r.label).join(", ") + ", permanently or for a set time."]);
   if (role.id === "coowner") lines.push(["Commands", "The same as " + ROLES.admin.icon + " " + ROLES.admin.label + "."]);
   return { lines, newCommands, notes: [
-    role.id === "crown" ? "The only rank that can /close the chat and /unban." : null,
+    role.id === "crown" ? "The only rank that can /unban." : null,
     byHand ? "Can't be banned or timed out." : null
   ].filter(Boolean) };
 }
@@ -5078,24 +5070,6 @@ async function renderOwnerMenuList() {
   if (staffMenuMode === "owner") {
     const staffTools = document.createElement("div");
     staffTools.className = "staff-tools";
-    const closeChatBtn = document.createElement("button");
-    closeChatBtn.className = "toolbar-btn danger-btn";
-    closeChatBtn.textContent = "Close chat";
-    closeChatBtn.title = "Close VUS Chat for everyone";
-    closeChatBtn.addEventListener("click", async () => {
-      if (!confirm("Close VUS Chat for everyone? All connected users will be removed.")) return;
-      closeChatBtn.disabled = true;
-      try {
-        await ChatBackend.setChatClosed(true);
-        closeOwnerMenu();
-        showComposerNotice("VUS Chat was closed for everyone.");
-      } catch (e) {
-        closeChatBtn.disabled = false;
-        showComposerNotice("Couldn't close VUS Chat — try again.");
-      }
-    });
-    staffTools.appendChild(closeChatBtn);
-
     const unbanBtn = document.createElement("button");
     unbanBtn.className = "toolbar-btn";
     unbanBtn.textContent = "Unban...";
