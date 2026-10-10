@@ -2176,6 +2176,22 @@ const ChatBackend = {
   },
 
   // ── Bans and timeouts (Owner Menu / Mod Menu) ──
+  // A ban only counts if it was made by an Admin or higher who outranks the person
+  // banned, and Co-owner / Owner can't be banned at all. A fake ban (e.g. a "loop ban"
+  // script) is ignored. It can't stop someone who copies a real staff ID onto a fake
+  // ban -- only real logins could. Bans made by hand in the database need byLoginId
+  // set to a staff account ID, or they're ignored too.
+  async isBanValid(ban, targetLoginId) {
+    if (!ban || !ban.byLoginId) return false;
+    const [byRole, targetRole] = await Promise.all([
+      this.getEffectiveRole(ban.byLoginId),
+      this.getEffectiveRole(targetLoginId)
+    ]);
+    const byRank = ROLES[byRole].rank, targetRank = ROLES[targetRole].rank;
+    if (targetRank >= ROLES.coowner.rank) return false;
+    return byRank >= ROLES.admin.rank && byRank > targetRank;
+  },
+
   async getBan(loginId) {
     if (!loginId) return null;
     try {
@@ -2185,6 +2201,7 @@ const ChatBackend = {
         await snap.ref.remove();
         return null;
       }
+      if (ban && !(await this.isBanValid(ban, loginId))) return null;
       return ban;
     } catch (e) {
       return null;
@@ -2282,7 +2299,10 @@ const ChatBackend = {
   watchBan(loginId, onChange) {
     if (!loginId) return () => {};
     const ref = this._bansRef.child(this._safeKey(String(loginId)));
-    const handler = snap => onChange(snap.exists() ? snap.val() : null);
+    const handler = async snap => {
+      const ban = snap.exists() ? snap.val() : null;
+      onChange(ban && (await this.isBanValid(ban, loginId)) ? ban : null);
+    };
     ref.on("value", handler);
     return () => ref.off("value", handler);
   },
