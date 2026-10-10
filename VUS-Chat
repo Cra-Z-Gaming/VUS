@@ -566,7 +566,7 @@
   }
   #pingToast .ping-toast-title { color: #4ade80; font-weight: 700; font-size: 15px; margin-bottom: 4px; }
   #pingToast .ping-toast-body { color: #f1f5f9; font-size: 14px; line-height: 1.4; }
-  #roomsToggleBtn {
+  #roomsToggleBtn, #inventoryBtn {
     background: transparent;
     border: 1.5px solid #334155;
     color: #94a3b8;
@@ -576,7 +576,7 @@
     cursor: pointer;
     position: relative;
   }
-  #roomsToggleBtn:hover { color: #f1f5f9; border-color: #475569; }
+  #roomsToggleBtn:hover, #inventoryBtn:hover { color: #f1f5f9; border-color: #475569; }
   #roomsToggleBtn .rooms-badge-dot {
     display: none;
     position: absolute;
@@ -929,7 +929,7 @@
     .hdr-right { flex: 1 1 0; justify-content: flex-end; gap: 8px; font-size: 13px; }
     .online-count { margin-left: 4px; font-size: 13px; }
     .oc-word { display: none; }
-    #roomsToggleBtn { font-size: 13px; padding: 4px 8px; flex: 0 0 auto; }
+    #roomsToggleBtn, #inventoryBtn { font-size: 13px; padding: 4px 8px; flex: 0 0 auto; }
     #youAre { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; flex: 0 1 auto; min-width: 0; max-width: 130px; }
     #youAre .ya-prefix, #youAre .ya-sep { display: none; }
     #youAre .ya-name { font-size: 13px; max-width: 100%; }
@@ -981,6 +981,7 @@
   <div class="hdr-title">VUS Chat</div>
   <div class="hdr-right">
     <button id="roomsToggleBtn">🚪 Rooms<span class="rooms-badge-dot" id="roomsBadgeDot"></span></button>
+    <button id="inventoryBtn">🎒 Inventory</button>
     <span id="youAreAvatar" class="you-avatar" aria-label="Your profile picture"></span>
     <span id="youAre"></span>
     <button id="changeNameBtn" style="display:none;background:transparent;border:1.5px solid #334155;color:#64748b;font-size:15.8px;padding:4.5px 10.5px;border-radius:9px;cursor:pointer">Change name</button>
@@ -1103,6 +1104,36 @@
     <div class="chat-modal-row">
       <button class="chat-modal-btn-secondary" id="ownerMenuRefreshBtn">&#8635; Refresh</button>
       <button class="chat-modal-btn-secondary" id="ownerMenuCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="chat-modal-overlay" id="inventoryOverlay">
+  <div class="chat-modal" style="max-width:420px">
+    <h3>🎒 Inventory</h3>
+    <div id="inventoryList" style="margin:10px 0 14px"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="inventoryCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="chat-modal-overlay" id="modListOverlay">
+  <div class="chat-modal" style="max-width:560px">
+    <h3>🔨 Bans &amp; timeouts</h3>
+    <div style="display:flex;gap:8px;margin:8px 0">
+      <input id="modListBanInput" type="text" placeholder="Ban by username or 6-digit ID" style="flex:1;padding:8px 10px;border-radius:8px;border:1.5px solid #334155;background:#0f172a;color:#f1f5f9;font-size:14px">
+      <button class="toolbar-btn" id="modListBanBtn">Ban</button>
+    </div>
+    <div class="staff-tools" style="margin:8px 0">
+      <button class="toolbar-btn" id="modListTabBans">Bans</button>
+      <button class="toolbar-btn" id="modListTabTemp">Temp bans</button>
+      <button class="toolbar-btn" id="modListTabTimeouts">Timeouts</button>
+    </div>
+    <div id="modListBody" style="margin-bottom:8px"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="modListRefreshBtn">&#8635; Refresh</button>
+      <button class="chat-modal-btn-secondary" id="modListCloseBtn">Close</button>
     </div>
   </div>
 </div>
@@ -3770,7 +3801,7 @@ function commandDescription(cmd, rank) {
 
 function availableSlashCommands() {
   const rank = myRank();
-  return SLASH_COMMANDS.filter(c => rank >= c.minRank);
+  return SLASH_COMMANDS.filter(c => rank >= c.minRank && (c.name !== "/kick" || currentRoomCode)); // /kick only does anything inside a private room
 }
 
 // Online-only lookup by exact chat name (case-insensitive).
@@ -3780,6 +3811,23 @@ function findModerationTarget(name) {
 }
 
 // Real account with this 6-digit ID? (checks both DM databases)
+// Real account with this exact username? (checks both DM databases) Lets staff ban
+// people who are offline by name, not just by 6-digit ID.
+async function lookupAccountByUsername(name) {
+  const lower = String(name || "").trim().toLowerCase();
+  if (!/^[a-z0-9_]{3,24}$/.test(lower)) return null;
+  for (const database of [dmAuthDb, legacyDmAuthDb]) {
+    if (!database) continue;
+    try {
+      const keySnap = await database.ref("usernameIndex/" + lower).get();
+      if (!keySnap.exists()) continue;
+      const account = (await database.ref("users/" + keySnap.val()).get()).val();
+      if (account && account.id) return { loginId: String(account.id), username: account.username || lower };
+    } catch (e) {}
+  }
+  return null;
+}
+
 async function lookupAccountByLoginId(id) {
   for (const database of [dmAuthDb, legacyDmAuthDb]) {
     if (!database) continue;
@@ -3815,13 +3863,18 @@ async function resolveModerationTarget(raw, opts) {
     return { name: last || account.username || ("ID #" + wanted), loginId: wanted, online: false };
   }
   const hit = findModerationTarget(wanted);
-  return hit && hit.loginId ? { name: hit.name, loginId: String(hit.loginId), online: true } : null;
+  if (hit && hit.loginId) return { name: hit.name, loginId: String(hit.loginId), online: true };
+  if (opts && opts.allowOfflineId) {
+    const account = await lookupAccountByUsername(wanted);
+    if (account) return { name: account.username, loginId: account.loginId, online: false };
+  }
+  return null;
 }
 
 // Shared checks before acting on someone. Returns true when it's OK to go on.
 function guardModerationTarget(target, verb) {
   if (!target || !target.loginId) {
-    showComposerNotice("Couldn't find that user. Use the name of someone who's online" + (verb === "ban" ? ", or their 6-digit ID." : "."));
+    showComposerNotice("Couldn't find that user. Use the name of someone who's online" + (verb === "ban" ? ", or their exact username or 6-digit ID." : "."));
     return false;
   }
   if (String(target.loginId) === String(myLoginId)) {
@@ -3966,7 +4019,7 @@ async function handleModerationCommand(text) {
     }
     const target = await resolveModerationTarget(nameParts.join(" "), { allowOfflineId: true });
     if (!target) {
-      showComposerNotice("Couldn't find that user. Use the name of someone who's online, or a real 6-digit account ID.");
+      showComposerNotice("Couldn't find that user. Use their exact username or a real 6-digit account ID.");
       return true;
     }
     if (!guardModerationTarget(target, "ban")) return true;
@@ -4750,12 +4803,159 @@ $banConfirmBtn.addEventListener("click", async () => {
     await ChatBackend.banUser(target.loginId, target.name, myLoginId, durationMs);
     closeBanConfirm();
     if ($ownerMenuOverlay.style.display === "flex") renderOwnerMenuList();
+    if ($modListOverlay.style.display === "flex") renderModList();
     showComposerNotice(durationMs ? "Temporarily banned " + target.name + "." : "Banned " + target.name + ".");
   } catch (e) {
     $banConfirmErr.textContent = "Couldn't apply that ban. Check your connection and try again.";
     $banConfirmBtn.disabled = false;
     $banConfirmBtn.textContent = durationMs ? "Temporary ban" : "Ban";
   }
+});
+
+// ── Inventory (what you own; items are added by hand in the Firebase console) ──
+const INVENTORY_ITEMS = {
+  protection: { emoji: PROTECTION_EMOJI, label: "Protection", desc: "Can't be timed out or banned." }
+};
+const $inventoryOverlay = document.getElementById("inventoryOverlay");
+const $inventoryList = document.getElementById("inventoryList");
+function renderInventory() {
+  $inventoryList.innerHTML = "";
+  const mine = (myLoginId && inventoryData[String(myLoginId)]) || {};
+  const owned = Object.entries(mine).filter(([, qty]) => Number(qty) > 0);
+  if (owned.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "rooms-empty";
+    empty.textContent = "You have no items";
+    $inventoryList.appendChild(empty);
+    return;
+  }
+  owned.forEach(([id, qty]) => {
+    const def = INVENTORY_ITEMS[id] || { emoji: "📦", label: id, desc: "" };
+    const row = document.createElement("div");
+    row.className = "room-member-row";
+    const nameEl = document.createElement("span");
+    nameEl.className = "room-member-name";
+    nameEl.textContent = def.emoji + " " + def.label + (def.desc ? " — " + def.desc : "");
+    const countEl = document.createElement("span");
+    countEl.textContent = "×" + Number(qty);
+    row.appendChild(nameEl);
+    row.appendChild(countEl);
+    $inventoryList.appendChild(row);
+  });
+}
+document.getElementById("inventoryBtn").addEventListener("click", () => { renderInventory(); $inventoryOverlay.style.display = "flex"; });
+document.getElementById("inventoryCloseBtn").addEventListener("click", () => { $inventoryOverlay.style.display = "none"; });
+$inventoryOverlay.addEventListener("click", e => { if (e.target === $inventoryOverlay) $inventoryOverlay.style.display = "none"; });
+
+// ── Bans & timeouts list (Admin and up). Loads when opened and on Refresh. ──
+const $modListOverlay = document.getElementById("modListOverlay");
+const $modListBody = document.getElementById("modListBody");
+const $modListBanInput = document.getElementById("modListBanInput");
+let modListTab = "bans";
+let modListToken = 0;
+
+function openModListMenu() {
+  if (myRank() < ROLES.admin.rank) return;
+  modListTab = "bans";
+  $modListOverlay.style.display = "flex";
+  renderModList();
+}
+
+async function modListName(id, fallback) {
+  const online = latestPresenceList.find(e => String(e.loginId || "") === String(id));
+  if (online) return online.name;
+  if (fallback) return fallback;
+  try { const p = await ChatBackend.getProfile(id); if (p && p.lastName) return p.lastName; } catch (e) {}
+  return "ID #" + id;
+}
+
+async function renderModList() {
+  const token = ++modListToken;
+  [["bans", "modListTabBans"], ["temp", "modListTabTemp"], ["timeouts", "modListTabTimeouts"]].forEach(([tab, id]) => {
+    document.getElementById(id).style.opacity = tab === modListTab ? "1" : "0.55";
+  });
+  $modListBody.innerHTML = "";
+  const loading = document.createElement("div");
+  loading.className = "rooms-empty";
+  loading.textContent = "Loading…";
+  $modListBody.appendChild(loading);
+
+  let rows = [];
+  try {
+    const now = await ChatBackend._serverNow();
+    if (modListTab === "timeouts") {
+      const val = (await ChatBackend._timeoutsRef.get()).val() || {};
+      rows = Object.entries(val).filter(([, v]) => v && v.expiresAt > now)
+        .map(([id, v]) => ({ id, remaining: v.expiresAt - now }));
+    } else {
+      const val = (await ChatBackend._bansRef.get()).val() || {};
+      const all = Object.entries(val).filter(([, v]) => v && !(v.expiresAt && v.expiresAt <= now))
+        .map(([id, v]) => ({ id, ban: v, remaining: v.expiresAt ? v.expiresAt - now : 0 }));
+      const valid = await Promise.all(all.map(r => ChatBackend.isBanValid(r.ban, r.id)));
+      rows = all.filter((r, i) => valid[i] && (modListTab === "temp" ? r.remaining > 0 : r.remaining === 0));
+    }
+    const names = await Promise.all(rows.map(r => modListName(r.id, r.ban && r.ban.username)));
+    rows.forEach((r, i) => { r.name = names[i]; });
+  } catch (e) {
+    if (token === modListToken) loading.textContent = "Couldn't load the list. Try Refresh.";
+    return;
+  }
+  if (token !== modListToken) return;
+  $modListBody.innerHTML = "";
+  if (rows.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "rooms-empty";
+    empty.textContent = modListTab === "bans" ? "No bans" : modListTab === "temp" ? "No temp bans" : "No one is timed out";
+    $modListBody.appendChild(empty);
+    return;
+  }
+  const isOwner = myRank() >= ROLES.crown.rank;
+  rows.sort((a, b) => a.name.localeCompare(b.name)).forEach(r => {
+    const row = document.createElement("div");
+    row.className = "room-member-row";
+    const nameEl = document.createElement("span");
+    nameEl.className = "room-member-name";
+    nameEl.textContent = r.name + " (#" + r.id + ")" + (r.remaining ? " — " + formatCountdown(r.remaining) + " left" : "");
+    row.appendChild(nameEl);
+    const actions = document.createElement("div");
+    actions.className = "room-member-actions";
+    const addBtn = (label, cls, handler) => {
+      const b = document.createElement("button");
+      if (cls) b.className = cls;
+      b.textContent = label;
+      b.addEventListener("click", handler);
+      actions.appendChild(b);
+    };
+    const target = { name: r.name, loginId: r.id, online: false };
+    if (modListTab !== "bans") {
+      addBtn(modListTab === "temp" ? "Make permanent" : "Ban", "kick", () => { if (guardModerationTarget(target, "ban")) openBanConfirm(target, 0); });
+    }
+    if (isOwner) {
+      addBtn(modListTab === "timeouts" ? "Clear" : "Unban", "", async () => {
+        try {
+          if (modListTab === "timeouts") await ChatBackend.clearTimeout_(r.id);
+          else await ChatBackend.unbanUser(r.id);
+          renderModList();
+        } catch (e) { showComposerNotice("Couldn't do that: " + (e && e.message ? e.message : "check your connection") + "."); }
+      });
+    }
+    row.appendChild(actions);
+    $modListBody.appendChild(row);
+  });
+}
+document.getElementById("modListTabBans").addEventListener("click", () => { modListTab = "bans"; renderModList(); });
+document.getElementById("modListTabTemp").addEventListener("click", () => { modListTab = "temp"; renderModList(); });
+document.getElementById("modListTabTimeouts").addEventListener("click", () => { modListTab = "timeouts"; renderModList(); });
+document.getElementById("modListRefreshBtn").addEventListener("click", renderModList);
+document.getElementById("modListCloseBtn").addEventListener("click", () => { $modListOverlay.style.display = "none"; });
+$modListOverlay.addEventListener("click", e => { if (e.target === $modListOverlay) $modListOverlay.style.display = "none"; });
+document.getElementById("modListBanBtn").addEventListener("click", async () => {
+  const raw = $modListBanInput.value.trim();
+  if (!raw) return;
+  const target = await resolveModerationTarget(raw, { allowOfflineId: true });
+  if (!guardModerationTarget(target, "ban")) return;
+  $modListBanInput.value = "";
+  openBanConfirm(target, 0);
 });
 
 function openOwnerMenu() {
@@ -4796,7 +4996,7 @@ let staffHistoryOpen = false;
 function renderStaffCommands() {
   $ownerMenuCommands.innerHTML = "";
   const rank = myRank();
-  const visible = SLASH_COMMANDS.filter(c => rank >= c.minRank);
+  const visible = availableSlashCommands();
 
   // Commands: folded by default. Open, this list is taller than a phone screen and
   // used to push the actual member list (the reason anyone opens this menu) off the bottom.
@@ -5183,6 +5383,16 @@ async function renderOwnerMenuList() {
     staffTools.appendChild(unbanBtn);
     $ownerMenuList.appendChild(staffTools);
   }
+  if (staffMenuMode === "owner" || staffMenuMode === "admin") {
+    const listTools = document.createElement("div");
+    listTools.className = "staff-tools";
+    const listBtn = document.createElement("button");
+    listBtn.className = "toolbar-btn";
+    listBtn.textContent = "Bans & timeouts…";
+    listBtn.addEventListener("click", openModListMenu);
+    listTools.appendChild(listBtn);
+    $ownerMenuList.appendChild(listTools);
+  }
 
   const others = latestPresenceList
     .filter(entry => entry.name !== myName)
@@ -5493,6 +5703,7 @@ function watchModIssuedTimeoutExpiry(modName, targetName) {
     ref.off("value", handler);
     await ChatBackend.startModRetimeoutCooldown(modName, targetName).catch(() => {});
     if ($ownerMenuOverlay.style.display === "flex") renderOwnerMenuList();
+    if ($modListOverlay.style.display === "flex") renderModList();
   };
 
   const handler = ref.on("value", async snap => {
@@ -6888,7 +7099,7 @@ function init() {
       onMyRoleMaybeChanged();
     });
   });
-  ChatBackend.watchInventory(data => { inventoryData = data; });
+  ChatBackend.watchInventory(data => { inventoryData = data; if ($inventoryOverlay.style.display === "flex") renderInventory(); });
   attachRoomListeners();
   watchPublicRoomsList();
   restoreSidebarRoomList();
