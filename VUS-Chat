@@ -1706,6 +1706,19 @@ const ChatBackend = {
     });
   },
 
+  // ── Inventory items. inventory/<loginId>/<item> = quantity, added by hand in the
+  // Firebase console only (the rules refuse writes from the browser). ──
+  watchInventory(onChange) {
+    this._db.ref("inventory").on("value", snap => onChange(snap.val() || {}));
+  },
+  async hasItem(loginId, itemId) {
+    if (!loginId) return false;
+    try {
+      const snap = await this._db.ref("inventory/" + this._pid(loginId) + "/" + itemId).get();
+      return Number(snap.val()) > 0;
+    } catch (e) { return false; }
+  },
+
   async hasRoleId(roleId, loginId) {
     if (!roleId || !loginId || !this._roleIdRefs[roleId]) return false;
     try {
@@ -1955,6 +1968,8 @@ const ChatBackend = {
       return { ok: false, reason: "closed" };
     }
 
+    this._startPresenceHeal(name, loginId);
+
     // Roles/image access/color are tied to loginId (userProfiles + roleIds),
     // so joining changes nothing about them -- they were never removed.
     // Remember the name this ID last used so offline holders can still be
@@ -1972,7 +1987,51 @@ const ChatBackend = {
     return { ok: true };
   },
 
+  // ── Presence self-repair ──
+  // If my entry in the online list disappears while I'm still in the chat (a network
+  // blip, or someone deleting it), put it back. It won't if I left on purpose, I'm
+  // banned, or the chat is closed (the database refuses the write).
+  _startPresenceHeal(name, loginId) {
+    this._stopPresenceHeal();
+    this._presenceMeta = { name, loginId: String(loginId) };
+    this._healRef = this._myPresenceRef;
+    this._healHandler = snap => { if (!snap.exists()) this.ensurePresence(); };
+    this._healRef.on("value", this._healHandler);
+  },
+  _stopPresenceHeal() {
+    if (this._healRef && this._healHandler) this._healRef.off("value", this._healHandler);
+    this._healRef = this._healHandler = this._presenceMeta = null;
+    clearTimeout(this._healTimer);
+    this._healTimer = null;
+  },
+  ensurePresence() {
+    if (!this._presenceMeta || this._healTimer) return;
+    const wait = Math.max(1500, 5000 - (Date.now() - (this._lastHealAt || 0)));
+    this._healTimer = setTimeout(async () => {
+      this._healTimer = null;
+      const meta = this._presenceMeta, mine = this._myPresenceRef;
+      if (!meta || !mine) return;
+      try {
+        const listed = Object.values((await this._presenceRef.get()).val() || {})
+          .some(v => v && String(v.loginId || "") === meta.loginId);
+        if (listed) return;
+        if (await this.getBan(meta.loginId)) return;
+        if (this._myPresenceRef !== mine) return;
+        this._lastHealAt = Date.now();
+        mine.onDisconnect().remove();
+        await mine.set({ loginId: meta.loginId, joinedAt: firebase.database.ServerValue.TIMESTAMP });
+        if (!this._silentSession) {
+          try { if (this._myLeaveEventRef) this._myLeaveEventRef.onDisconnect().cancel(); } catch (e) {}
+          const leaveRef = this._leaveEventsRef.push();
+          leaveRef.onDisconnect().set({ name: meta.name, ts: firebase.database.ServerValue.TIMESTAMP });
+          this._myLeaveEventRef = leaveRef;
+        }
+      } catch (e) {}
+    }, wait);
+  },
+
   releasePresenceSilently() {
+    this._stopPresenceHeal();
     if (this._myLeaveEventRef) {
       this._myLeaveEventRef.onDisconnect().cancel();
       this._myLeaveEventRef = null;
@@ -1990,6 +2049,7 @@ const ChatBackend = {
   },
 
   releasePresence() {
+    this._stopPresenceHeal();
     if (this._myPresenceRef) {
       this._myPresenceRef.remove();
       this._myPresenceRef = null;
@@ -2183,6 +2243,7 @@ const ChatBackend = {
   // set to a staff account ID, or they're ignored too.
   async isBanValid(ban, targetLoginId) {
     if (!ban || !ban.byLoginId) return false;
+    if (await this.hasItem(targetLoginId, "protection")) return false; // protected: no ban counts
     const [byRole, targetRole] = await Promise.all([
       this.getEffectiveRole(ban.byLoginId),
       this.getEffectiveRole(targetLoginId)
@@ -2353,6 +2414,7 @@ const ChatBackend = {
       const snap = await this._timeoutsRef.child(this._safeKey(String(targetLoginId))).get();
       const val = snap.val();
       if (!val || !val.expiresAt) return 0;
+      if (await this.hasItem(targetLoginId, "protection")) return 0;
       const serverNow = await this._serverNow();
       return Math.max(0, val.expiresAt - serverNow);
     } catch (e) {
@@ -2368,6 +2430,7 @@ const ChatBackend = {
     ref.on("value", async snap => {
       const val = snap.val();
       if (!val || !val.expiresAt) { onChange(0); return; }
+      if (await this.hasItem(targetLoginId, "protection")) { onChange(0); return; }
       const serverNow = await this._serverNow();
       onChange(Math.max(0, val.expiresAt - serverNow));
     });
@@ -3765,6 +3828,11 @@ function guardModerationTarget(target, verb) {
     showComposerNotice("You cannot " + verb + " yourself.");
     return false;
   }
+  if ((verb === "kick" || verb === "timeout" || verb === "ban") && isProtected(target.loginId)) {
+    const past = verb === "kick" ? "kicked" : verb === "timeout" ? "timed out" : "banned";
+    showComposerNotice(PROTECTION_EMOJI + " " + (target.name || "That person") + " is protected and can't be " + past + ".");
+    return false;
+  }
   if (rankOfLoginId(target.loginId) >= myRank()) {
     showComposerNotice("You can only " + verb + " ranks below your own.");
     return false;
@@ -4011,6 +4079,8 @@ async function sendMessage() {
     openChangeName();
     return;
   }
+  // Chatting but missing from the online list? Put them back.
+  if (myLoginId && !latestPresenceList.some(e => String(e.loginId || "") === String(myLoginId))) ChatBackend.ensurePresence();
   if (myTimeoutRemainingMs > 0) {
     showComposerNotice("You're timed out for " + formatCountdown(myTimeoutRemainingMs) + " more.");
     return;
@@ -4616,6 +4686,11 @@ function rebuildRoleHolders() {
 function loginIdForName(name) {
   return name ? (nameToLoginId()[ChatBackend._safeKey(name)] || null) : null;
 }
+const PROTECTION_EMOJI = "⚕️";
+let inventoryData = {}; // loginId -> { itemId: quantity }, kept live from the database
+function isProtected(loginId) {
+  return !!(loginId && Number((inventoryData[String(loginId)] || {}).protection) > 0);
+}
 function holdsRoleId(roleId, loginId) {
   return !!(loginId && (roleIdHolders[roleId] || new Set()).has(String(loginId)));
 }
@@ -4667,6 +4742,7 @@ $banConfirmBtn.addEventListener("click", async () => {
   if (!pendingBanTarget) return;
   const target = pendingBanTarget;
   const durationMs = pendingBanDurationMs;
+  if (isProtected(target.loginId)) { $banConfirmErr.textContent = PROTECTION_EMOJI + " " + target.name + " is protected and can't be banned."; return; }
   $banConfirmBtn.disabled = true;
   $banConfirmBtn.textContent = "Applying…";
   $banConfirmErr.textContent = "";
@@ -5367,6 +5443,11 @@ $timeoutSetConfirmBtn.addEventListener("click", async () => {
       $timeoutSetConfirmBtn.textContent = "Timeout";
       renderOwnerMenuList();
       showComposerNotice("Granted temporary Mod to " + target.name + ".");
+      return;
+    }
+    if (isProtected(pendingTimeoutTarget.loginId)) {
+      $timeoutSetErr.textContent = PROTECTION_EMOJI + " " + (pendingTimeoutTarget.name || "That person") + " is protected and can't be timed out.";
+      $timeoutSetConfirmBtn.disabled = false;
       return;
     }
     await ChatBackend.setTimeout_(pendingTimeoutTarget.loginId, totalMs, myLoginId);
@@ -6807,6 +6888,7 @@ function init() {
       onMyRoleMaybeChanged();
     });
   });
+  ChatBackend.watchInventory(data => { inventoryData = data; });
   attachRoomListeners();
   watchPublicRoomsList();
   restoreSidebarRoomList();
