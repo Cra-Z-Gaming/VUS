@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>VUS DM's</title>
+</head>
+<body>
+
+
+<div id="appShell" class="mode-chat">
+  <div id="navBackdrop"></div>
+  <div id="navCol">
+  <div id="rail">
+    <button class="rail-nav-btn active" id="navChat" title="Chat" aria-label="Chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-8l-4.5 4v-4H6a2 2 0 0 1-2-2V5z"/></svg></button>
+    <div class="rail-sep"></div>
+    <button class="rail-nav-btn" id="navChats" title="Direct messages" aria-label="Direct messages"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7.5 8 5.5 8-5.5"/></svg><span class="rail-dot" id="dmRailDot"></span></button>
+  </div>
+  <div id="listPane">
+    <div id="listPaneHeader">
+      <span id="listPaneTitle">Chat Rooms</span>
+      <div id="dmTabs">
+        <button class="rail-nav-btn dm-tab" id="navFind" title="Find people" aria-label="Find people"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><span class="rail-dot" id="findRailDot"></span></button>
+        <button class="rail-nav-btn dm-tab" id="navBlocked" title="Blocked" aria-label="Blocked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m6 6 12 12"/></svg></button>
+      </div>
+    </div>
+    <div id="listPaneBody">
+
+      <div class="list-view active" id="viewRooms">
+    <div id="roomsSidebarOverlay"></div>
+    <div id="roomsSidebar">
+      <div id="roomsSidebarHeader">
+        <h3>Rooms</h3>
+        <button id="roomsSidebarClose" aria-label="Close">&times;</button>
+      </div>
+      <div id="roomsSidebarBody"></div>
+      <div id="roomsSidebarFooter">
+        <div id="roomsFooterMsg"></div>
+        <input id="joinByCodeInput" type="text" placeholder="Enter room code…" maxlength="20">
+        <div class="rooms-footer-row">
+          <button id="joinByCodeBtn">Join by Code</button>
+          <button id="createRoomBtn">+ New Room</button>
+        </div>
+      </div>
+    </div>
+      </div>
+
+      <div class="list-view" id="viewChats">
+        <div class="list-new-group-row" id="newGroupBtn">+ New group</div>
+        <div class="list-section-label">Groups</div>
+        <div id="groupsList"></div>
+        <div id="groupsEmpty" class="list-empty" style="padding-left:14px">No groups yet.</div>
+        <div class="list-section-label">Friends</div>
+        <div id="friendsList"></div>
+        <div id="friendsEmpty" class="list-empty" style="padding-left:14px">No friends yet — use Find to add someone.</div>
+      </div>
+
+      <div class="list-view" id="viewFind">
+        <div class="list-section">
+          <div class="list-section-title">Find people</div>
+          <div class="list-search-row">
+            <input type="text" id="searchInput" placeholder="Username or 6-digit ID…" maxlength="24">
+            <button id="searchBtn">Go</button>
+          </div>
+          <div class="list-search-note">Matches the start of a username, or an exact 6-digit ID.</div>
+          <div id="searchResults"></div>
+          <div id="searchEmpty" class="list-empty" style="display:none">No results.</div>
+        </div>
+
+        <div class="list-section">
+          <div class="list-section-title">
+            <span>Friend requests</span>
+            <span class="count-badge" id="incomingCountBadge" style="display:none"></span>
+          </div>
+          <div id="incomingRequestsList"></div>
+          <div id="incomingRequestsEmpty" class="list-empty">No incoming requests.</div>
+        </div>
+
+        <div class="list-section">
+          <div class="list-section-title">
+            <span>Hidden requests</span>
+            <span class="count-badge" id="hiddenCountBadge" style="display:none"></span>
+          </div>
+          <div class="list-search-note">Requests from people you've blocked land here instead.</div>
+          <div id="hiddenRequestsList"></div>
+          <div id="hiddenRequestsEmpty" class="list-empty">No hidden requests.</div>
+        </div>
+
+        <div class="list-section">
+          <div class="list-section-title">Sent requests</div>
+          <div id="outgoingRequestsList"></div>
+          <div id="outgoingRequestsEmpty" class="list-empty">No pending sent requests.</div>
+        </div>
+
+        <div class="list-section">
+          <div class="list-section-title">
+            <span>Online now</span>
+            <span id="onlineCountText" style="font-size:10.5px;color:#475569;font-family:ui-monospace,Consolas,monospace"></span>
+          </div>
+          <div id="onlineList"></div>
+          <div id="onlineEmpty" style="display:none" class="list-empty">No one else online right now.</div>
+        </div>
+      </div>
+
+      <div class="list-view" id="viewBlocked">
+        <div class="list-section">
+          <div class="list-section-title">Blocked</div>
+          <div id="blockedList"></div>
+          <div id="blockedEmpty" class="list-empty">No one blocked.</div>
+        </div>
+      </div>
+
+    </div>
+    <div id="userCard">
+      <button id="railAvatarBtn" title="Profile"></button>
+      <div id="userCardInfo">
+        <div id="listPaneYouName"></div>
+        <div id="listPaneYouId"></div>
+      </div>
+      <button id="railSettingsBtn" title="Settings" aria-label="Settings">&#9881;</button>
+    </div>
+  </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       CHAT ROOM PANE — the public/group VUS Chat room, restored from
+       the pre-redesign shell and re-skinned to sit alongside the DM
+       pane. Shown by default (see navChat "active" class above);
+       toggling to DMs/Find/Blocked hides this and shows chatPane.
+       ══════════════════════════════════════════════════════════ -->
+  <div id="chatRoomPane">
+
+    <div class="chat-header">
+      <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Open menu">&#9776;</button>
+      <div class="ch-title"><span class="ch-hash">#</span><span id="chatHeaderTitle">VUS Chat</span></div>
+      <div class="ch-spacer"></div>
+      <div class="ch-online">
+        <span id="onlineDot" class="chat-online-dot offline" style="cursor:pointer"></span>
+        <span id="onlineCount"></span>
+        <div id="globalClearPanel" style="display:none;position:absolute;top:30px;right:0;background:#1e293b;border:1.5px solid #334155;border-radius:10px;padding:12px;z-index:10;width:240px;font-size:15px;font-weight:400"></div>
+        <div id="onlineListPanel" style="display:none;position:absolute;top:30px;right:0;background:#1e293b;border:1.5px solid #334155;border-radius:10px;padding:12px;z-index:10;width:220px;font-size:14px;font-weight:400;max-height:280px;overflow-y:auto"></div>
+      </div>
+      <button id="roomsToggleBtn" type="button" aria-hidden="true" tabindex="-1">Rooms<span class="rooms-badge-dot" id="roomsBadgeDot"></span></button>
+      <span id="youAre"></span>
+    </div>
+
+    <div id="chatRoomConnError"></div>
+    <div id="chatRoomComposerNotice"></div>
+
+    <div id="pingToast">
+      <div class="ping-toast-title" id="pingToastTitle">You were pinged</div>
+      <div class="ping-toast-body" id="pingToastBody"></div>
+    </div>
+
+    <div id="roomTopBar">
+      <div id="roomTopBarLeft">
+        <span id="roomTopBarName"></span>
+        <span id="roomTopBarCode"></span>
+      </div>
+      <span id="roomTopBarTimer"></span>
+      <div id="roomTopBarActions">
+        <button class="room-top-btn" id="roomSettingsBtn" style="display:none">⚙ Settings</button>
+        <button class="room-top-btn leave" id="roomLeaveBtn">Leave</button>
+      </div>
+    </div>
+
+    <div class="chat-modal-overlay" id="createRoomOverlay">
+      <div class="chat-modal">
+        <h3>Create a Room</h3>
+        <label for="createRoomNameInput">Room name (optional)</label>
+        <input type="text" id="createRoomNameInput" maxlength="30" placeholder="e.g. Movie Night">
+        <div class="chat-modal-err" id="createRoomErr"></div>
+        <div class="chat-modal-row">
+          <button class="chat-modal-btn-secondary" id="createRoomCancelBtn">Cancel</button>
+          <button class="chat-modal-btn-primary" id="createRoomConfirmBtn">Create</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-modal-overlay" id="roomSettingsOverlay">
+      <div class="chat-modal" style="max-width:340px">
+        <h3>Room Settings</h3>
+        <div class="chat-modal-toggle-row">
+          <label>Public room</label>
+          <button class="room-top-btn" id="roomPublicToggleBtn">Off</button>
+        </div>
+        <label for="roomCodeInput">Room code (max 20 chars)</label>
+        <input type="text" id="roomCodeInput" maxlength="20">
+        <div class="chat-modal-err" id="roomCodeErr"></div>
+        <div class="chat-modal-row" style="margin-bottom:14px">
+          <button class="chat-modal-btn-secondary" id="roomCodeSaveBtn" style="flex:none;padding:7px 14px;font-size:13px">Save Code</button>
+        </div>
+        <label>Members</label>
+        <div id="roomMembersList" style="margin-bottom:8px"></div>
+        <div class="chat-modal-row">
+          <button class="chat-modal-btn-secondary" id="roomSettingsCloseBtn">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-modal-overlay" id="extendRoomOverlay">
+      <div class="chat-modal">
+        <h3>⏳ Room expiring soon</h3>
+        <p id="extendRoomText">This room closes in under a minute.</p>
+        <div class="chat-modal-row">
+          <button class="chat-modal-btn-secondary" id="extendRoomDismissBtn">Dismiss</button>
+          <button class="chat-modal-btn-primary" id="extendRoomConfirmBtn">+10 minutes</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-modal-overlay" id="transferOfferOverlay">
+      <div class="chat-modal">
+        <h3>👑 Ownership offer</h3>
+        <p id="transferOfferText"></p>
+        <div class="chat-modal-row">
+          <button class="chat-modal-btn-secondary" id="transferDeclineBtn">Decline</button>
+          <button class="chat-modal-btn-primary" id="transferAcceptBtn">Accept</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-modal-overlay" id="kickConfirmOverlay">
+      <div class="chat-modal">
+        <h3>Kick member?</h3>
+        <p id="kickConfirmText"></p>
+        <div class="chat-modal-row">
+          <button class="chat-modal-btn-secondary" id="kickCancelBtn">Cancel</button>
+          <button class="chat-modal-btn-danger" id="kickConfirmBtn">Kick</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-modal-overlay" id="rolesMenuOverlay">
+      <div class="chat-modal">
+        <h3>Claim a role</h3>
+        <div id="rolesMenuList"></div>
+        <div class="chat-modal-row">
+          <button class="chat-modal-btn-secondary" id="rolesMenuCloseBtn">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-modal-overlay" id="roleClaimOverlay">
+      <div class="chat-modal">
+        <h3 id="roleClaimTitle">Claim role</h3>
+        <div id="roleClaimBody"></div>
+        <div class="chat-modal-row">
+          <button class="chat-modal-btn-secondary" id="roleClaimBackBtn">Back</button>
+          <button class="chat-modal-btn-secondary" id="roleClaimCloseBtn">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-modal-overlay" id="ownerMenuOverlay">
+      <div class="chat-modal" style="max-width:340px">
+        <h3 id="ownerMenuTitle">👑 Owner Menu</h3>
+        <p id="ownerMenuSubtitle" style="margin-bottom:8px">Online now — refreshes every 5s while this is open.</p>
+        <div id="ownerMenuList" style="margin-bottom:8px"></div>
+        <div class="chat-modal-row">
+          <button class="chat-modal-btn-secondary" id="ownerMenuCloseBtn">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-modal-overlay" id="timeoutSetOverlay">
+      <div class="chat-modal">
+        <h3 id="timeoutSetTitle">Timeout</h3>
+        <label>Duration</label>
+        <div style="display:flex;gap:8px;margin-bottom:6px">
+          <input type="text" id="timeoutMinutesInput" inputmode="numeric" pattern="[0-9]*" maxlength="1" placeholder="Min" style="width:100%;padding:8px 11px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none;text-align:center">
+          <input type="text" id="timeoutSecondsInput" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="Sec" style="width:100%;padding:8px 11px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none;text-align:center">
+        </div>
+        <div id="timeoutSetNote" style="color:#64748b;font-size:12.5px;margin-bottom:8px">Max 3:00.</div>
+        <div class="chat-modal-err" id="timeoutSetErr"></div>
+        <div class="chat-modal-row">
+          <button class="chat-modal-btn-secondary" id="timeoutSetCancelBtn">Cancel</button>
+          <button class="chat-modal-btn-danger" id="timeoutSetConfirmBtn">Timeout</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ban duration modal — Admin+ only, opened from the Owner Menu's
+         Ban button (see openBanSetModal in app.js). Three separate
+         fields matching the code-level BAN_MAX_DAYS/HOURS/MINUTES
+         constants, so the max shown here always tracks whatever those
+         constants are currently set to without needing a matching
+         text-edit in the HTML. -->
+    <div class="chat-modal-overlay" id="banSetOverlay">
+      <div class="chat-modal">
+        <h3 id="banSetTitle">Ban</h3>
+        <label>Duration</label>
+        <div style="display:flex;gap:8px;margin-bottom:6px">
+          <input type="text" id="banDaysInput" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="Days" style="width:100%;padding:8px 11px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none;text-align:center">
+          <input type="text" id="banHoursInput" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="Hrs" style="width:100%;padding:8px 11px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none;text-align:center">
+          <input type="text" id="banMinutesInput" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="Min" style="width:100%;padding:8px 11px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none;text-align:center">
+        </div>
+        <div id="banSetNote" style="color:#64748b;font-size:12.5px;margin-bottom:8px"></div>
+        <div class="chat-modal-err" id="banSetErr"></div>
+        <div class="chat-modal-row">
+          <button class="chat-modal-btn-secondary" id="banSetCancelBtn">Cancel</button>
+          <button class="chat-modal-btn-danger" id="banSetConfirmBtn">Ban</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-modal-overlay" id="grantModConfirmOverlay">
+      <div class="chat-modal">
+        <h3 id="grantModConfirmTitle">🧩 Grant Mod?</h3>
+        <p id="grantModConfirmText"></p>
+        <div class="chat-modal-row">
+          <button class="chat-modal-btn-secondary" id="grantModCancelBtn">Cancel</button>
+          <button class="chat-modal-btn-primary" id="grantModConfirmBtn">Yes, grant Mod</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Profile popover shown when a name is clicked in chat — looks up
+         the sender's CURRENT username/ID fresh from their account record
+         (via fromAccountKey stamped on the message), so it works even if
+         they're offline or have since renamed. -->
+    <div class="chat-modal-overlay" id="chatUserProfileOverlay">
+      <div class="chat-modal" style="max-width:300px">
+        <h3 id="chatUserProfileName">—</h3>
+        <div id="chatUserProfileId" style="color:#64748b;font-size:12.5px;font-family:ui-monospace,Consolas,monospace;margin-bottom:12px"></div>
+        <div id="chatUserProfileStatus" class="modal-error" style="margin-bottom:8px"></div>
+        <div class="chat-modal-row">
+          <button class="chat-modal-btn-secondary" id="chatUserProfileCloseBtn">Close</button>
+          <button class="chat-modal-btn-primary" id="chatUserProfileAddBtn" style="display:none">Add Friend</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="chatScreen" style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div id="chatRoomMessages"></div>
+      <div id="chatRoomEmptyState" style="display:none">No messages yet — say hi!</div>
+      <button id="chatRoomJumpToBottomBtn">↓ Jump to latest</button>
+      <div id="chatRoomTypingBar" style="display:none;padding:2px 16px;min-height:20px;font-size:13px;color:#64748b;font-style:italic;flex-shrink:0"></div>
+      <div id="chatRoomPendingImageBar" style="display:none;padding:10px 16px;border-top:1.5px solid #1f2937;align-items:center;gap:12px;flex-shrink:0">
+        <img id="chatRoomPendingImagePreview" style="max-height:60px;max-width:90px;border-radius:8px;object-fit:cover;display:block">
+        <span style="flex:1;font-size:14.5px;color:#94a3b8">Image ready — click Send to post it</span>
+        <button id="chatRoomCancelPendingImageBtn" class="toolbar-btn">Cancel</button>
+      </div>
+      <div id="chatRoomToolbar">
+        <button id="chatRoomUploadImageBtn" class="toolbar-btn" style="display:none">📎 Image</button>
+        <input id="chatRoomImageFileInput" type="file" accept="image/*" style="display:none">
+        <span id="chatRoomCharCounter">500</span>
+        <div style="flex:1"></div>
+        <div style="position:relative">
+          <button id="pingYouBtn" class="toolbar-btn" title="Send a Discord ping to the site owner">🔔 Ping Devs</button>
+          <div id="pingYouPanel">
+            <textarea id="pingYouNote" rows="2" maxlength="200" placeholder="Optional note (max 200 chars)…"></textarea>
+            <button id="pingYouSend" class="toolbar-btn active" style="width:100%">Send Ping</button>
+          </div>
+        </div>
+        <button id="chatRoomAutoScrollBtn" class="toolbar-btn active">Auto Scroll: On</button>
+        <button id="chatRoomClearChatBtn" class="toolbar-btn">Clear Chat</button>
+      </div>
+      <div id="chatRoomComposer">
+        <div id="mentionDropdown"></div>
+        <div id="chatRoomComposerInputWrap">
+          <button id="mentionChip" type="button"></button>
+          <textarea id="chatRoomMsgInput" rows="1" placeholder="Type a message… (@ to mention someone)" maxlength="500"></textarea>
+        </div>
+        <button id="chatRoomSendBtn">Send</button>
+      </div>
+    </div>
+
+    <audio id="pingSound" preload="auto"></audio>
+  </div>
+
+  <div id="chatPane">
+    <div id="chatEmptyState"><button class="mobile-menu-btn" id="mobileMenuBtn2" aria-label="Open menu">&#9776;</button><span>Select a friend to start chatting.</span></div>
+    <div id="chatThread">
+      <div id="chatThreadHeader">
+        <button id="chatBackBtn">←</button>
+        <div class="list-row-presence-wrap">
+          <div class="list-row-avatar" id="chatThreadAvatar"></div>
+          <div class="list-row-presence-dot" id="chatThreadPresenceBadge"></div>
+        </div>
+        <div>
+          <div id="chatThreadHeaderName"></div>
+          <div id="chatThreadHeaderStatus"></div>
+        </div>
+        <button id="groupInfoBtn" style="display:none">Manage</button>
+      </div>
+      <div id="chatMessages"></div>
+      <div id="typingIndicatorBar"></div>
+      <div id="replyPreviewBar">
+        <div class="reply-preview-text" id="replyPreviewText"></div>
+        <button id="cancelReplyBtn" title="Cancel reply">✕</button>
+      </div>
+      <div id="editingBar">
+        <div class="editing-label">Editing message…</div>
+        <button id="cancelEditBtn" title="Cancel edit">✕</button>
+      </div>
+      <div id="pendingImageBar">
+        <img id="pendingImagePreview" alt="Pending image">
+        <span class="pending-image-label">Image ready — click Send to post it</span>
+        <button id="cancelPendingImageBtn">Cancel</button>
+      </div>
+      <div id="chatComposer">
+        <input id="imageFileInput" type="file" accept="image/*" style="display:none">
+        <button id="uploadImageBtn" title="Send an image">📎</button>
+        <button id="emojiPickerBtn" title="Insert emoji">🙂</button>
+        <div id="emojiPickerPopover"></div>
+        <textarea id="chatMsgInput" rows="1" placeholder="Message…" maxlength="2000"></textarea>
+        <button id="chatSendBtn">SEND</button>
+      </div>
+    </div>
+  </div>
+
+  <aside id="membersPane" aria-label="Members">
+    <div id="membersHeader">Online &mdash; <span id="membersCount">0</span></div>
+    <div id="membersList"></div>
+  </aside>
+
+  <div id="profilePopover">
+    <div class="profile-popover-avatar-wrap">
+      <button id="profileAvatarPreviewBtn" title="Change photo">
+        <span class="avatar-cam-badge">📷</span>
+      </button>
+      <input id="profileAvatarFileInput" type="file" accept="image/*">
+      <div class="profile-popover-hint">Click to change photo</div>
+      <div class="profile-popover-field">
+        <label for="profileNameInput">Display name</label>
+        <input type="text" id="profileNameInput" maxlength="24">
+      </div>
+      <button id="profileSaveBtn">Save</button>
+      <div id="profilePopoverError"></div>
+    </div>
+  </div>
+</div>
+
+<div id="authHero" aria-hidden="true">
+  <div class="hero-logo">VUS</div>
+  <p class="hero-tag">Hang out in the open chat, or message your friends privately.</p>
+</div>
+
+<div id="authCard">
+
+  <div id="authFlow">
+    <div id="authHeader">
+      <h1>VUS DM's</h1>
+      <p>Log in or create an account to start messaging.</p>
+    </div>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tabLogin">Log In</button>
+      <button class="auth-tab" id="tabSignup">Sign Up</button>
+    </div>
+
+    <div id="newIdReveal">
+      <div class="id-label">Your account ID</div>
+      <div class="id-value" id="revealedId"></div>
+      <div class="id-note">Save this — you (or friends) can use it to log in or add you. You can change it later in settings.</div>
+      <button id="newIdContinueBtn">Continue to Log In</button>
+    </div>
+
+    <form id="authForm" autocomplete="off">
+      <div id="loginFields" style="display:flex;flex-direction:column;gap:12px">
+        <div class="auth-field">
+          <label for="loginIdentifier">Username or ID</label>
+          <input type="text" id="loginIdentifier" placeholder="e.g. alex or 384021" maxlength="24">
+        </div>
+        <div class="auth-field">
+          <label for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" placeholder="Password">
+        </div>
+      </div>
+
+      <div id="signupFields" style="display:none;flex-direction:column;gap:12px">
+        <div class="auth-field">
+          <label for="signupUsername">Username</label>
+          <input type="text" id="signupUsername" placeholder="Pick a username" maxlength="24" autocomplete="off">
+          <div class="auth-hint">Letters, numbers, underscores. Must be unique.</div>
+        </div>
+        <div class="auth-field">
+          <label for="signupPassword">Password</label>
+          <input type="password" id="signupPassword" placeholder="Choose a password" autocomplete="new-password">
+        </div>
+        <div class="auth-field">
+          <label for="signupPasswordConfirm">Confirm password</label>
+          <input type="password" id="signupPasswordConfirm" placeholder="Retype your password" autocomplete="new-password">
+        </div>
+      </div>
+
+      <div id="authError"></div>
+      <div id="authSuccess"></div>
+
+      <button type="submit" id="authSubmitBtn">Log In</button>
+    </form>
+  </div>
+
+</div>
+
+<div id="modalOverlay">
+  <div class="modal-box" id="modalBox"></div>
+</div>
+
+<div id="imageLightbox">
+  <img id="imageLightboxImg" alt="Full size image">
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+/* ══════════════════════════════════════════════════════════
+   EXTERNAL FILE LOADER
+   raw.githubusercontent.com serves everything as Content-Type:
+   text/plain, so a plain <link rel="stylesheet"> or <script src>
+   pointed at it gets silently blocked by the browser's strict
+   MIME-type check. Instead we fetch the raw text ourselves and
+   inject it: CSS goes into a <style> tag, JS gets wrapped in a
+   Blob URL (so it still shows up as a real file in devtools,
+   unlike eval/new Function) and loaded as a normal <script src>.
+   ══════════════════════════════════════════════════════════ */
+(function loadExternalAppFiles() {
+  var CSS_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/other/Chat-DM/style.css";
+  var JS_URL  = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/other/Chat-DM/app.js";
+
+  function showLoadError(what, err) {
+    document.body.innerHTML =
+      "<div style='padding:24px;color:#f1f5f9;font-family:Arial,sans-serif;background:#0f172a;min-height:100vh'>" +
+      "<h2>Couldn't load " + what + "</h2>" +
+      "<p style='color:#94a3b8;font-size:14px;margin-top:8px;line-height:1.5'>" +
+      (err && err.message ? err.message : String(err)) +
+      "<br><br>Check that the file exists at the expected GitHub path and the repo/branch is public." +
+      "</p></div>";
+  }
+
+  function loadCss() {
+    return fetch(CSS_URL, { cache: "no-store" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status + " fetching style.css");
+        return r.text();
+      })
+      .then(function (cssText) {
+        var styleEl = document.createElement("style");
+        styleEl.textContent = cssText;
+        document.head.appendChild(styleEl);
+      });
+  }
+
+  function loadJs() {
+    return fetch(JS_URL, { cache: "no-store" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status + " fetching app.js");
+        return r.text();
+      })
+      .then(function (jsText) {
+        var blob = new Blob([jsText], { type: "application/javascript" });
+        var blobUrl = URL.createObjectURL(blob);
+        return new Promise(function (resolve, reject) {
+          var scriptEl = document.createElement("script");
+          scriptEl.src = blobUrl;
+          scriptEl.onload = resolve;
+          scriptEl.onerror = function () { reject(new Error("Blob script failed to execute — check app.js for syntax errors.")); };
+          document.body.appendChild(scriptEl);
+        });
+      });
+  }
+
+  loadCss()
+    .catch(function (err) { showLoadError("styles (style.css)", err); throw err; })
+    .then(loadJs)
+    .catch(function (err) {
+      // If loadCss already threw and displayed its own error, don't
+      // stomp the message with a second, less specific one.
+      if (!document.body.querySelector("h2")) showLoadError("app logic (app.js)", err);
+    });
+})();
+</script>
+</body>
+</html>
