@@ -144,6 +144,7 @@
   .msep { height:1px; background:var(--line); margin:5px 4px; }
   dialog.modal input.txt { width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--line); background:var(--raised); color:var(--text); font:inherit; margin-bottom:16px; }
   .btnrow { display:flex; gap:10px; justify-content:center; }
+  .xclose { position:absolute; top:10px; right:10px; }
 
   #queuePanel { position:fixed; right:16px; bottom:112px; width:min(380px,calc(100% - 32px)); max-height:min(60vh,520px); overflow-y:auto; background:var(--raised); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); padding:12px; z-index:30; }
   .qhead { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
@@ -1053,12 +1054,19 @@ function queueNext(tracks){
 }
 
 // ---------- dialogs ----------
-function modal(build){
+// opts.sticky: a stray click outside (or Esc) won't close it. Close with the X button or by double-clicking outside, which resolves "leave".
+function modal(build,opts){
+  opts=opts||{};
   return new Promise(res=>{
     const d=$("dlg2"); d.innerHTML=""; let settled=false;
     const done=v=>{ if(settled) return; settled=true; res(v); if(d.open) d.close(); };
-    d.onclose=()=>{ if(!d.open) done(null); }; d.onclick=e=>{ if(e.target===d) done(null); };   // ignore the previous dialog's late "close" event
-    build(d,done); d.showModal();
+    d.onclose=()=>{ if(!d.open) done(null); };   // ignore the previous dialog's late "close" event
+    d.oncancel=opts.sticky?e=>e.preventDefault():null;
+    d.onclick=opts.sticky?null:e=>{ if(e.target===d) done(null); };
+    d.ondblclick=opts.sticky?e=>{ const r=d.getBoundingClientRect(); if(e.target===d&&(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)) done("leave"); }:null;   // only the backdrop, not the dialog's own padding
+    build(d,done);
+    if(opts.sticky){ const x=iconBtn(XICON,"Close (or double-click outside)",()=>done("leave")); x.classList.add("xclose"); d.append(x); }
+    d.showModal();
   });
 }
 function inputDialog(title,value,ok){
@@ -1355,6 +1363,7 @@ paintOpts();
 // ---------- accounts + sync (Firebase: Google or email/password) ----------
 let auth=null, db=null, fbUser=null, unsubDoc=null, pushTimer=null, wasSignedIn=false;
 let pendingUser=null;   // signed in with email/password but the email isn't verified yet
+let authDraft={e:"",p:""};   // typed-but-unsent sign-in text, kept in memory only; cleared when you leave with X / double-click or succeed
 // true for an email/password account whose email hasn't been verified (Google accounts are always verified)
 const needsVerify=u=>!!u&&!u.emailVerified&&u.providerData.length>0&&u.providerData.every(p=>p.providerId==="password");
 const PERSON='<svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 100-8 4 4 0 000 8zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
@@ -1390,6 +1399,8 @@ function authModal(){
     const pw=el("input","txt"); pw.type="password"; pw.placeholder="Password"; pw.autocomplete="current-password"; pw.setAttribute("aria-label","Password");
     const signIn=()=>run(()=>auth.signInWithEmailAndPassword(em.value.trim(),pw.value));
     pw.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); signIn(); } };
+    em.value=authDraft.e; pw.value=authDraft.p;
+    em.oninput=()=>{ authDraft.e=em.value; }; pw.oninput=()=>{ authDraft.p=pw.value; };
     const stack=el("div","stack"); stack.append(em,pw);
     const row=el("div","btnrow"); const sib=pill("","Sign in",signIn); sib.classList.add("primary");
     row.append(sib,pill("","Create account",()=>run(async()=>{
@@ -1399,13 +1410,14 @@ function authModal(){
     const fg=el("button","linkbtn","Forgot password?");
     fg.onclick=async()=>{ try{ await auth.sendPasswordResetEmail(em.value.trim()); err.style.color="var(--accent)"; err.textContent="Reset email sent. Check your inbox."; }catch(e){ err.style.color=""; err.textContent=authMsg(e); } };
     if(AUTH_GOOGLE){ const brow=el("div","btnrow"); brow.append(g); d.append(brow,el("p","or","or use email")); }
-    d.append(stack,err,row,fg);
-  });
+    const spam=el("p","note","New account? We'll email you a verification link. Check your spam folder if you don't see it."); spam.style.margin="12px 0 0";
+    d.append(stack,err,row,spam,fg);
+  },{sticky:true}).then(r=>{ if(r==="leave"||r===true) authDraft={e:"",p:""}; return r; });
 }
 async function authDialog(){
   const ok=await authModal();
   const u=auth&&auth.currentUser;
-  if(ok&&needsVerify(u)) verifyDialog();
+  if(ok===true&&needsVerify(u)) verifyDialog();
 }
 function verifyDialog(){
   const u=auth&&auth.currentUser; if(!needsVerify(u)) return;
@@ -1434,7 +1446,7 @@ function verifyDialog(){
     const so=el("button","linkbtn","Use a different account");
     so.onclick=()=>{ clearInterval(iv); auth.signOut(); done(null); };
     d.append(err,row,so);
-  });
+  },{sticky:true});
 }
 function schedulePush(){ if(!fbUser||!db) return; clearTimeout(pushTimer); pushTimer=setTimeout(pushNow,800); }
 function pushNow(){
