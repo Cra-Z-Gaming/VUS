@@ -1354,17 +1354,20 @@ paintOpts();
 
 // ---------- accounts + sync (Firebase: Google or email/password) ----------
 let auth=null, db=null, fbUser=null, unsubDoc=null, pushTimer=null, wasSignedIn=false;
+let pendingUser=null;   // signed in with email/password but the email isn't verified yet
+// true for an email/password account whose email hasn't been verified (Google accounts are always verified)
+const needsVerify=u=>!!u&&!u.emailVerified&&u.providerData.length>0&&u.providerData.every(p=>p.providerId==="password");
 const PERSON='<svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 100-8 4 4 0 000 8zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
 function loadScript(src){ return new Promise((res,rej)=>{ const sc=document.createElement("script"); sc.src=src; sc.onload=res; sc.onerror=()=>rej(new Error("Couldn't load "+src)); document.head.append(sc); }); }
 function renderAccount(){
   const b=$("acct"); b.hidden=!FIREBASE_CONFIG; if(!FIREBASE_CONFIG) return;
   b.innerHTML=""; const u=fbUser;
   if(u&&u.photoURL){ const im=el("img"); im.src=u.photoURL; im.alt=""; im.referrerPolicy="no-referrer"; b.append(im); } else b.insertAdjacentHTML("beforeend",PERSON);
-  b.append(el("span","name",u?(u.displayName||u.email||"Account"):"Sign in to sync"));
+  b.append(el("span","name",u?(u.displayName||u.email||"Account"):pendingUser?"Verify your email":"Sign in to sync"));
 }
 $("acct").onclick=()=>{
   if(!auth){ toast("Still connecting…"); return; }
-  if(!fbUser){ authDialog(); return; }
+  if(!fbUser){ pendingUser?verifyDialog():authDialog(); return; }
   const r=$("acct").getBoundingClientRect();
   showMenu([{label:fbUser.email||fbUser.displayName||"Signed in",fn:()=>{}},{sep:1},{label:"Sign out",fn:()=>auth.signOut()}],r.left,Math.max(8,r.top-90));
 };
@@ -1377,7 +1380,7 @@ function authMsg(e){
     "auth/too-many-requests":"Too many attempts. Try again in a bit."};
   return e.code in m?m[e.code]:(e.message||"Something went wrong.");
 }
-function authDialog(){
+function authModal(){
   return modal((d,done)=>{
     const err=el("p","err");
     const run=async fn=>{ err.textContent=""; err.style.color=""; try{ await fn(); done(true); }catch(e){ err.textContent=authMsg(e); } };
@@ -1389,11 +1392,48 @@ function authDialog(){
     pw.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); signIn(); } };
     const stack=el("div","stack"); stack.append(em,pw);
     const row=el("div","btnrow"); const sib=pill("","Sign in",signIn); sib.classList.add("primary");
-    row.append(sib,pill("","Create account",()=>run(()=>auth.createUserWithEmailAndPassword(em.value.trim(),pw.value))));
+    row.append(sib,pill("","Create account",()=>run(async()=>{
+      const c=await auth.createUserWithEmailAndPassword(em.value.trim(),pw.value);
+      try{ await c.user.sendEmailVerification(); }catch(e){}   // the verify window has a Resend button if this fails
+    })));
     const fg=el("button","linkbtn","Forgot password?");
     fg.onclick=async()=>{ try{ await auth.sendPasswordResetEmail(em.value.trim()); err.style.color="var(--accent)"; err.textContent="Reset email sent. Check your inbox."; }catch(e){ err.style.color=""; err.textContent=authMsg(e); } };
     if(AUTH_GOOGLE){ const brow=el("div","btnrow"); brow.append(g); d.append(brow,el("p","or","or use email")); }
     d.append(stack,err,row,fg);
+  });
+}
+async function authDialog(){
+  const ok=await authModal();
+  const u=auth&&auth.currentUser;
+  if(ok&&needsVerify(u)) verifyDialog();
+}
+function verifyDialog(){
+  const u=auth&&auth.currentUser; if(!needsVerify(u)) return;
+  return modal((d,done)=>{
+    const err=el("p","err");
+    d.append(el("h2",null,"Verify your email"),
+      el("p","note","We sent a verification link to "+u.email+". Open it on any device, then this window continues on its own. Check your spam folder if you don't see it."));
+    let iv=null;
+    const check=async manual=>{
+      try{ await u.reload(); }catch(e){ if(manual) err.textContent=authMsg(e); return; }
+      const cu=auth.currentUser;
+      if(cu&&cu.emailVerified){
+        clearInterval(iv);
+        try{ await cu.getIdToken(true); }catch(e){}   // refresh the token so Firestore rules see email_verified
+        done(true); onUser(cu); toast("Email verified. Syncing your library");
+      }else if(manual) err.textContent="Not verified yet. Open the link in the email first.";
+    };
+    iv=setInterval(()=>{ if(!d.open){ clearInterval(iv); return; } check(false); },5000);
+    const ok=pill("","I've verified",()=>check(true)); ok.classList.add("primary");
+    const rs=pill("","Resend email",async()=>{
+      err.style.color=""; err.textContent="";
+      try{ await u.sendEmailVerification(); err.style.color="var(--accent)"; err.textContent="Sent again."; rs.disabled=true; setTimeout(()=>rs.disabled=false,30000); }
+      catch(e){ err.textContent=authMsg(e); }
+    });
+    const row=el("div","btnrow"); row.append(rs,ok);
+    const so=el("button","linkbtn","Use a different account");
+    so.onclick=()=>{ clearInterval(iv); auth.signOut(); done(null); };
+    d.append(err,row,so);
   });
 }
 function schedulePush(){ if(!fbUser||!db) return; clearTimeout(pushTimer); pushTimer=setTimeout(pushNow,800); }
@@ -1412,6 +1452,7 @@ function mergeWithCloud(cloud){
   store={likes,playlists:pls}; saveLocal(); refreshAfterSync(); pushNow();
 }
 function onUser(u){
+  pendingUser=needsVerify(u)?u:null; if(pendingUser) u=null;   // unverified accounts don't count as signed in
   fbUser=u; renderAccount();
   if(unsubDoc){ unsubDoc(); unsubDoc=null; }
   if(!u){
@@ -1508,7 +1549,7 @@ function sharePanel(p){
   const fill=()=>{
     [...box.children].slice(1).forEach(x=>x.remove());
     box.append(el("p","stat","A code is an invitation. People who join keep this playlist until you delete it. Once it expires, no one new can join."));
-    if(!fbUser){ const r=el("div","srow"); r.append(pill("","Sign in to share",()=>authDialog())); box.append(r); return; }
+    if(!fbUser){ const r=el("div","srow"); r.append(pill("",pendingUser?"Verify your email to share":"Sign in to share",()=>pendingUser?verifyDialog():authDialog())); box.append(r); return; }
     const live=myCodes.filter(c=>c.exp>Date.now()), mine=live.filter(c=>c.sid===p.sid);
     mine.forEach(c=>{
       const r=el("div","srow"), left=el("span","left"); left.dataset.exp=c.exp; left.textContent=timeLeft(c.exp);
@@ -1665,7 +1706,7 @@ async function clearDownloads(){
 async function clearAllData(){
   if(!await confirmDialog("Clear all data?","This removes your downloads and saved settings from this device. If you're not signed in, it also removes your liked songs and playlists. A signed-in library stays in your account, but you'll be signed out.","Continue")) return;
   if(!await confirmDialog("Are you sure?","This can't be undone.","Yes, clear everything")) return;
-  try{ if(auth&&fbUser) await auth.signOut(); }catch(e){}
+  try{ if(auth&&(fbUser||pendingUser)) await auth.signOut(); }catch(e){}
   clearTimeout(pushTimer); pushTimer=null;
   audio.pause(); audio.removeAttribute("src"); audio.load();
   queue=[]; userQ=[]; qi=-1; $("now").textContent="Nothing playing"; $("sub").textContent="Pick a track to start"; $("art").hidden=true; $("cur").textContent="0:00"; $("dur").textContent="0:00"; $("seek").value=0; setFill($("seek")); document.title="mzk";
@@ -1734,7 +1775,11 @@ function renderSettings(c){
   // account
   if(FIREBASE_CONFIG){
     const ac=el("section","setcard"); ac.append(el("h3",null,"Account"));
-    ac.append(fbUser?setRow(fbUser.email||fbUser.displayName||"Signed in","Your playlists and liked songs sync to this account.",pill("","Sign out",()=>auth.signOut())):setRow("Not signed in","Sign in to sync playlists and liked songs across devices.",pill("","Sign in",()=>authDialog())));
+    ac.append(fbUser
+      ?setRow(fbUser.email||fbUser.displayName||"Signed in","Your playlists and liked songs sync to this account.",pill("","Sign out",()=>auth.signOut()))
+      :pendingUser
+        ?setRow("Verify your email","Check your inbox for the link to finish signing in.",pill("","Verify",()=>verifyDialog()))
+        :setRow("Not signed in","Sign in to sync playlists and liked songs across devices.",pill("","Sign in",()=>authDialog())));
     c.append(ac);
   }
   // storage
