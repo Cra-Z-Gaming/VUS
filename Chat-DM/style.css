@@ -1673,3 +1673,52 @@
     #msgInput, #chatMsgInput, #searchInput, #joinByCodeInput { font-size: 16px; }
   }
   #createRoomBtn, #joinByCodeBtn { font-size: 13px; white-space: nowrap; padding: 8px 6px; }
+
+  /* ═══ Profile pictures beside messages ═══ */
+  .msg.has-av, .chat-msg.has-av { position: relative; padding-left: 68px; min-height: 52px; }
+  .msg-av {
+    position: absolute; left: 16px; top: 6px; width: 40px; height: 40px; border-radius: 50%; background: #334155;
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; color: #f1f5f9;
+    overflow: hidden; cursor: pointer; flex-shrink: 0; user-select: none;
+  }
+  .msg-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .msg-av:hover { box-shadow: 0 0 0 2px rgba(74,222,128,.6); }
+  .chat-msg-author { cursor: pointer; }
+  .chat-msg-author:hover { text-decoration: underline; }
+  .member-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  @media (max-width: 720px) {
+    .msg.has-av, .chat-msg.has-av { padding-left: 58px; }
+    .msg-av { left: 10px; width: 36px; height: 36px; font-size: 14px; }
+  }
+
+  /* ═══ Profile card (click a name / picture) ═══ */
+  .chat-modal.profile-card { max-width: 340px; padding: 0; overflow: hidden; }
+  .pc-banner { height: 84px; background: linear-gradient(135deg, #16a34a, #14532d 70%, #0f172a); }
+  .pc-av {
+    position: relative; width: 84px; height: 84px; margin: -44px 0 0 18px; border-radius: 50%; background: #334155;
+    border: 6px solid #1e293b; box-sizing: border-box; display: flex; align-items: center; justify-content: center;
+    font-size: 30px; font-weight: 700; color: #f1f5f9; overflow: hidden;
+  }
+  .pc-av img { width: 100%; height: 100%; object-fit: cover; }
+  .pc-body { padding: 8px 20px 18px; }
+  .pc-body h3 { font-size: 21px; margin: 4px 0 0; word-break: break-word; }
+  #chatUserProfileId { color: #94a3b8; font-size: 13px; font-family: ui-monospace, Consolas, monospace; margin: 2px 0 8px; }
+  #chatUserProfileStatus { font-size: 13.5px; color: #94a3b8; min-height: 16px; margin: 10px 0; }
+  .pc-roles { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 6px; }
+  .pc-roles:empty { display: none; }
+  .pc-role { font-size: 12.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: #0f172a; border: 1px solid #334155; color: #cbd5e1; }
+  .pc-role.role-crown { color: #fbbf24; border-color: #78580d; }
+  .pc-role.role-coowner { color: #a78bfa; border-color: #4c3a8a; }
+  .pc-role.role-admin { color: #38bdf8; border-color: #1d5775; }
+  .pc-role.role-mod { color: #4ade80; border-color: #1b6a3b; }
+  .pc-h { margin-top: 10px; font-size: 11.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #cbd5e1; }
+  #chatUserProfileBio, .dmp-bio { margin-top: 4px; font-size: 14px; line-height: 1.4; color: #cbd5e1; white-space: pre-wrap; word-break: break-word; }
+
+  /* bio box in the profile editor */
+  #profilePopover { width: 250px; }
+  .profile-popover-field textarea {
+    width: 100%; resize: none; background: #0f172a; border: 1.5px solid #334155; border-radius: 5px; padding: 6px 8px;
+    font-size: 13px; color: #f1f5f9; outline: none; font-family: inherit;
+  }
+  .profile-popover-field textarea:focus { border-color: #22c55e; }
+  #profileBioCount { float: right; color: #64748b; }
