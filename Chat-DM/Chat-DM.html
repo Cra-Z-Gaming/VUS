@@ -56,62 +56,7 @@
         <div id="friendsEmpty" class="list-empty" style="padding-left:14px">No friends yet — use Find to add someone.</div>
       </div>
 
-      <div class="list-view" id="viewFind">
-        <div class="list-section">
-          <div class="list-section-title">Find people</div>
-          <div class="list-search-row">
-            <input type="text" id="searchInput" placeholder="Username or 6-digit ID…" maxlength="24">
-            <button id="searchBtn">Go</button>
           </div>
-          <div class="list-search-note">Matches the start of a username, or an exact 6-digit ID.</div>
-          <div id="searchResults"></div>
-          <div id="searchEmpty" class="list-empty" style="display:none">No results.</div>
-        </div>
-
-        <div class="list-section">
-          <div class="list-section-title">
-            <span>Friend requests</span>
-            <span class="count-badge" id="incomingCountBadge" style="display:none"></span>
-          </div>
-          <div id="incomingRequestsList"></div>
-          <div id="incomingRequestsEmpty" class="list-empty">No incoming requests.</div>
-        </div>
-
-        <div class="list-section">
-          <div class="list-section-title">
-            <span>Hidden requests</span>
-            <span class="count-badge" id="hiddenCountBadge" style="display:none"></span>
-          </div>
-          <div class="list-search-note">Requests from people you've blocked land here instead.</div>
-          <div id="hiddenRequestsList"></div>
-          <div id="hiddenRequestsEmpty" class="list-empty">No hidden requests.</div>
-        </div>
-
-        <div class="list-section">
-          <div class="list-section-title">Sent requests</div>
-          <div id="outgoingRequestsList"></div>
-          <div id="outgoingRequestsEmpty" class="list-empty">No pending sent requests.</div>
-        </div>
-
-        <div class="list-section">
-          <div class="list-section-title">
-            <span>Online now</span>
-            <span id="onlineCountText" style="font-size:10.5px;color:#475569;font-family:ui-monospace,Consolas,monospace"></span>
-          </div>
-          <div id="onlineList"></div>
-          <div id="onlineEmpty" style="display:none" class="list-empty">No one else online right now.</div>
-        </div>
-      </div>
-
-      <div class="list-view" id="viewBlocked">
-        <div class="list-section">
-          <div class="list-section-title">Blocked</div>
-          <div id="blockedList"></div>
-          <div id="blockedEmpty" class="list-empty">No one blocked.</div>
-        </div>
-      </div>
-
-    </div>
     <div id="userCard">
       <button id="railAvatarBtn" title="Profile"></button>
       <div id="userCardInfo">
@@ -451,6 +396,74 @@
       </div>
     </div>
   </div>
+
+  <section id="friendsPane" aria-label="Friends and people">
+    <div id="friendsHeader">
+      <button class="mobile-menu-btn" aria-label="Open menu">&#9776;</button>
+      <div id="friendsTitle">Find People</div>
+      <div class="ch-spacer"></div>
+      <button id="friendsBackBtn" type="button">&larr; Back to messages</button>
+    </div>
+    <div id="friendsBody">
+      <div class="list-view" id="viewFind">
+        <div class="list-section">
+          <div class="list-section-title">Find people</div>
+          <div class="list-search-row">
+            <input type="text" id="searchInput" placeholder="Username or 6-digit ID…" maxlength="24">
+            <button id="searchBtn">Go</button>
+          </div>
+          <div class="list-search-note">Matches the start of a username, or an exact 6-digit ID.</div>
+          <div id="searchResults"></div>
+          <div id="searchEmpty" class="list-empty" style="display:none">No results.</div>
+        </div>
+
+        <div class="list-section">
+          <div class="list-section-title">
+            <span>Friend requests</span>
+            <span class="count-badge" id="incomingCountBadge" style="display:none"></span>
+          </div>
+          <div id="incomingRequestsList"></div>
+          <div id="incomingRequestsEmpty" class="list-empty">No incoming requests.</div>
+        </div>
+
+        <div class="list-section">
+          <div class="list-section-title">
+            <span>Hidden requests</span>
+            <span class="count-badge" id="hiddenCountBadge" style="display:none"></span>
+          </div>
+          <div class="list-search-note">Requests from people you've blocked land here instead.</div>
+          <div id="hiddenRequestsList"></div>
+          <div id="hiddenRequestsEmpty" class="list-empty">No hidden requests.</div>
+        </div>
+
+        <div class="list-section">
+          <div class="list-section-title">Sent requests</div>
+          <div id="outgoingRequestsList"></div>
+          <div id="outgoingRequestsEmpty" class="list-empty">No pending sent requests.</div>
+        </div>
+
+        <div class="list-section">
+          <div class="list-section-title">
+            <span>Online now</span>
+            <span id="onlineCountText" style="font-size:10.5px;color:#475569;font-family:ui-monospace,Consolas,monospace"></span>
+          </div>
+          <div id="onlineList"></div>
+          <div id="onlineEmpty" style="display:none" class="list-empty">No one else online right now.</div>
+        </div>
+      </div>
+      <div class="list-view" id="viewBlocked">
+        <div class="list-section">
+          <div class="list-section-title">Blocked</div>
+          <div id="blockedList"></div>
+          <div id="blockedEmpty" class="list-empty">No one blocked.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <aside id="dmProfilePane" aria-label="Profile">
+    <div id="dmProfileBody"></div>
+  </aside>
 
   <aside id="membersPane" aria-label="Members">
     <div id="membersHeader">Online &mdash; <span id="membersCount">0</span></div>
