@@ -1,6 +1,6 @@
 {
 "updated":"October 13, 2026",
-"message":"added sukis multi-tool app to tools tab",
+"message":"VUS-X-ICH collab - New launcher for links",
 "apps":[
 {"name":"VUS-OS","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS-OS/refs/heads/main/index.html","desc":"Desktop version of VUS Hub","icon":"OS","color":"white"},
 {"name":"VUS Launcher","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL","desc":"Main game hub — V17.4","icon":"🎮","color":"green"},
@@ -104,7 +104,7 @@
 {"name":"Code Editor online","url":"https://hcodx.com/editor","desc":"Code Editor with many features","icon":"CE","color":"green"},
 {"name":"CPS Test","url":"https://redragonshop.com/pages/cps-test","desc":"Test how fast you can click - OV, bookmarks exist btw..","icon":"CPS","color":"orange"},
 {"name":"","url":"","desc":"","icon":"","color":""},
-{"name":"","url":"","desc":"","icon":"","color":""},
+{"name":"VUS-X-ICH","url":"https://raw.githubusercontent.com/v-x-i/x/refs/heads/main/VUSxICH-Launcher.html","desc":"find all link mirrors for both VUS and ICH","icon":"VXI","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""}
 ],
