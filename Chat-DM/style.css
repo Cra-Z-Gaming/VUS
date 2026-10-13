@@ -1722,3 +1722,21 @@
   }
   .profile-popover-field textarea:focus { border-color: #22c55e; }
   #profileBioCount { float: right; color: #64748b; }
+
+  /* ═══ Fix: messages overlapping. Giving .msg a min-height removed the "never shrink below content"
+     rule, so a full chat squashed rows into each other. Rows must never shrink. ═══ */
+  #messages > *, #chatMessages > * { flex-shrink: 0; }
+  .msg, .chat-msg { flex-shrink: 0; }
+  .msg-meta { line-height: 1.35; overflow: visible; max-width: none; white-space: normal; }
+  .msg-meta-name { display: inline-block; max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+  .msg.has-av { padding-top: 6px; padding-bottom: 6px; }
+  .msg.has-av .role-bubble-row { margin: 2px 0 3px; }
+
+  /* ═══ Bubble outline for everyone (default outline, no fill) ═══ */
+  .msg-bubble, .chat-msg-bubble, .chat-msg.mine .chat-msg-bubble, .msg.mine .msg-bubble {
+    border: 1.5px solid #334155; border-radius: 12px; padding: 7px 13px; background: transparent;
+  }
+  .msg-bubble[style*="background"] { border: 1.5px solid #334155; padding: 7px 13px; }   /* custom bubble colors keep their fill */
+  .msg.system .msg-bubble { border: none; padding: 2px 0; }
+  .chat-msg-bubble-row { align-items: flex-start; }
+  .chat-msg-bubble { max-width: min(100%, 640px); }
