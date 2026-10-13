@@ -5259,49 +5259,85 @@ $msgInput.addEventListener("paste", (e) => {
 const $membersList = document.getElementById("membersList");
 const $membersCount = document.getElementById("membersCount");
 
+const memberNameCache = {};   // loginId -> last known chat name (for offline rank holders)
+const memberNameLoading = new Set();
+
 function renderMembersPane() {
   if (!$membersList) return;
   const list = latestPresenceList || [];
   $membersCount.textContent = String(list.length);
-  const decorated = list.map(entry => {
-    const role = ROLES[effectiveRoleForLoginId(entry.loginId)] || ROLES.unranked;
-    return { entry, role };
-  }).sort((a, b) => b.role.rank - a.role.rank || (a.entry.joinedAt || 0) - (b.entry.joinedAt || 0));
+
+  // Everyone online, plus everyone who holds a rank even if offline (shown dimmed),
+  // like Discord's role list.
+  const byId = {};
+  list.forEach(entry => {
+    const id = String(entry.loginId || "");
+    byId[id || ("name:" + entry.name)] = { id, name: entry.name, online: true, joinedAt: entry.joinedAt || 0 };
+  });
+  Object.values(ROLES).forEach(role => {
+    if (role.implicit) return;
+    (roleIdHolders[role.id] || new Set()).forEach(rawId => {
+      const id = String(rawId);
+      if (byId[id]) return;
+      const cached = memberNameCache[id];
+      if (!cached && !memberNameLoading.has(id)) {
+        memberNameLoading.add(id);
+        ChatBackend.getProfile(id).then(p => {
+          memberNameCache[id] = (p && p.lastName) || "";
+        }).catch(() => { memberNameCache[id] = ""; }).then(() => { renderMembersPane(); });
+      }
+      if (cached) byId[id] = { id, name: cached, online: false, joinedAt: 0 };
+    });
+  });
+  const people = Object.values(byId).map(p => {
+    const role = (p.id && ROLES[effectiveRoleForLoginId(p.id)]) || ROLES.unranked;
+    return Object.assign(p, { role });
+  }).sort((a, b) =>
+    b.role.rank - a.role.rank || (b.online - a.online) ||
+    String(a.name || "").toLowerCase().localeCompare(String(b.name || "").toLowerCase()));
 
   const frag = document.createDocumentFragment();
-  if (decorated.length === 0) {
+  if (people.length === 0) {
     const empty = document.createElement("div");
     empty.className = "member-empty";
     empty.textContent = "No one's here yet.";
     frag.appendChild(empty);
   }
-  decorated.forEach(({ entry, role }) => {
+  const groupKey = role => (role.rank > 0 ? role.id : "online");
+  const counts = {};
+  people.forEach(p => { const k = groupKey(p.role); counts[k] = (counts[k] || 0) + 1; });
+  let lastGroup = null;
+  people.forEach(p => {
+    const role = p.role;
+    const gk = groupKey(role);
+    if (gk !== lastGroup) {
+      lastGroup = gk;
+      const head = document.createElement("div");
+      head.className = "member-group-head role-" + gk;
+      head.textContent = (role.rank > 0 ? role.icon + " " + role.label : "Online") + " — " + counts[gk];
+      frag.appendChild(head);
+    }
     const row = document.createElement("div");
-    row.className = "member-row";
+    row.className = "member-row role-" + gk + (p.online ? "" : " off");
     const wrap = document.createElement("div");
     wrap.className = "member-av-wrap";
     const av = document.createElement("div");
     av.className = "member-av";
-    av.textContent = (entry.name || "?").charAt(0).toUpperCase();
-    const dot = document.createElement("div");
-    dot.className = "member-dot";
+    av.textContent = (p.name || "?").charAt(0).toUpperCase();
     wrap.appendChild(av);
-    wrap.appendChild(dot);
+    if (p.online) {
+      const dot = document.createElement("div");
+      dot.className = "member-dot";
+      wrap.appendChild(dot);
+    }
     const nameEl = document.createElement("div");
     nameEl.className = "member-name";
-    const isMe = myLoginId && String(entry.loginId || "") === String(myLoginId);
-    nameEl.textContent = entry.name + (isMe ? " (you)" : "");
+    const isMe = myLoginId && p.id === String(myLoginId);
+    nameEl.textContent = p.name + (isMe ? " (you)" : "");
     row.appendChild(wrap);
     row.appendChild(nameEl);
-    if (role.rank > 0) {
-      const badge = document.createElement("div");
-      badge.className = "member-badges";
-      badge.textContent = role.icon;
-      badge.title = role.label;
-      row.appendChild(badge);
-    }
-    if (!isMe && entry.loginId) {
-      row.addEventListener("click", () => { if (window.VUS_DM) window.VUS_DM.openChatUserProfile(entry.loginId, entry.name); });
+    if (!isMe && p.id) {
+      row.addEventListener("click", () => { if (window.VUS_DM) window.VUS_DM.openChatUserProfile(p.id, p.name); });
     }
     frag.appendChild(row);
   });
