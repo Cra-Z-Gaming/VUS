@@ -934,6 +934,8 @@ async function fetchAndCacheAvatar(accountKey, onLoaded) {
    ══════════════════════════════════════════════════════════ */
 const $viewRooms = document.getElementById("viewRooms");
 const $listPaneTitle = document.getElementById("listPaneTitle");
+const $friendsTitle = document.getElementById("friendsTitle");
+const $friendsBackBtn = document.getElementById("friendsBackBtn");
 const $navBackdrop = document.getElementById("navBackdrop");
 const $dmRailDot = document.getElementById("dmRailDot");
 
@@ -952,10 +954,14 @@ function applyUiMode() {
   $tabFind.classList.toggle("active", dm && dmSidebarView === "find");
   $tabBlocked.classList.toggle("active", dm && dmSidebarView === "blocked");
   $viewRooms.classList.toggle("active", !dm);
-  $viewChats.classList.toggle("active", dm && dmSidebarView === "chats");
+  // The sidebar always lists conversations in DM mode; Find / Blocked open in the main area.
+  const friendsOpen = dm && dmSidebarView !== "chats";
+  $viewChats.classList.toggle("active", dm);
   $viewFind.classList.toggle("active", dm && dmSidebarView === "find");
   $viewBlocked.classList.toggle("active", dm && dmSidebarView === "blocked");
-  $listPaneTitle.textContent = dm ? DM_VIEW_TITLES[dmSidebarView] : "Chat Rooms";
+  $appShell.classList.toggle("friends-open", friendsOpen);
+  $listPaneTitle.textContent = dm ? "Direct Messages" : "Chat Rooms";
+  $friendsTitle.textContent = DM_VIEW_TITLES[dmSidebarView] || "";
   // chat.js listens for this to start/stop the rooms list's live countdowns.
   window.dispatchEvent(new CustomEvent("vus:mode", { detail: { mode: dm ? "dm" : "chat" } }));
 }
@@ -964,8 +970,18 @@ function openDmSidebar(view) {
   uiMode = "dm";
   if (view) dmSidebarView = view;
   applyUiMode();
-  if (isMobileLayout()) $appShell.classList.add("nav-open");
+  if (isMobileLayout()) {
+    // conversations live in the drawer; Find / Blocked open in the main area
+    if (dmSidebarView === "chats") $appShell.classList.add("nav-open");
+    else $appShell.classList.remove("nav-open");
+  }
 }
+
+function showConversationsView() {
+  if (uiMode === "dm" && dmSidebarView !== "chats") { dmSidebarView = "chats"; applyUiMode(); }
+  $appShell.classList.remove("nav-open");
+}
+$friendsBackBtn.addEventListener("click", () => openDmSidebar("chats"));
 
 // Name kept for the existing call sites: "go back to the chat view".
 function closeDmSidebar() {
@@ -1557,6 +1573,7 @@ let editingMessageId = null;
 let threadReadsState = {};
 
 function updateChatThreadHeaderStatus() {
+  setTimeout(renderDmProfile, 0);
   if (openChatGcId) {
     const count = currentGroupInfo ? Object.keys(currentGroupInfo.members || {}).length : 0;
     $chatThreadHeaderStatus.textContent = count + " member" + (count === 1 ? "" : "s");
@@ -1577,6 +1594,75 @@ function updateChatThreadHeaderStatus() {
 }
 
 let otherUserLastSeenCache = {};
+
+/* ── Right-hand profile card in DM mode (who you're talking to, or the group's members) ── */
+const $dmProfileBody = document.getElementById("dmProfileBody");
+const dmProfileIdCache = {};
+
+function renderDmProfile() {
+  if (!$dmProfileBody) return;
+  const open = !!(openChatAccountKey || openChatGcId);
+  $appShell.classList.toggle("has-profile", open);
+  if (!open) { $dmProfileBody.replaceChildren(); return; }
+  const card = h("div", { className: "dmp" });
+  card.appendChild(h("div", { className: "dmp-banner" }));
+  const avWrap = h("div", { className: "dmp-av" });
+  const av = h("div", { className: "list-row-avatar dmp-avatar" });
+  avWrap.appendChild(av);
+  const info = h("div", { className: "dmp-card" });
+  if (openChatGcId) {
+    av.textContent = "👥"; av.classList.add("group-avatar");
+    const gc = myGroupChats.find(g => g.gcId === openChatGcId) || currentGroupInfo;
+    const members = (currentGroupInfo && currentGroupInfo.members) || {};
+    info.appendChild(h("div", { className: "dmp-name" }, (gc && gc.name) || "Group"));
+    info.appendChild(h("div", { className: "dmp-sub" }, Object.keys(members).length + " members"));
+    info.appendChild(h("div", { className: "dmp-h" }, "Members"));
+    Object.keys(members).forEach(key => {
+      const m = members[key] || {};
+      const online = latestPresenceAccountKeys.has(key);
+      info.appendChild(h("div", { className: "dmp-member" },
+        h("span", { className: "dmp-sd" + (online ? " on" : "") }),
+        h("span", {}, (key === currentSession.accountKey ? currentSession.username + " (you)" : (m.username || "Member")))
+      ));
+    });
+    info.appendChild(h("button", { className: "dmp-btn", onclick: () => openManageGroupModal(openChatGcId) }, "Manage group"));
+  } else {
+    const key = openChatAccountKey, name = openChatUsername || "";
+    renderAvatarInto(av, name, null);
+    fetchAndCacheAvatar(key, (url) => { if (url) renderAvatarInto(av, name, url); });
+    const online = latestPresenceAccountKeys.has(key);
+    info.appendChild(h("div", { className: "dmp-name" }, name));
+    const idLine = h("div", { className: "dmp-sub" }, dmProfileIdCache[key] ? "#" + dmProfileIdCache[key] : "");
+    info.appendChild(idLine);
+    if (!dmProfileIdCache[key]) {
+      usersRef.child(key).child("id").get().then(snap => {
+        if (!snap.exists()) return;
+        dmProfileIdCache[key] = snap.val();
+        if (openChatAccountKey === key) idLine.textContent = "#" + snap.val();
+      }).catch(() => {});
+    }
+    info.appendChild(h("div", { className: "dmp-status" },
+      h("span", { className: "dmp-sd" + (online ? " on" : "") }),
+      h("span", {}, online ? "Online" : formatLastSeen(otherUserLastSeenCache[key]))));
+    const fr = currentUserData && currentUserData.friends && currentUserData.friends[key];
+    if (fr && fr.since) {
+      info.appendChild(h("div", { className: "dmp-h" }, "Friends since"));
+      info.appendChild(h("div", { className: "dmp-t" }, new Date(fr.since).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })));
+    }
+    info.appendChild(h("div", { className: "dmp-actions" },
+      h("button", { className: "dmp-btn", onclick: async () => {
+        const r = await unfriend(key); if (!r.ok) showComposerNotice(r.error);
+      } }, "Unfriend"),
+      h("button", { className: "dmp-btn danger", onclick: async () => {
+        const r = await blockUser(key, name); if (!r.ok) showComposerNotice(r.error);
+      } }, "Block")
+    ));
+  }
+  card.appendChild(avWrap);
+  card.appendChild(info);
+  $dmProfileBody.replaceChildren(card);
+}
+
 async function fetchOtherLastSeen(accountKey) {
   try {
     const snap = await usersRef.child(accountKey).child("lastSeen").get();
@@ -1768,6 +1854,7 @@ function renderTypingIndicator(activeUsernames) {
 }
 
 function openChatWith(accountKey, username) {
+  showConversationsView();
   unwatchGroupInfo();
   clearPendingImage();
   cancelReply();
@@ -1817,6 +1904,7 @@ function refreshReadReceiptDisplay() {
 }
 
 function openGroupChat(gcId) {
+  showConversationsView();
   clearPendingImage();
   cancelReply();
   cancelEditing();
@@ -1850,6 +1938,7 @@ function openGroupChat(gcId) {
 }
 
 function closeOpenChat() {
+  setTimeout(renderDmProfile, 0);
   unwatchGroupInfo();
   stopWatchingOpenChat();
   setTyping(!!openChatGcId, openChatGcId || openChatAccountKey, false);
