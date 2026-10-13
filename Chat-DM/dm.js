@@ -387,15 +387,24 @@ async function updateProfile(newUsername, newAvatarDataUrl, newBio) {
     updates["users/" + currentSession.accountKey + "/avatar"] = newAvatarDataUrl;
   }
 
+  // The bio is saved on its own, and only when it actually changed, so a problem with it
+  // can never stop your name or picture from saving.
+  let bioToSave;
   if (newBio !== undefined) {
     const bio = String(newBio || "").replace(/\s+/g, " ").trim().slice(0, BIO_MAX_LENGTH);
-    updates["users/" + currentSession.accountKey + "/bio"] = bio || null;
+    const current = String((currentUserData && currentUserData.bio) || "");
+    if (bio !== current) bioToSave = bio;
   }
 
-  if (Object.keys(updates).length === 0) return { ok: true, username: currentSession.username };
+  if (Object.keys(updates).length === 0 && bioToSave === undefined) return { ok: true, username: currentSession.username };
 
-  try {
-    await db.ref().update(updates);
+  if (Object.keys(updates).length > 0) {
+    try {
+      await db.ref().update(updates);
+    } catch (e) {
+      console.error("profile save failed", e);
+      return { ok: false, error: friendlyDbError(e, "Couldn't save your name/picture") };
+    }
     delete profileCache[currentSession.accountKey];
     delete otherAvatarCache[currentSession.accountKey];
     if (usernameChanged) {
@@ -403,8 +412,24 @@ async function updateProfile(newUsername, newAvatarDataUrl, newBio) {
       saveSession(currentSession.accountKey, currentSession.username, currentSession.id);
       claimPresence(currentSession.accountKey, currentSession.username);
     }
-    return { ok: true, username: currentSession.username };
-  } catch (e) { return { ok: false, error: "Couldn't save — try again." }; }
+  }
+
+  if (bioToSave !== undefined) {
+    try {
+      await usersRef.child(currentSession.accountKey).child("bio").set(bioToSave || null);
+      delete profileCache[currentSession.accountKey];
+    } catch (e) {
+      console.error("bio save failed", e);
+      return { ok: false, error: friendlyDbError(e, "Your picture/name saved, but the bio couldn't") };
+    }
+  }
+  return { ok: true, username: currentSession.username };
+}
+
+function friendlyDbError(e, prefix) {
+  const code = String((e && (e.code || e.message)) || "");
+  if (/permission/i.test(code)) return prefix + ": the database rules don't allow it yet.";
+  return prefix + " — try again.";
 }
 
 async function changePassword(currentPassword, newPassword) {
