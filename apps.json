@@ -1,6 +1,6 @@
 {
 "updated":"October 13, 2026",
-"message":"added sukis multi tool app to tools tab",
+"message":"added sukis multi-tool app to tools tab",
 "apps":[
 {"name":"VUS-OS","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS-OS/refs/heads/main/index.html","desc":"Desktop version of VUS Hub","icon":"OS","color":"white"},
 {"name":"VUS Launcher","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL","desc":"Main game hub — V17.4","icon":"🎮","color":"green"},
@@ -75,7 +75,7 @@
 {"name":"Notes","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Notes","desc":"Keep text saved easily in your browser","icon":"📝","color":"amber"},
 {"name":"VUS Analytics","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/analytics.html","desc":"helps me figure out when yall use my site","icon":"📈","color":"purple"},
 {"name":"Image to Base64","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Image-2-Base64","desc":"if you want to add an image to your code but the image is blocked? base64 takes care of that","icon":"B64","color":"green"},
-{"name":"Sukis Multi Tools App","url":"https://raw.githubusercontent.com/v-x-i/other/refs/heads/main/Sukis%20Multi%20Tools%20App.html","desc":"multi-purpose app","icon":"SMT","color":""},
+{"name":"Sukis Multi-Tool App","url":"https://raw.githubusercontent.com/v-x-i/other/refs/heads/main/Sukis%20Multi%20Tools%20App.html","desc":"multi-purpose app","icon":"SMT","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
