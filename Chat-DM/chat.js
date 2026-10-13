@@ -1316,6 +1316,21 @@ function scheduleRoleBadgeRefresh() {
   }, 60);
 }
 
+/* Profile picture (from the account's profile in vus-dm), with the first letter as a placeholder. */
+function paintAvatar(container, loginId, name) {
+  container.textContent = (name || "?").trim().slice(0, 1).toUpperCase();
+  if (!loginId || !window.VUS_DM || !window.VUS_DM.getAvatarByLoginId) return;
+  window.VUS_DM.getAvatarByLoginId(loginId).then(url => {
+    if (!url) return;
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = "";
+    container.textContent = "";
+    container.appendChild(img);
+  }).catch(() => {});
+}
+function openProfileFor(loginId, name) { if (window.VUS_DM) window.VUS_DM.openChatUserProfile(loginId, name); }
+
 function renderMessage(msg) {
   $emptyState.style.display = "none";
 
@@ -1346,16 +1361,23 @@ function renderMessage(msg) {
 
   const mine = msg.name === myName;
   const el = document.createElement("div");
-  el.className = "msg" + (mine ? " mine" : "");
+  el.className = "msg has-av" + (mine ? " mine" : "");
+
+  const avEl = document.createElement("div");
+  avEl.className = "msg-av";
+  avEl.title = "View profile";
+  paintAvatar(avEl, msg.loginId, msg.name);
+  if (msg.loginId) avEl.addEventListener("click", () => openProfileFor(msg.loginId, msg.name));
+  el.appendChild(avEl);
 
   const meta = document.createElement("div");
   meta.className = "msg-meta";
   const nameLink = document.createElement("span");
   nameLink.className = "msg-meta-name";
   nameLink.textContent = mine ? "You" : msg.name;
-  if (!mine && msg.loginId) {
+  if (msg.loginId) {
     nameLink.title = "View profile";
-    nameLink.addEventListener("click", () => { if (window.VUS_DM) window.VUS_DM.openChatUserProfile(msg.loginId, msg.name); });
+    nameLink.addEventListener("click", () => openProfileFor(msg.loginId, msg.name));
   }
   meta.appendChild(nameLink);
   if (msg.ts) meta.appendChild(document.createTextNode(" · " + formatTime(msg.ts)));
@@ -5323,7 +5345,7 @@ function renderMembersPane() {
     wrap.className = "member-av-wrap";
     const av = document.createElement("div");
     av.className = "member-av";
-    av.textContent = (p.name || "?").charAt(0).toUpperCase();
+    paintAvatar(av, p.id, p.name);
     wrap.appendChild(av);
     if (p.online) {
       const dot = document.createElement("div");
@@ -5425,6 +5447,17 @@ function init() {
   });
   if (loadDmSession()) autoLoginOrPrompt();
 }
+
+/* Lets dm.js (profile cards) ask which ranks an account holds. */
+window.VUS_CHAT = {
+  getRolesFor(loginId) {
+    const id = String(loginId || "");
+    return Object.values(ROLES)
+      .filter(r => !r.implicit && roleIdHolders[r.id] && roleIdHolders[r.id].has(id))
+      .sort((a, b) => b.rank - a.rank)
+      .map(r => ({ id: r.id, label: r.label, icon: r.icon }));
+  }
+};
 
 init();
 
