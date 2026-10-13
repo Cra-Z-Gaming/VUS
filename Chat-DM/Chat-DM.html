@@ -481,6 +481,10 @@
         <label for="profileNameInput">Display name</label>
         <input type="text" id="profileNameInput" maxlength="24">
       </div>
+      <div class="profile-popover-field">
+        <label for="profileBioInput">Bio <span id="profileBioCount">0/100</span></label>
+        <textarea id="profileBioInput" maxlength="100" rows="3" placeholder="Tell people about yourself"></textarea>
+      </div>
       <button id="profileSaveBtn">Save</button>
       <div id="profilePopoverError"></div>
     </div>
@@ -489,13 +493,22 @@
 
 
 <div class="chat-modal-overlay" id="chatUserProfileOverlay">
-  <div class="chat-modal" style="max-width:300px">
-    <h3 id="chatUserProfileName">—</h3>
-    <div id="chatUserProfileId" style="color:#64748b;font-size:12.5px;font-family:ui-monospace,Consolas,monospace;margin-bottom:12px"></div>
-    <div id="chatUserProfileStatus" style="font-size:13px;color:#94a3b8;min-height:16px;margin-bottom:8px"></div>
-    <div class="chat-modal-row">
-      <button class="chat-modal-btn-secondary" id="chatUserProfileCloseBtn">Close</button>
-      <button class="chat-modal-btn-primary" id="chatUserProfileAddBtn" style="display:none">Add Friend</button>
+  <div class="chat-modal profile-card">
+    <div class="pc-banner"></div>
+    <div class="pc-av" id="chatUserProfileAvatar"></div>
+    <div class="pc-body">
+      <h3 id="chatUserProfileName">—</h3>
+      <div id="chatUserProfileId"></div>
+      <div id="chatUserProfileRoles" class="pc-roles"></div>
+      <div id="chatUserProfileBioWrap" style="display:none">
+        <div class="pc-h">About me</div>
+        <div id="chatUserProfileBio"></div>
+      </div>
+      <div id="chatUserProfileStatus"></div>
+      <div class="chat-modal-row">
+        <button class="chat-modal-btn-secondary" id="chatUserProfileCloseBtn">Close</button>
+        <button class="chat-modal-btn-primary" id="chatUserProfileAddBtn" style="display:none">Add Friend</button>
+      </div>
     </div>
   </div>
 </div>
