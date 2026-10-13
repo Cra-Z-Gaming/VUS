@@ -330,6 +330,7 @@ async function unblockUser(otherAccountKey) {
   catch (e) { return { ok: false, error: "Couldn't unblock — try again." }; }
 }
 
+const BIO_MAX_LENGTH = 100;
 const AVATAR_MAX_DIMENSION = 64;
 const AVATAR_JPEG_QUALITY = 0.55;
 
@@ -360,7 +361,7 @@ function compressAvatarFile(file) {
   });
 }
 
-async function updateProfile(newUsername, newAvatarDataUrl) {
+async function updateProfile(newUsername, newAvatarDataUrl, newBio) {
   if (!currentSession) return { ok: false, error: "Not logged in." };
   const updates = {};
   let usernameChanged = false;
@@ -386,10 +387,17 @@ async function updateProfile(newUsername, newAvatarDataUrl) {
     updates["users/" + currentSession.accountKey + "/avatar"] = newAvatarDataUrl;
   }
 
+  if (newBio !== undefined) {
+    const bio = String(newBio || "").replace(/\s+/g, " ").trim().slice(0, BIO_MAX_LENGTH);
+    updates["users/" + currentSession.accountKey + "/bio"] = bio || null;
+  }
+
   if (Object.keys(updates).length === 0) return { ok: true, username: currentSession.username };
 
   try {
     await db.ref().update(updates);
+    delete profileCache[currentSession.accountKey];
+    delete otherAvatarCache[currentSession.accountKey];
     if (usernameChanged) {
       currentSession.username = newUsername.trim();
       saveSession(currentSession.accountKey, currentSession.username, currentSession.id);
@@ -784,6 +792,8 @@ const $profileAvatarPreviewBtn = document.getElementById("profileAvatarPreviewBt
 const $profileAvatarFileInput = document.getElementById("profileAvatarFileInput");
 const $profileNameInput = document.getElementById("profileNameInput");
 const $profileSaveBtn = document.getElementById("profileSaveBtn");
+const $profileBioInput = document.getElementById("profileBioInput");
+const $profileBioCount = document.getElementById("profileBioCount");
 const $profilePopoverError = document.getElementById("profilePopoverError");
 
 const $listPaneYouName = document.getElementById("listPaneYouName");
@@ -921,6 +931,43 @@ async function fetchAndCacheAvatar(accountKey, onLoaded) {
   onLoaded(otherAvatarCache[accountKey]);
 }
 
+/* ── Public profile lookups (username, ID, picture, bio), cached ── */
+const profileCache = {};     // accountKey -> { accountKey, username, id, avatar, bio }
+const profileInflight = {};
+const idToAccountKey = {};
+function fetchAccountProfile(accountKey) {
+  if (!accountKey) return Promise.resolve(null);
+  if (profileCache[accountKey]) return Promise.resolve(profileCache[accountKey]);
+  if (profileInflight[accountKey]) return profileInflight[accountKey];
+  const base = usersRef.child(accountKey);
+  const p = Promise.all(["username", "id", "avatar", "bio"].map(k => base.child(k).get())).then(snaps => {
+    delete profileInflight[accountKey];
+    if (!snaps[0].exists()) return null;
+    const prof = { accountKey, username: snaps[0].val(), id: snaps[1].val(), avatar: snaps[2].val() || null, bio: snaps[3].val() || "" };
+    profileCache[accountKey] = prof;
+    if (prof.id) idToAccountKey[String(prof.id)] = accountKey;
+    return prof;
+  }).catch(() => { delete profileInflight[accountKey]; return null; });
+  profileInflight[accountKey] = p;
+  return p;
+}
+async function accountKeyForLoginId(loginId) {
+  const id = String(loginId || "");
+  if (!id) return null;
+  if (idToAccountKey[id]) return idToAccountKey[id];
+  try {
+    const snap = await idIndexRef.child(id).get();
+    if (snap.exists()) { idToAccountKey[id] = snap.val(); return snap.val(); }
+  } catch (e) {}
+  return null;
+}
+async function getAvatarByLoginId(loginId) {
+  const key = await accountKeyForLoginId(loginId);
+  if (!key) return null;
+  const prof = await fetchAccountProfile(key);
+  return prof ? prof.avatar : null;
+}
+
 /* ══════════════════════════════════════════════════════════
    LAYOUT MODEL — Discord-style three-pane shell.
    The rail (far left) switches between two MODES:
@@ -1025,9 +1072,13 @@ function openProfilePopover() {
   pendingAvatarDataUrl = null;
   $profilePopoverError.textContent = "";
   $profileNameInput.value = currentSession ? currentSession.username : "";
+  $profileBioInput.value = (currentUserData && currentUserData.bio) || "";
+  updateBioCount();
   renderProfileAvatarButton(currentUserData && currentUserData.avatar);
   $profilePopover.classList.add("show");
 }
+function updateBioCount() { $profileBioCount.textContent = $profileBioInput.value.length + "/" + BIO_MAX_LENGTH; }
+$profileBioInput.addEventListener("input", updateBioCount);
 function closeProfilePopover() { $profilePopover.classList.remove("show"); }
 
 $railAvatarBtn.addEventListener("click", (e) => {
@@ -1055,7 +1106,7 @@ $profileAvatarFileInput.addEventListener("change", async () => {
 $profileSaveBtn.addEventListener("click", async () => {
   $profileSaveBtn.disabled = true;
   $profilePopoverError.textContent = "";
-  const result = await updateProfile($profileNameInput.value, pendingAvatarDataUrl !== null ? pendingAvatarDataUrl : undefined);
+  const result = await updateProfile($profileNameInput.value, pendingAvatarDataUrl !== null ? pendingAvatarDataUrl : undefined, $profileBioInput.value);
   $profileSaveBtn.disabled = false;
   if (!result.ok) { $profilePopoverError.textContent = result.error; return; }
   pendingAvatarDataUrl = null;
@@ -1649,6 +1700,18 @@ function renderDmProfile() {
       info.appendChild(h("div", { className: "dmp-h" }, "Friends since"));
       info.appendChild(h("div", { className: "dmp-t" }, new Date(fr.since).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })));
     }
+    const rolesBox = h("div", { className: "pc-roles" });
+    const bioBox = h("div", {});
+    info.appendChild(rolesBox);
+    info.appendChild(bioBox);
+    fetchAccountProfile(key).then(prof => {
+      if (!prof || openChatAccountKey !== key) return;
+      fillRoles(rolesBox, prof.id);
+      if (prof.bio) {
+        bioBox.appendChild(h("div", { className: "dmp-h" }, "About me"));
+        bioBox.appendChild(h("div", { className: "dmp-t dmp-bio" }, prof.bio));
+      }
+    });
     info.appendChild(h("div", { className: "dmp-actions" },
       h("button", { className: "dmp-btn", onclick: async () => {
         const r = await unfriend(key); if (!r.ok) showComposerNotice(r.error);
@@ -1755,11 +1818,17 @@ $cancelEditBtn.addEventListener("click", () => { cancelEditing(); $chatMsgInput.
 function renderChatMessage(msg) {
   maybeInsertDateSeparator(msg.ts);
   const mine = msg.fromAccountKey === currentSession.accountKey;
-  const el = h("div", { className: "chat-msg " + (mine ? "mine" : "theirs") });
+  const el = h("div", { className: "chat-msg has-av " + (mine ? "mine" : "theirs") });
   el.dataset.msgId = msg.id;
 
   const authorName = mine ? currentSession.username : (msg.fromUsername || openChatUsername || "");
-  if (authorName) el.appendChild(h("div", { className: "chat-msg-author" }, authorName));
+  const senderKey = msg.fromAccountKey || (mine ? currentSession.accountKey : openChatAccountKey);
+  const openSender = () => { if (senderKey) openAccountProfile(senderKey, authorName); };
+  const avEl = h("div", { className: "msg-av", title: "View profile", onclick: openSender });
+  renderAvatarInto(avEl, authorName, null);
+  if (senderKey) fetchAndCacheAvatar(senderKey, (url) => { if (url) renderAvatarInto(avEl, authorName, url); });
+  el.appendChild(avEl);
+  if (authorName) el.appendChild(h("div", { className: "chat-msg-author", onclick: openSender, title: "View profile" }, authorName));
 
   if (msg.replyTo) {
     const label = msg.replyToLabel || "them";
@@ -2191,46 +2260,43 @@ const $chatUserProfileId = document.getElementById("chatUserProfileId");
 const $chatUserProfileStatus = document.getElementById("chatUserProfileStatus");
 const $chatUserProfileCloseBtn = document.getElementById("chatUserProfileCloseBtn");
 const $chatUserProfileAddBtn = document.getElementById("chatUserProfileAddBtn");
+const $chatUserProfileAvatar = document.getElementById("chatUserProfileAvatar");
+const $chatUserProfileRoles = document.getElementById("chatUserProfileRoles");
+const $chatUserProfileBioWrap = document.getElementById("chatUserProfileBioWrap");
+const $chatUserProfileBio = document.getElementById("chatUserProfileBio");
 
 function closeChatUserProfile() { $chatUserProfileOverlay.style.display = "none"; }
 $chatUserProfileCloseBtn.addEventListener("click", closeChatUserProfile);
 $chatUserProfileOverlay.addEventListener("click", (e) => { if (e.target === $chatUserProfileOverlay) closeChatUserProfile(); });
 
-// Clicking a name in chat. Chat messages carry the sender's 6-digit account ID
-// (loginId), so we resolve the account fresh from it -- this works even if the
-// sender has gone offline or since changed their chat name.
-async function openChatUserProfile(loginId, nameAtSendTime) {
+// Rank pills (Owner, Admin, ...) for an account ID. The ranks live in the chat
+// database, so ask chat.js; if it isn't ready there's simply nothing to show.
+function fillRoles(container, loginId) {
+  container.replaceChildren();
+  const roles = (window.VUS_CHAT && loginId) ? window.VUS_CHAT.getRolesFor(loginId) : [];
+  roles.forEach(r => container.appendChild(h("span", { className: "pc-role role-" + r.id }, r.icon + " " + r.label)));
+}
+
+function resetProfileCard() {
   $chatUserProfileName.textContent = "Loading…";
   $chatUserProfileId.textContent = "";
   $chatUserProfileStatus.textContent = "";
   $chatUserProfileStatus.style.color = "";
   $chatUserProfileAddBtn.style.display = "none";
+  $chatUserProfileRoles.replaceChildren();
+  $chatUserProfileBioWrap.style.display = "none";
+  $chatUserProfileAvatar.replaceChildren();
   $chatUserProfileOverlay.style.display = "flex";
+}
 
-  if (!currentSession) { $chatUserProfileName.textContent = nameAtSendTime || "Unknown"; $chatUserProfileStatus.textContent = "Log in to add friends."; return; }
-  if (!loginId) { $chatUserProfileName.textContent = nameAtSendTime || "Unknown"; $chatUserProfileStatus.textContent = "This message is too old to look up an account for."; return; }
-  if (String(loginId) === String(currentSession.id)) {
-    $chatUserProfileName.textContent = currentSession.username;
-    $chatUserProfileId.textContent = "#" + currentSession.id;
-    $chatUserProfileStatus.textContent = "That's you.";
-    return;
-  }
+function fillProfileCard(prof, accountKey) {
+  $chatUserProfileName.textContent = prof.username;
+  $chatUserProfileId.textContent = "#" + prof.id;
+  renderAvatarInto($chatUserProfileAvatar, prof.username, prof.avatar);
+  fillRoles($chatUserProfileRoles, prof.id);
+  if (prof.bio) { $chatUserProfileBio.textContent = prof.bio; $chatUserProfileBioWrap.style.display = "block"; }
 
-  let accountKey = null, account = null;
-  try {
-    const idSnap = await idIndexRef.child(String(loginId)).get();
-    accountKey = idSnap.exists() ? idSnap.val() : null;
-    if (accountKey) account = (await usersRef.child(accountKey).get()).val();
-  } catch (e) { account = null; }
-
-  if (!account) {
-    $chatUserProfileName.textContent = nameAtSendTime || "Unknown";
-    $chatUserProfileStatus.textContent = "This account no longer exists.";
-    return;
-  }
-  $chatUserProfileName.textContent = account.username;
-  $chatUserProfileId.textContent = "#" + account.id;
-
+  if (accountKey === currentSession.accountKey) { $chatUserProfileStatus.textContent = "That's you."; return; }
   const status = getRelationshipStatus(accountKey);
   if (status === "friends") $chatUserProfileStatus.textContent = "Already friends.";
   else if (status === "outgoing") $chatUserProfileStatus.textContent = "Friend request pending.";
@@ -2242,7 +2308,7 @@ async function openChatUserProfile(loginId, nameAtSendTime) {
     $chatUserProfileAddBtn.onclick = async () => {
       $chatUserProfileAddBtn.disabled = true;
       $chatUserProfileAddBtn.textContent = "Sending…";
-      const result = await sendFriendRequest(accountKey, account.username);
+      const result = await sendFriendRequest(accountKey, prof.username);
       if (result.ok) {
         $chatUserProfileStatus.style.color = "#4ade80";
         $chatUserProfileStatus.textContent = "Friend request sent.";
@@ -2257,8 +2323,35 @@ async function openChatUserProfile(loginId, nameAtSendTime) {
   }
 }
 
+// Clicking a name or picture in chat. Chat messages carry the sender's 6-digit
+// account ID (loginId), so we resolve the account fresh from it -- this works even
+// if the sender has gone offline or since changed their chat name.
+async function openChatUserProfile(loginId, nameAtSendTime) {
+  resetProfileCard();
+  if (!currentSession) { $chatUserProfileName.textContent = nameAtSendTime || "Unknown"; $chatUserProfileStatus.textContent = "Log in to add friends."; return; }
+  if (!loginId) { $chatUserProfileName.textContent = nameAtSendTime || "Unknown"; $chatUserProfileStatus.textContent = "This message is too old to look up an account for."; return; }
+  const accountKey = await accountKeyForLoginId(loginId);
+  const prof = accountKey ? await fetchAccountProfile(accountKey) : null;
+  if (!prof) {
+    $chatUserProfileName.textContent = nameAtSendTime || "Unknown";
+    $chatUserProfileStatus.textContent = "This account no longer exists.";
+    return;
+  }
+  fillProfileCard(prof, accountKey);
+}
+
+// Same card, opened from a DM / group message (we already know the account).
+async function openAccountProfile(accountKey, nameFallback) {
+  resetProfileCard();
+  if (!currentSession) return;
+  const prof = await fetchAccountProfile(accountKey);
+  if (!prof) { $chatUserProfileName.textContent = nameFallback || "Unknown"; $chatUserProfileStatus.textContent = "This account no longer exists."; return; }
+  fillProfileCard(prof, accountKey);
+}
+
 window.VUS_DM = {
   openChatUserProfile,
+  getAvatarByLoginId,
   getSession: () => currentSession ? { accountKey: currentSession.accountKey, username: currentSession.username, id: currentSession.id } : null,
   logout: () => doLogout()
 };
