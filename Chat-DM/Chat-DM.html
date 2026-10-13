@@ -3,10 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>VUS DM's</title>
+<title>VUS</title>
 </head>
 <body>
-
 
 <div id="appShell" class="mode-chat">
   <div id="navBackdrop"></div>
@@ -27,22 +26,24 @@
     <div id="listPaneBody">
 
       <div class="list-view active" id="viewRooms">
-    <div id="roomsSidebarOverlay"></div>
-    <div id="roomsSidebar">
-      <div id="roomsSidebarHeader">
-        <h3>Rooms</h3>
-        <button id="roomsSidebarClose" aria-label="Close">&times;</button>
-      </div>
-      <div id="roomsSidebarBody"></div>
-      <div id="roomsSidebarFooter">
-        <div id="roomsFooterMsg"></div>
-        <input id="joinByCodeInput" type="text" placeholder="Enter room code…" maxlength="20">
-        <div class="rooms-footer-row">
-          <button id="joinByCodeBtn">Join by Code</button>
-          <button id="createRoomBtn">+ New Room</button>
-        </div>
-      </div>
+<div id="roomsSidebarOverlay"></div>
+<div id="roomsSidebar">
+  <div id="roomsSidebarHeader">
+    <h3>Rooms</h3>
+    <button id="roomsSidebarClose" aria-label="Close">&times;</button>
+  </div>
+  <div id="roomsSidebarBody"></div>
+  <div id="roomsSidebarFooter">
+    <div id="roomsFooterMsg"></div>
+    <input id="joinByCodeInput" type="text" placeholder="Enter room code…" maxlength="20">
+    <div class="rooms-footer-row">
+      <button id="joinByCodeBtn">Join by Code</button>
+      <button id="createRoomBtn">+ New Room</button>
     </div>
+  </div>
+</div>
+
+
       </div>
 
       <div class="list-view" id="viewChats">
@@ -122,255 +123,296 @@
   </div>
   </div>
 
-  <!-- ══════════════════════════════════════════════════════════
-       CHAT ROOM PANE — the public/group VUS Chat room, restored from
-       the pre-redesign shell and re-skinned to sit alongside the DM
-       pane. Shown by default (see navChat "active" class above);
-       toggling to DMs/Find/Blocked hides this and shows chatPane.
-       ══════════════════════════════════════════════════════════ -->
-  <div id="chatRoomPane">
 
-    <div class="chat-header">
-      <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Open menu">&#9776;</button>
-      <div class="ch-title"><span class="ch-hash">#</span><span id="chatHeaderTitle">VUS Chat</span></div>
-      <div class="ch-spacer"></div>
-      <div class="ch-online">
-        <span id="onlineDot" class="chat-online-dot offline" style="cursor:pointer"></span>
-        <span id="onlineCount"></span>
-        <div id="globalClearPanel" style="display:none;position:absolute;top:30px;right:0;background:#1e293b;border:1.5px solid #334155;border-radius:10px;padding:12px;z-index:10;width:240px;font-size:15px;font-weight:400"></div>
-        <div id="onlineListPanel" style="display:none;position:absolute;top:30px;right:0;background:#1e293b;border:1.5px solid #334155;border-radius:10px;padding:12px;z-index:10;width:220px;font-size:14px;font-weight:400;max-height:280px;overflow-y:auto"></div>
-      </div>
-      <button id="roomsToggleBtn" type="button" aria-hidden="true" tabindex="-1">Rooms<span class="rooms-badge-dot" id="roomsBadgeDot"></span></button>
-      <span id="youAre"></span>
-    </div>
-
-    <div id="chatRoomConnError"></div>
-    <div id="chatRoomComposerNotice"></div>
-
-    <div id="pingToast">
-      <div class="ping-toast-title" id="pingToastTitle">You were pinged</div>
-      <div class="ping-toast-body" id="pingToastBody"></div>
-    </div>
-
-    <div id="roomTopBar">
-      <div id="roomTopBarLeft">
-        <span id="roomTopBarName"></span>
-        <span id="roomTopBarCode"></span>
-      </div>
-      <span id="roomTopBarTimer"></span>
-      <div id="roomTopBarActions">
-        <button class="room-top-btn" id="roomSettingsBtn" style="display:none">⚙ Settings</button>
-        <button class="room-top-btn leave" id="roomLeaveBtn">Leave</button>
-      </div>
-    </div>
-
-    <div class="chat-modal-overlay" id="createRoomOverlay">
-      <div class="chat-modal">
-        <h3>Create a Room</h3>
-        <label for="createRoomNameInput">Room name (optional)</label>
-        <input type="text" id="createRoomNameInput" maxlength="30" placeholder="e.g. Movie Night">
-        <div class="chat-modal-err" id="createRoomErr"></div>
-        <div class="chat-modal-row">
-          <button class="chat-modal-btn-secondary" id="createRoomCancelBtn">Cancel</button>
-          <button class="chat-modal-btn-primary" id="createRoomConfirmBtn">Create</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="chat-modal-overlay" id="roomSettingsOverlay">
-      <div class="chat-modal" style="max-width:340px">
-        <h3>Room Settings</h3>
-        <div class="chat-modal-toggle-row">
-          <label>Public room</label>
-          <button class="room-top-btn" id="roomPublicToggleBtn">Off</button>
-        </div>
-        <label for="roomCodeInput">Room code (max 20 chars)</label>
-        <input type="text" id="roomCodeInput" maxlength="20">
-        <div class="chat-modal-err" id="roomCodeErr"></div>
-        <div class="chat-modal-row" style="margin-bottom:14px">
-          <button class="chat-modal-btn-secondary" id="roomCodeSaveBtn" style="flex:none;padding:7px 14px;font-size:13px">Save Code</button>
-        </div>
-        <label>Members</label>
-        <div id="roomMembersList" style="margin-bottom:8px"></div>
-        <div class="chat-modal-row">
-          <button class="chat-modal-btn-secondary" id="roomSettingsCloseBtn">Close</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="chat-modal-overlay" id="extendRoomOverlay">
-      <div class="chat-modal">
-        <h3>⏳ Room expiring soon</h3>
-        <p id="extendRoomText">This room closes in under a minute.</p>
-        <div class="chat-modal-row">
-          <button class="chat-modal-btn-secondary" id="extendRoomDismissBtn">Dismiss</button>
-          <button class="chat-modal-btn-primary" id="extendRoomConfirmBtn">+10 minutes</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="chat-modal-overlay" id="transferOfferOverlay">
-      <div class="chat-modal">
-        <h3>👑 Ownership offer</h3>
-        <p id="transferOfferText"></p>
-        <div class="chat-modal-row">
-          <button class="chat-modal-btn-secondary" id="transferDeclineBtn">Decline</button>
-          <button class="chat-modal-btn-primary" id="transferAcceptBtn">Accept</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="chat-modal-overlay" id="kickConfirmOverlay">
-      <div class="chat-modal">
-        <h3>Kick member?</h3>
-        <p id="kickConfirmText"></p>
-        <div class="chat-modal-row">
-          <button class="chat-modal-btn-secondary" id="kickCancelBtn">Cancel</button>
-          <button class="chat-modal-btn-danger" id="kickConfirmBtn">Kick</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="chat-modal-overlay" id="rolesMenuOverlay">
-      <div class="chat-modal">
-        <h3>Claim a role</h3>
-        <div id="rolesMenuList"></div>
-        <div class="chat-modal-row">
-          <button class="chat-modal-btn-secondary" id="rolesMenuCloseBtn">Close</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="chat-modal-overlay" id="roleClaimOverlay">
-      <div class="chat-modal">
-        <h3 id="roleClaimTitle">Claim role</h3>
-        <div id="roleClaimBody"></div>
-        <div class="chat-modal-row">
-          <button class="chat-modal-btn-secondary" id="roleClaimBackBtn">Back</button>
-          <button class="chat-modal-btn-secondary" id="roleClaimCloseBtn">Close</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="chat-modal-overlay" id="ownerMenuOverlay">
-      <div class="chat-modal" style="max-width:340px">
-        <h3 id="ownerMenuTitle">👑 Owner Menu</h3>
-        <p id="ownerMenuSubtitle" style="margin-bottom:8px">Online now — refreshes every 5s while this is open.</p>
-        <div id="ownerMenuList" style="margin-bottom:8px"></div>
-        <div class="chat-modal-row">
-          <button class="chat-modal-btn-secondary" id="ownerMenuCloseBtn">Close</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="chat-modal-overlay" id="timeoutSetOverlay">
-      <div class="chat-modal">
-        <h3 id="timeoutSetTitle">Timeout</h3>
-        <label>Duration</label>
-        <div style="display:flex;gap:8px;margin-bottom:6px">
-          <input type="text" id="timeoutMinutesInput" inputmode="numeric" pattern="[0-9]*" maxlength="1" placeholder="Min" style="width:100%;padding:8px 11px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none;text-align:center">
-          <input type="text" id="timeoutSecondsInput" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="Sec" style="width:100%;padding:8px 11px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none;text-align:center">
-        </div>
-        <div id="timeoutSetNote" style="color:#64748b;font-size:12.5px;margin-bottom:8px">Max 3:00.</div>
-        <div class="chat-modal-err" id="timeoutSetErr"></div>
-        <div class="chat-modal-row">
-          <button class="chat-modal-btn-secondary" id="timeoutSetCancelBtn">Cancel</button>
-          <button class="chat-modal-btn-danger" id="timeoutSetConfirmBtn">Timeout</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Ban duration modal — Admin+ only, opened from the Owner Menu's
-         Ban button (see openBanSetModal in app.js). Three separate
-         fields matching the code-level BAN_MAX_DAYS/HOURS/MINUTES
-         constants, so the max shown here always tracks whatever those
-         constants are currently set to without needing a matching
-         text-edit in the HTML. -->
-    <div class="chat-modal-overlay" id="banSetOverlay">
-      <div class="chat-modal">
-        <h3 id="banSetTitle">Ban</h3>
-        <label>Duration</label>
-        <div style="display:flex;gap:8px;margin-bottom:6px">
-          <input type="text" id="banDaysInput" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="Days" style="width:100%;padding:8px 11px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none;text-align:center">
-          <input type="text" id="banHoursInput" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="Hrs" style="width:100%;padding:8px 11px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none;text-align:center">
-          <input type="text" id="banMinutesInput" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="Min" style="width:100%;padding:8px 11px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none;text-align:center">
-        </div>
-        <div id="banSetNote" style="color:#64748b;font-size:12.5px;margin-bottom:8px"></div>
-        <div class="chat-modal-err" id="banSetErr"></div>
-        <div class="chat-modal-row">
-          <button class="chat-modal-btn-secondary" id="banSetCancelBtn">Cancel</button>
-          <button class="chat-modal-btn-danger" id="banSetConfirmBtn">Ban</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="chat-modal-overlay" id="grantModConfirmOverlay">
-      <div class="chat-modal">
-        <h3 id="grantModConfirmTitle">🧩 Grant Mod?</h3>
-        <p id="grantModConfirmText"></p>
-        <div class="chat-modal-row">
-          <button class="chat-modal-btn-secondary" id="grantModCancelBtn">Cancel</button>
-          <button class="chat-modal-btn-primary" id="grantModConfirmBtn">Yes, grant Mod</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Profile popover shown when a name is clicked in chat — looks up
-         the sender's CURRENT username/ID fresh from their account record
-         (via fromAccountKey stamped on the message), so it works even if
-         they're offline or have since renamed. -->
-    <div class="chat-modal-overlay" id="chatUserProfileOverlay">
-      <div class="chat-modal" style="max-width:300px">
-        <h3 id="chatUserProfileName">—</h3>
-        <div id="chatUserProfileId" style="color:#64748b;font-size:12.5px;font-family:ui-monospace,Consolas,monospace;margin-bottom:12px"></div>
-        <div id="chatUserProfileStatus" class="modal-error" style="margin-bottom:8px"></div>
-        <div class="chat-modal-row">
-          <button class="chat-modal-btn-secondary" id="chatUserProfileCloseBtn">Close</button>
-          <button class="chat-modal-btn-primary" id="chatUserProfileAddBtn" style="display:none">Add Friend</button>
-        </div>
-      </div>
-    </div>
-
-    <div id="chatScreen" style="display:flex;flex-direction:column;flex:1;min-height:0">
-      <div id="chatRoomMessages"></div>
-      <div id="chatRoomEmptyState" style="display:none">No messages yet — say hi!</div>
-      <button id="chatRoomJumpToBottomBtn">↓ Jump to latest</button>
-      <div id="chatRoomTypingBar" style="display:none;padding:2px 16px;min-height:20px;font-size:13px;color:#64748b;font-style:italic;flex-shrink:0"></div>
-      <div id="chatRoomPendingImageBar" style="display:none;padding:10px 16px;border-top:1.5px solid #1f2937;align-items:center;gap:12px;flex-shrink:0">
-        <img id="chatRoomPendingImagePreview" style="max-height:60px;max-width:90px;border-radius:8px;object-fit:cover;display:block">
-        <span style="flex:1;font-size:14.5px;color:#94a3b8">Image ready — click Send to post it</span>
-        <button id="chatRoomCancelPendingImageBtn" class="toolbar-btn">Cancel</button>
-      </div>
-      <div id="chatRoomToolbar">
-        <button id="chatRoomUploadImageBtn" class="toolbar-btn" style="display:none">📎 Image</button>
-        <input id="chatRoomImageFileInput" type="file" accept="image/*" style="display:none">
-        <span id="chatRoomCharCounter">500</span>
-        <div style="flex:1"></div>
-        <div style="position:relative">
-          <button id="pingYouBtn" class="toolbar-btn" title="Send a Discord ping to the site owner">🔔 Ping Devs</button>
-          <div id="pingYouPanel">
-            <textarea id="pingYouNote" rows="2" maxlength="200" placeholder="Optional note (max 200 chars)…"></textarea>
-            <button id="pingYouSend" class="toolbar-btn active" style="width:100%">Send Ping</button>
-          </div>
-        </div>
-        <button id="chatRoomAutoScrollBtn" class="toolbar-btn active">Auto Scroll: On</button>
-        <button id="chatRoomClearChatBtn" class="toolbar-btn">Clear Chat</button>
-      </div>
-      <div id="chatRoomComposer">
-        <div id="mentionDropdown"></div>
-        <div id="chatRoomComposerInputWrap">
-          <button id="mentionChip" type="button"></button>
-          <textarea id="chatRoomMsgInput" rows="1" placeholder="Type a message… (@ to mention someone)" maxlength="500"></textarea>
-        </div>
-        <button id="chatRoomSendBtn">Send</button>
-      </div>
-    </div>
-
-    <audio id="pingSound" preload="auto"></audio>
+<div id="chatRoomPane">
+<div class="chat-header" id="chatHeader">
+  <div class="hdr-left">
+    <button class="mobile-menu-btn" aria-label="Open menu">&#9776;</button>
+    <span id="onlineDot" class="chat-online-dot offline" title="Connection status"></span>
+    <span id="onlineCount" class="online-count"></span>
+    <div id="onlineListPanel" style="display:none;position:absolute;top:34px;left:0;background:#1e293b;border:1.5px solid #334155;border-radius:10px;padding:12px;z-index:30;width:220px;font-size:14px;font-weight:400;max-height:280px;overflow-y:auto"></div>
   </div>
+  <div class="hdr-title"><span class="ch-hash">#</span> VUS Chat</div>
+  <div class="hdr-right">
+    <button id="roomsToggleBtn" type="button" tabindex="-1">🚪 Rooms<span class="rooms-badge-dot" id="roomsBadgeDot"></span></button>
+    <button id="inventoryBtn">🎒 Inventory</button>
+    <span id="youAreAvatar" class="you-avatar" aria-label="Your profile picture"></span>
+    <span id="youAre"></span>
+    <button id="changeNameBtn" style="display:none">Change name</button>
+  </div>
+</div>
+<div id="connError"></div>
+<div id="composerNotice"></div>
+
+<div id="pingToast">
+  <div class="ping-toast-title" id="pingToastTitle">You were pinged</div>
+  <div class="ping-toast-body" id="pingToastBody"></div>
+</div>
+
+<div id="roomTopBar">
+  <div id="roomTopBarLeft">
+    <span id="roomTopBarName"></span>
+    <span id="roomTopBarCode"></span>
+  </div>
+  <span id="roomTopBarTimer"></span>
+  <div id="roomTopBarActions">
+    <button class="room-top-btn" id="roomSettingsBtn" style="display:none">⚙ Settings</button>
+    <button class="room-top-btn leave" id="roomLeaveBtn">Leave</button>
+  </div>
+</div>
+
+<div class="chat-modal-overlay" id="createRoomOverlay">
+  <div class="chat-modal">
+    <h3>Create a Room</h3>
+    <label for="createRoomNameInput">Room name (optional)</label>
+    <input type="text" id="createRoomNameInput" maxlength="30" placeholder="e.g. Movie Night">
+    <div class="chat-modal-err" id="createRoomErr"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="createRoomCancelBtn">Cancel</button>
+      <button class="chat-modal-btn-primary" id="createRoomConfirmBtn">Create</button>
+    </div>
+  </div>
+</div>
+
+<div class="chat-modal-overlay" id="roomSettingsOverlay">
+  <div class="chat-modal" style="max-width:340px">
+    <h3>Room Settings</h3>
+    <div class="chat-modal-toggle-row">
+      <label>Public room</label>
+      <button class="room-top-btn" id="roomPublicToggleBtn">Off</button>
+    </div>
+    <label for="roomCodeInput">Room code (max 20 chars)</label>
+    <input type="text" id="roomCodeInput" maxlength="20">
+    <div class="chat-modal-err" id="roomCodeErr"></div>
+    <div class="chat-modal-row" style="margin-bottom:14px">
+      <button class="chat-modal-btn-secondary" id="roomCodeSaveBtn" style="flex:none;padding:7px 14px;font-size:13px">Save Code</button>
+    </div>
+    <label>Members</label>
+    <div id="roomMembersList" style="margin-bottom:8px"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="roomSettingsCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="chat-modal-overlay" id="extendRoomOverlay">
+  <div class="chat-modal">
+    <h3>⏳ Room expiring soon</h3>
+    <p id="extendRoomText">This room closes in under a minute.</p>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="extendRoomDismissBtn">Dismiss</button>
+      <button class="chat-modal-btn-primary" id="extendRoomConfirmBtn">+10 minutes</button>
+    </div>
+  </div>
+</div>
+
+<div class="chat-modal-overlay" id="transferOfferOverlay">
+  <div class="chat-modal">
+    <h3>👑 Ownership offer</h3>
+    <p id="transferOfferText"></p>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="transferDeclineBtn">Decline</button>
+      <button class="chat-modal-btn-primary" id="transferAcceptBtn">Accept</button>
+    </div>
+  </div>
+</div>
+
+<div class="chat-modal-overlay" id="kickConfirmOverlay">
+  <div class="chat-modal">
+    <h3>Kick member?</h3>
+    <p id="kickConfirmText"></p>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="kickCancelBtn">Cancel</button>
+      <button class="chat-modal-btn-danger" id="kickConfirmBtn">Kick</button>
+    </div>
+  </div>
+</div>
+
+<!-- Staff menu: shared modal for the Owner / Admin / Mod menus. Which one opens
+     depends on your rank -- there is no unlock code. Lists everyone online;
+     refreshes when opened and when you press Refresh (no timer). -->
+<div class="chat-modal-overlay" id="ownerMenuOverlay">
+  <div class="chat-modal" style="max-width:560px">
+    <h3 id="ownerMenuTitle">👑 Owner Menu</h3>
+    <p id="ownerMenuSubtitle" style="margin-bottom:8px">Online now. Press Refresh to update the list.</p>
+    <div id="ownerMenuCommands" style="margin-bottom:14px"></div>
+    <div id="ownerMenuList" style="margin-bottom:8px"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="ownerMenuRefreshBtn">&#8635; Refresh</button>
+      <button class="chat-modal-btn-secondary" id="ownerMenuCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="chat-modal-overlay" id="inventoryOverlay">
+  <div class="chat-modal" style="max-width:420px">
+    <h3>🎒 Inventory</h3>
+    <div id="inventoryList" style="margin:10px 0 14px"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="inventoryCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="chat-modal-overlay" id="modListOverlay">
+  <div class="chat-modal" style="max-width:560px">
+    <h3>🔨 Bans &amp; timeouts</h3>
+    <div style="display:flex;gap:8px;margin:8px 0">
+      <input id="modListBanInput" type="text" placeholder="Ban by username or 6-digit ID" style="flex:1;padding:8px 10px;border-radius:8px;border:1.5px solid #334155;background:#0f172a;color:#f1f5f9;font-size:14px">
+      <button class="toolbar-btn" id="modListBanBtn">Ban</button>
+    </div>
+    <div class="staff-tools" style="margin:8px 0">
+      <button class="toolbar-btn" id="modListTabBans">Bans</button>
+      <button class="toolbar-btn" id="modListTabTemp">Temp bans</button>
+      <button class="toolbar-btn" id="modListTabTimeouts">Timeouts</button>
+    </div>
+    <div id="modListBody" style="margin-bottom:8px"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="modListRefreshBtn">&#8635; Refresh</button>
+      <button class="chat-modal-btn-secondary" id="modListCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Rank roster (Mod and up): everyone who holds a rank, online or not. Loads when
+     opened and when you press Refresh -- no timer. -->
+<div class="chat-modal-overlay" id="rosterOverlay">
+  <div class="chat-modal" style="max-width:520px">
+    <h3>&#128101; Rank roster</h3>
+    <p id="rosterSubtitle" style="margin-bottom:8px">Everyone who holds a rank, online or not.</p>
+    <div id="rosterList" style="margin-bottom:8px"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="rosterRefreshBtn">&#8635; Refresh</button>
+      <button class="chat-modal-btn-secondary" id="rosterCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Rank guide (everyone): what each rank can do. Built from the same tables the
+     chat itself uses, so the numbers can't drift out of date. -->
+<div class="chat-modal-overlay" id="rankGuideOverlay">
+  <div class="chat-modal" style="max-width:560px">
+    <h3>&#128214; What each rank does</h3>
+    <div id="rankGuideBody"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="rankGuideCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Timeout duration modal: minutes + seconds. Cap/note text set dynamically
+     (3:00 for owners, 0:40 for mods) by openTimeoutSetModal. -->
+<div class="chat-modal-overlay" id="timeoutSetOverlay">
+  <div class="chat-modal">
+    <h3 id="timeoutSetTitle">Timeout</h3>
+    <label>Duration</label>
+    <div style="display:flex;gap:8px;margin-bottom:6px">
+      <input type="text" id="timeoutMinutesInput" inputmode="numeric" pattern="[0-9]*" maxlength="5" placeholder="Min" style="width:100%;padding:8px 11px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none;text-align:center">
+      <input type="text" id="timeoutSecondsInput" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="Sec" style="width:100%;padding:8px 11px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none;text-align:center">
+    </div>
+    <div id="timeoutSetNote" style="color:#64748b;font-size:12.5px;margin-bottom:8px">Max 30 days.</div>
+    <div class="chat-modal-err" id="timeoutSetErr"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="timeoutSetCancelBtn">Cancel</button>
+      <button class="chat-modal-btn-danger" id="timeoutSetConfirmBtn">Timeout</button>
+    </div>
+  </div>
+</div>
+
+<!-- Grant-mod double-confirm: a plain click-through, no typing required,
+     but a second explicit step so a misclick can't hand out the tag. -->
+<div class="chat-modal-overlay" id="grantModConfirmOverlay">
+  <div class="chat-modal">
+    <h3 id="grantModConfirmTitle">🧩 Grant Mod?</h3>
+    <p id="grantModConfirmText"></p>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="grantModCancelBtn">Cancel</button>
+      <button class="chat-modal-btn-primary" id="grantModConfirmBtn">Yes, grant Mod</button>
+    </div>
+  </div>
+</div>
+
+<div class="chat-modal-overlay" id="banConfirmOverlay">
+  <div class="chat-modal">
+    <h3 id="banConfirmTitle">Ban user?</h3>
+    <p id="banConfirmText"></p>
+    <div class="chat-modal-err" id="banConfirmErr"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="banCancelBtn">Cancel</button>
+      <button class="chat-modal-btn-danger" id="banConfirmBtn">Ban</button>
+    </div>
+  </div>
+</div>
+
+<div id="joinScreen">
+  <div id="joinCard"></div>
+</div>
+
+<!-- Shown instead of the join screen while your account is banned. Never lets
+     you back to login/signup -- only unban (owner) or the timer running out
+     (temporary bans) gets you out of this screen. -->
+<div id="banScreen" style="display:none">
+  <div id="banCard">
+    <div id="banIcon">&#128683;</div>
+    <h2 id="banTitle">You are banned</h2>
+    <p id="banReason"></p>
+    <div id="banCountdownWrap" style="display:none">
+      <div id="banCountdown"></div>
+      <p id="banCountdownLabel">until you can log back in</p>
+    </div>
+    <p id="banPermanentNote" style="display:none">This ban has no time limit. Only an Owner can lift it.</p>
+    <button id="banRefreshBtn" type="button">Check again</button>
+  </div>
+</div>
+
+<div id="chatScreen">
+  <div id="messages"></div>
+  <div id="emptyState" style="display:none">No messages yet — say hi!</div>
+  <button id="jumpToBottomBtn">↓ Jump to latest</button>
+  <div id="typingBar" style="display:none;padding:6px 21px;font-size:17.2px;color:#64748b;font-style:italic;flex-shrink:0"></div>
+  <div id="chatPendingImageBar" style="display:none;padding:10px 21px;border-top:1.5px solid #1f2937;align-items:center;gap:12px;flex-shrink:0">
+    <img id="chatPendingImagePreview" style="max-height:60px;max-width:90px;border-radius:8px;object-fit:cover;display:block">
+    <span style="flex:1;font-size:14.5px;color:#94a3b8">Image ready — click Send to post it</span>
+    <button id="chatCancelPendingImageBtn" class="toolbar-btn">Cancel</button>
+  </div>
+  <div id="toolbar">
+    <button id="chatUploadImageBtn" class="toolbar-btn" style="display:none">📎 Image</button>
+    <input id="chatImageFileInput" type="file" accept="image/*" style="display:none">
+    <span id="charCounter">500</span>
+    <div style="flex:1"></div>
+    <div style="position:relative">
+      <button id="pingYouBtn" class="toolbar-btn" title="Send a Discord ping to the site owner">🔔 Ping Devs</button>
+      <div id="pingYouPanel">
+        <textarea id="pingYouNote" rows="2" maxlength="200" placeholder="Optional note (max 200 chars)…"></textarea>
+        <button id="pingYouSend" class="toolbar-btn active" style="width:100%">Send Ping</button>
+      </div>
+    </div>
+    <button id="autoScrollBtn" class="toolbar-btn active">Auto Scroll: On</button>
+    <button id="clearChatBtn" class="toolbar-btn">Clear Chat</button>
+  </div>
+  <div id="composer">
+    <div id="mentionDropdown"></div>
+    <div id="commandList" role="listbox" aria-label="Commands"></div>
+    <div id="globalClearPanel" style="display:none"></div>
+    <button id="settingsBtn" type="button" title="Settings" aria-label="Settings">⚙</button>
+    <div id="composerInputWrap">
+      <button id="mentionChip" type="button"></button>
+      <div id="inputStack">
+        <div id="commandGhost" aria-hidden="true"></div>
+        <textarea id="msgInput" rows="1" placeholder="Type a message… (@ to mention someone, / for commands)" maxlength="500"></textarea>
+      </div>
+    </div>
+    <button id="sendBtn">Send</button>
+  </div>
+</div>
+
+<audio id="pingSound" preload="auto"></audio>
+
+
+</div>
 
   <div id="chatPane">
-    <div id="chatEmptyState"><button class="mobile-menu-btn" id="mobileMenuBtn2" aria-label="Open menu">&#9776;</button><span>Select a friend to start chatting.</span></div>
+    <div id="chatEmptyState"><button class="mobile-menu-btn" aria-label="Open menu">&#9776;</button><span>Select a friend to start chatting.</span></div>
     <div id="chatThread">
       <div id="chatThreadHeader">
         <button id="chatBackBtn">←</button>
@@ -432,17 +474,25 @@
   </div>
 </div>
 
-<div id="authHero" aria-hidden="true">
-  <div class="hero-logo">VUS</div>
-  <p class="hero-tag">Hang out in the open chat, or message your friends privately.</p>
+
+<div class="chat-modal-overlay" id="chatUserProfileOverlay">
+  <div class="chat-modal" style="max-width:300px">
+    <h3 id="chatUserProfileName">—</h3>
+    <div id="chatUserProfileId" style="color:#64748b;font-size:12.5px;font-family:ui-monospace,Consolas,monospace;margin-bottom:12px"></div>
+    <div id="chatUserProfileStatus" style="font-size:13px;color:#94a3b8;min-height:16px;margin-bottom:8px"></div>
+    <div class="chat-modal-row">
+      <button class="chat-modal-btn-secondary" id="chatUserProfileCloseBtn">Close</button>
+      <button class="chat-modal-btn-primary" id="chatUserProfileAddBtn" style="display:none">Add Friend</button>
+    </div>
+  </div>
 </div>
 
 <div id="authCard">
 
   <div id="authFlow">
     <div id="authHeader">
-      <h1>VUS DM's</h1>
-      <p>Log in or create an account to start messaging.</p>
+      <h1>VUS</h1>
+      <p>One account for chat and DMs. Log in or sign up.</p>
     </div>
 
     <div class="auth-tabs">
@@ -505,19 +555,15 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script>
-/* ══════════════════════════════════════════════════════════
-   EXTERNAL FILE LOADER
-   raw.githubusercontent.com serves everything as Content-Type:
-   text/plain, so a plain <link rel="stylesheet"> or <script src>
-   pointed at it gets silently blocked by the browser's strict
-   MIME-type check. Instead we fetch the raw text ourselves and
-   inject it: CSS goes into a <style> tag, JS gets wrapped in a
-   Blob URL (so it still shows up as a real file in devtools,
-   unlike eval/new Function) and loaded as a normal <script src>.
-   ══════════════════════════════════════════════════════════ */
+/* EXTERNAL FILE LOADER
+   raw.githubusercontent.com serves text/plain, which browsers refuse to run as
+   <link>/<script src>. So we fetch the text ourselves: CSS goes into a <style>,
+   each JS file becomes a Blob URL script. Load order matters: dm.js first
+   (accounts/login, creates window.VUS_DM), then chat.js. */
 (function loadExternalAppFiles() {
-  var CSS_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Chat-DM/style.css";
-  var JS_URL  = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Chat-DM/app.js";
+  var BASE = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Chat-DM/";
+  var CSS_URL = BASE + "style.css";
+  var JS_URLS = [BASE + "dm.js", BASE + "chat.js"];
 
   function showLoadError(what, err) {
     document.body.innerHTML =
@@ -525,50 +571,37 @@
       "<h2>Couldn't load " + what + "</h2>" +
       "<p style='color:#94a3b8;font-size:14px;margin-top:8px;line-height:1.5'>" +
       (err && err.message ? err.message : String(err)) +
-      "<br><br>Check that the file exists at the expected GitHub path and the repo/branch is public." +
-      "</p></div>";
+      "<br><br>Check that the file exists at the expected GitHub path and the repo/branch is public.</p></div>";
   }
-
+  function getText(url) {
+    return fetch(url, { cache: "no-store" }).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status + " fetching " + url.split("/").pop());
+      return r.text();
+    });
+  }
   function loadCss() {
-    return fetch(CSS_URL, { cache: "no-store" })
-      .then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status + " fetching style.css");
-        return r.text();
-      })
-      .then(function (cssText) {
-        var styleEl = document.createElement("style");
-        styleEl.textContent = cssText;
-        document.head.appendChild(styleEl);
-      });
+    return getText(CSS_URL).then(function (t) {
+      var el = document.createElement("style");
+      el.textContent = t;
+      document.head.appendChild(el);
+    });
   }
-
-  function loadJs() {
-    return fetch(JS_URL, { cache: "no-store" })
-      .then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status + " fetching app.js");
-        return r.text();
-      })
-      .then(function (jsText) {
-        var blob = new Blob([jsText], { type: "application/javascript" });
-        var blobUrl = URL.createObjectURL(blob);
-        return new Promise(function (resolve, reject) {
-          var scriptEl = document.createElement("script");
-          scriptEl.src = blobUrl;
-          scriptEl.onload = resolve;
-          scriptEl.onerror = function () { reject(new Error("Blob script failed to execute — check app.js for syntax errors.")); };
-          document.body.appendChild(scriptEl);
-        });
+  function loadJs(url) {
+    return getText(url).then(function (t) {
+      var blobUrl = URL.createObjectURL(new Blob([t], { type: "application/javascript" }));
+      return new Promise(function (resolve, reject) {
+        var s = document.createElement("script");
+        s.src = blobUrl;
+        s.onload = resolve;
+        s.onerror = function () { reject(new Error("Script failed to run: " + url.split("/").pop() + " (syntax error?)")); };
+        document.body.appendChild(s);
       });
+    });
   }
-
   loadCss()
     .catch(function (err) { showLoadError("styles (style.css)", err); throw err; })
-    .then(loadJs)
-    .catch(function (err) {
-      // If loadCss already threw and displayed its own error, don't
-      // stomp the message with a second, less specific one.
-      if (!document.body.querySelector("h2")) showLoadError("app logic (app.js)", err);
-    });
+    .then(function () { return JS_URLS.reduce(function (p, u) { return p.then(function () { return loadJs(u); }); }, Promise.resolve()); })
+    .catch(function (err) { if (!document.body.querySelector("h2")) showLoadError("app code", err); });
 })();
 </script>
 </body>
