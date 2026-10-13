@@ -1544,3 +1544,132 @@
     #youAre { display: none; }
     #composer { padding: 0 10px 12px; }
   }
+
+  /* ── Role-grouped members panel ── */
+  .member-group-head { padding: 14px 8px 4px; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #64748b; }
+  .member-group-head.role-crown { color: #fbbf24; }
+  .member-group-head.role-coowner { color: #a78bfa; }
+  .member-group-head.role-admin { color: #38bdf8; }
+  .member-group-head.role-mod { color: #4ade80; }
+  .member-group-head.role-normie { color: #94a3b8; }
+  .member-row.role-crown .member-name { color: #fbbf24; font-weight: 600; }
+  .member-row.role-coowner .member-name { color: #a78bfa; font-weight: 600; }
+  .member-row.role-admin .member-name { color: #38bdf8; font-weight: 600; }
+  .member-row.role-mod .member-name { color: #4ade80; font-weight: 600; }
+  .member-row.role-normie .member-name { color: #cbd5e1; }
+
+  /* ── Friends hub: Find / Blocked open in the main area, not the cramped sidebar ── */
+  #friendsPane { flex: 1; min-width: 0; min-height: 0; display: none; flex-direction: column; background: #0f172a; }
+  #appShell.mode-dm.friends-open #friendsPane { display: flex; }
+  #appShell.mode-dm.friends-open #chatPane { display: none; }
+  #friendsHeader {
+    height: 48px; padding: 0 16px; display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+    border-bottom: 1px solid #0a1020; box-shadow: 0 1px 0 rgba(0,0,0,.18);
+  }
+  #friendsTitle { font-size: 16px; font-weight: 700; color: #f1f5f9; }
+  .ch-spacer { flex: 1; }
+  #friendsBackBtn { background: #1e293b; border: 1px solid #334155; color: #cbd5e1; border-radius: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+  #friendsBackBtn:hover { color: #f1f5f9; border-color: #475569; }
+  #friendsBody { flex: 1; min-height: 0; overflow-y: auto; padding: 20px; }
+  #friendsBody .list-view { display: none; }
+  #friendsBody .list-view.active { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; max-width: 1000px; margin: 0 auto; }
+  #friendsBody #viewBlocked.active { display: block; max-width: 560px; }
+  #friendsBody .list-section { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 14px 16px; margin: 0; }
+  #friendsBody .list-section-title { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; margin-bottom: 8px; }
+  #friendsBody .list-search-row input { font-size: 14px; padding: 9px 11px; }
+  #friendsBody .list-row-name, #friendsBody .find-person-name { font-size: 14.5px; }
+  @media (max-width: 720px) {
+    #friendsHeader { padding: 0 10px; }
+    #friendsBody { padding: 12px; }
+    #friendsBody .list-view.active { grid-template-columns: 1fr; }
+  }
+
+  .member-row.off { opacity: .45; }
+  .member-row.off:hover { opacity: 1; }
+
+  /* ── DM mode: right-hand profile card (like Discord's DM sidebar) ── */
+  #dmProfilePane { width: 300px; flex-shrink: 0; background: #111827; display: none; min-height: 0; overflow-y: auto; border-left: 1px solid #0a1020; }
+  #appShell.mode-dm.has-profile:not(.friends-open) #dmProfilePane { display: block; }
+  @media (max-width: 1000px) { #appShell.mode-dm #dmProfilePane { display: none !important; } }
+  .dmp { padding: 12px; }
+  .dmp-banner { height: 90px; border-radius: 10px 10px 0 0; background: linear-gradient(135deg, #16a34a, #14532d 70%, #0f172a); }
+  .dmp-av { position: relative; width: 84px; height: 84px; margin: -44px 0 0 16px; }
+  .dmp-avatar { width: 84px; height: 84px; font-size: 32px; border: 6px solid #0d1424; box-sizing: border-box; background: #334155; }
+  .dmp-avatar.group-avatar { border-radius: 50%; }
+  .dmp-card { margin-top: 8px; padding: 14px 16px 16px; border-radius: 0 0 10px 10px; background: #0d1424; }
+  .dmp-name { font-size: 20px; font-weight: 700; color: #f1f5f9; word-break: break-word; line-height: 1.2; }
+  .dmp-sub { margin-top: 2px; font-size: 13px; color: #94a3b8; font-family: ui-monospace, Consolas, monospace; min-height: 16px; }
+  .dmp-status { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px; color: #94a3b8; }
+  .dmp-sd { width: 10px; height: 10px; border-radius: 50%; background: #475569; flex-shrink: 0; }
+  .dmp-sd.on { background: #22c55e; }
+  .dmp-h { margin-top: 16px; font-size: 11.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #cbd5e1; }
+  .dmp-t { margin-top: 4px; font-size: 14px; color: #94a3b8; }
+  .dmp-member { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 14px; color: #cbd5e1; }
+  .dmp-actions { display: flex; gap: 8px; margin-top: 18px; }
+  .dmp-btn { flex: 1; margin-top: 14px; padding: 9px 10px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #e2e8f0; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+  .dmp-actions .dmp-btn { margin-top: 0; }
+  .dmp-btn:hover { background: #273449; }
+  .dmp-btn.danger { color: #f87171; border-color: #7f1d1d; background: transparent; }
+  .dmp-btn.danger:hover { background: rgba(239,68,68,.12); }
+
+  /* ═══ Type scale pass: one consistent set of sizes across chat + DMs ═══ */
+  body { font-size: 16px; line-height: 1.4; }
+  /* sidebar */
+  #listPaneTitle { font-size: 16px; }
+  .rooms-section-title, .list-section-label { font-size: 12px; }
+  .room-card-name, .list-row-name { font-size: 15.5px; }
+  .room-card-code, .room-card-timer, .list-row-sub { font-size: 12.5px; }
+  .list-new-group-row { font-size: 14px; }
+  .list-empty { font-size: 13.5px; }
+  #joinByCodeInput, #createRoomBtn, #joinByCodeBtn { font-size: 14px; }
+  #listPaneYouName { font-size: 14.5px; }
+  #listPaneYouId { font-size: 12px; }
+  /* headers */
+  .hdr-title, #friendsTitle { font-size: 17px; }
+  #chatThreadHeaderName { font-size: 16px; }
+  #chatThreadHeaderStatus { font-size: 12.5px; }
+  .online-count, #youAre, .hdr-right { font-size: 14px; }
+  #inventoryBtn, #roomsToggleBtn { font-size: 14px; }
+  /* chat messages */
+  #messages { padding-top: 14px; }
+  .msg-bubble { font-size: 16px; line-height: 1.5; }
+  .msg-meta-name { font-size: 16px; }
+  .msg-meta { font-size: 12.5px; }
+  .msg.system .msg-bubble { font-size: 14px; }
+  .crown-bubble, .mod-bubble, .admin-bubble, .normie-bubble, .coowner-bubble, .unranked-bubble { font-size: 13px; }
+  #emptyState { font-size: 16px; }
+  #typingBar { font-size: 14px !important; padding: 4px 16px !important; }
+  /* DM messages */
+  .chat-msg-bubble, .chat-msg.mine .chat-msg-bubble { font-size: 16px; line-height: 1.5; }
+  .chat-msg-author { font-size: 16px; }
+  .chat-msg-meta, .chat-msg.mine .chat-msg-meta { font-size: 12px; }
+  .chat-msg-reply-preview { font-size: 13.5px; }
+  .chat-date-sep { font-size: 12.5px; }
+  #typingIndicatorBar { font-size: 13.5px; }
+  /* composers */
+  #msgInput, #chatMsgInput { font-size: 16px; }
+  #sendBtn { font-size: 15px; }
+  #chatSendBtn { font-size: 14px; }
+  .toolbar-btn { font-size: 13px; padding: 5px 11px; }
+  #charCounter { font-size: 13px; }
+  #settingsBtn { width: 44px; min-height: 44px; font-size: 19px; }
+  #composerInputWrap { min-height: 44px; }
+  #replyPreviewBar, #editingBar, #chatPendingImageBar, #pendingImageBar { font-size: 14px; }
+  /* members */
+  .member-name { font-size: 15.5px; }
+  .member-group-head, #membersHeader { font-size: 12px; }
+  /* friends hub + profile card */
+  #friendsBody .list-section-title { font-size: 12.5px; }
+  .find-person-name { font-size: 15px; }
+  .find-person-id, .list-search-note, .list-section .list-row-sub { font-size: 12.5px; }
+  .dmp-name { font-size: 22px; }
+  .dmp-sub, .dmp-status, .dmp-t, .dmp-member { font-size: 14px; }
+  /* modals */
+  .chat-modal h3 { font-size: 18px; }
+  .chat-modal p, .chat-modal label { font-size: 14.5px; }
+  .modal-box h3 { font-size: 18px; }
+  @media (max-width: 720px) {
+    .msg-bubble, .chat-msg-bubble, .chat-msg.mine .chat-msg-bubble { font-size: 16px; }
+    #msgInput, #chatMsgInput, #searchInput, #joinByCodeInput { font-size: 16px; }
+  }
+  #createRoomBtn, #joinByCodeBtn { font-size: 13px; white-space: nowrap; padding: 8px 6px; }
