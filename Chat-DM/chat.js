@@ -5283,9 +5283,12 @@ const $membersCount = document.getElementById("membersCount");
 
 const memberNameCache = {};   // loginId -> last known chat name (for offline rank holders)
 const memberNameLoading = new Set();
+let memberSongUnsubs = [];   // live "now playing" listeners for the rows currently drawn
 
 function renderMembersPane() {
   if (!$membersList) return;
+  memberSongUnsubs.forEach(f => { try { f(); } catch (e) {} });
+  memberSongUnsubs = [];
   const list = latestPresenceList || [];
   $membersCount.textContent = String(list.length);
 
@@ -5356,8 +5359,24 @@ function renderMembersPane() {
     nameEl.className = "member-name";
     const isMe = myLoginId && p.id === String(myLoginId);
     nameEl.textContent = p.name + (isMe ? " (you)" : "");
+    const textEl = document.createElement("div");
+    textEl.className = "member-text";
+    textEl.appendChild(nameEl);
+    if (p.online && p.id && window.VUS_DM && window.VUS_DM.watchSongByLoginId) {
+      const songEl = document.createElement("div");
+      songEl.className = "member-song";
+      songEl.style.display = "none";
+      textEl.appendChild(songEl);
+      memberSongUnsubs.push(window.VUS_DM.watchSongByLoginId(p.id, song => {
+        if (!song) { songEl.style.display = "none"; songEl.textContent = ""; return; }
+        const line = song.title + (song.artist ? " · " + song.artist : "");
+        songEl.textContent = "♪ " + line;
+        songEl.title = "Listening on MZK: " + line;
+        songEl.style.display = "";
+      }));
+    }
     row.appendChild(wrap);
-    row.appendChild(nameEl);
+    row.appendChild(textEl);
     if (!isMe && p.id) {
       row.addEventListener("click", () => { if (window.VUS_DM) window.VUS_DM.openChatUserProfile(p.id, p.name); });
     }
@@ -5440,6 +5459,7 @@ function init() {
   // login being restored) and "vus:logout" on logout. The saved-session check
   // covers dm.js having finished before this file loaded.
   window.addEventListener("vus:session", () => autoLoginOrPrompt());
+  window.addEventListener("vus:profile", () => renderMembersPane());
   window.addEventListener("vus:logout", () => shutdownChatSession());
   window.addEventListener("vus:mode", ev => {
     if (!chatBooted) return;

@@ -485,6 +485,11 @@
         <label for="profileBioInput">Bio <span id="profileBioCount">0/100</span></label>
         <textarea id="profileBioInput" maxlength="100" rows="3" placeholder="Tell people about yourself"></textarea>
       </div>
+      <div class="profile-popover-field">
+        <label for="profileMzkInput">MZK link code</label>
+        <input type="text" id="profileMzkInput" maxlength="11" placeholder="XXXXX-XXXXX" autocomplete="off" spellcheck="false">
+        <div class="profile-popover-fieldhint">Shows the song you're playing on your profile. Get a code in MZK, under Settings.</div>
+      </div>
       <button id="profileSaveBtn">Save</button>
       <div id="profilePopoverError"></div>
     </div>
@@ -504,6 +509,7 @@
         <div class="pc-h">About me</div>
         <div id="chatUserProfileBio"></div>
       </div>
+      <div id="chatUserProfileSong" style="display:none"></div>
       <div id="chatUserProfileStatus"></div>
       <div class="chat-modal-row">
         <button class="chat-modal-btn-secondary" id="chatUserProfileCloseBtn">Close</button>

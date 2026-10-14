@@ -334,6 +334,150 @@ const BIO_MAX_LENGTH = 100;
 const AVATAR_MAX_DIMENSION = 64;
 const AVATAR_JPEG_QUALITY = 0.55;
 
+/* ── MZK "now playing" ──
+   People can paste a link code from MZK into their profile. MZK publishes the song under that
+   code in its own Firestore (project mzk-playa); here we only READ it, no sign-in needed.
+   Firestore is loaded lazily, the first time a code is actually looked at. */
+const MZK_CONFIG = {
+  apiKey: "AIzaSyDyKNOMa_YnIXlqtZ8OrIePHBOhudiEoUk",
+  authDomain: "mzk-playa.firebaseapp.com",
+  projectId: "mzk-playa",
+  storageBucket: "mzk-playa.firebasestorage.app",
+  messagingSenderId: "359354025989",
+  appId: "1:359354025989:web:281bf6bd232eedfefb346c"
+};
+const MZK_CODE_RE = /^[A-Z2-9]{5}-[A-Z2-9]{5}$/;
+const SONG_FRESH_MS = 150000;      // MZK sends a heartbeat every 45s while playing
+const MZK_MAX_WATCHERS = 40;
+let mzkDbPromise = null;
+
+function loadMzkDb() {
+  if (mzkDbPromise) return mzkDbPromise;
+  mzkDbPromise = new Promise((resolve, reject) => {
+    const start = () => {
+      try {
+        const app = firebase.apps.find(a => a.name === "vusMzk") || firebase.initializeApp(MZK_CONFIG, "vusMzk");
+        const fs = app.firestore();
+        try { fs.settings({ experimentalAutoDetectLongPolling: true, merge: true }); } catch (e) {}
+        resolve(fs);
+      } catch (e) { reject(e); }
+    };
+    if (firebase.firestore) { start(); return; }
+    const s = document.createElement("script");
+    s.src = "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js";
+    s.onload = start;
+    s.onerror = () => reject(new Error("Couldn't load MZK."));
+    document.head.appendChild(s);
+  }).catch(e => { mzkDbPromise = null; throw e; });
+  return mzkDbPromise;
+}
+
+// "k7f2m 92qxw" -> "K7F2M-92QXW"; "" -> ""; anything else -> null
+function normalizeMzkCode(raw) {
+  const s = String(raw || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!s) return "";
+  return /^[A-Z2-9]{10}$/.test(s) ? s.slice(0, 5) + "-" + s.slice(5) : null;
+}
+
+// true / false, or null when we couldn't tell (offline, rules not added yet)
+async function mzkCodeExists(code) {
+  try {
+    const fs = await loadMzkDb();
+    const snap = await Promise.race([
+      fs.collection("nowPlaying").doc(code).get(),
+      new Promise(r => setTimeout(() => r(null), 6000))
+    ]);
+    return snap ? snap.exists : null;
+  } catch (e) { return null; }
+}
+
+function songFromDoc(d) {
+  if (!d || !d.playing) return null;
+  const title = String(d.title || "").trim().slice(0, 150);
+  if (!title) return null;
+  const ms = d.updated && typeof d.updated.toMillis === "function" ? d.updated.toMillis() : Date.now();
+  if (Date.now() - ms > SONG_FRESH_MS) return null;   // heartbeat stopped: they closed MZK
+  const cover = (typeof d.cover === "string" && d.cover.length <= 60000 && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(d.cover)) ? d.cover : "";
+  return { title, artist: String(d.artist || "").trim().slice(0, 150), album: String(d.album || "").trim().slice(0, 150), cover };
+}
+
+// One live listener per code, shared by everything that shows it. A listener lingers for a few
+// seconds after its last user leaves, so re-drawing the member list doesn't thrash connections.
+const mzkWatch = new Map();   // code -> { subs, last, lastJson, data, unsub, tick, killTimer }
+function mzkSubscribe(code, cb) {
+  if (!MZK_CODE_RE.test(code || "")) return () => {};
+  let e = mzkWatch.get(code);
+  if (!e) {
+    if (mzkWatch.size >= MZK_MAX_WATCHERS) return () => {};
+    e = { subs: new Set(), last: null, lastJson: "", data: null, unsub: null, tick: null, killTimer: null };
+    mzkWatch.set(code, e);
+    const entry = e;
+    const publish = () => {
+      const song = songFromDoc(entry.data), j = song ? JSON.stringify(song) : "";
+      if (j === entry.lastJson) return;
+      entry.lastJson = j; entry.last = song;
+      entry.subs.forEach(f => { try { f(song); } catch (_) {} });
+    };
+    loadMzkDb().then(fs => {
+      if (mzkWatch.get(code) !== entry) return;
+      entry.unsub = fs.collection("nowPlaying").doc(code).onSnapshot(snap => {
+        entry.data = snap.exists ? snap.data() : null;
+        publish();
+      }, () => {});
+      entry.tick = setInterval(publish, 20000);   // notice a stopped heartbeat
+    }).catch(() => {});
+  }
+  clearTimeout(e.killTimer); e.killTimer = null;
+  e.subs.add(cb);
+  if (e.last) { try { cb(e.last); } catch (_) {} }
+  const entry = e;
+  return () => {
+    entry.subs.delete(cb);
+    if (entry.subs.size === 0 && !entry.killTimer) {
+      entry.killTimer = setTimeout(() => {
+        if (entry.subs.size) return;
+        if (entry.unsub) entry.unsub();
+        clearInterval(entry.tick);
+        if (mzkWatch.get(code) === entry) mzkWatch.delete(code);
+      }, 8000);
+    }
+  };
+}
+function mzkStopAll() {
+  mzkWatch.forEach(e => { if (e.unsub) e.unsub(); clearInterval(e.tick); clearTimeout(e.killTimer); });
+  mzkWatch.clear();
+}
+
+function buildSongCard(song) {
+  const cover = h("div", { className: "song-cover" });
+  if (song.cover) { const im = document.createElement("img"); im.alt = ""; im.src = song.cover; cover.appendChild(im); }
+  else cover.textContent = "♪";
+  return h("div", { className: "song-card" },
+    cover,
+    h("div", { className: "song-text" },
+      h("div", { className: "song-label" }, h("span", { className: "eq" }, h("i"), h("i"), h("i")), "Listening on MZK"),
+      h("div", { className: "song-title", title: song.title }, song.title),
+      song.artist ? h("div", { className: "song-artist", title: song.artist }, song.artist) : null));
+}
+// Shows the live song in `box` (hidden whenever nothing is playing). Returns an unsubscribe function.
+function mountSong(box, code) {
+  box.replaceChildren(); box.style.display = "none";
+  if (!code) return () => {};
+  return mzkSubscribe(code, song => {
+    if (!song) { box.replaceChildren(); box.style.display = "none"; return; }
+    box.replaceChildren(buildSongCard(song)); box.style.display = "";
+  });
+}
+// For the members list: look the person up by chat ID, then follow their song.
+function watchSongByLoginId(loginId, cb) {
+  let unsub = null, dead = false;
+  accountKeyForLoginId(loginId).then(k => k ? fetchAccountProfile(k) : null).then(prof => {
+    if (dead || !prof || !prof.mzk) return;
+    unsub = mzkSubscribe(prof.mzk, cb);
+  }).catch(() => {});
+  return () => { dead = true; if (unsub) unsub(); };
+}
+
 function compressAvatarFile(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -361,7 +505,7 @@ function compressAvatarFile(file) {
   });
 }
 
-async function updateProfile(newUsername, newAvatarDataUrl, newBio) {
+async function updateProfile(newUsername, newAvatarDataUrl, newBio, newMzk) {
   if (!currentSession) return { ok: false, error: "Not logged in." };
   const updates = {};
   let usernameChanged = false;
@@ -387,6 +531,20 @@ async function updateProfile(newUsername, newAvatarDataUrl, newBio) {
     updates["users/" + currentSession.accountKey + "/avatar"] = newAvatarDataUrl;
   }
 
+  // MZK link code: checked up front so a typo can't half-save the rest of the profile.
+  let mzkToSave;
+  if (newMzk !== undefined) {
+    const norm = normalizeMzkCode(newMzk);
+    if (norm === null) return { ok: false, error: "That link code doesn't look right. It looks like K7F2M-92QXW." };
+    const currentMzk = String((currentUserData && currentUserData.mzk) || "");
+    if (norm !== currentMzk) {
+      if (norm && (await mzkCodeExists(norm)) === false) {
+        return { ok: false, error: "MZK doesn't know that code. In MZK, turn on “Show my song in VUS” and copy the code it shows." };
+      }
+      mzkToSave = norm;
+    }
+  }
+
   // The bio is saved on its own, and only when it actually changed, so a problem with it
   // can never stop your name or picture from saving.
   let bioToSave;
@@ -396,7 +554,7 @@ async function updateProfile(newUsername, newAvatarDataUrl, newBio) {
     if (bio !== current) bioToSave = bio;
   }
 
-  if (Object.keys(updates).length === 0 && bioToSave === undefined) return { ok: true, username: currentSession.username };
+  if (Object.keys(updates).length === 0 && bioToSave === undefined && mzkToSave === undefined) return { ok: true, username: currentSession.username };
 
   if (Object.keys(updates).length > 0) {
     try {
@@ -421,6 +579,16 @@ async function updateProfile(newUsername, newAvatarDataUrl, newBio) {
     } catch (e) {
       console.error("bio save failed", e);
       return { ok: false, error: friendlyDbError(e, "Your picture/name saved, but the bio couldn't") };
+    }
+  }
+
+  if (mzkToSave !== undefined) {
+    try {
+      await usersRef.child(currentSession.accountKey).child("mzk").set(mzkToSave || null);
+      delete profileCache[currentSession.accountKey];
+    } catch (e) {
+      console.error("mzk save failed", e);
+      return { ok: false, error: friendlyDbError(e, "The rest saved, but the MZK link couldn't") };
     }
   }
   return { ok: true, username: currentSession.username };
@@ -818,6 +986,7 @@ const $profileAvatarFileInput = document.getElementById("profileAvatarFileInput"
 const $profileNameInput = document.getElementById("profileNameInput");
 const $profileSaveBtn = document.getElementById("profileSaveBtn");
 const $profileBioInput = document.getElementById("profileBioInput");
+const $profileMzkInput = document.getElementById("profileMzkInput");
 const $profileBioCount = document.getElementById("profileBioCount");
 const $profilePopoverError = document.getElementById("profilePopoverError");
 
@@ -957,18 +1126,20 @@ async function fetchAndCacheAvatar(accountKey, onLoaded) {
 }
 
 /* ── Public profile lookups (username, ID, picture, bio), cached ── */
-const profileCache = {};     // accountKey -> { accountKey, username, id, avatar, bio }
+const PROFILE_CACHE_MS = 60000;   // short, so a new picture / bio / MZK link shows up for others without a reload
+const profileCache = {};     // accountKey -> { accountKey, username, id, avatar, bio, mzk }
 const profileInflight = {};
 const idToAccountKey = {};
 function fetchAccountProfile(accountKey) {
   if (!accountKey) return Promise.resolve(null);
-  if (profileCache[accountKey]) return Promise.resolve(profileCache[accountKey]);
+  const hit = profileCache[accountKey];
+  if (hit && Date.now() - (hit._at || 0) < PROFILE_CACHE_MS) return Promise.resolve(hit);
   if (profileInflight[accountKey]) return profileInflight[accountKey];
   const base = usersRef.child(accountKey);
-  const p = Promise.all(["username", "id", "avatar", "bio"].map(k => base.child(k).get())).then(snaps => {
+  const p = Promise.all(["username", "id", "avatar", "bio", "mzk"].map(k => base.child(k).get())).then(snaps => {
     delete profileInflight[accountKey];
     if (!snaps[0].exists()) return null;
-    const prof = { accountKey, username: snaps[0].val(), id: snaps[1].val(), avatar: snaps[2].val() || null, bio: snaps[3].val() || "" };
+    const prof = { accountKey, username: snaps[0].val(), id: snaps[1].val(), avatar: snaps[2].val() || null, bio: snaps[3].val() || "", mzk: snaps[4].val() || "", _at: Date.now() };
     profileCache[accountKey] = prof;
     if (prof.id) idToAccountKey[String(prof.id)] = accountKey;
     return prof;
@@ -1098,12 +1269,18 @@ function openProfilePopover() {
   $profilePopoverError.textContent = "";
   $profileNameInput.value = currentSession ? currentSession.username : "";
   $profileBioInput.value = (currentUserData && currentUserData.bio) || "";
+  $profileMzkInput.value = (currentUserData && currentUserData.mzk) || "";
   updateBioCount();
   renderProfileAvatarButton(currentUserData && currentUserData.avatar);
   $profilePopover.classList.add("show");
 }
 function updateBioCount() { $profileBioCount.textContent = $profileBioInput.value.length + "/" + BIO_MAX_LENGTH; }
 $profileBioInput.addEventListener("input", updateBioCount);
+// shape the MZK code as it's typed or pasted: capitals only, dash after the 5th character
+$profileMzkInput.addEventListener("input", () => {
+  const raw = $profileMzkInput.value.toUpperCase().replace(/[^A-Z2-9]/g, "").slice(0, 10);
+  $profileMzkInput.value = raw.length > 5 ? raw.slice(0, 5) + "-" + raw.slice(5) : raw;
+});
 function closeProfilePopover() { $profilePopover.classList.remove("show"); }
 
 $railAvatarBtn.addEventListener("click", (e) => {
@@ -1131,12 +1308,13 @@ $profileAvatarFileInput.addEventListener("change", async () => {
 $profileSaveBtn.addEventListener("click", async () => {
   $profileSaveBtn.disabled = true;
   $profilePopoverError.textContent = "";
-  const result = await updateProfile($profileNameInput.value, pendingAvatarDataUrl !== null ? pendingAvatarDataUrl : undefined, $profileBioInput.value);
+  const result = await updateProfile($profileNameInput.value, pendingAvatarDataUrl !== null ? pendingAvatarDataUrl : undefined, $profileBioInput.value, $profileMzkInput.value);
   $profileSaveBtn.disabled = false;
   if (!result.ok) { $profilePopoverError.textContent = result.error; return; }
   pendingAvatarDataUrl = null;
   closeProfilePopover();
   refreshOwnRailAvatar();
+  window.dispatchEvent(new CustomEvent("vus:profile"));   // chat redraws the members list (picture, song)
 });
 
 function refreshOwnRailAvatar() {
@@ -1204,6 +1382,7 @@ async function doLogout() {
   closeOpenChat();
   closeModal();
   closeProfilePopover();
+  stopProfileSong(); if (dmpSongUnsub) { dmpSongUnsub(); dmpSongUnsub = null; } mzkStopAll();
   window.dispatchEvent(new CustomEvent("vus:logout"));
   otherAvatarCache = {};
   currentSession = null;
@@ -1675,8 +1854,11 @@ let otherUserLastSeenCache = {};
 const $dmProfileBody = document.getElementById("dmProfileBody");
 const dmProfileIdCache = {};
 
+let dmpSongUnsub = null, dmpRenderId = 0;
 function renderDmProfile() {
   if (!$dmProfileBody) return;
+  const myRender = ++dmpRenderId;
+  if (dmpSongUnsub) { dmpSongUnsub(); dmpSongUnsub = null; }
   const open = !!(openChatAccountKey || openChatGcId);
   $appShell.classList.toggle("has-profile", open);
   if (!open) { $dmProfileBody.replaceChildren(); return; }
@@ -1727,15 +1909,18 @@ function renderDmProfile() {
     }
     const rolesBox = h("div", { className: "pc-roles" });
     const bioBox = h("div", {});
+    const songBox = h("div", { className: "song-wrap" });
     info.appendChild(rolesBox);
     info.appendChild(bioBox);
+    info.appendChild(songBox);
     fetchAccountProfile(key).then(prof => {
-      if (!prof || openChatAccountKey !== key) return;
+      if (!prof || openChatAccountKey !== key || myRender !== dmpRenderId) return;
       fillRoles(rolesBox, prof.id);
       if (prof.bio) {
         bioBox.appendChild(h("div", { className: "dmp-h" }, "About me"));
         bioBox.appendChild(h("div", { className: "dmp-t dmp-bio" }, prof.bio));
       }
+      if (prof.mzk) dmpSongUnsub = mountSong(songBox, prof.mzk);
     });
     info.appendChild(h("div", { className: "dmp-actions" },
       h("button", { className: "dmp-btn", onclick: async () => {
@@ -2289,8 +2474,11 @@ const $chatUserProfileAvatar = document.getElementById("chatUserProfileAvatar");
 const $chatUserProfileRoles = document.getElementById("chatUserProfileRoles");
 const $chatUserProfileBioWrap = document.getElementById("chatUserProfileBioWrap");
 const $chatUserProfileBio = document.getElementById("chatUserProfileBio");
+const $chatUserProfileSong = document.getElementById("chatUserProfileSong");
+let profileSongUnsub = null;
+function stopProfileSong() { if (profileSongUnsub) { profileSongUnsub(); profileSongUnsub = null; } }
 
-function closeChatUserProfile() { $chatUserProfileOverlay.style.display = "none"; }
+function closeChatUserProfile() { stopProfileSong(); $chatUserProfileOverlay.style.display = "none"; }
 $chatUserProfileCloseBtn.addEventListener("click", closeChatUserProfile);
 $chatUserProfileOverlay.addEventListener("click", (e) => { if (e.target === $chatUserProfileOverlay) closeChatUserProfile(); });
 
@@ -2310,6 +2498,8 @@ function resetProfileCard() {
   $chatUserProfileAddBtn.style.display = "none";
   $chatUserProfileRoles.replaceChildren();
   $chatUserProfileBioWrap.style.display = "none";
+  stopProfileSong();
+  $chatUserProfileSong.replaceChildren(); $chatUserProfileSong.style.display = "none";
   $chatUserProfileAvatar.replaceChildren();
   $chatUserProfileOverlay.style.display = "flex";
 }
@@ -2320,6 +2510,7 @@ function fillProfileCard(prof, accountKey) {
   renderAvatarInto($chatUserProfileAvatar, prof.username, prof.avatar);
   fillRoles($chatUserProfileRoles, prof.id);
   if (prof.bio) { $chatUserProfileBio.textContent = prof.bio; $chatUserProfileBioWrap.style.display = "block"; }
+  if (prof.mzk && $chatUserProfileOverlay.style.display === "flex") profileSongUnsub = mountSong($chatUserProfileSong, prof.mzk);
 
   if (accountKey === currentSession.accountKey) { $chatUserProfileStatus.textContent = "That's you."; return; }
   const status = getRelationshipStatus(accountKey);
@@ -2377,6 +2568,7 @@ async function openAccountProfile(accountKey, nameFallback) {
 window.VUS_DM = {
   openChatUserProfile,
   getAvatarByLoginId,
+  watchSongByLoginId,
   getSession: () => currentSession ? { accountKey: currentSession.accountKey, username: currentSession.username, id: currentSession.id } : null,
   logout: () => doLogout()
 };
