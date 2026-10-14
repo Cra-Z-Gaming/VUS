@@ -229,6 +229,12 @@
   .sharebox .stat { margin:0 0 10px; font-size:.88rem; }
   .srow { display:flex; align-items:center; gap:12px; padding:10px 0; border-top:1px solid var(--line); flex-wrap:wrap; }
   .srow .scode { font:700 1.5rem ui-monospace,Menlo,Consolas,monospace; letter-spacing:.25em; }
+  .npcode { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .npcode .scode { font:700 1.35rem ui-monospace,Menlo,Consolas,monospace; letter-spacing:.14em; padding:6px 14px; border-radius:10px; background:var(--surface); border:1px solid var(--line); user-select:all; }
+  .npstat { display:flex; align-items:center; gap:8px; color:var(--dim); font-size:.85rem; }
+  .npstat i { width:8px; height:8px; border-radius:50%; background:var(--dim); flex:none; }
+  .npstat.live i { background:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent); }
+  .npstat.err { color:#ff7a7a; } .npstat.err i { background:#ff7a7a; }
   .srow .left { flex:1; color:var(--dim); font-size:.85rem; min-width:80px; }
   dialog.modal input.codein { text-align:center; letter-spacing:.4em; font:700 1.6rem ui-monospace,Menlo,Consolas,monospace; text-transform:uppercase; }
 
@@ -1464,6 +1470,7 @@ function mergeWithCloud(cloud){
   store={likes,playlists:pls}; saveLocal(); refreshAfterSync(); pushNow();
 }
 function onUser(u){
+  if(u&&u.isAnonymous) u=null;   // anonymous sessions are never a real account
   pendingUser=needsVerify(u)?u:null; if(pendingUser) u=null;   // unverified accounts don't count as signed in
   fbUser=u; renderAccount();
   if(unsubDoc){ unsubDoc(); unsubDoc=null; }
@@ -1503,7 +1510,7 @@ async function initFirebase(){
     auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{}).then(()=>auth.onAuthStateChanged(onUser));
   }catch(e){ $("acct").querySelector(".name").textContent="Sync unavailable"; }
 }
-initFirebase();
+const fbReady=initFirebase();
 
 // ---------- sharing: temporary codes (needs an account to create, none to join) ----------
 const CODE_ALPHA="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -1629,6 +1636,164 @@ async function refreshJoined(){
   if(changed){ saveStore(); refreshAfterSync(); if(activeList&&activeList!=="liked"&&!getPl(activeList)) go(activeTab); }
 }
 
+// ---------- show my song in VUS (now playing) ----------
+// Publishes the current song (title, artist, small cover) to Firestore under a private random link code.
+// The code is pasted into the VUS profile, which reads it back. It uses its own anonymous Firebase session,
+// so it never touches your sign-in. Turn it off (or clear data) and the shared song is deleted.
+// (var, not let/const: syncNP can run during early startup, before this block is reached)
+var NP_KEY="mzk:np", NP_ALPHA="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+var npApp=null, npDb=null, npAuth=null, npUid=null, npTimer=null, npBeat=null, npLast="", npBusy=false, npStatus={t:"",k:""};
+function npState(){ try{ const x=JSON.parse(localStorage.getItem(NP_KEY)||"null"); if(x&&/^[A-Z2-9]{5}-[A-Z2-9]{5}$/.test(x.code||"")) return x; }catch(e){} return null; }
+function npSave(x){ try{ if(x) localStorage.setItem(NP_KEY,JSON.stringify(x)); else localStorage.removeItem(NP_KEY); }catch(e){} }
+const npNewCode=()=>rndStr(5,NP_ALPHA)+"-"+rndStr(5,NP_ALPHA);
+function npSetStatus(t,k){
+  npStatus={t,k:k||""};
+  document.querySelectorAll(".npstat").forEach(n=>{ n.className="npstat"+(k?" "+k:""); n.querySelector("span").textContent=t; });
+}
+function npErrText(e){
+  const c=(e&&(e.code||e.message))||"error";
+  if(/operation-not-allowed|admin-restricted/.test(c)) return "Anonymous sign-in isn't turned on in Firebase yet (Authentication → Sign-in method → Anonymous).";
+  if(/permission-denied/.test(c)) return "Firestore rules don't allow this yet. Add the nowPlaying rule.";
+  if(/network|unavailable/.test(c)) return "Couldn't reach the server. Check your connection.";
+  return "Couldn't share your song ("+c+").";
+}
+async function npInit(){
+  if(npDb&&npUid) return;
+  await fbReady;
+  if(!window.firebase||!firebase.firestore||!firebase.auth) throw new Error("Sharing isn't available right now.");
+  npApp=firebase.apps.find(a=>a.name==="np")||firebase.initializeApp(FIREBASE_CONFIG,"np");
+  npAuth=npApp.auth(); npDb=npApp.firestore();
+  let u=await new Promise(res=>{ const off=npAuth.onAuthStateChanged(x=>{ off(); res(x); }); });
+  if(!u) u=(await npAuth.signInAnonymously()).user;
+  npUid=u.uid;
+}
+const npRef=code=>npDb.collection("nowPlaying").doc(code);
+const npStamp=()=>firebase.firestore.FieldValue.serverTimestamp();
+function shrinkImg(src,px){
+  return new Promise(res=>{
+    const im=new Image(); im.crossOrigin="anonymous";
+    im.onload=()=>{
+      try{
+        const w=im.naturalWidth, h=im.naturalHeight; if(!w||!h) return res("");
+        const k=Math.min(1,px/Math.max(w,h)), c=document.createElement("canvas"); c.width=Math.max(1,Math.round(w*k)); c.height=Math.max(1,Math.round(h*k));
+        c.getContext("2d").drawImage(im,0,0,c.width,c.height); res(c.toDataURL("image/jpeg",.8));
+      }catch(e){ res(""); }
+    };
+    im.onerror=()=>res(""); im.src=src;
+  });
+}
+// the cover currently shown in the player, shrunk to a small JPEG (cached per song)
+async function npCover(t){
+  if(t._npc!==undefined) return t._npc;
+  const src=$("art").hidden?"":$("art").src; if(!src) return "";
+  const d=await shrinkImg(src,160);
+  if(queue[qi]===t) t._npc=d;   // only cache once the art was really this song's
+  return d;
+}
+async function npPayload(){
+  const t=queue[qi];
+  if(!t) return {title:"",artist:"",album:"",cover:"",playing:false};
+  const m=t.meta;
+  return { title:((m&&m.title)||t.title||"").slice(0,150), artist:((m&&m.artist)||t.group||"").slice(0,150), album:((m&&m.album)||"").slice(0,150),
+    cover:await npCover(t), playing:!audio.paused&&!audio.ended };
+}
+// called whenever the player changes; writes only when something actually changed
+function npTouch(){
+  if(!npDb) return;
+  const st=npState(); if(!st||!st.on) return;
+  clearTimeout(npTimer); npTimer=setTimeout(npPush,900);
+}
+async function npPush(force){
+  const st=npState(); if(!st||!st.on||!npDb||npBusy) { if(npBusy) npTouch(); return; }
+  const body=await npPayload(), j=JSON.stringify(body);
+  if(!force&&j===npLast) return;
+  npBusy=true;
+  try{
+    await npRef(st.code).set({owner:npUid,...body,updated:npStamp()});
+    npLast=j; npSetStatus(body.playing?"Live: sharing "+(body.title||"your song"):"On. Nothing playing right now","live");
+  }catch(e){
+    if(e&&e.code==="permission-denied"&&!force) { npBusy=false; return npRelink(); }
+    npSetStatus(npErrText(e),"err");
+  }finally{ npBusy=false; }
+}
+// a heartbeat keeps "playing" fresh; VUS ignores a song whose heartbeat stopped
+function npStartBeat(){
+  clearInterval(npBeat);
+  npBeat=setInterval(()=>{
+    const st=npState(); if(!st||!st.on||!npDb||audio.paused||!queue[qi]) return;
+    npRef(st.code).update({updated:npStamp()}).catch(()=>{});
+  },45000);
+}
+async function npEnable(fresh){
+  await npInit();
+  const old=npState(); let code=(!fresh&&old&&old.code)||npNewCode(), ok=false;
+  for(let i=0;i<6&&!ok;i++){
+    try{
+      await npRef(code).set({owner:npUid,title:"",artist:"",album:"",cover:"",playing:false,updated:npStamp()}); ok=true;
+    }catch(e){ if(e.code!=="permission-denied") throw e; code=npNewCode(); }   // taken by someone else: try another
+  }
+  if(!ok) throw Object.assign(new Error("permission-denied"),{code:"permission-denied"});
+  if(old&&old.code&&old.code!==code&&fresh) npRef(old.code).delete().catch(()=>{});
+  npSave({code,on:true}); npLast=""; npStartBeat(); npPush(true);
+  return code;
+}
+// the old code no longer belongs to this browser (site data was cleared): make a new one
+async function npRelink(){
+  try{ const c=await npEnable(true); toast("Your MZK link code changed. Paste the new one into VUS."); if(activeTab==="Settings") render(false); return c; }
+  catch(e){ npSetStatus(npErrText(e),"err"); }
+}
+function npUnlink(){
+  const st=npState(); clearInterval(npBeat); clearTimeout(npTimer); npLast="";
+  if(st&&st.code&&npDb) npRef(st.code).delete().catch(()=>{});
+  npSave(null);
+}
+// on page load, pick up where we left off
+fbReady.then(async()=>{
+  const st=npState(); if(!st||!st.on) return;
+  try{ await npInit(); npStartBeat(); await npPush(true); }catch(e){ npSetStatus(npErrText(e),"err"); }
+});
+window.addEventListener("pagehide",()=>{
+  const st=npState(); if(!st||!st.on||!npDb) return;
+  try{ npRef(st.code).update({playing:false,updated:npStamp()}).catch(()=>{}); }catch(e){}
+});
+function npCard(){
+  const card=el("section","setcard"); card.append(el("h3",null,"VUS profile"));
+  const st=npState(), on=!!(st&&st.on);
+  const seg=el("div","seg");
+  [[false,"Off"],[true,"On"]].forEach(([v,lbl])=>{
+    const b=el("button",null,lbl); b.setAttribute("aria-pressed",on===v);
+    b.onclick=async()=>{
+      if(on===v) return;
+      if(v){
+        b.disabled=true; npSetStatus("Connecting…","");
+        try{ await npEnable(false); toast("Sharing on. Copy your code into VUS"); }
+        catch(e){ toast(npErrText(e)); }
+      }else{
+        if(!await confirmDialog("Stop sharing your song?","Your song disappears from your VUS profile and the link code stops working.","Turn off",true)) return;
+        npUnlink(); toast("Sharing off");
+      }
+      render(false);
+    };
+    seg.append(b);
+  });
+  card.append(setRow("Show my song in VUS","Puts what you're playing on your VUS profile, with the cover. Only the title, artist and cover are shared. Anyone who can see your VUS profile can see it.",seg));
+  if(on){
+    const r=el("div","setrow"), l=el("div"); l.append(el("span","lbl","Your link code"),el("span","d","In VUS, open your profile and paste this into “MZK link code”. It works on this browser only."));
+    const cc=el("div","npcode");
+    cc.append(el("span","scode",st.code),
+      pill("","Copy",()=>{ (navigator.clipboard?navigator.clipboard.writeText(st.code):Promise.reject()).then(()=>toast("Copied "+st.code)).catch(()=>toast("Code: "+st.code)); }),
+      pill("","New code",async()=>{
+        if(!await confirmDialog("Make a new code?","The old code stops working, so you'll need to paste the new one into VUS.","New code",true)) return;
+        try{ await npEnable(true); toast("New code made"); }catch(e){ toast(npErrText(e)); }
+        render(false);
+      }));
+    r.append(l,cc); card.append(r);
+    const sr=el("div","setrow"), s=el("div","npstat"+(npStatus.k?" "+npStatus.k:"")); s.append(el("i"),el("span",null,npStatus.t||"Connecting…"));
+    sr.append(s); card.append(sr);
+  }
+  return card;
+}
+
 // ---------- downloaded to this browser (download-only; songs are only removed from Settings) ----------
 const OFFLINE="mzk-offline-v1", OFF_ICON='<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 15l-5-5h3V7h4v5h3l-5 5z"/></svg>';
 let offlineSet=new Set(), offState={active:false,id:null,done:0,total:0}, srcToken=0, curBlob=null, offChangedTimer=null;
@@ -1722,6 +1887,7 @@ async function clearAllData(){
   clearTimeout(pushTimer); pushTimer=null;
   audio.pause(); audio.removeAttribute("src"); audio.load();
   queue=[]; userQ=[]; qi=-1; $("now").textContent="Nothing playing"; $("sub").textContent="Pick a track to start"; $("art").hidden=true; $("cur").textContent="0:00"; $("dur").textContent="0:00"; $("seek").value=0; setFill($("seek")); document.title="mzk";
+  npUnlink();   // stops sharing and removes the shared song (best effort)
   try{ Object.keys(localStorage).filter(k=>k.startsWith("mzk:")).forEach(k=>localStorage.removeItem(k)); }catch(e){}
   try{ if(window.caches) await caches.delete(OFFLINE); }catch(e){}
   hist={recent:[],counts:{}}; reorder=false; qReorder=false; closeNP();
@@ -1794,6 +1960,7 @@ function renderSettings(c){
         :setRow("Not signed in","Sign in to sync playlists and liked songs across devices.",pill("","Sign in",()=>authDialog())));
     c.append(ac);
   }
+  if(FIREBASE_CONFIG) c.append(npCard());
   // storage
   const st=el("section","setcard"); st.append(el("h3",null,"Storage"));
   const dl=data.Downloaded.tracks, size=dl.reduce((n,t)=>n+(t.size||0),0);
@@ -1920,6 +2087,7 @@ $("npq").innerHTML=$("qbtn").innerHTML; $("npopts").innerHTML=$("opts").innerHTM
 function openNP(){ if(!queue[qi]) return; $("npv").hidden=false; syncNP(); $("npclose").focus(); }
 function closeNP(){ $("npv").hidden=true; }
 function syncNP(){
+  npTouch();
   const v=$("npv"); if(v.hidden) return;
   const t=queue[qi]; if(!t){ closeNP(); return; }
   $("npt").textContent=t.title; $("nps").textContent=$("sub").textContent;
