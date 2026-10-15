@@ -430,7 +430,7 @@ const ChatBackend = {
       ...(loginId ? { loginId: String(loginId) } : {}),
       text: text,
       ts: firebase.database.ServerValue.TIMESTAMP,
-      ...(mention ? { mention: mention.name } : {}),
+      ...(mention ? { mention: mention.name + (mention.silent ? SILENT_MENTION_MARK : "") } : {}),
       ...(color ? { bubble: color.bubble, textColor: color.text } : {})
     });
   },
@@ -467,6 +467,28 @@ const ChatBackend = {
       const snap = await this._presenceRef.get();
       return Object.values(snap.val() || {}).some(e => e && String(e.loginId || "") === String(loginId));
     } catch (e) { return false; }
+  },
+
+  // "Join from this tab": clear every entry this account has in the current room so the
+  // claim that follows can't hit "already-online". Removing is always allowed by the rules.
+  // The tab that was displaced notices (joinedAt changes) and steps aside -- see _startPresenceHeal.
+  async removeAccountPresence(loginId) {
+    const snap = await this._presenceRef.get();
+    const val = snap.val() || {};
+    const jobs = Object.entries(val)
+      .filter(([, e]) => e && String(e.loginId || "") === String(loginId))
+      .map(([key]) => this._presenceRef.child(key).remove());
+    await Promise.all(jobs);
+    return jobs.length;
+  },
+
+  // Called by the displaced tab: forget my presence WITHOUT deleting it (it now belongs to the new tab).
+  abandonPresence() {
+    this._stopPresenceHeal();
+    try { if (this._myLeaveEventRef) this._myLeaveEventRef.onDisconnect().cancel(); } catch (e) {}
+    try { if (this._myPresenceRef) this._myPresenceRef.onDisconnect().cancel(); } catch (e) {}
+    this._myLeaveEventRef = null;
+    this._myPresenceRef = null;
   },
 
   async isNameTaken(name, ownLoginId) {
@@ -527,6 +549,7 @@ const ChatBackend = {
     }
 
     this._startPresenceHeal(name, loginId);
+    await this._recordJoinedAt();
 
     // Roles/image access/color are tied to loginId (userProfiles + roleIds),
     // so joining changes nothing about them -- they were never removed.
@@ -553,8 +576,26 @@ const ChatBackend = {
     this._stopPresenceHeal();
     this._presenceMeta = { name, loginId: String(loginId) };
     this._healRef = this._myPresenceRef;
-    this._healHandler = snap => { if (!snap.exists()) this.ensurePresence(); };
+    this._myJoinedAt = null;
+    this._healHandler = snap => {
+      if (!snap.exists()) { this.ensurePresence(); return; }
+      // Someone else (this account in another tab) re-claimed my entry: joinedAt no longer matches
+      // the value I wrote. Step aside instead of fighting for it.
+      const j = (snap.val() || {}).joinedAt;
+      if (this._myJoinedAt != null && j != null && j !== this._myJoinedAt && typeof this.onDisplaced === "function") {
+        const cb = this.onDisplaced;
+        this.abandonPresence();
+        cb();
+      }
+    };
     this._healRef.on("value", this._healHandler);
+  },
+  async _recordJoinedAt() {
+    try {
+      const ref = this._myPresenceRef;
+      const v = (await ref.get()).val();
+      if (ref === this._myPresenceRef && v && v.joinedAt != null) this._myJoinedAt = v.joinedAt;
+    } catch (e) {}
   },
   _stopPresenceHeal() {
     if (this._healRef && this._healHandler) this._healRef.off("value", this._healHandler);
@@ -577,7 +618,9 @@ const ChatBackend = {
         if (this._myPresenceRef !== mine) return;
         this._lastHealAt = Date.now();
         mine.onDisconnect().remove();
+        this._myJoinedAt = null;
         await mine.set({ loginId: meta.loginId, joinedAt: firebase.database.ServerValue.TIMESTAMP });
+        await this._recordJoinedAt();
         if (!this._silentSession) {
           try { if (this._myLeaveEventRef) this._myLeaveEventRef.onDisconnect().cancel(); } catch (e) {}
           const leaveRef = this._leaveEventsRef.push();
@@ -1224,7 +1267,13 @@ const $pingSound = document.getElementById("pingSound");
 let myName = "";
 let myLoginId = "";
 let messageCount = 0;
-let autoScroll = true;
+const CHAT_PREFS_KEY = "vus_chat_prefs_v1";
+const chatPrefs = { autoScroll: true, showJoinLeave: true };
+try { Object.assign(chatPrefs, JSON.parse(localStorage.getItem(CHAT_PREFS_KEY) || "{}")); } catch (e) {}
+function saveChatPrefs() { try { localStorage.setItem(CHAT_PREFS_KEY, JSON.stringify(chatPrefs)); } catch (e) {} }
+let autoScroll = chatPrefs.autoScroll !== false;
+let stickToBottom = true;      // true while the view is pinned to the newest message
+document.body.classList.toggle("hide-joinleave", chatPrefs.showJoinLeave === false);
 let myTimeoutRemainingMs = 0; // live, kept in sync by watchMyTimeout()
 let unwatchMyTimeout = null;
 let myTimeoutCountdownTimer = null;
@@ -1282,10 +1331,24 @@ function isNearBottom() {
   return $messages.scrollHeight - $messages.scrollTop - $messages.clientHeight < 120;
 }
 
+let programmaticScrollUntil = 0;
+function snapToBottom() {
+  programmaticScrollUntil = Date.now() + 150;
+  $messages.scrollTop = $messages.scrollHeight;
+}
 function scrollToBottom() {
-  requestAnimationFrame(() => { $messages.scrollTop = $messages.scrollHeight; });
+  stickToBottom = true;
+  snapToBottom();
+  // layout can still grow a frame or two later (images, the typing bar, fonts): snap again
+  requestAnimationFrame(() => { snapToBottom(); requestAnimationFrame(snapToBottom); });
   $jumpToBottomBtn.style.display = "none";
 }
+// Strict auto scroll: while it is on and the view is pinned, ANY growth of the chat
+// (new rows, images loading, the composer resizing) keeps the newest message in view.
+function keepPinned() { if (autoScroll && stickToBottom) snapToBottom(); }
+new MutationObserver(keepPinned).observe($messages, { childList: true, subtree: true });
+if (window.ResizeObserver) new ResizeObserver(keepPinned).observe($messages);
+$messages.addEventListener("load", keepPinned, true);
 
 // Fills (or refreshes) one badge row from the sender's current rank.
 // The badge is looked up from who is actually ONLINE under that name right
@@ -1331,19 +1394,25 @@ function paintAvatar(container, loginId, name) {
 }
 function openProfileFor(loginId, name) { if (window.VUS_DM) window.VUS_DM.openChatUserProfile(loginId, name); }
 
+// A mention is stored as the person's name. A "mention only" (no sound) mention carries an invisible
+// zero-width marker after the name -- no database change needed, and older tabs simply ignore it.
+const SILENT_MENTION_MARK = "\u200b";
+function isSilentMention(v) { return String(v || "").endsWith(SILENT_MENTION_MARK); }
+function mentionTargetOf(v) { return String(v || "").replace(/\u200b+$/, ""); }
+
 function renderMessage(msg) {
   $emptyState.style.display = "none";
 
   if (msg.system) {
     const sysEl = document.createElement("div");
-    sysEl.className = "msg system";
+    sysEl.className = "msg system" + ((Array.isArray(msg.leftNames) || /^.{1,60} joined$/.test(String(msg.text || "")) || / left$/.test(String(msg.text || ""))) ? " sys-joinleave" : "");
     const sysBubble = document.createElement("div");
     sysBubble.className = "msg-bubble";
     sysBubble.textContent = msg.text;
     sysEl.appendChild(sysBubble);
     $messages.appendChild(sysEl);
     messageCount++;
-    if (autoScroll) scrollToBottom();
+    if (autoScroll && stickToBottom) scrollToBottom();
 
     // If the chat just posted a "left" message for the name THIS tab is
     // currently using, our presence is already gone server-side (someone/
@@ -1412,7 +1481,7 @@ function renderMessage(msg) {
   } else if (msg.mention) {
     const chip = document.createElement("span");
     chip.className = "mention-chip-inline";
-    chip.textContent = "@" + msg.mention;
+    chip.textContent = "@" + mentionTargetOf(msg.mention);
     bubble.appendChild(chip);
     if (msg.text) {
       bubble.appendChild(document.createTextNode(" " + msg.text));
@@ -1433,18 +1502,22 @@ function renderMessage(msg) {
   while (messageCount > MAX_MESSAGES) {
     const first = $messages.querySelector(".msg");
     if (!first) break;
+    // Trimming old rows from the top must not shove what you're reading upward.
+    const removed = first.offsetHeight;
     first.remove();
+    if (!(autoScroll && stickToBottom) && removed) $messages.scrollTop = Math.max(0, $messages.scrollTop - removed);
     messageCount--;
   }
 
-  if (autoScroll && (isNearBottom() || mine)) {
+  if (mine || (autoScroll && stickToBottom)) {
     scrollToBottom();
   } else if (!isNearBottom()) {
     $jumpToBottomBtn.style.display = "block";
   }
 
-  if (msg.mention && msg.mention === myName && msg.name !== myName) {
-    triggerIncomingPing(msg.name, msg.text);
+  if (msg.mention && mentionTargetOf(msg.mention) === myName && msg.name !== myName) {
+    el.classList.add("mentions-me");
+    if (!isSilentMention(msg.mention)) triggerIncomingPing(msg.name, msg.text);
   }
 }
 
@@ -1634,8 +1707,11 @@ async function autoLoginOrPrompt() {
     // On a plain page refresh, our previous tab's presence can linger for a
     // second or two before onDisconnect clears it. Wait it out once rather
     // than bouncing the person to an error on every refresh.
-    const stale = await ChatBackend.isAccountOnline(session.id);
-    if (stale) await new Promise(r => setTimeout(r, 2500));
+    // Leaving the site and coming back leaves a ghost entry until the old connection times
+    // out, so give it a few seconds to clear before offering "Join from this tab".
+    for (let i = 0; i < 3 && (await ChatBackend.isAccountOnline(session.id)); i++) {
+      await new Promise(r => setTimeout(r, 2000));
+    }
     await joinWithDmSession(session, session.username);
   } catch (e) {
     renderDmLoginPrompt("Couldn't reach the chat server — try again.");
@@ -1802,8 +1878,40 @@ function onMyRoleMaybeChanged() {
 
 // Shown when auto-login finds the account already online elsewhere.
 function renderAutoLoginBlocked(session, message) {
-  showStatusCard("Already in chat", message, [{ label: "Try again", onClick: () => autoLoginOrPrompt() }]);
+  showStatusCard("Already in chat", message, [
+    { label: "Join from this tab", onClick: () => joinFromThisTab(session) },
+    { label: "Try again", onClick: () => autoLoginOrPrompt() }
+  ]);
 }
+
+// Moves the chat session to THIS tab: clears the account's old entry (a closed tab's leftover
+// ghost, or a live tab elsewhere, which then shows "you're in another tab") and joins fresh.
+async function joinFromThisTab(session) {
+  if (chatJoinInFlight || myName) return;
+  chatJoinInFlight = true;
+  try {
+    showStatusCard("Joining from this tab…", "");
+    if (!bootChat()) return;
+    if (!roomListenersLive) { attachRoomListeners(); roomListenersLive = true; }
+    await ChatBackend.removeAccountPresence(session.id);
+    await joinWithDmSession(session, session.username);
+  } catch (e) {
+    renderAutoLoginBlocked(session, "Couldn't switch to this tab — try again.");
+  } finally {
+    chatJoinInFlight = false;
+  }
+}
+
+// This tab lost its presence to the same account joining from another tab.
+ChatBackend.onDisplaced = function () {
+  const session = loadDmSession();
+  shutdownChatSession();
+  if (!session) return;
+  showStatusCard("You're chatting in another tab", "This account just joined VUS Chat from another tab or window.", [
+    { label: "Join from this tab", onClick: () => joinFromThisTab(session) }
+  ]);
+  $joinScreen.style.display = "flex";
+};
 
 // Renaming = log out of this name and pick another. The account is unchanged.
 function updateSendButtonState() {
@@ -2440,6 +2548,11 @@ async function sendMessage() {
 
   if (!text && !mentionTarget) return;
 
+  if (mentionTarget && !currentMentionSound) {
+    // mention only: no sound, so no cooldown
+    finalizeSend(text, { name: mentionTarget, silent: true });
+    return;
+  }
   if (mentionTarget) {
     $sendBtn.disabled = true;
     ChatBackend.tryStartAtPingCooldown(mentionTarget).then(result => {
@@ -2471,8 +2584,7 @@ function finalizeSend(text, mention) {
       clearMention();
       autosizeInput();
       updateCharCounter();
-      autoScroll = true;
-      setAutoScrollUI();
+      scrollToBottom();   // your own message always scrolls into view
     })
     .catch(error => {
       $connError.textContent = "Message failed to send — check your connection.";
@@ -2593,16 +2705,18 @@ function setAutoScrollUI() {
   $autoScrollBtn.classList.toggle("active", autoScroll);
   if (autoScroll) scrollToBottom();
 }
-
-$autoScrollBtn.addEventListener("click", () => {
-  autoScroll = !autoScroll;
+function setAutoScroll(on) {
+  autoScroll = !!on;
+  chatPrefs.autoScroll = autoScroll;
+  saveChatPrefs();
   setAutoScrollUI();
-});
+}
+$autoScrollBtn.addEventListener("click", () => setAutoScroll(!autoScroll));
 
 $messages.addEventListener("scroll", () => {
-  if (isNearBottom()) {
-    $jumpToBottomBtn.style.display = "none";
-  }
+  const away = $messages.scrollHeight - $messages.scrollTop - $messages.clientHeight;
+  if (Date.now() > programmaticScrollUntil) stickToBottom = away < 40;   // only the person's own scrolling unpins
+  if (away < 40) $jumpToBottomBtn.style.display = "none";
 });
 
 $jumpToBottomBtn.addEventListener("click", () => {
@@ -2668,10 +2782,71 @@ function renderPreCodeActions(container) {
   container.appendChild(divider);
 }
 
+// ── Chat settings: everything that used to sit in the toolbar ──
+function renderChatSettings(container) {
+  const wrap = document.createElement("div");
+  wrap.className = "chat-settings";
+  const title = document.createElement("div");
+  title.className = "cs-title";
+  title.textContent = "Chat settings";
+  wrap.appendChild(title);
+
+  const toggle = (label, hint, isOn, onChange) => {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "cs-row";
+    const text = document.createElement("span");
+    text.className = "cs-label";
+    text.textContent = label;
+    if (hint) { const h = document.createElement("small"); h.textContent = hint; text.appendChild(h); }
+    const sw = document.createElement("span");
+    sw.className = "cs-switch" + (isOn() ? " on" : "");
+    row.append(text, sw);
+    row.addEventListener("click", (e) => {
+      e.stopPropagation();
+      onChange(!isOn());
+      sw.classList.toggle("on", isOn());
+    });
+    wrap.appendChild(row);
+  };
+
+  toggle("Auto scroll", "Keeps the newest message in view", () => autoScroll, v => setAutoScroll(v));
+  toggle("Show join / leave", "\u201cX joined\u201d and \u201cX left\u201d lines", () => chatPrefs.showJoinLeave !== false, v => {
+    chatPrefs.showJoinLeave = v;
+    saveChatPrefs();
+    document.body.classList.toggle("hide-joinleave", !v);
+    if (autoScroll && stickToBottom) scrollToBottom();
+  });
+
+  const action = (label, onClick, danger) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "cs-action" + (danger ? " danger" : "");
+    b.textContent = label;
+    b.addEventListener("click", (e) => { e.stopPropagation(); onClick(b); });
+    wrap.appendChild(b);
+    return b;
+  };
+  const rem = getPingYouRemainingMs();
+  const pingBtn = action(rem > 0 ? "\uD83D\uDD14 Ping Devs (" + Math.ceil(rem / 1000) + "s)" : "\uD83D\uDD14 Ping Devs", () => {
+    if (getPingYouRemainingMs() > 0) return;
+    closeClearPanel();
+    $pingYouBtn.click();
+  });
+  if (rem > 0) pingBtn.disabled = true;
+  action("Clear chat on my screen", () => { $clearChatBtn.click(); closeClearPanel(); }, true);
+
+  const divider = document.createElement("div");
+  divider.style.cssText = "height:1px;background:#334155;margin:10px 0";
+  wrap.appendChild(divider);
+  container.appendChild(wrap);
+}
+
 async function renderModMenu() {
   $globalClearPanel.innerHTML = "";
   $globalClearPanel.style.width = "260px";
 
+  renderChatSettings($globalClearPanel);
   renderPreCodeActions($globalClearPanel);
 
   const showColor = myRank() >= COLOR_MIN_RANK;
@@ -4138,18 +4313,26 @@ function stopTyping() {
   }
 }
 
+// "Who is typing" keeps a stable order: the first person to start stays first, the next
+// is second, and when someone stops (or sends) everyone behind them moves up one.
+let typingOrder = [];
 function renderTyping(names) {
-  if (names.length === 0) {
-    $typingBar.style.display = "none";
+  const present = new Set(names);
+  typingOrder = typingOrder.filter(n => present.has(n));
+  names.forEach(n => { if (!typingOrder.includes(n)) typingOrder.push(n); });   // newcomers go last (names arrive oldest-first)
+  const list = typingOrder;
+  if (list.length === 0) {
+    $typingBar.classList.add("idle");
+    $typingBar.textContent = "\u00a0";
     return;
   }
-  const shown = names.slice(0, 3);
-  const extra = names.length - shown.length;
-  let text = shown.map(esc).join(", ");
-  if (extra > 0) text += `, +${extra} more`;
-  text += (names.length === 1 ? " is typing…" : " are typing…");
-  $typingBar.textContent = text;
-  $typingBar.style.display = "block";
+  let text;
+  if (list.length >= 4) text = "Several people are typing\u2026";
+  else if (list.length === 1) text = list[0] + " is typing\u2026";
+  else if (list.length === 2) text = list[0] + " and " + list[1] + " are typing\u2026";
+  else text = list[0] + ", " + list[1] + " and " + list[2] + " are typing\u2026";
+  $typingBar.textContent = text;   // textContent: names are never parsed as HTML
+  $typingBar.classList.remove("idle");
 }
 
 function getPingYouRemainingMs() {
@@ -4233,17 +4416,38 @@ let mentionDropdownOpen = false;
 let mentionTriggerCharIndex = -1;
 let mentionDropdownMode = "mention";
 
+const $mentionSoundBtn = document.getElementById("mentionSoundBtn");
+const $mentionCancelBtn = document.getElementById("mentionCancelBtn");
+let currentMentionSound = false;   // "mention only" is the default; the bell turns sound on for this one mention
+
+function paintMentionSound() {
+  $mentionSoundBtn.textContent = currentMentionSound ? "\uD83D\uDD14 Ping" : "\uD83D\uDD15 Silent";
+  $mentionSoundBtn.classList.toggle("on", currentMentionSound);
+  $mentionSoundBtn.title = currentMentionSound
+    ? "Plays a sound and a pop-up for them (30s limit per person). Click for mention only."
+    : "Mentions them without a sound (no limit). Click to ping with sound.";
+}
+
 function clearMention() {
   currentMentionTarget = null;
+  currentMentionSound = false;
   $mentionChip.style.display = "none";
   $mentionChip.textContent = "";
+  $mentionSoundBtn.style.display = "none";
+  $mentionCancelBtn.style.display = "none";
 }
 
 function setMention(name) {
   currentMentionTarget = name;
+  currentMentionSound = false;
   $mentionChip.textContent = "@" + name;
   $mentionChip.style.display = "inline-flex";
+  $mentionSoundBtn.style.display = "inline-flex";
+  $mentionCancelBtn.style.display = "inline-flex";
+  paintMentionSound();
 }
+$mentionSoundBtn.addEventListener("click", (e) => { e.stopPropagation(); currentMentionSound = !currentMentionSound; paintMentionSound(); $msgInput.focus(); });
+$mentionCancelBtn.addEventListener("click", (e) => { e.stopPropagation(); clearMention(); $msgInput.focus(); });
 
 function closeMentionDropdown() {
   mentionDropdownOpen = false;
@@ -4252,8 +4456,24 @@ function closeMentionDropdown() {
   $mentionDropdown.innerHTML = "";
 }
 
+function addMentionCancelRow(labelText) {
+  const row = document.createElement("div");
+  row.className = "mention-head";
+  const label = document.createElement("span");
+  label.textContent = labelText || "Mention someone";
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "mention-cancel";
+  cancel.textContent = "Cancel";
+  cancel.addEventListener("mousedown", (e) => e.preventDefault());   // keep focus in the message box
+  cancel.addEventListener("click", (e) => { e.stopPropagation(); closeMentionDropdown(); $msgInput.focus(); });
+  row.append(label, cancel);
+  $mentionDropdown.appendChild(row);
+}
+
 function renderMentionDropdown() {
   $mentionDropdown.innerHTML = "";
+  addMentionCancelRow();
 
   const candidates = latestPresenceList
     .map(e => e.name)
@@ -4303,6 +4523,7 @@ function openModerationTargetDropdown(tokenStart) {
   mentionDropdownOpen = true;
   $mentionDropdown.style.display = "block";
   $mentionDropdown.innerHTML = "";
+  addMentionCancelRow("Pick a user");
 
   const typed = $msgInput.value.slice(tokenStart).trim().toLowerCase();
   const candidates = latestPresenceList
@@ -4344,6 +4565,8 @@ function refreshMentionDropdownIfOpen() {
     renderMentionDropdown();
   }
 }
+
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && mentionDropdownOpen) { closeMentionDropdown(); } });
 
 $mentionChip.addEventListener("click", (e) => {
   e.stopPropagation();
@@ -4720,11 +4943,102 @@ function stopRoomsSidebarLive() {
 
 // The rooms list is docked in the sidebar, so "close" only means: on phones,
 // slide the drawer away after picking something; always clear the footer note.
+
+/* ══════════════════════════════════════════════════════════
+   ROOMS IN THE SERVER RAIL
+   Main chat = the Chat button. Joined private rooms and public rooms get their own icon,
+   "+" opens the room browser (join by code / new room / public list) beside the rail.
+   ══════════════════════════════════════════════════════════ */
+const $railRooms = document.getElementById("railRooms");
+const $navRooms = document.getElementById("navRooms");
+const $roomsRailDot = document.getElementById("roomsRailDot");
+const $navChatBtn = document.getElementById("navChat");
+const railMetaCache = {};
+let railSignature = "";
+
+function railRoomEntries() {
+  const out = new Map();
+  for (const code of joinedPrivateRoomCodes) {
+    const m = railMetaCache[code];
+    out.set(code, { code, name: (m && m.name) || ("Room " + code) });
+    if (!m && !railMetaCache.__loading) {
+      railMetaCache.__loading = true;
+      RoomManager.getRoomMeta(code).then(meta => { if (meta) railMetaCache[code] = meta; }).catch(() => {})
+        .then(() => { railMetaCache.__loading = false; });
+    }
+  }
+  for (const m of publicRoomsList) if (m && m.code) out.set(m.code, { code: m.code, name: m.name || ("Room " + m.code) });
+  if (currentRoomCode && !out.has(currentRoomCode)) {
+    out.set(currentRoomCode, { code: currentRoomCode, name: (currentRoomMeta && currentRoomMeta.name) || ("Room " + currentRoomCode) });
+  }
+  return [...out.values()];
+}
+
+function railInitials(name) {
+  const words = String(name || "?").trim().split(/\s+/).filter(Boolean);
+  const chars = words.length > 1 ? words[0][0] + words[1][0] : (words[0] || "?").slice(0, 2);
+  return chars;
+}
+
+function renderRailRooms() {
+  const shell = document.getElementById("appShell");
+  if (shell) shell.classList.toggle("in-private-room", currentRoomCode !== null);
+  const entries = railRoomEntries();
+  const pinged = roomPingBadges.size > 0;
+  $roomsRailDot.classList.toggle("show", pinged);
+  const sig = entries.map(e => e.code + "|" + e.name + "|" + (roomPingBadges.has(e.code) ? 1 : 0)).join(",") + "#" + currentRoomCode;
+  if (sig === railSignature) return;
+  railSignature = sig;
+  $railRooms.innerHTML = "";
+  entries.forEach(e => {
+    const btn = document.createElement("button");
+    btn.className = "rail-nav-btn rail-room" + (currentRoomCode === e.code ? " active" : "");
+    btn.title = e.name;
+    btn.setAttribute("aria-label", e.name);
+    btn.textContent = railInitials(e.name);
+    if (roomPingBadges.has(e.code)) {
+      const dot = document.createElement("span");
+      dot.className = "rail-dot show";
+      btn.appendChild(dot);
+    }
+    btn.addEventListener("click", () => {
+      if (window.VUS_UI) window.VUS_UI.showChat();
+      closeRoomsSidebar();
+      joinRoomByCode(e.code);
+    });
+    $railRooms.appendChild(btn);
+  });
+}
+setInterval(renderRailRooms, 1200);
+
+// Chat button = main room (only when you're already in chat mode; from DMs it just returns).
+$navChatBtn.addEventListener("click", () => {
+  const shell = document.getElementById("appShell");
+  const wasChat = shell && shell.classList.contains("mode-chat");
+  if (shell) shell.classList.remove("rooms-open");
+  $navRooms.classList.remove("active");
+  if (wasChat && myName && currentRoomCode !== null) switchToMainRoom();
+  setTimeout(renderRailRooms, 0);
+}, true);
+
+$navRooms.addEventListener("click", () => {
+  const shell = document.getElementById("appShell");
+  const wasDm = shell.classList.contains("mode-dm");
+  if (window.VUS_UI) window.VUS_UI.showChat();
+  const open = wasDm ? true : !shell.classList.contains("rooms-open");
+  shell.classList.toggle("rooms-open", open);
+  $navRooms.classList.toggle("active", open);
+  if (open && window.matchMedia("(max-width: 720px)").matches) shell.classList.add("nav-open");
+  if (open) { renderRoomsSidebar(); }
+});
+
 function closeRoomsSidebar() {
   $roomsFooterMsg.textContent = "";
   $roomsFooterMsg.classList.remove("err");
   const shell = document.getElementById("appShell");
-  if (shell) shell.classList.remove("nav-open");
+  if (shell) { shell.classList.remove("nav-open"); shell.classList.remove("rooms-open"); }
+  if ($navRooms) $navRooms.classList.remove("active");
+  setTimeout(renderRailRooms, 0);
 }
 
 $roomsToggleBtn.addEventListener("click", () => {
@@ -5285,6 +5599,7 @@ const memberNameCache = {};   // loginId -> last known chat name (for offline ra
 const memberNameLoading = new Set();
 let memberSongUnsubs = [];   // live "now playing" listeners for the rows currently drawn
 
+let showOfflineRanks = false;   // offline rank-holders are tucked away until you expand the list
 function renderMembersPane() {
   if (!$membersList) return;
   memberSongUnsubs.forEach(f => { try { f(); } catch (e) {} });
@@ -5314,14 +5629,25 @@ function renderMembersPane() {
       if (cached) byId[id] = { id, name: cached, online: false, joinedAt: 0 };
     });
   });
-  const people = Object.values(byId).map(p => {
+  const everyone = Object.values(byId).map(p => {
     const role = (p.id && ROLES[effectiveRoleForLoginId(p.id)]) || ROLES.unranked;
     return Object.assign(p, { role });
-  }).sort((a, b) =>
+  });
+  const offlineTotal = everyone.filter(p => !p.online).length;
+  const people = everyone.filter(p => showOfflineRanks || p.online).sort((a, b) =>
     b.role.rank - a.role.rank || (b.online - a.online) ||
     String(a.name || "").toLowerCase().localeCompare(String(b.name || "").toLowerCase()));
 
   const frag = document.createDocumentFragment();
+  if (offlineTotal > 0 || showOfflineRanks) {
+    const tog = document.createElement("button");
+    tog.type = "button";
+    tog.className = "member-offline-toggle";
+    tog.textContent = showOfflineRanks ? "\u25BE Hide offline (" + offlineTotal + ")" : "\u25B8 Show offline (" + offlineTotal + ")";
+    tog.title = showOfflineRanks ? "Hide offline rank-holders" : "Show offline rank-holders";
+    tog.addEventListener("click", () => { showOfflineRanks = !showOfflineRanks; renderMembersPane(); });
+    frag.appendChild(tog);
+  }
   if (people.length === 0) {
     const empty = document.createElement("div");
     empty.className = "member-empty";
@@ -5329,8 +5655,8 @@ function renderMembersPane() {
     frag.appendChild(empty);
   }
   const groupKey = role => (role.rank > 0 ? role.id : "online");
-  const counts = {};
-  people.forEach(p => { const k = groupKey(p.role); counts[k] = (counts[k] || 0) + 1; });
+  const counts = {}, offCounts = {};
+  people.forEach(p => { const k = groupKey(p.role); counts[k] = (counts[k] || 0) + 1; if (!p.online) offCounts[k] = (offCounts[k] || 0) + 1; });
   let lastGroup = null;
   people.forEach(p => {
     const role = p.role;
@@ -5339,7 +5665,9 @@ function renderMembersPane() {
       lastGroup = gk;
       const head = document.createElement("div");
       head.className = "member-group-head role-" + gk;
-      head.textContent = (role.rank > 0 ? role.icon + " " + role.label : "Online") + " — " + counts[gk];
+      const onN = counts[gk] - (offCounts[gk] || 0);
+      head.textContent = (role.rank > 0 ? role.icon + " " + role.label : "Online") + " — " + onN +
+        (offCounts[gk] ? " \u00b7 " + offCounts[gk] + " offline" : "");
       frag.appendChild(head);
     }
     const row = document.createElement("div");
@@ -5377,7 +5705,7 @@ function renderMembersPane() {
     }
     row.appendChild(wrap);
     row.appendChild(textEl);
-    if (!isMe && p.id) {
+    if (p.id) {
       row.addEventListener("click", () => { if (window.VUS_DM) window.VUS_DM.openChatUserProfile(p.id, p.name); });
     }
     frag.appendChild(row);

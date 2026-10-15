@@ -971,7 +971,6 @@ const $appShell = document.getElementById("appShell");
 
 const $rail = document.getElementById("rail");
 const $railAvatarBtn = document.getElementById("railAvatarBtn");
-const $railSettingsBtn = document.getElementById("railSettingsBtn");
 const $tabChats = document.getElementById("navChats");
 const $tabFind = document.getElementById("navFind");
 const $tabBlocked = document.getElementById("navBlocked");
@@ -1209,6 +1208,9 @@ function applyUiMode() {
   window.dispatchEvent(new CustomEvent("vus:mode", { detail: { mode: dm ? "dm" : "chat" } }));
 }
 
+// Lets chat.js (rooms rail) leave DM mode without reaching into this file.
+window.VUS_UI = { showChat() { if (uiMode !== "chat") closeDmSidebar(); } };
+
 function openDmSidebar(view) {
   uiMode = "dm";
   if (view) dmSidebarView = view;
@@ -1264,12 +1266,100 @@ function renderProfileAvatarButton(avatarDataUrl) {
   $profileAvatarPreviewBtn.appendChild(camBadge);
 }
 
+const $profileMzkLinked = document.getElementById("profileMzkLinked");
+const $profileMzkUnlinked = document.getElementById("profileMzkUnlinked");
+const $profileMzkMasked = document.getElementById("profileMzkMasked");
+const $profileMzkReveal = document.getElementById("profileMzkReveal");
+const $profileMzkSong = document.getElementById("profileMzkSong");
+const $profileMzkIdle = document.getElementById("profileMzkIdle");
+const $profileMzkUnlink = document.getElementById("profileMzkUnlink");
+const $profilePwToggle = document.getElementById("profilePwToggle");
+const $profilePwFields = document.getElementById("profilePwFields");
+const $profilePwSave = document.getElementById("profilePwSave");
+const $profilePwError = document.getElementById("profilePwError");
+const $profileLogoutBtn = document.getElementById("profileLogoutBtn");
+const $currentMzk = () => String((currentUserData && currentUserData.mzk) || "");
+let profileMzkSongUnsub = null, mzkRevealed = false, unlinkStep = 0, unlinkTimer = null;
+
+function paintMzkLinkState() {
+  const code = String((currentUserData && currentUserData.mzk) || "");
+  if (profileMzkSongUnsub) { profileMzkSongUnsub(); profileMzkSongUnsub = null; }
+  $profileMzkLinked.style.display = code ? "block" : "none";
+  $profileMzkUnlinked.style.display = code ? "none" : "block";
+  if (!code) return;
+  // the second half stays hidden unless the person asks to see it
+  $profileMzkMasked.textContent = mzkRevealed ? code : code.slice(0, 5) + "-\u2022\u2022\u2022\u2022\u2022";
+  $profileMzkReveal.textContent = mzkRevealed ? "Hide" : "Show";
+  $profileMzkIdle.style.display = "";
+  profileMzkSongUnsub = mzkSubscribe(code, song => {
+    if (!song) { $profileMzkSong.replaceChildren(); $profileMzkSong.style.display = "none"; $profileMzkIdle.style.display = ""; return; }
+    $profileMzkSong.replaceChildren(buildSongCard(song));
+    $profileMzkSong.style.display = "";
+    $profileMzkIdle.style.display = "none";
+  });
+}
+function resetUnlinkButton() {
+  unlinkStep = 0; clearTimeout(unlinkTimer);
+  $profileMzkUnlink.textContent = "Unlink MZK";
+  $profileMzkUnlink.classList.remove("armed");
+}
+$profileMzkReveal.addEventListener("click", () => { mzkRevealed = !mzkRevealed; paintMzkLinkState(); });
+// Two confirmations before the link is removed; each one expires after 5 seconds.
+$profileMzkUnlink.addEventListener("click", async () => {
+  if (unlinkStep === 0) {
+    unlinkStep = 1; $profileMzkUnlink.textContent = "Are you sure? Click again"; $profileMzkUnlink.classList.add("armed");
+  } else if (unlinkStep === 1) {
+    unlinkStep = 2; $profileMzkUnlink.textContent = "Really unlink? Final click";
+  } else {
+    resetUnlinkButton();
+    $profileMzkUnlink.disabled = true;
+    const result = await updateProfile(undefined, undefined, undefined, "");
+    $profileMzkUnlink.disabled = false;
+    if (!result.ok) { $profilePopoverError.textContent = result.error; return; }
+    $profileMzkInput.value = "";
+    mzkRevealed = false;
+    if (currentUserData) delete currentUserData.mzk;   // don't wait for the live listener to redraw
+    paintMzkLinkState();
+    window.dispatchEvent(new CustomEvent("vus:profile"));
+    return;
+  }
+  clearTimeout(unlinkTimer);
+  unlinkTimer = setTimeout(resetUnlinkButton, 5000);
+});
+
+$profilePwToggle.addEventListener("click", () => {
+  const opening = $profilePwFields.style.display === "none";
+  $profilePwFields.style.display = opening ? "block" : "none";
+  $profilePwToggle.textContent = opening ? "Change password ▴" : "Change password ▾";
+});
+$profilePwSave.addEventListener("click", async () => {
+  const curPw = document.getElementById("settingsCurrentPw").value;
+  const newPw = document.getElementById("settingsNewPw").value;
+  const confirmPw = document.getElementById("settingsNewPwConfirm").value;
+  $profilePwError.style.color = "";
+  if (newPw !== confirmPw) { $profilePwError.textContent = "New passwords don't match."; return; }
+  $profilePwSave.disabled = true;
+  const result = await changePassword(curPw, newPw);
+  $profilePwSave.disabled = false;
+  if (!result.ok) { $profilePwError.textContent = result.error; return; }
+  $profilePwError.style.color = "#4ade80";
+  $profilePwError.textContent = "Password changed.";
+  ["settingsCurrentPw", "settingsNewPw", "settingsNewPwConfirm"].forEach(id => { document.getElementById(id).value = ""; });
+});
+$profileLogoutBtn.addEventListener("click", () => doLogout());
+
 function openProfilePopover() {
   pendingAvatarDataUrl = null;
   $profilePopoverError.textContent = "";
+  $profilePwError.textContent = "";
+  $profilePwFields.style.display = "none";
+  $profilePwToggle.textContent = "Change password ▾";
+  resetUnlinkButton();
+  mzkRevealed = false;
   $profileNameInput.value = currentSession ? currentSession.username : "";
   $profileBioInput.value = (currentUserData && currentUserData.bio) || "";
-  $profileMzkInput.value = (currentUserData && currentUserData.mzk) || "";
+  $profileMzkInput.value = "";
+  paintMzkLinkState();
   updateBioCount();
   renderProfileAvatarButton(currentUserData && currentUserData.avatar);
   $profilePopover.classList.add("show");
@@ -1281,7 +1371,11 @@ $profileMzkInput.addEventListener("input", () => {
   const raw = $profileMzkInput.value.toUpperCase().replace(/[^A-Z2-9]/g, "").slice(0, 10);
   $profileMzkInput.value = raw.length > 5 ? raw.slice(0, 5) + "-" + raw.slice(5) : raw;
 });
-function closeProfilePopover() { $profilePopover.classList.remove("show"); }
+function closeProfilePopover() {
+  $profilePopover.classList.remove("show");
+  if (profileMzkSongUnsub) { profileMzkSongUnsub(); profileMzkSongUnsub = null; }
+  resetUnlinkButton();
+}
 
 $railAvatarBtn.addEventListener("click", (e) => {
   e.stopPropagation();
@@ -1308,7 +1402,7 @@ $profileAvatarFileInput.addEventListener("change", async () => {
 $profileSaveBtn.addEventListener("click", async () => {
   $profileSaveBtn.disabled = true;
   $profilePopoverError.textContent = "";
-  const result = await updateProfile($profileNameInput.value, pendingAvatarDataUrl !== null ? pendingAvatarDataUrl : undefined, $profileBioInput.value, $profileMzkInput.value);
+  const result = await updateProfile($profileNameInput.value, pendingAvatarDataUrl !== null ? pendingAvatarDataUrl : undefined, $profileBioInput.value, ($currentMzk() ? undefined : $profileMzkInput.value));
   $profileSaveBtn.disabled = false;
   if (!result.ok) { $profilePopoverError.textContent = result.error; return; }
   pendingAvatarDataUrl = null;
@@ -1369,7 +1463,6 @@ function openSettingsModal() {
 
   $modalOverlay.classList.add("show");
 }
-$railSettingsBtn.addEventListener("click", () => { if (currentSession) openSettingsModal(); });
 
 async function doLogout() {
   const accountKey = currentSession && currentSession.accountKey;
@@ -2512,7 +2605,14 @@ function fillProfileCard(prof, accountKey) {
   if (prof.bio) { $chatUserProfileBio.textContent = prof.bio; $chatUserProfileBioWrap.style.display = "block"; }
   if (prof.mzk && $chatUserProfileOverlay.style.display === "flex") profileSongUnsub = mountSong($chatUserProfileSong, prof.mzk);
 
-  if (accountKey === currentSession.accountKey) { $chatUserProfileStatus.textContent = "That's you."; return; }
+  if (accountKey === currentSession.accountKey) {
+    $chatUserProfileStatus.textContent = "That's you.";
+    $chatUserProfileAddBtn.style.display = "inline-block";
+    $chatUserProfileAddBtn.disabled = false;
+    $chatUserProfileAddBtn.textContent = "Edit profile";
+    $chatUserProfileAddBtn.onclick = (ev) => { ev.stopPropagation(); $chatUserProfileCloseBtn.click(); openProfilePopover(); };
+    return;
+  }
   const status = getRelationshipStatus(accountKey);
   if (status === "friends") $chatUserProfileStatus.textContent = "Already friends.";
   else if (status === "outgoing") $chatUserProfileStatus.textContent = "Friend request pending.";
