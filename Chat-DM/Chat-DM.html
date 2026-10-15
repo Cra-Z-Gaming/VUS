@@ -12,6 +12,8 @@
   <div id="navCol">
   <div id="rail">
     <button class="rail-nav-btn active" id="navChat" title="Chat" aria-label="Chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-8l-4.5 4v-4H6a2 2 0 0 1-2-2V5z"/></svg></button>
+    <div id="railRooms"></div>
+    <button class="rail-nav-btn rail-browse" id="navRooms" title="Browse rooms" aria-label="Browse rooms"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="rail-dot" id="roomsRailDot"></span></button>
     <div class="rail-sep"></div>
     <button class="rail-nav-btn" id="navChats" title="Direct messages" aria-label="Direct messages"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7.5 8 5.5 8-5.5"/></svg><span class="rail-dot" id="dmRailDot"></span></button>
   </div>
@@ -57,15 +59,14 @@
       </div>
 
           </div>
+  </div>
     <div id="userCard">
       <button id="railAvatarBtn" title="Profile"></button>
       <div id="userCardInfo">
         <div id="listPaneYouName"></div>
         <div id="listPaneYouId"></div>
       </div>
-      <button id="railSettingsBtn" title="Settings" aria-label="Settings">&#9881;</button>
     </div>
-  </div>
   </div>
 
 
@@ -314,7 +315,7 @@
   <div id="messages"></div>
   <div id="emptyState" style="display:none">No messages yet — say hi!</div>
   <button id="jumpToBottomBtn">↓ Jump to latest</button>
-  <div id="typingBar" style="display:none;padding:6px 21px;font-size:17.2px;color:#64748b;font-style:italic;flex-shrink:0"></div>
+  <div id="typingBar" class="idle" style="padding:0 21px;font-size:17.2px;color:#64748b;font-style:italic;flex-shrink:0"></div>
   <div id="chatPendingImageBar" style="display:none;padding:10px 21px;border-top:1.5px solid #1f2937;align-items:center;gap:12px;flex-shrink:0">
     <img id="chatPendingImagePreview" style="max-height:60px;max-width:90px;border-radius:8px;object-fit:cover;display:block">
     <span style="flex:1;font-size:14.5px;color:#94a3b8">Image ready — click Send to post it</span>
@@ -326,14 +327,14 @@
     <span id="charCounter">500</span>
     <div style="flex:1"></div>
     <div style="position:relative">
-      <button id="pingYouBtn" class="toolbar-btn" title="Send a Discord ping to the site owner">🔔 Ping Devs</button>
+      <button id="pingYouBtn" class="toolbar-btn" style="display:none" title="Send a Discord ping to the site owner">🔔 Ping Devs</button>
       <div id="pingYouPanel">
         <textarea id="pingYouNote" rows="2" maxlength="200" placeholder="Optional note (max 200 chars)…"></textarea>
         <button id="pingYouSend" class="toolbar-btn active" style="width:100%">Send Ping</button>
       </div>
     </div>
-    <button id="autoScrollBtn" class="toolbar-btn active">Auto Scroll: On</button>
-    <button id="clearChatBtn" class="toolbar-btn">Clear Chat</button>
+    <button id="autoScrollBtn" class="toolbar-btn active" style="display:none">Auto Scroll: On</button>
+    <button id="clearChatBtn" class="toolbar-btn" style="display:none">Clear Chat</button>
   </div>
   <div id="composer">
     <div id="mentionDropdown"></div>
@@ -342,6 +343,8 @@
     <button id="settingsBtn" type="button" title="Settings" aria-label="Settings">⚙</button>
     <div id="composerInputWrap">
       <button id="mentionChip" type="button"></button>
+      <button id="mentionSoundBtn" type="button" title="Mention only (no sound). Click to ping with sound."></button>
+      <button id="mentionCancelBtn" type="button" title="Cancel mention" aria-label="Cancel mention">&times;</button>
       <div id="inputStack">
         <div id="commandGhost" aria-hidden="true"></div>
         <textarea id="msgInput" rows="1" placeholder="Type a message… (@ to mention someone, / for commands)" maxlength="500"></textarea>
@@ -485,13 +488,34 @@
         <label for="profileBioInput">Bio <span id="profileBioCount">0/100</span></label>
         <textarea id="profileBioInput" maxlength="100" rows="3" placeholder="Tell people about yourself"></textarea>
       </div>
-      <div class="profile-popover-field">
+      <div class="profile-popover-field" id="profileMzkField">
         <label for="profileMzkInput">MZK link code</label>
-        <input type="text" id="profileMzkInput" maxlength="11" placeholder="XXXXX-XXXXX" autocomplete="off" spellcheck="false">
-        <div class="profile-popover-fieldhint">Shows the song you're playing on your profile. Get a code in MZK, under Settings.</div>
+        <div id="profileMzkLinked" style="display:none">
+          <div class="mzk-linked-row">
+            <code id="profileMzkMasked"></code>
+            <button type="button" id="profileMzkReveal" class="mini-link">Show</button>
+          </div>
+          <div id="profileMzkSong" class="profile-mzk-song" style="display:none"></div>
+          <div id="profileMzkIdle" class="profile-popover-fieldhint">Linked. Nothing is playing right now.</div>
+          <button type="button" id="profileMzkUnlink" class="danger-btn">Unlink MZK</button>
+        </div>
+        <div id="profileMzkUnlinked">
+          <input type="text" id="profileMzkInput" maxlength="11" placeholder="XXXXX-XXXXX" autocomplete="off" spellcheck="false">
+          <div class="profile-popover-fieldhint">Shows the song you're playing on your profile. Get a code in MZK, under Settings.</div>
+        </div>
       </div>
       <button id="profileSaveBtn">Save</button>
       <div id="profilePopoverError"></div>
+      <div class="profile-popover-sep"></div>
+      <button type="button" id="profilePwToggle" class="mini-link wide">Change password ▾</button>
+      <div id="profilePwFields" style="display:none">
+        <input type="password" id="settingsCurrentPw" placeholder="Current password" autocomplete="current-password">
+        <input type="password" id="settingsNewPw" placeholder="New password" autocomplete="new-password">
+        <input type="password" id="settingsNewPwConfirm" placeholder="Confirm new password" autocomplete="new-password">
+        <button type="button" id="profilePwSave">Save password</button>
+        <div id="profilePwError"></div>
+      </div>
+      <button type="button" id="profileLogoutBtn" class="danger-btn">Log out</button>
     </div>
   </div>
 </div>
