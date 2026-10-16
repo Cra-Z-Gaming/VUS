@@ -56,6 +56,8 @@
         <div class="list-section-label">Friends</div>
         <div id="friendsList"></div>
         <div id="friendsEmpty" class="list-empty" style="padding-left:14px">No friends yet — use Find to add someone.</div>
+        <div class="list-section-label" id="otherChatsLabel" style="display:none">Other chats</div>
+        <div id="otherChatsList"></div>
       </div>
 
           </div>
@@ -409,15 +411,15 @@
     </div>
     <div id="friendsBody">
       <div class="list-view" id="viewFind">
-        <div class="list-section">
-          <div class="list-section-title">Find people</div>
+        <div class="list-section find-hero">
+          <div class="find-hero-title">Find people</div>
+          <div class="find-hero-sub">Search by username, or paste a 6-digit ID.</div>
           <div class="list-search-row">
-            <input type="text" id="searchInput" placeholder="Username or 6-digit ID…" maxlength="24">
-            <button id="searchBtn">Go</button>
+            <input type="text" id="searchInput" placeholder="Search username or ID…" maxlength="24" autocomplete="off">
+            <button id="searchBtn">Search</button>
           </div>
-          <div class="list-search-note">Matches the start of a username, or an exact 6-digit ID.</div>
           <div id="searchResults"></div>
-          <div id="searchEmpty" class="list-empty" style="display:none">No results.</div>
+          <div id="searchEmpty" class="list-empty" style="display:none">No one found. Usernames match from the start, IDs must be exact.</div>
         </div>
 
         <div class="list-section">
@@ -473,6 +475,27 @@
     <div id="membersList"></div>
   </aside>
 
+
+<div id="settingsOverlay">
+  <div id="settingsModal" role="dialog" aria-modal="true" aria-label="Settings">
+    <div id="settingsHead">
+      <div id="settingsTitle">Settings</div>
+      <div id="settingsTabs">
+        <button type="button" class="settings-tab active" data-tab="account">Profile &amp; account</button>
+        <button type="button" class="settings-tab" data-tab="chat">Chat</button>
+      </div>
+      <button type="button" id="settingsX" aria-label="Close settings">&times;</button>
+    </div>
+    <div id="settingsBody">
+      <div class="settings-pane active" id="paneAccount"></div>
+      <div class="settings-pane" id="paneChat"></div>
+    </div>
+    <div id="settingsFoot">
+      <span class="settings-hint">Esc, the X, or double-click outside to close</span>
+      <button type="button" id="settingsCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
   <div id="profilePopover">
     <div class="profile-popover-avatar-wrap">
       <button id="profileAvatarPreviewBtn" title="Change photo">
@@ -537,6 +560,8 @@
       <div id="chatUserProfileStatus"></div>
       <div class="chat-modal-row">
         <button class="chat-modal-btn-secondary" id="chatUserProfileCloseBtn">Close</button>
+        <button class="chat-modal-btn-secondary" id="chatUserProfileMuteBtn" style="display:none">Mute</button>
+        <button class="chat-modal-btn-secondary" id="chatUserProfileMsgBtn" style="display:none">Message</button>
         <button class="chat-modal-btn-primary" id="chatUserProfileAddBtn" style="display:none">Add Friend</button>
       </div>
     </div>
@@ -605,6 +630,7 @@
 </div>
 
 <div id="imageLightbox">
+  <button type="button" id="imageLightboxX" aria-label="Close image">&times;</button>
   <img id="imageLightboxImg" alt="Full size image">
 </div>
 

@@ -1851,3 +1851,109 @@ body.hide-joinleave .msg.system.sys-joinleave { display: none; }
 .msg.mentions-me .msg-bubble { box-shadow: 0 0 0 2px rgba(250,204,21,.55); }
 #appShell.rooms-open #navChat.active { background: #1e293b; color: #94a3b8; border-radius: 16px; }
 #appShell.rooms-open #navChat.active::before { height: 0; }
+
+/* ── Unread badges ── */
+.list-row-unread-badge { min-width: 18px; height: 18px; border-radius: 9px; background: #22c55e; color: #052e16; font-size: 11px; font-weight: 700; display: none; align-items: center; justify-content: center; padding: 0 5px; flex-shrink: 0; box-sizing: border-box; }
+.list-row.has-unread .list-row-unread-badge { display: flex; }
+.rail-nav-btn .rail-dot.num.show, #dmRailDot.show { display: flex; align-items: center; justify-content: center; width: auto; min-width: 18px; height: 18px; border-radius: 9px; padding: 0 4px; box-sizing: border-box; border-width: 2px; top: -4px; right: -7px; font-size: 10.5px; font-weight: 700; color: #fff; line-height: 1; }
+#chatUserProfileOverlay .chat-modal-row { flex-wrap: wrap; }
+
+/* ── Anti-spam: hidden messages, muted rows, role icon on the name line ── */
+.msg.muted-hidden, .msg.spam-hidden { display: none !important; }
+.member-row.muted .member-name { opacity: .55; text-decoration: line-through; }
+.member-row.muted-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: default; }
+.member-unmute { background: transparent; border: 1px solid #334155; color: #4ade80; border-radius: 6px; font-size: 11px; padding: 3px 8px; cursor: pointer; }
+.member-unmute:hover { border-color: #22c55e; background: rgba(34,197,94,.1); }
+.member-group-head.role-muted { color: #94a3b8; }
+.msg-meta { display: flex; align-items: center; flex-wrap: wrap; }
+.msg-meta .role-bubble-row { display: inline-flex; margin: 0 5px 0 0; gap: 0; flex-wrap: nowrap; }
+.msg-meta .role-bubble-row:empty { display: none; }
+.msg-meta .role-bubble-row > div { background: none !important; border: none !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; font-size: 14px; line-height: 1; min-width: 0 !important; }
+.msg.mine .msg-meta .role-bubble-row { justify-content: flex-start; }
+
+/* ═══ One centered Settings window ═══ */
+#settingsOverlay { display: none; position: fixed; inset: 0; z-index: 200; background: rgba(2,6,14,.68); align-items: center; justify-content: center; padding: 16px; }
+#settingsOverlay.show { display: flex; }
+#settingsModal { width: min(560px, 100%); max-height: min(86vh, 760px); display: flex; flex-direction: column; background: #131c2e; border: 1px solid #263248; border-radius: 14px; box-shadow: 0 24px 70px rgba(0,0,0,.6); overflow: hidden; }
+#settingsHead { display: flex; align-items: center; gap: 14px; padding: 12px 14px 0 18px; border-bottom: 1px solid #233046; flex-shrink: 0; }
+#settingsTitle { font-size: 16px; font-weight: 700; color: #f1f5f9; padding-bottom: 12px; }
+#settingsTabs { display: flex; gap: 4px; flex: 1; align-self: flex-end; }
+.settings-tab { background: none; border: none; border-bottom: 2px solid transparent; color: #94a3b8; font-size: 13.5px; padding: 8px 12px 10px; cursor: pointer; }
+.settings-tab:hover { color: #e2e8f0; }
+.settings-tab.active { color: #4ade80; border-bottom-color: #22c55e; }
+#settingsX { background: none; border: none; color: #94a3b8; font-size: 26px; line-height: 1; cursor: pointer; padding: 0 6px 10px; align-self: center; }
+#settingsX:hover { color: #f1f5f9; }
+#settingsBody { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 20px; }
+.settings-pane { display: none; }
+.settings-pane.active { display: block; }
+#settingsFoot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 16px; border-top: 1px solid #233046; flex-shrink: 0; }
+.settings-hint { font-size: 11.5px; color: #64748b; }
+#settingsCloseBtn { background: #1e293b; border: 1px solid #334155; color: #e2e8f0; border-radius: 8px; padding: 7px 16px; font-size: 13px; cursor: pointer; }
+#settingsCloseBtn:hover { background: #26354d; }
+/* the two old floating panels, now living inside the window */
+#settingsModal #profilePopover { display: block !important; position: static !important; width: auto !important; max-width: 420px; max-height: none !important; overflow: visible !important; margin: 0 auto; padding: 0 !important; background: transparent !important; border: none !important; box-shadow: none !important; }
+#settingsModal #globalClearPanel { position: static !important; width: auto !important; max-width: 420px; max-height: none !important; overflow: visible !important; margin: 0 auto !important; padding: 0 !important; background: transparent !important; border: none !important; box-shadow: none !important; }
+#settingsModal .profile-popover-avatar-wrap { align-items: stretch; gap: 10px; }
+@media (max-width: 720px) {
+  #settingsOverlay { padding: 8px; }
+  #settingsModal { max-height: 92vh; }
+  .settings-hint { display: none; }
+  #settingsFoot { justify-content: flex-end; }
+}
+
+/* ═══ Find People, redesigned: one centered column of person cards ═══ */
+#friendsBody { padding: 24px 20px 40px; }
+#friendsBody .list-view.active { display: flex; flex-direction: column; gap: 14px; max-width: 720px; margin: 0 auto; }
+#friendsBody #viewBlocked.active { max-width: 720px; }
+#friendsBody .list-section { background: #111827; border: 1px solid #1c2638; border-radius: 14px; padding: 16px 18px; }
+#friendsBody .list-section-title { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: #8b9ab3; margin-bottom: 10px; }
+#friendsBody .list-section-title .count-badge { background: #22c55e; color: #052e16; border-radius: 9px; padding: 1px 7px; font-weight: 700; }
+#friendsBody .find-hero { padding: 22px 22px 18px; background: linear-gradient(160deg, #15233a 0%, #111827 70%); border-color: #243553; }
+.find-hero-title { font-size: 20px; font-weight: 700; color: #f1f5f9; }
+.find-hero-sub { font-size: 13px; color: #8b9ab3; margin: 3px 0 14px; }
+#friendsBody .list-search-row { margin-bottom: 4px; gap: 8px; }
+#friendsBody .list-search-row input { flex: 1; font-size: 15px; padding: 12px 14px; border-radius: 10px; background: #0b1322; border: 1.5px solid #2a3a57; }
+#friendsBody .list-search-row input:focus { border-color: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.15); }
+#friendsBody .list-search-row button { padding: 0 20px; border-radius: 10px; font-size: 14px; font-weight: 600; }
+#searchResults { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+#friendsBody .list-empty { font-size: 13px; color: #5b6b85; padding: 6px 2px; }
+#incomingRequestsList, #hiddenRequestsList, #outgoingRequestsList, #onlineList, #blockedList { display: flex; flex-direction: column; gap: 8px; }
+#friendsBody #viewFind .list-section:nth-child(1) { order: 0; }
+#friendsBody #viewFind .list-section:nth-child(2) { order: 1; }
+#friendsBody #viewFind .list-section:nth-child(5) { order: 2; }
+#friendsBody #viewFind .list-section:nth-child(4) { order: 3; }
+#friendsBody #viewFind .list-section:nth-child(3) { order: 4; }
+.pcard { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: #0e1626; border: 1px solid #1c2638; border-radius: 12px; cursor: pointer; transition: border-color .12s, background .12s; }
+.pcard:hover { border-color: #2f4468; background: #111c31; }
+.pcard .list-row-presence-wrap { flex-shrink: 0; }
+.pcard-info { flex: 1; min-width: 0; }
+.pcard-name { font-size: 14.5px; font-weight: 600; color: #e6edf7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pcard-sub { font-size: 12px; color: #6b7c97; margin-top: 1px; font-family: inherit; }
+.pcard-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; cursor: default; }
+.pbtn { border-radius: 8px; font-size: 12.5px; font-weight: 600; padding: 7px 12px; cursor: pointer; border: 1px solid transparent; white-space: nowrap; }
+.pbtn.primary { background: #22c55e; color: #052e16; }
+.pbtn.primary:hover { background: #4ade80; }
+.pbtn.ghost { background: transparent; color: #cbd5e1; border-color: #2f3f5c; }
+.pbtn.ghost:hover { background: #1a263b; }
+.pbtn.danger { background: transparent; color: #f87171; border-color: #4a2a30; }
+.pbtn.danger:hover { background: rgba(248,113,113,.1); }
+.pbtn:disabled { opacity: .5; cursor: not-allowed; }
+.pill { font-size: 11.5px; color: #8b9ab3; background: #17213a; border-radius: 20px; padding: 4px 10px; }
+.pill.ok { color: #4ade80; background: rgba(34,197,94,.12); }
+@media (max-width: 720px) {
+  #friendsBody { padding: 12px 10px 30px; }
+  .pcard { flex-wrap: wrap; }
+  .pcard-actions { width: 100%; justify-content: flex-end; }
+}
+
+/* image lightbox: click any chat / DM image to expand; click, X or Esc closes */
+#imageLightbox { z-index: 400; }
+#imageLightbox img { box-shadow: 0 10px 40px rgba(0,0,0,.6); object-fit: contain; }
+#imageLightboxX { position: absolute; top: 14px; right: 18px; width: 38px; height: 38px; border-radius: 50%; border: none; background: rgba(255,255,255,.14); color: #fff; font-size: 24px; line-height: 1; cursor: pointer; }
+#imageLightboxX:hover { background: rgba(255,255,255,.28); }
+.msg-bubble img { cursor: zoom-in; }
+
+/* Find People: every card spans the same centered column */
+#friendsBody #viewFind { align-items: stretch; }
+#friendsBody #viewFind .list-section { width: 100%; box-sizing: border-box; align-self: stretch; }
+#friendsBody #viewFind .list-section-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; }

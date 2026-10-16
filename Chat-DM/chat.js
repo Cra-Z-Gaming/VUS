@@ -1400,6 +1400,99 @@ const SILENT_MENTION_MARK = "\u200b";
 function isSilentMention(v) { return String(v || "").endsWith(SILENT_MENTION_MARK); }
 function mentionTargetOf(v) { return String(v || "").replace(/\u200b+$/, ""); }
 
+
+/* ══════════════════════════════════════════════════════════
+   CLIENT-SIDE ANTI-SPAM (only changes what THIS browser shows)
+   1. Mute: hide everything from a person on this browser. Saved per browser.
+   2. Duplicate filter: the same (or nearly the same) text from one person within
+      2 seconds is hidden. The sender still sees their own messages.
+   3. New-account burst: an account under a minute old that sends more than 2 messages
+      in 2 seconds is muted for everyone already in the room. Not saved: someone who
+      joins afterwards still sees those messages and can mute the account themselves.
+   ══════════════════════════════════════════════════════════ */
+const MUTE_KEY = "vus_chat_muted_v1";
+const SPAM_WINDOW_MS = 2000;           // "same text within this long" and "burst window"
+const BURST_MAX_MESSAGES = 2;          // more than this inside the window = burst
+const NEW_ACCOUNT_MS = 60 * 1000;      // accounts younger than this count as "new"
+const SIMILAR_AT = 0.75;               // 0..1, how alike two texts must be to count as the same
+let mutedMap = {};                     // loginId -> { name }   (saved)
+let autoMuted = {};                    // loginId -> { name }   (this session only)
+try { mutedMap = JSON.parse(localStorage.getItem(MUTE_KEY) || "{}") || {}; } catch (e) { mutedMap = {}; }
+function saveMutes() { try { localStorage.setItem(MUTE_KEY, JSON.stringify(mutedMap)); } catch (e) {} }
+function isMuted(loginId) { const id = String(loginId || ""); return !!(id && (mutedMap[id] || autoMuted[id])); }
+function applyMutesToDom() {
+  document.querySelectorAll(".msg[data-sender-id]").forEach(el => {
+    el.classList.toggle("muted-hidden", !el.classList.contains("mine") && isMuted(el.dataset.senderId));
+  });
+  if (autoScroll && stickToBottom) scrollToBottom();
+}
+function toggleMute(loginId, name) {
+  const id = String(loginId || "");
+  if (!id || id === String(myLoginId)) return false;
+  if (isMuted(id)) { delete mutedMap[id]; delete autoMuted[id]; }
+  else mutedMap[id] = { name: name || (mutedMap[id] && mutedMap[id].name) || "Someone" };
+  saveMutes();
+  applyMutesToDom();
+  renderMembersPane();
+  return isMuted(id);
+}
+let liveSince = 0;                     // messages stamped after this arrived while we were here
+const dupHistory = {};                 // sender -> [{ ts, norm }]
+const burstTimes = {};                 // loginId -> [ts]
+const createdAtCache = {};
+
+function normalizeForSpam(text) {
+  const t = String(text || "").toLowerCase();
+  const stripped = t.replace(/[^\p{L}\p{N}]+/gu, "");
+  return stripped || t.trim();
+}
+function bigrams(str) { const m = new Map(); for (let i = 0; i < str.length - 1; i++) { const g = str.slice(i, i + 2); m.set(g, (m.get(g) || 0) + 1); } return m; }
+function textsAlike(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const shortLen = Math.min(a.length, b.length);
+  if (shortLen < 5) return false;
+  if (shortLen >= 8 && (a.includes(b) || b.includes(a))) return true;
+  const A = bigrams(a), B = bigrams(b);
+  let overlap = 0;
+  A.forEach((n, g) => { overlap += Math.min(n, B.get(g) || 0); });
+  return (2 * overlap) / ((a.length - 1) + (b.length - 1)) >= SIMILAR_AT;
+}
+function isSpamDuplicate(msg) {
+  if (!msg.text) return false;
+  const key = String(msg.loginId || msg.name || "");
+  if (!key) return false;
+  const ts = Number(msg.ts) || Date.now();
+  const norm = normalizeForSpam(msg.text + (msg.mention ? "" : ""));
+  const list = (dupHistory[key] = (dupHistory[key] || []).filter(e => ts - e.ts < SPAM_WINDOW_MS * 3 && ts - e.ts > -SPAM_WINDOW_MS));
+  const dup = list.some(e => Math.abs(ts - e.ts) < SPAM_WINDOW_MS && textsAlike(e.norm, norm));
+  list.push({ ts, norm });
+  return dup;
+}
+async function accountCreatedAt(loginId) {
+  const id = String(loginId);
+  if (id in createdAtCache) return createdAtCache[id];
+  let v = 0;
+  try { v = window.VUS_DM && window.VUS_DM.getAccountCreatedAt ? await window.VUS_DM.getAccountCreatedAt(id) : 0; } catch (e) {}
+  return (createdAtCache[id] = v || 0);
+}
+function trackNewAccountBurst(msg) {
+  if (!msg.loginId || !msg.ts || msg.ts < liveSince) return;      // history never triggers this
+  const id = String(msg.loginId);
+  if (isMuted(id)) return;
+  const list = (burstTimes[id] = (burstTimes[id] || []).filter(t => msg.ts - t < SPAM_WINDOW_MS));
+  list.push(msg.ts);
+  if (list.length <= BURST_MAX_MESSAGES) return;
+  if (effectiveRoleForLoginId(id) && ROLES[effectiveRoleForLoginId(id)] && ROLES[effectiveRoleForLoginId(id)].rank > 0) return;   // never auto-mute staff
+  accountCreatedAt(id).then(created => {
+    if (!created || isMuted(id) || msg.ts - created >= NEW_ACCOUNT_MS) return;
+    autoMuted[id] = { name: msg.name, auto: true };
+    applyMutesToDom();
+    renderMembersPane();
+    showComposerNotice("Hid " + msg.name + " (new account sending too fast). You can unmute them in the members list.");
+  });
+}
+
 function renderMessage(msg) {
   $emptyState.style.display = "none";
 
@@ -1431,6 +1524,15 @@ function renderMessage(msg) {
   const mine = msg.name === myName;
   const el = document.createElement("div");
   el.className = "msg has-av" + (mine ? " mine" : "");
+  if (msg.loginId) el.dataset.senderId = String(msg.loginId);
+  // Hidden (not removed) so unmuting brings a muted person's messages back; spam stays hidden for good.
+  let hiddenForMe = false;
+  if (!mine) {
+    if (isSpamDuplicate(msg)) { el.classList.add("spam-hidden"); hiddenForMe = true; }
+    else if (msg.loginId && isMuted(msg.loginId)) { el.classList.add("muted-hidden"); hiddenForMe = true; }
+    trackNewAccountBurst(msg);
+    if (!hiddenForMe && msg.loginId && isMuted(msg.loginId)) hiddenForMe = true;
+  }
 
   const avEl = document.createElement("div");
   avEl.className = "msg-av";
@@ -1461,16 +1563,15 @@ function renderMessage(msg) {
   badgeRow.dataset.senderName = msg.name || "";
   if (msg.loginId) badgeRow.dataset.senderId = String(msg.loginId);
   fillRoleBadge(badgeRow);
-  el.appendChild(badgeRow);
+  meta.insertBefore(badgeRow, meta.firstChild);   // highest role sits before the name, same line
 
   const bubble = document.createElement("div");
   bubble.className = "msg-bubble";
 
   if (msg.imageData) {
-    const link = document.createElement("a");
-    link.href = msg.imageData;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
+    const link = document.createElement("div");
+    link.style.cursor = "zoom-in";
+    link.addEventListener("click", () => { if (window.VUS_UI && window.VUS_UI.openImage) window.VUS_UI.openImage(msg.imageData); });
     const img = document.createElement("img");
     img.src = msg.imageData;
     img.alt = "Shared image";
@@ -1515,7 +1616,7 @@ function renderMessage(msg) {
     $jumpToBottomBtn.style.display = "block";
   }
 
-  if (msg.mention && mentionTargetOf(msg.mention) === myName && msg.name !== myName) {
+  if (!hiddenForMe && msg.mention && mentionTargetOf(msg.mention) === myName && msg.name !== myName && !(msg.loginId && isMuted(msg.loginId))) {
     el.classList.add("mentions-me");
     if (!isSilentMention(msg.mention)) triggerIncomingPing(msg.name, msg.text);
   }
@@ -3049,16 +3150,27 @@ function renderSettingsPanel() {
 function closeClearPanel() {
   $globalClearPanel.style.display = "none";
   $settingsBtn.classList.remove("open");
+  if (window.VUS_UI && window.VUS_UI.closeSettings) window.VUS_UI.closeSettings();
 }
+// The chat panel now lives in the shared Settings window (Chat tab).
+window.addEventListener("vus:settings-tab", ev => {
+  if (ev.detail && ev.detail.tab === "chat") {
+    closeOnlineListPanel(); closeCommandList(); closeMentionDropdown(); closePingYouPanel();
+    $globalClearPanel.style.display = "block";
+    $settingsBtn.classList.add("open");
+    renderModMenu();
+  } else {
+    $globalClearPanel.style.display = "none";
+    $settingsBtn.classList.remove("open");
+  }
+});
+window.addEventListener("vus:settings-closed", () => {
+  $globalClearPanel.style.display = "none";
+  $settingsBtn.classList.remove("open");
+});
 
 function openModMenu() {
-  closeOnlineListPanel();
-  closeCommandList();
-  closeMentionDropdown();
-  closePingYouPanel();
-  $globalClearPanel.style.display = "block";
-  $settingsBtn.classList.add("open");
-  renderModMenu();
+  if (window.VUS_UI && window.VUS_UI.openSettings) window.VUS_UI.openSettings("chat");
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -4281,12 +4393,6 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-document.addEventListener("click", (e) => {
-  // Click anywhere outside the panel (or its button) closes it.
-  if ($globalClearPanel.style.display === "block" && !$globalClearPanel.contains(e.target) && !$settingsBtn.contains(e.target)) {
-    closeClearPanel();
-  }
-});
 
 function handleTypingActivity() {
   const hasText = $msgInput.value.trim().length > 0;
@@ -4317,6 +4423,7 @@ function stopTyping() {
 // is second, and when someone stops (or sends) everyone behind them moves up one.
 let typingOrder = [];
 function renderTyping(names) {
+  names = names.filter(n => !isMuted(loginIdForName(n)));
   const present = new Set(names);
   typingOrder = typingOrder.filter(n => present.has(n));
   names.forEach(n => { if (!typingOrder.includes(n)) typingOrder.push(n); });   // newcomers go last (names arrive oldest-first)
@@ -5686,7 +5793,8 @@ function renderMembersPane() {
     const nameEl = document.createElement("div");
     nameEl.className = "member-name";
     const isMe = myLoginId && p.id === String(myLoginId);
-    nameEl.textContent = p.name + (isMe ? " (you)" : "");
+    nameEl.textContent = (isMuted(p.id) ? "\uD83D\uDD07 " : "") + p.name + (isMe ? " (you)" : "");
+    if (isMuted(p.id)) row.classList.add("muted");
     const textEl = document.createElement("div");
     textEl.className = "member-text";
     textEl.appendChild(nameEl);
@@ -5710,6 +5818,31 @@ function renderMembersPane() {
     }
     frag.appendChild(row);
   });
+  const mutedIds = Object.keys(Object.assign({}, mutedMap, autoMuted));
+  if (mutedIds.length) {
+    const head = document.createElement("div");
+    head.className = "member-group-head role-muted";
+    head.textContent = "\uD83D\uDD07 Muted \u2014 " + mutedIds.length;
+    frag.appendChild(head);
+    mutedIds.forEach(id => {
+      const info = mutedMap[id] || autoMuted[id] || {};
+      const row = document.createElement("div");
+      row.className = "member-row muted-row";
+      const text = document.createElement("div");
+      text.className = "member-text";
+      const nm = document.createElement("div");
+      nm.className = "member-name";
+      nm.textContent = (info.name || "Someone") + (autoMuted[id] && !mutedMap[id] ? " (auto)" : "");
+      text.appendChild(nm);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "member-unmute";
+      btn.textContent = "Unmute";
+      btn.addEventListener("click", (e) => { e.stopPropagation(); toggleMute(id, info.name); });
+      row.append(text, btn);
+      frag.appendChild(row);
+    });
+  }
   $membersList.replaceChildren(frag);
 }
 
@@ -5728,6 +5861,9 @@ function attachRoomListeners() {
     refreshMentionDropdownIfOpen();
     checkSoleSurvivorAutoOwnership(list);
   });
+  liveSince = ChatBackend.serverNowSync();
+  Object.keys(dupHistory).forEach(k => delete dupHistory[k]);
+  Object.keys(burstTimes).forEach(k => delete burstTimes[k]);
   ChatBackend.watchMessages(renderMessage);
   ChatBackend.watchLeaveEvents();
   ChatBackend.watchTyping(renderTyping, () => myName);
@@ -5798,6 +5934,7 @@ function init() {
 
 /* Lets dm.js (profile cards) ask which ranks an account holds. */
 window.VUS_CHAT = {
+  isMuted, toggleMute,
   getRolesFor(loginId) {
     const id = String(loginId || "");
     return Object.values(ROLES)

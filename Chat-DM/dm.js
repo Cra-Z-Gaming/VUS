@@ -42,6 +42,7 @@ function initFirebase() {
   idIndexRef = db.ref("idIndex");
   presenceRef = db.ref("presence");
   connectedRef = db.ref(".info/connected");
+  db.ref(".info/serverTimeOffset").on("value", snap => { serverOffset = Number(snap.val()) || 0; });
   dmsRef = db.ref("dms");
   groupChatsRef = db.ref("groupChats");
 }
@@ -727,6 +728,13 @@ async function sendDirectMessage(otherAccountKey, text, imageData, replyTo) {
       ts: firebase.database.ServerValue.TIMESTAMP
     });
     await markThreadRead(threadId, pushRef.key);
+    // Not friends yet: leave a 0 marker on their account so the thread shows up under "Other chats" for them.
+    if (!(currentUserData && currentUserData.friends && currentUserData.friends[otherAccountKey])) {
+      try {
+        const markRef = usersRef.child(otherAccountKey).child("lastRead").child(threadId);
+        if (!(await markRef.get()).exists()) await markRef.set(0);
+      } catch (e) {}
+    }
     return { ok: true };
   } catch (e) { return { ok: false, error: "Message failed to send — try again." }; }
 }
@@ -755,8 +763,10 @@ async function toggleReaction(scopeRef, messageId, emoji) {
   } catch (e) { showComposerNotice("Couldn't react — try again."); }
 }
 
-async function markThreadRead(threadId, lastMessageId) {
+async function markThreadRead(threadId, lastMessageId, isGroup) {
   if (!currentSession || !lastMessageId) return;
+  markLastRead(threadId);
+  if (isGroup) return;
   try { await dmsRef.child(threadId).child("reads").child(currentSession.accountKey).set(lastMessageId); } catch (e) {}
 }
 
@@ -1225,10 +1235,10 @@ function fetchAccountProfile(accountKey) {
   if (hit && Date.now() - (hit._at || 0) < PROFILE_CACHE_MS) return Promise.resolve(hit);
   if (profileInflight[accountKey]) return profileInflight[accountKey];
   const base = usersRef.child(accountKey);
-  const p = Promise.all(["username", "id", "avatar", "bio", "mzk", "mzkUid"].map(k => base.child(k).get())).then(snaps => {
+  const p = Promise.all(["username", "id", "avatar", "bio", "mzk", "createdAt", "mzkUid"].map(k => base.child(k).get())).then(snaps => {
     delete profileInflight[accountKey];
     if (!snaps[0].exists()) return null;
-    const prof = { accountKey, username: snaps[0].val(), id: snaps[1].val(), avatar: snaps[2].val() || null, bio: snaps[3].val() || "", mzk: snaps[4].val() || "", mzkUid: snaps[5].val() || "", _at: Date.now() };
+    const prof = { accountKey, username: snaps[0].val(), id: snaps[1].val(), avatar: snaps[2].val() || null, bio: snaps[3].val() || "", mzk: snaps[4].val() || "", createdAt: Number(snaps[5].val()) || 0, mzkUid: snaps[6].val() || "", _at: Date.now() };
     profileCache[accountKey] = prof;
     if (prof.id) idToAccountKey[String(prof.id)] = accountKey;
     return prof;
@@ -1343,7 +1353,7 @@ function updateFindRailDot(userData) {
   const incoming = (userData && userData.friendRequestsIncoming) || {};
   const visibleCount = Object.values(incoming).filter(r => !r.hidden).length;
   $findRailDot.classList.toggle("show", visibleCount > 0);
-  if ($dmRailDot) $dmRailDot.classList.toggle("show", visibleCount > 0);
+  updateDmBadge();
 }
 
 let pendingAvatarDataUrl = null;
@@ -1472,7 +1482,7 @@ $profilePwSave.addEventListener("click", async () => {
 });
 $profileLogoutBtn.addEventListener("click", () => doLogout());
 
-function openProfilePopover() {
+function prepareAccountPane() {
   pendingAvatarDataUrl = null;
   $profilePopoverError.textContent = "";
   $profilePwError.textContent = "";
@@ -1489,6 +1499,46 @@ function openProfilePopover() {
   renderProfileAvatarButton(currentUserData && currentUserData.avatar);
   $profilePopover.classList.add("show");
 }
+
+/* ── ONE settings window: Profile & account + Chat, centered ── */
+const $settingsOverlay = document.getElementById("settingsOverlay");
+let settingsTab = "account";
+document.getElementById("paneAccount").appendChild($profilePopover);
+const $chatPanelEl = document.getElementById("globalClearPanel");
+if ($chatPanelEl) document.getElementById("paneChat").appendChild($chatPanelEl);
+
+function settingsIsOpen() { return $settingsOverlay.classList.contains("show"); }
+function showSettingsTab(tab) {
+  settingsTab = tab === "chat" ? "chat" : "account";
+  document.querySelectorAll("#settingsTabs .settings-tab").forEach(b => b.classList.toggle("active", b.dataset.tab === settingsTab));
+  document.getElementById("paneAccount").classList.toggle("active", settingsTab === "account");
+  document.getElementById("paneChat").classList.toggle("active", settingsTab === "chat");
+  if (settingsTab === "account") prepareAccountPane();
+  else { stopProfileMzkSong(); }
+  window.dispatchEvent(new CustomEvent("vus:settings-tab", { detail: { tab: settingsTab } }));
+}
+function openSettings(tab) {
+  if (!currentSession) return;
+  $settingsOverlay.classList.add("show");
+  showSettingsTab(tab || settingsTab);
+}
+function closeSettings() {
+  if (!settingsIsOpen()) return;
+  $settingsOverlay.classList.remove("show");
+  $profilePopover.classList.remove("show");
+  stopProfileMzkSong();
+  resetUnlinkButton();
+  window.dispatchEvent(new CustomEvent("vus:settings-closed"));
+}
+function stopProfileMzkSong() { if (profileMzkSongUnsub) { profileMzkSongUnsub(); profileMzkSongUnsub = null; } }
+function openProfilePopover() { openSettings("account"); }
+document.querySelectorAll("#settingsTabs .settings-tab").forEach(b => b.addEventListener("click", () => showSettingsTab(b.dataset.tab)));
+document.getElementById("settingsX").addEventListener("click", closeSettings);
+document.getElementById("settingsCloseBtn").addEventListener("click", closeSettings);
+// double-click on the dimmed area (not inside the window) closes it
+$settingsOverlay.addEventListener("dblclick", (e) => { if (e.target === $settingsOverlay) closeSettings(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && settingsIsOpen()) closeSettings(); });
+window.VUS_UI = Object.assign(window.VUS_UI || {}, { openSettings, closeSettings });
 function updateBioCount() { $profileBioCount.textContent = $profileBioInput.value.length + "/" + BIO_MAX_LENGTH; }
 $profileBioInput.addEventListener("input", updateBioCount);
 // shape the MZK code as it's typed or pasted: capitals only, dash after the 5th character
@@ -1496,22 +1546,13 @@ $profileMzkInput.addEventListener("input", () => {
   const raw = $profileMzkInput.value.toUpperCase().replace(/[^A-Z2-9]/g, "").slice(0, 10);
   $profileMzkInput.value = raw.length > 5 ? raw.slice(0, 5) + "-" + raw.slice(5) : raw;
 });
-function closeProfilePopover() {
-  $profilePopover.classList.remove("show");
-  if (profileMzkSongUnsub) { profileMzkSongUnsub(); profileMzkSongUnsub = null; }
-  resetUnlinkButton();
-}
+function closeProfilePopover() { closeSettings(); }
 
 $railAvatarBtn.addEventListener("click", (e) => {
   e.stopPropagation();
   if (!currentSession) return;
-  if ($profilePopover.classList.contains("show")) closeProfilePopover();
-  else openProfilePopover();
-});
-document.addEventListener("click", (e) => {
-  if ($profilePopover.classList.contains("show") && !$profilePopover.contains(e.target) && e.target !== $railAvatarBtn) {
-    closeProfilePopover();
-  }
+  if (settingsIsOpen() && settingsTab === "account") closeSettings();
+  else openSettings("account");
 });
 $profileAvatarPreviewBtn.addEventListener("click", () => $profileAvatarFileInput.click());
 $profileAvatarFileInput.addEventListener("change", async () => {
@@ -1541,60 +1582,13 @@ function refreshOwnRailAvatar() {
   renderAvatarInto($railAvatarBtn, currentSession.username, currentUserData && currentUserData.avatar);
 }
 
-function openSettingsModal() {
-  $modalBox.innerHTML = "";
-  $modalBox.appendChild(h("h3", {}, "Settings"));
-
-  const pwFields = h("div", { className: "settings-password-fields" },
-    h("input", { type: "password", id: "settingsCurrentPw", placeholder: "Current password" }),
-    h("input", { type: "password", id: "settingsNewPw", placeholder: "New password" }),
-    h("input", { type: "password", id: "settingsNewPwConfirm", placeholder: "Confirm new password" })
-  );
-  const pwError = h("div", { className: "modal-error" });
-  const pwSaveBtn = h("button", { className: "primary-btn", onclick: async () => {
-    const curPw = document.getElementById("settingsCurrentPw").value;
-    const newPw = document.getElementById("settingsNewPw").value;
-    const confirmPw = document.getElementById("settingsNewPwConfirm").value;
-    if (newPw !== confirmPw) { pwError.textContent = "New passwords don't match."; return; }
-    pwSaveBtn.disabled = true;
-    const result = await changePassword(curPw, newPw);
-    pwSaveBtn.disabled = false;
-    if (!result.ok) { pwError.textContent = result.error; return; }
-    pwError.textContent = "";
-    pwFields.classList.remove("show");
-    pwActionsRow.style.display = "none";
-    passwordRow.textContent = "Change password";
-    document.getElementById("settingsCurrentPw").value = "";
-    document.getElementById("settingsNewPw").value = "";
-    document.getElementById("settingsNewPwConfirm").value = "";
-  }}, "Save password");
-  const pwActionsRow = h("div", { className: "modal-actions", style: "display:none" }, pwSaveBtn);
-
-  const passwordRow = h("div", { className: "settings-row", onclick: () => {
-    const opening = !pwFields.classList.contains("show");
-    pwFields.classList.toggle("show");
-    pwActionsRow.style.display = opening ? "flex" : "none";
-    passwordRow.textContent = opening ? "Change password ▾" : "Change password";
-  }}, "Change password");
-
-  const logoutRow = h("div", { className: "settings-row danger-row", onclick: doLogout }, "Log out");
-
-  $modalBox.appendChild(passwordRow);
-  $modalBox.appendChild(pwFields);
-  $modalBox.appendChild(pwError);
-  $modalBox.appendChild(pwActionsRow);
-  $modalBox.appendChild(logoutRow);
-  $modalBox.appendChild(h("div", { className: "modal-actions" }, h("button", { className: "plain-link", onclick: closeModal }, "Close")));
-
-  $modalOverlay.classList.add("show");
-}
-
 async function doLogout() {
   const accountKey = currentSession && currentSession.accountKey;
   releasePresence();
   if (accountKey) await recordLastSeen(accountKey);
   unwatchOwnAccount(accountKey);
   unwatchMyGroupChats();
+  stopAllUnread();
   unwatchGroupInfo();
   clearPendingImage();
   closeOpenChat();
@@ -1622,16 +1616,29 @@ function renderOnlineList(list) {
     $onlineEmpty.style.display = "none";
     sorted.forEach(entry => {
       const isMe = currentSession && entry.accountKey === currentSession.accountKey;
-      $onlineList.appendChild(h("div", { style: "display:flex;align-items:center;gap:8px;font-size:12.5px;padding:3px 0" },
-        h("span", { style: "width:6px;height:6px;border-radius:50%;background:#22c55e;flex-shrink:0" }),
-        h("span", {}, entry.username),
-        isMe ? h("span", { style: "color:#475569;font-size:11px" }, "(you)") : null
-      ));
+      $onlineList.appendChild(buildPersonRow(entry.accountKey, entry.username, isMe ? "you" : "online", isMe ? [] : [dmButton(entry.accountKey, entry.username)]));
     });
   }
   if (currentUserData) renderFriendsList(currentUserData);
   if (openChatAccountKey) updateChatThreadHeaderStatus();
 }
+
+// One consistent person card for search results, requests, sent requests and blocked people.
+function buildPersonRow(accountKey, username, sub, actions) {
+  const info = h("div", { className: "pcard-info" },
+    h("div", { className: "pcard-name" }, username),
+    sub ? h("div", { className: "pcard-sub" }, sub) : null);
+  const row = h("div", { className: "pcard", title: "View profile", onclick: () => { if (accountKey) openAccountProfile(accountKey, username); } },
+    buildAvatarWithPresence(username, accountKey, false),
+    info,
+    h("div", { className: "pcard-actions", onclick: (e) => e.stopPropagation() }, ...(actions || [])));
+  return row;
+}
+function pbtn(label, kind, onclick) { return h("button", { className: "pbtn " + kind, onclick }, label); }
+function dmButton(accountKey, username) {
+  return pbtn("Message", "ghost", () => { openDmSidebar("chats"); openChatWith(accountKey, username); });
+}
+function toggleSectionFor(el, show) { const sec = el.closest && el.closest(".list-section"); if (sec) sec.style.display = show ? "" : "none"; }
 
 let lastSearchResults = [];
 function renderSearchResults(results) {
@@ -1642,25 +1649,23 @@ function renderSearchResults(results) {
 
   results.forEach(person => {
     const status = getRelationshipStatus(person.accountKey);
-    let btn;
-    if (status === "self") btn = h("button", { className: "find-action-btn plain", disabled: true }, "You");
-    else if (status === "friends") btn = h("button", { className: "find-action-btn plain", disabled: true }, "Friends");
-    else if (status === "outgoing") btn = h("button", { className: "find-action-btn plain", disabled: true }, "Pending");
-    else if (status === "incoming") btn = h("button", { className: "find-action-btn plain", disabled: true }, "Respond below");
+    const actions = [];
+    if (status === "self") actions.push(h("span", { className: "pill" }, "You"));
     else {
-      btn = h("button", { className: "find-action-btn primary", onclick: async () => {
-        btn.disabled = true; btn.textContent = "Sending…";
-        const result = await sendFriendRequest(person.accountKey, person.username);
-        if (!result.ok) { showComposerNotice(result.error); btn.disabled = false; btn.textContent = "Add friend"; }
-      }}, "Add friend");
+      actions.push(dmButton(person.accountKey, person.username));
+      if (status === "friends") actions.push(h("span", { className: "pill ok" }, "Friends"));
+      else if (status === "outgoing") actions.push(h("span", { className: "pill" }, "Pending"));
+      else if (status === "incoming") actions.push(h("span", { className: "pill" }, "Respond below"));
+      else {
+        const btn = pbtn("Add friend", "primary", async () => {
+          btn.disabled = true; btn.textContent = "Sending…";
+          const result = await sendFriendRequest(person.accountKey, person.username);
+          if (!result.ok) { showComposerNotice(result.error); btn.disabled = false; btn.textContent = "Add friend"; }
+        });
+        actions.push(btn);
+      }
     }
-    $searchResults.appendChild(h("div", { className: "find-person-row" },
-      h("div", {},
-        h("div", { className: "find-person-name" }, person.username),
-        h("div", { className: "find-person-id" }, "#" + person.id)
-      ),
-      btn
-    ));
+    $searchResults.appendChild(buildPersonRow(person.accountKey, person.username, "#" + person.id, actions));
   });
 }
 
@@ -1668,26 +1673,23 @@ function buildIncomingRequestRow(fromAccountKey, req) {
   let acceptBtn, declineBtn, blockBtn;
   function setRowButtonsDisabled(disabled) { acceptBtn.disabled = disabled; declineBtn.disabled = disabled; blockBtn.disabled = disabled; }
 
-  acceptBtn = h("button", { className: "find-action-btn primary", onclick: async () => {
+  acceptBtn = h("button", { className: "pbtn primary", onclick: async () => {
     setRowButtonsDisabled(true);
     const result = await acceptFriendRequest(fromAccountKey, req.fromUsername);
     if (!result.ok) { showComposerNotice(result.error); setRowButtonsDisabled(false); }
   }}, "Accept");
-  declineBtn = h("button", { className: "find-action-btn plain", onclick: async () => {
+  declineBtn = h("button", { className: "pbtn ghost", onclick: async () => {
     setRowButtonsDisabled(true);
     const result = await declineFriendRequest(fromAccountKey);
     if (!result.ok) { showComposerNotice(result.error); setRowButtonsDisabled(false); }
   }}, "Decline");
-  blockBtn = h("button", { className: "find-action-btn danger", onclick: async () => {
+  blockBtn = h("button", { className: "pbtn danger", onclick: async () => {
     setRowButtonsDisabled(true);
     const result = await blockUser(fromAccountKey, req.fromUsername);
     if (!result.ok) { showComposerNotice(result.error); setRowButtonsDisabled(false); }
   }}, "Block");
 
-  return h("div", { className: "find-person-row" },
-    h("div", { className: "find-person-name" }, req.fromUsername),
-    h("div", { style: "display:flex;gap:8px" }, acceptBtn, declineBtn, blockBtn)
-  );
+  return buildPersonRow(fromAccountKey, req.fromUsername, "wants to be friends", [acceptBtn, declineBtn, blockBtn]);
 }
 
 function renderIncomingRequests(userData) {
@@ -1704,6 +1706,7 @@ function renderIncomingRequests(userData) {
   if (hidden.length === 0) { $hiddenRequestsEmpty.style.display = "block"; $hiddenCountBadge.style.display = "none"; }
   else { $hiddenRequestsEmpty.style.display = "none"; $hiddenCountBadge.style.display = "inline-block"; $hiddenCountBadge.textContent = hidden.length; }
   hidden.forEach(([fromAccountKey, req]) => $hiddenRequestsList.appendChild(buildIncomingRequestRow(fromAccountKey, req)));
+  toggleSectionFor($hiddenRequestsList, hidden.length > 0);
 }
 
 function renderOutgoingRequests(userData) {
@@ -1712,19 +1715,14 @@ function renderOutgoingRequests(userData) {
   $outgoingRequestsList.innerHTML = "";
   $outgoingRequestsEmpty.style.display = entries.length === 0 ? "block" : "none";
 
+  toggleSectionFor($outgoingRequestsList, entries.length > 0);
   entries.forEach(([toAccountKey, req]) => {
-    const cancelBtn = h("button", { className: "find-action-btn plain", onclick: async () => {
+    const cancelBtn = pbtn("Cancel", "ghost", async () => {
       cancelBtn.disabled = true;
       const result = await cancelOutgoingRequest(toAccountKey);
       if (!result.ok) { showComposerNotice(result.error); cancelBtn.disabled = false; }
-    }}, "Cancel");
-    $outgoingRequestsList.appendChild(h("div", { className: "find-person-row" },
-      h("div", {},
-        h("div", { className: "find-person-name" }, req.toUsername),
-        h("div", { className: "find-person-id" }, "pending…")
-      ),
-      cancelBtn
-    ));
+    });
+    $outgoingRequestsList.appendChild(buildPersonRow(toAccountKey, req.toUsername, "request pending", [cancelBtn]));
   });
 }
 
@@ -1748,8 +1746,139 @@ function buildAvatarWithPresence(username, accountKey, isGroup) {
 }
 
 let myGroupChats = [];
-let unreadThreads = new Set();
-let threadLastReadState = {};
+
+/* ══════════════════════════════════════════════════════════
+   UNREAD COUNTS
+   users/{me}/lastRead/{threadKey} = server timestamp (a DM's threadIdFor(...) or a group's id).
+   Unread = messages in that thread newer than lastRead and not sent by me, counted from the
+   last 100 messages of each thread. A thread with no lastRead yet is treated as read "as of now"
+   (so old history doesn't light up), EXCEPT a 0 marker, which a sender writes on a stranger's
+   account to say "this thread exists" -- that is how "Other chats" finds people you haven't added.
+   ══════════════════════════════════════════════════════════ */
+let unreadCounts = {}, lastReadMap = {}, localLastRead = {}, threadMsgs = {}, unreadRefs = {};
+let serverOffset = 0, unreadTimer = null, lastUnreadSig = "", otherChatKeys = [];
+const badgeText = n => (n > 99 ? "99+" : String(n));
+function serverNow() { return Date.now() + serverOffset; }
+
+function currentOpenThreadKey() {
+  if (openChatGcId) return openChatGcId;
+  if (openChatAccountKey && currentSession) return threadIdFor(currentSession.accountKey, openChatAccountKey);
+  return null;
+}
+
+const markReadTimers = {};
+function markLastRead(key) {
+  if (!currentSession || !key) return;
+  localLastRead[key] = serverNow();
+  clearTimeout(markReadTimers[key]);
+  const uid = currentSession.accountKey;
+  markReadTimers[key] = setTimeout(() => {
+    try { usersRef.child(uid).child("lastRead").child(key).set(firebase.database.ServerValue.TIMESTAMP).catch(() => {}); } catch (e) {}
+  }, 400);
+  scheduleUnread();
+}
+
+function ensureUnreadWatch(key, isGroup) {
+  if (!currentSession || !dmsRef || unreadRefs[key]) return;
+  if (lastReadMap[key] === undefined && localLastRead[key] === undefined) markLastRead(key);   // first time: start from "now"
+  const ref = (isGroup ? groupChatsRef.child(key) : dmsRef.child(key)).child("messages").limitToLast(100);
+  threadMsgs[key] = [];
+  ref.on("child_added", snap => {
+    const v = snap.val() || {};
+    threadMsgs[key].push({ ts: v.ts || 0, from: v.fromAccountKey });
+    scheduleUnread();
+  });
+  unreadRefs[key] = ref;
+}
+
+function stopAllUnread() {
+  Object.values(unreadRefs).forEach(r => { try { r.off("child_added"); } catch (e) {} });
+  Object.values(markReadTimers).forEach(clearTimeout);
+  unreadRefs = {}; threadMsgs = {}; unreadCounts = {}; lastReadMap = {}; localLastRead = {}; otherChatKeys = []; lastUnreadSig = "";
+  clearTimeout(unreadTimer); unreadTimer = null;
+  updateDmBadge();
+}
+
+function scheduleUnread() {
+  if (unreadTimer) return;
+  unreadTimer = setTimeout(() => { unreadTimer = null; recomputeUnread(); }, 250);   // bursts of history collapse into one pass
+}
+
+function recomputeUnread() {
+  if (!currentSession) return;
+  const open = currentOpenThreadKey();
+  Object.keys(threadMsgs).forEach(k => {
+    if (k === open) { unreadCounts[k] = 0; return; }
+    const lr = Math.max(lastReadMap[k] || 0, localLastRead[k] || 0);
+    unreadCounts[k] = threadMsgs[k].filter(m => m.ts > lr && m.from !== currentSession.accountKey).length;
+  });
+  const sig = JSON.stringify(unreadCounts) + "|" + open;
+  if (sig !== lastUnreadSig) {
+    lastUnreadSig = sig;
+    if (currentUserData) renderFriendsList(currentUserData);
+    renderGroupsList(myGroupChats);
+    renderOtherChats();
+  }
+  updateDmBadge();
+}
+
+// One number for the DMs icon: unread in friends, groups and other chats, plus friend requests waiting.
+function updateDmBadge() {
+  if (!$dmRailDot) return;
+  const sum = Object.values(unreadCounts).reduce((a, n) => a + (n || 0), 0);
+  const reqs = Object.values((currentUserData && currentUserData.friendRequestsIncoming) || {}).filter(r => !r.hidden).length;
+  const total = currentSession ? sum + reqs : 0;
+  $dmRailDot.textContent = total > 0 ? badgeText(total) : "";
+  $dmRailDot.classList.toggle("show", total > 0);
+  $dmRailDot.title = total > 0 ? (sum + " unread" + (reqs ? ", " + reqs + " friend request" + (reqs === 1 ? "" : "s") : "")) : "";
+}
+
+// Threads with people who aren't friends: found through lastRead keys (see the note above).
+function deriveOtherChats(userData) {
+  const me = currentSession && currentSession.accountKey;
+  const friends = (userData && userData.friends) || {};
+  const blocked = (userData && userData.blockedUsers) || {};
+  const out = [];
+  Object.keys((userData && userData.lastRead) || {}).forEach(k => {
+    let other = null;
+    if (k.startsWith(me + "_")) other = k.slice(me.length + 1);
+    else if (k.endsWith("_" + me)) other = k.slice(0, k.length - me.length - 1);
+    if (!other || other === me || friends[other] || blocked[other]) return;
+    out.push({ key: k, other });
+  });
+  return out;
+}
+
+const otherChatNames = {};
+function renderOtherChats() {
+  const list = document.getElementById("otherChatsList");
+  const label = document.getElementById("otherChatsLabel");
+  if (!list) return;
+  list.innerHTML = "";
+  label.style.display = otherChatKeys.length ? "block" : "none";
+  otherChatKeys.forEach(({ key, other }) => {
+    const name = otherChatNames[other];
+    if (!name) {
+      fetchAccountProfile(other).then(p => { if (p && !otherChatNames[other]) { otherChatNames[other] = p.username; renderOtherChats(); } });
+      return;
+    }
+    const n = unreadCounts[key] || 0;
+    const addLink = h("span", { className: "unfriend-link", onclick: async (e) => {
+      e.stopPropagation();
+      const res = await sendFriendRequest(other, name);
+      showComposerNotice(res.ok ? "Friend request sent." : res.error);
+    }}, "Add friend");
+    const row = h("div", { className: "list-row" + (openChatAccountKey === other ? " selected" : "") + (n > 0 ? " has-unread" : ""), onclick: () => openChatWith(other, name) },
+      buildAvatarWithPresence(name, other, false),
+      h("div", { className: "list-row-info" },
+        h("div", { className: "list-row-name" }, name),
+        h("div", { className: "list-row-sub" }, "not friends")
+      ),
+      h("div", { className: "list-row-unread-badge" }, badgeText(n))
+    );
+    list.appendChild(h("div", {}, row, h("div", { className: "list-row-actions-row show" }, addLink)));
+  });
+}
 
 function renderGroupsList(groups) {
   myGroupChats = groups;
@@ -1757,15 +1886,16 @@ function renderGroupsList(groups) {
   $groupsEmpty.style.display = groups.length === 0 ? "block" : "none";
 
   groups.forEach(gc => {
+    ensureUnreadWatch(gc.gcId, true);
     const count = Object.keys(gc.members || {}).length;
-    const isUnread = unreadThreads.has(gc.gcId);
-    const row = h("div", { className: "list-row" + (openChatGcId === gc.gcId ? " selected" : "") + (isUnread ? " has-unread" : ""), onclick: () => openGroupChat(gc.gcId) },
+    const n = unreadCounts[gc.gcId] || 0;
+    const row = h("div", { className: "list-row" + (openChatGcId === gc.gcId ? " selected" : "") + (n > 0 ? " has-unread" : ""), onclick: () => openGroupChat(gc.gcId) },
       buildAvatarWithPresence(gc.name, gc.gcId, true),
       h("div", { className: "list-row-info" },
         h("div", { className: "list-row-name" }, gc.name),
-        h("div", { className: "list-row-sub" }, count + " member" + (count === 1 ? "" : "s")),
-        h("div", { className: "list-row-unread-dot" })
-      )
+        h("div", { className: "list-row-sub" }, count + " member" + (count === 1 ? "" : "s"))
+      ),
+      h("div", { className: "list-row-unread-badge" }, badgeText(n))
     );
     $groupsList.appendChild(row);
     if (openChatGcId === gc.gcId) currentGroupInfo = gc;
@@ -1781,15 +1911,17 @@ function renderFriendsList(userData) {
   $friendsEmpty.style.display = entries.length === 0 ? "block" : "none";
 
   entries.forEach(([friendAccountKey, friendData]) => {
-    const isUnread = unreadThreads.has(friendAccountKey);
+    const threadKey = threadIdFor(currentSession.accountKey, friendAccountKey);
+    ensureUnreadWatch(threadKey, false);
+    const n = unreadCounts[threadKey] || 0;
     const isOnline = latestPresenceAccountKeys.has(friendAccountKey);
-    const row = h("div", { className: "list-row" + (openChatAccountKey === friendAccountKey ? " selected" : "") + (isUnread ? " has-unread" : ""), onclick: () => openChatWith(friendAccountKey, friendData.username) },
+    const row = h("div", { className: "list-row" + (openChatAccountKey === friendAccountKey ? " selected" : "") + (n > 0 ? " has-unread" : ""), onclick: () => openChatWith(friendAccountKey, friendData.username) },
       buildAvatarWithPresence(friendData.username, friendAccountKey, false),
       h("div", { className: "list-row-info" },
         h("div", { className: "list-row-name" }, friendData.username),
         h("div", { className: "list-row-sub" }, isOnline ? "online" : "offline")
       ),
-      h("div", { className: "list-row-unread-dot" })
+      h("div", { className: "list-row-unread-badge" }, badgeText(n))
     );
 
     const actionsRow = h("div", { className: "list-row-actions-row" });
@@ -1823,23 +1955,25 @@ function renderBlockedList(userData) {
   $blockedEmpty.style.display = entries.length === 0 ? "block" : "none";
 
   entries.forEach(([blockedAccountKey, blockedData]) => {
-    const unblockBtn = h("button", { className: "find-action-btn plain", onclick: async () => {
+    const unblockBtn = pbtn("Unblock", "ghost", async () => {
       unblockBtn.disabled = true;
       const result = await unblockUser(blockedAccountKey);
       if (!result.ok) { showComposerNotice(result.error); unblockBtn.disabled = false; }
-    }}, "Unblock");
-    $blockedList.appendChild(h("div", { className: "find-person-row" },
-      h("div", { className: "find-person-name" }, blockedData.username),
-      unblockBtn
-    ));
+    });
+    $blockedList.appendChild(buildPersonRow(blockedAccountKey, blockedData.username, "blocked", [unblockBtn]));
   });
 }
 
 function renderAllRelationshipUI(userData) {
+  lastReadMap = Object.assign({}, (userData && userData.lastRead) || {});
+  otherChatKeys = currentSession ? deriveOtherChats(userData) : [];
+  otherChatKeys.forEach(o => ensureUnreadWatch(o.key, false));
   renderIncomingRequests(userData);
   renderOutgoingRequests(userData);
   renderFriendsList(userData);
   renderBlockedList(userData);
+  renderOtherChats();
+  scheduleUnread();
   updateFindRailDot(userData);
   refreshOwnRailAvatar();
   if ($listPaneYouName) { $listPaneYouName.textContent = currentSession ? currentSession.username : ""; }
@@ -2277,10 +2411,7 @@ function renderChatMessage(msg) {
     bubble.style.opacity = "0.6";
     bubble.textContent = "This message was deleted";
   } else if (msg.imageData) {
-    const img = h("img", { className: "chat-msg-image", alt: "Image", onclick: () => {
-      $imageLightboxImg.src = msg.imageData;
-      $imageLightbox.classList.add("show");
-    }});
+    const img = h("img", { className: "chat-msg-image", alt: "Image", onclick: () => openImageLightbox(msg.imageData) });
     img.src = msg.imageData;
     bubble.appendChild(img);
     if (msg.text) bubble.appendChild(h("div", { style: "margin-top:6px;white-space:pre-wrap", html: linkify(esc(msg.text)) }));
@@ -2322,7 +2453,7 @@ function renderChatMessage(msg) {
     requestAnimationFrame(() => { $chatMessages.scrollTop = $chatMessages.scrollHeight; });
   }
 
-  if (!openChatGcId && !mine && openThreadId) markThreadRead(openThreadId, msg.id);
+  if (!mine && (openChatGcId || openThreadId)) markThreadRead(openChatGcId || openThreadId, msg.id, !!openChatGcId);
 }
 
 function updateRenderedMessage(msg) {
@@ -2373,6 +2504,7 @@ function openChatWith(accountKey, username) {
 
   $chatMessages.innerHTML = "";
   openThreadId = watchThreadMessages(accountKey, renderChatMessage, updateRenderedMessage);
+  markLastRead(openThreadId);
   watchTyping(false, accountKey, renderTypingIndicator);
   watchThreadReads(openThreadId, (reads) => { threadReadsState = reads; refreshReadReceiptDisplay(); });
 
@@ -2409,6 +2541,7 @@ function openGroupChat(gcId) {
   openChatUsername = null;
   openChatGcId = gcId;
   openThreadId = null;
+  markLastRead(gcId);
   chatMessageCount = 0;
   lastRenderedDateKey = null;
 
@@ -2511,7 +2644,11 @@ document.addEventListener("click", (e) => {
   if (!$emojiPickerPopover.contains(e.target) && e.target !== $emojiPickerBtn) $emojiPickerPopover.classList.remove("show");
 });
 
-$imageLightbox.addEventListener("click", () => $imageLightbox.classList.remove("show"));
+function openImageLightbox(src) { if (!src) return; $imageLightboxImg.src = src; $imageLightbox.classList.add("show"); }
+function closeImageLightbox() { $imageLightbox.classList.remove("show"); $imageLightboxImg.removeAttribute("src"); }
+$imageLightbox.addEventListener("click", closeImageLightbox);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $imageLightbox.classList.contains("show")) { e.stopImmediatePropagation(); closeImageLightbox(); } }, true);
+window.VUS_UI = Object.assign(window.VUS_UI || {}, { openImage: openImageLightbox, closeImage: closeImageLightbox });
 
 function sendChatMessage() {
   if (!openChatAccountKey && !openChatGcId) return;
@@ -2688,6 +2825,8 @@ const $chatUserProfileId = document.getElementById("chatUserProfileId");
 const $chatUserProfileStatus = document.getElementById("chatUserProfileStatus");
 const $chatUserProfileCloseBtn = document.getElementById("chatUserProfileCloseBtn");
 const $chatUserProfileAddBtn = document.getElementById("chatUserProfileAddBtn");
+const $chatUserProfileMsgBtn = document.getElementById("chatUserProfileMsgBtn");
+const $chatUserProfileMuteBtn = document.getElementById("chatUserProfileMuteBtn");
 const $chatUserProfileAvatar = document.getElementById("chatUserProfileAvatar");
 const $chatUserProfileRoles = document.getElementById("chatUserProfileRoles");
 const $chatUserProfileBioWrap = document.getElementById("chatUserProfileBioWrap");
@@ -2714,12 +2853,24 @@ function resetProfileCard() {
   $chatUserProfileStatus.textContent = "";
   $chatUserProfileStatus.style.color = "";
   $chatUserProfileAddBtn.style.display = "none";
+  $chatUserProfileMsgBtn.style.display = "none";
+  $chatUserProfileMuteBtn.style.display = "none";
   $chatUserProfileRoles.replaceChildren();
   $chatUserProfileBioWrap.style.display = "none";
   stopProfileSong();
   $chatUserProfileSong.replaceChildren(); $chatUserProfileSong.style.display = "none";
   $chatUserProfileAvatar.replaceChildren();
   $chatUserProfileOverlay.style.display = "flex";
+}
+
+// Mute works on chat IDs and only changes what THIS browser shows (see chat.js).
+function setupProfileMute(prof) {
+  const chat = window.VUS_CHAT;
+  if (!chat || !chat.toggleMute || !prof.id) return;
+  const paint = () => { $chatUserProfileMuteBtn.textContent = chat.isMuted(prof.id) ? "Unmute" : "Mute"; };
+  $chatUserProfileMuteBtn.style.display = "inline-block";
+  $chatUserProfileMuteBtn.onclick = () => { chat.toggleMute(prof.id, prof.username); paint(); };
+  paint();
 }
 
 function fillProfileCard(prof, accountKey) {
@@ -2730,6 +2881,17 @@ function fillProfileCard(prof, accountKey) {
   if (prof.bio) { $chatUserProfileBio.textContent = prof.bio; $chatUserProfileBioWrap.style.display = "block"; }
   if (mzkSourceOf(prof) && $chatUserProfileOverlay.style.display === "flex") profileSongUnsub = mountSong($chatUserProfileSong, mzkSourceOf(prof));
 
+  if (accountKey !== currentSession.accountKey) {
+    setupProfileMute(prof);
+    if (!(currentUserData && currentUserData.blockedUsers && currentUserData.blockedUsers[accountKey])) {
+      $chatUserProfileMsgBtn.style.display = "inline-block";
+      $chatUserProfileMsgBtn.onclick = () => {
+        $chatUserProfileCloseBtn.click();
+        openDmSidebar("chats");
+        openChatWith(accountKey, prof.username);
+      };
+    }
+  }
   if (accountKey === currentSession.accountKey) {
     $chatUserProfileStatus.textContent = "That's you.";
     $chatUserProfileAddBtn.style.display = "inline-block";
@@ -2794,6 +2956,11 @@ window.VUS_DM = {
   openChatUserProfile,
   getAvatarByLoginId,
   watchSongByLoginId,
+  getAccountCreatedAt: async (loginId) => {
+    const key = await accountKeyForLoginId(loginId);
+    const prof = key ? await fetchAccountProfile(key) : null;
+    return prof ? prof.createdAt : 0;
+  },
   getSession: () => currentSession ? { accountKey: currentSession.accountKey, username: currentSession.username, id: currentSession.id } : null,
   logout: () => doLogout()
 };
