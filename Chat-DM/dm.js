@@ -347,6 +347,19 @@ const MZK_CONFIG = {
   appId: "1:359354025989:web:281bf6bd232eedfefb346c"
 };
 const MZK_CODE_RE = /^[A-Z2-9]{5}-[A-Z2-9]{5}$/;
+const MZK_UID_RE = /^[A-Za-z0-9]{20,40}$/;
+/* A profile's song can come from a pasted code, OR from a linked MZK account. A linked account is written
+   "uid:<MZK account id>|<this profile's VUS id>"; the song is only shown while MZK's own links/<account id>
+   record points back at this same VUS id (both sides must agree). */
+function mzkSourceOf(prof) {
+  if (!prof) return "";
+  if (prof.mzkUid && MZK_UID_RE.test(String(prof.mzkUid)) && prof.id != null && prof.id !== "") return "uid:" + prof.mzkUid + "|" + String(prof.id);
+  return prof.mzk || "";
+}
+function parseMzkSource(src) {
+  const m = /^uid:([A-Za-z0-9]{20,40})\|(.+)$/.exec(String(src || ""));
+  return m ? { uid: m[1], owner: m[2] } : null;
+}
 const SONG_FRESH_MS = 150000;      // MZK sends a heartbeat every 45s while playing
 const MZK_MAX_WATCHERS = 40;
 let mzkDbPromise = null;
@@ -405,25 +418,33 @@ function songFromDoc(d) {
 // seconds after its last user leaves, so re-drawing the member list doesn't thrash connections.
 const mzkWatch = new Map();   // code -> { subs, last, lastJson, data, unsub, tick, killTimer }
 function mzkSubscribe(code, cb) {
-  if (!MZK_CODE_RE.test(code || "")) return () => {};
+  const acct = parseMzkSource(code);
+  if (!acct && !MZK_CODE_RE.test(code || "")) return () => {};
   let e = mzkWatch.get(code);
   if (!e) {
     if (mzkWatch.size >= MZK_MAX_WATCHERS) return () => {};
-    e = { subs: new Set(), last: null, lastJson: "", data: null, unsub: null, tick: null, killTimer: null };
+    e = { subs: new Set(), last: null, lastJson: "", data: null, unsub: null, unsubLink: null, linkOk: !acct, tick: null, killTimer: null };
     mzkWatch.set(code, e);
     const entry = e;
     const publish = () => {
-      const song = songFromDoc(entry.data), j = song ? JSON.stringify(song) : "";
+      const song = entry.linkOk ? songFromDoc(entry.data) : null, j = song ? JSON.stringify(song) : "";
       if (j === entry.lastJson) return;
       entry.lastJson = j; entry.last = song;
       entry.subs.forEach(f => { try { f(song); } catch (_) {} });
     };
     loadMzkDb().then(fs => {
       if (mzkWatch.get(code) !== entry) return;
-      entry.unsub = fs.collection("nowPlaying").doc(code).onSnapshot(snap => {
+      entry.unsub = fs.collection("nowPlaying").doc(acct ? acct.uid : code).onSnapshot(snap => {
         entry.data = snap.exists ? snap.data() : null;
         publish();
       }, () => {});
+      if (acct) {
+        // the MZK account has to point back at this VUS id, otherwise nothing is shown
+        entry.unsubLink = fs.collection("links").doc(acct.uid).onSnapshot(snap => {
+          entry.linkOk = !!(snap.exists && String((snap.data() || {}).vusId) === acct.owner);
+          publish();
+        }, () => { entry.linkOk = false; publish(); });
+      }
       entry.tick = setInterval(publish, 20000);   // notice a stopped heartbeat
     }).catch(() => {});
   }
@@ -437,6 +458,7 @@ function mzkSubscribe(code, cb) {
       entry.killTimer = setTimeout(() => {
         if (entry.subs.size) return;
         if (entry.unsub) entry.unsub();
+        if (entry.unsubLink) entry.unsubLink();
         clearInterval(entry.tick);
         if (mzkWatch.get(code) === entry) mzkWatch.delete(code);
       }, 8000);
@@ -444,7 +466,7 @@ function mzkSubscribe(code, cb) {
   };
 }
 function mzkStopAll() {
-  mzkWatch.forEach(e => { if (e.unsub) e.unsub(); clearInterval(e.tick); clearTimeout(e.killTimer); });
+  mzkWatch.forEach(e => { if (e.unsub) e.unsub(); if (e.unsubLink) e.unsubLink(); clearInterval(e.tick); clearTimeout(e.killTimer); });
   mzkWatch.clear();
 }
 
@@ -472,8 +494,9 @@ function mountSong(box, code) {
 function watchSongByLoginId(loginId, cb) {
   let unsub = null, dead = false;
   accountKeyForLoginId(loginId).then(k => k ? fetchAccountProfile(k) : null).then(prof => {
-    if (dead || !prof || !prof.mzk) return;
-    unsub = mzkSubscribe(prof.mzk, cb);
+    const src = mzkSourceOf(prof);
+    if (dead || !src) return;
+    unsub = mzkSubscribe(src, cb);
   }).catch(() => {});
   return () => { dead = true; if (unsub) unsub(); };
 }
@@ -592,6 +615,73 @@ async function updateProfile(newUsername, newAvatarDataUrl, newBio, newMzk) {
     }
   }
   return { ok: true, username: currentSession.username };
+}
+
+
+/* ── Link by signing in to MZK ──
+   Signs in to the person's MZK account (mzk-playa project) once, checks the email is verified, writes
+   links/<mzk account id> = { vusId } on MZK's side, and saves the MZK account id on this VUS profile.
+   The password only goes to Firebase's own sign-in; nothing is stored here. Afterwards we sign out of MZK again. */
+let mzkAuthPromise = null;
+function loadMzkAuth() {
+  if (mzkAuthPromise) return mzkAuthPromise;
+  mzkAuthPromise = loadMzkDb().then(() => new Promise((resolve, reject) => {
+    const app = firebase.apps.find(a => a.name === "vusMzk");
+    if (firebase.auth) { resolve(app.auth()); return; }
+    const s = document.createElement("script");
+    s.src = "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js";
+    s.onload = () => { try { resolve(app.auth()); } catch (e) { reject(e); } };
+    s.onerror = () => reject(new Error("Couldn't load MZK sign-in."));
+    document.head.appendChild(s);
+  })).catch(e => { mzkAuthPromise = null; throw e; });
+  return mzkAuthPromise;
+}
+function mzkAuthMessage(e) {
+  const c = String((e && e.code) || "");
+  if (/invalid-credential|wrong-password|user-not-found/.test(c)) return "Wrong MZK email or password.";
+  if (/invalid-email/.test(c)) return "That email doesn't look right.";
+  if (/too-many-requests/.test(c)) return "Too many tries. Wait a bit and try again.";
+  if (/network/.test(c)) return "Couldn't reach MZK. Check your connection.";
+  if (/permission-denied/.test(c)) return "MZK's database rules don't allow linking yet.";
+  return (e && e.message) || "Couldn't sign in to MZK.";
+}
+async function linkMzkAccount(email, password) {
+  if (!currentSession) return { ok: false, error: "Not logged in." };
+  email = String(email || "").trim();
+  if (!email || !password) return { ok: false, error: "Enter your MZK email and password." };
+  let auth;
+  try { auth = await loadMzkAuth(); } catch (e) { return { ok: false, error: mzkAuthMessage(e) }; }
+  try {
+    const cred = await auth.signInWithEmailAndPassword(email, password);
+    const user = cred.user;
+    if (!user.emailVerified) {
+      await auth.signOut().catch(() => {});
+      return { ok: false, error: "Verify your email in MZK first (check your inbox), then try again." };
+    }
+    const fs = await loadMzkDb();
+    await fs.collection("links").doc(user.uid).set({ vusId: String(currentSession.id), updated: firebase.firestore.FieldValue.serverTimestamp() });
+    const k = usersRef.child(currentSession.accountKey);
+    await k.child("mzkUid").set(user.uid);
+    await k.child("mzk").set(null);   // the account link replaces any pasted code
+    delete profileCache[currentSession.accountKey];
+    await auth.signOut().catch(() => {});
+    return { ok: true, uid: user.uid };
+  } catch (e) {
+    try { await auth.signOut(); } catch (_) {}
+    if (e && /permission/i.test(String(e.code || e.message || "")) && !/auth\//.test(String(e.code || ""))) {
+      return { ok: false, error: "The database rules don't allow linking yet." };
+    }
+    return { ok: false, error: mzkAuthMessage(e) };
+  }
+}
+async function clearMzkLink() {
+  if (!currentSession) return { ok: false, error: "Not logged in." };
+  try {
+    const k = usersRef.child(currentSession.accountKey);
+    await Promise.all([k.child("mzk").set(null), k.child("mzkUid").set(null)]);
+    delete profileCache[currentSession.accountKey];
+    return { ok: true };
+  } catch (e) { return { ok: false, error: friendlyDbError(e, "Couldn't unlink") }; }
 }
 
 function friendlyDbError(e, prefix) {
@@ -1135,10 +1225,10 @@ function fetchAccountProfile(accountKey) {
   if (hit && Date.now() - (hit._at || 0) < PROFILE_CACHE_MS) return Promise.resolve(hit);
   if (profileInflight[accountKey]) return profileInflight[accountKey];
   const base = usersRef.child(accountKey);
-  const p = Promise.all(["username", "id", "avatar", "bio", "mzk"].map(k => base.child(k).get())).then(snaps => {
+  const p = Promise.all(["username", "id", "avatar", "bio", "mzk", "mzkUid"].map(k => base.child(k).get())).then(snaps => {
     delete profileInflight[accountKey];
     if (!snaps[0].exists()) return null;
-    const prof = { accountKey, username: snaps[0].val(), id: snaps[1].val(), avatar: snaps[2].val() || null, bio: snaps[3].val() || "", mzk: snaps[4].val() || "", _at: Date.now() };
+    const prof = { accountKey, username: snaps[0].val(), id: snaps[1].val(), avatar: snaps[2].val() || null, bio: snaps[3].val() || "", mzk: snaps[4].val() || "", mzkUid: snaps[5].val() || "", _at: Date.now() };
     profileCache[accountKey] = prof;
     if (prof.id) idToAccountKey[String(prof.id)] = accountKey;
     return prof;
@@ -1278,26 +1368,60 @@ const $profilePwFields = document.getElementById("profilePwFields");
 const $profilePwSave = document.getElementById("profilePwSave");
 const $profilePwError = document.getElementById("profilePwError");
 const $profileLogoutBtn = document.getElementById("profileLogoutBtn");
-const $currentMzk = () => String((currentUserData && currentUserData.mzk) || "");
+const $currentMzk = () => String((currentUserData && (currentUserData.mzkUid || currentUserData.mzk)) || "");
 let profileMzkSongUnsub = null, mzkRevealed = false, unlinkStep = 0, unlinkTimer = null;
 
 function paintMzkLinkState() {
-  const code = String((currentUserData && currentUserData.mzk) || "");
+  const uid = String((currentUserData && currentUserData.mzkUid) || "");
+  const code = uid ? "" : String((currentUserData && currentUserData.mzk) || "");
+  const linked = !!(uid || code);
   if (profileMzkSongUnsub) { profileMzkSongUnsub(); profileMzkSongUnsub = null; }
-  $profileMzkLinked.style.display = code ? "block" : "none";
-  $profileMzkUnlinked.style.display = code ? "none" : "block";
-  if (!code) return;
-  // the second half stays hidden unless the person asks to see it
-  $profileMzkMasked.textContent = mzkRevealed ? code : code.slice(0, 5) + "-\u2022\u2022\u2022\u2022\u2022";
-  $profileMzkReveal.textContent = mzkRevealed ? "Hide" : "Show";
+  $profileMzkLinked.style.display = linked ? "block" : "none";
+  $profileMzkUnlinked.style.display = linked ? "none" : "block";
+  if (!linked) return;
+  if (uid) {
+    $profileMzkMasked.textContent = "MZK account linked";
+    $profileMzkReveal.style.display = "none";
+  } else {
+    // the second half stays hidden unless the person asks to see it
+    $profileMzkReveal.style.display = "";
+    $profileMzkMasked.textContent = mzkRevealed ? code : code.slice(0, 5) + "-\u2022\u2022\u2022\u2022\u2022";
+    $profileMzkReveal.textContent = mzkRevealed ? "Hide" : "Show";
+  }
   $profileMzkIdle.style.display = "";
-  profileMzkSongUnsub = mzkSubscribe(code, song => {
+  const source = uid ? mzkSourceOf({ mzkUid: uid, id: currentSession && currentSession.id }) : code;
+  profileMzkSongUnsub = mzkSubscribe(source, song => {
     if (!song) { $profileMzkSong.replaceChildren(); $profileMzkSong.style.display = "none"; $profileMzkIdle.style.display = ""; return; }
     $profileMzkSong.replaceChildren(buildSongCard(song));
     $profileMzkSong.style.display = "";
     $profileMzkIdle.style.display = "none";
   });
 }
+
+// "Sign in to MZK" block, added under the code box (built here so the HTML file doesn't need to change)
+(function buildMzkSignIn() {
+  const hint = h("div", { className: "profile-popover-fieldhint" }, "Or sign in to your MZK account once. It links automatically and keeps working without a code.");
+  const email = h("input", { type: "email", id: "profileMzkEmail", placeholder: "MZK email", autocomplete: "off", spellcheck: "false" });
+  const pw = h("input", { type: "password", id: "profileMzkPw", placeholder: "MZK password", autocomplete: "off" });
+  const err = h("div", { id: "profileMzkSignInError", className: "profile-popover-fieldhint", style: "color:#ef4444;min-height:12px" });
+  const btn = h("button", { type: "button", id: "profileMzkSignInBtn", style: "width:100%;margin-top:6px;padding:7px 10px;background:#22c55e;color:#06260f;border:none;border-radius:7px;font-size:12.5px;font-weight:600;cursor:pointer" }, "Sign in to MZK");
+  const go = async () => {
+    err.textContent = ""; err.style.color = "#ef4444";
+    btn.disabled = true; btn.textContent = "Linking…";
+    const r = await linkMzkAccount(email.value, pw.value);
+    btn.disabled = false; btn.textContent = "Sign in to MZK";
+    pw.value = "";
+    if (!r.ok) { err.textContent = r.error; return; }
+    email.value = "";
+    if (currentUserData) { currentUserData.mzkUid = r.uid; delete currentUserData.mzk; }
+    paintMzkLinkState();
+    window.dispatchEvent(new CustomEvent("vus:profile"));
+  };
+  btn.addEventListener("click", go);
+  pw.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); go(); } });
+  const wrap = h("div", { style: "margin-top:10px;padding-top:8px;border-top:1px solid #334155" }, hint, h("div", { style: "margin-top:6px;display:flex;flex-direction:column;gap:6px" }, email, pw), btn, err);
+  $profileMzkUnlinked.appendChild(wrap);
+})();
 function resetUnlinkButton() {
   unlinkStep = 0; clearTimeout(unlinkTimer);
   $profileMzkUnlink.textContent = "Unlink MZK";
@@ -1313,12 +1437,12 @@ $profileMzkUnlink.addEventListener("click", async () => {
   } else {
     resetUnlinkButton();
     $profileMzkUnlink.disabled = true;
-    const result = await updateProfile(undefined, undefined, undefined, "");
+    const result = await clearMzkLink();
     $profileMzkUnlink.disabled = false;
     if (!result.ok) { $profilePopoverError.textContent = result.error; return; }
     $profileMzkInput.value = "";
     mzkRevealed = false;
-    if (currentUserData) delete currentUserData.mzk;   // don't wait for the live listener to redraw
+    if (currentUserData) { delete currentUserData.mzk; delete currentUserData.mzkUid; }   // don't wait for the live listener to redraw
     paintMzkLinkState();
     window.dispatchEvent(new CustomEvent("vus:profile"));
     return;
@@ -1359,6 +1483,7 @@ function openProfilePopover() {
   $profileNameInput.value = currentSession ? currentSession.username : "";
   $profileBioInput.value = (currentUserData && currentUserData.bio) || "";
   $profileMzkInput.value = "";
+  { const e1 = document.getElementById("profileMzkEmail"), p1 = document.getElementById("profileMzkPw"), r1 = document.getElementById("profileMzkSignInError"); if (e1) e1.value = ""; if (p1) p1.value = ""; if (r1) r1.textContent = ""; }
   paintMzkLinkState();
   updateBioCount();
   renderProfileAvatarButton(currentUserData && currentUserData.avatar);
@@ -2013,7 +2138,7 @@ function renderDmProfile() {
         bioBox.appendChild(h("div", { className: "dmp-h" }, "About me"));
         bioBox.appendChild(h("div", { className: "dmp-t dmp-bio" }, prof.bio));
       }
-      if (prof.mzk) dmpSongUnsub = mountSong(songBox, prof.mzk);
+      if (mzkSourceOf(prof)) dmpSongUnsub = mountSong(songBox, mzkSourceOf(prof));
     });
     info.appendChild(h("div", { className: "dmp-actions" },
       h("button", { className: "dmp-btn", onclick: async () => {
@@ -2603,7 +2728,7 @@ function fillProfileCard(prof, accountKey) {
   renderAvatarInto($chatUserProfileAvatar, prof.username, prof.avatar);
   fillRoles($chatUserProfileRoles, prof.id);
   if (prof.bio) { $chatUserProfileBio.textContent = prof.bio; $chatUserProfileBioWrap.style.display = "block"; }
-  if (prof.mzk && $chatUserProfileOverlay.style.display === "flex") profileSongUnsub = mountSong($chatUserProfileSong, prof.mzk);
+  if (mzkSourceOf(prof) && $chatUserProfileOverlay.style.display === "flex") profileSongUnsub = mountSong($chatUserProfileSong, mzkSourceOf(prof));
 
   if (accountKey === currentSession.accountKey) {
     $chatUserProfileStatus.textContent = "That's you.";
