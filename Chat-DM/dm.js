@@ -1257,6 +1257,25 @@ async function accountKeyForLoginId(loginId) {
   } catch (e) {}
   return null;
 }
+/* Does this chat sender's login id belong to a real account, and does the name on the message match it?
+   Used by chat to hide messages/images from forged senders. unknown=true means "couldn't check" (offline). */
+const senderChecks = {};
+async function verifySender(loginId, name) {
+  const id = String(loginId || "");
+  if (!/^\d{6}$/.test(id)) return { ok: false, nameMatches: false };
+  const hit = senderChecks[id];
+  if (hit && Date.now() - hit.at < (hit.ok ? 600000 : 30000)) return { ok: hit.ok, unknown: hit.unknown, nameMatches: hit.ok && String(hit.username || "").toLowerCase() === String(name || "").trim().toLowerCase() };
+  let rec = { at: Date.now(), ok: false, username: "", unknown: false };
+  try {
+    const key = await accountKeyForLoginId(id);
+    if (key) {
+      const prof = await fetchAccountProfile(key);
+      if (prof) { rec.ok = true; rec.username = prof.username; }
+    }
+  } catch (e) { rec.unknown = true; }
+  senderChecks[id] = rec;
+  return { ok: rec.ok, unknown: rec.unknown, nameMatches: rec.ok && String(rec.username).toLowerCase() === String(name || "").trim().toLowerCase() };
+}
 async function getAvatarByLoginId(loginId) {
   const key = await accountKeyForLoginId(loginId);
   if (!key) return null;
@@ -2956,6 +2975,7 @@ async function openAccountProfile(accountKey, nameFallback) {
 window.VUS_DM = {
   openChatUserProfile,
   getAvatarByLoginId,
+  verifySender,
   watchSongByLoginId,
   getAccountCreatedAt: async (loginId) => {
     const key = await accountKeyForLoginId(loginId);

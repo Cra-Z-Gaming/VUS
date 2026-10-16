@@ -1526,12 +1526,18 @@ function renderMessage(msg) {
   el.className = "msg has-av" + (mine ? " mine" : "");
   if (msg.loginId) el.dataset.senderId = String(msg.loginId);
   // Hidden (not removed) so unmuting brings a muted person's messages back; spam stays hidden for good.
-  let hiddenForMe = false;
+  let hiddenForMe = false, needsVerify = false;
   if (!mine) {
     if (isSpamDuplicate(msg)) { el.classList.add("spam-hidden"); hiddenForMe = true; }
     else if (msg.loginId && isMuted(msg.loginId)) { el.classList.add("muted-hidden"); hiddenForMe = true; }
     trackNewAccountBurst(msg);
     if (!hiddenForMe && msg.loginId && isMuted(msg.loginId)) hiddenForMe = true;
+    // No real login id or no name = not a real account (forged client): hidden for everyone else.
+    if (!/^\d{6}$/.test(String(msg.loginId || "")) || !String(msg.name || "").trim()) { el.classList.add("anon-hidden"); hiddenForMe = true; }
+    else {
+      needsVerify = true;
+      if (msg.imageData) el.classList.add("anon-hidden");   // images stay hidden until the sender is confirmed
+    }
   }
 
   const avEl = document.createElement("div");
@@ -1616,9 +1622,22 @@ function renderMessage(msg) {
     $jumpToBottomBtn.style.display = "block";
   }
 
-  if (!hiddenForMe && msg.mention && mentionTargetOf(msg.mention) === myName && msg.name !== myName && !(msg.loginId && isMuted(msg.loginId))) {
-    el.classList.add("mentions-me");
-    if (!isSilentMention(msg.mention)) triggerIncomingPing(msg.name, msg.text);
+  const firePing = () => {
+    if (!hiddenForMe && !el.classList.contains("anon-hidden") && msg.mention && mentionTargetOf(msg.mention) === myName && msg.name !== myName && !(msg.loginId && isMuted(msg.loginId))) {
+      el.classList.add("mentions-me");
+      if (!isSilentMention(msg.mention)) triggerIncomingPing(msg.name, msg.text);
+    }
+  };
+  if (needsVerify && window.VUS_DM && window.VUS_DM.verifySender) {
+    window.VUS_DM.verifySender(msg.loginId, msg.name).then(r => {
+      // Text: hidden only if the id isn't a real account. Images: the account must be real AND the name must match it.
+      const bad = !r.ok || (msg.imageData && !r.nameMatches);
+      if (bad && !(r.unknown && !msg.imageData)) { el.classList.add("anon-hidden"); }
+      else { el.classList.remove("anon-hidden"); firePing(); }
+      if (autoScroll && stickToBottom) scrollToBottom();
+    }).catch(() => { if (msg.imageData) el.classList.add("anon-hidden"); else firePing(); });
+  } else {
+    firePing();
   }
 }
 

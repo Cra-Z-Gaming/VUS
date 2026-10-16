@@ -1957,3 +1957,6 @@ body.hide-joinleave .msg.system.sys-joinleave { display: none; }
 #friendsBody #viewFind { align-items: stretch; }
 #friendsBody #viewFind .list-section { width: 100%; box-sizing: border-box; align-self: stretch; }
 #friendsBody #viewFind .list-section-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+/* messages from senders with no real account behind them */
+.msg.anon-hidden { display: none !important; }
