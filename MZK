@@ -1475,6 +1475,7 @@ function onUser(u){
   fbUser=u; renderAccount();
   if(unsubDoc){ unsubDoc(); unsubDoc=null; }
   if(!u){
+    alLink=null; alStop();   // account link is only live while signed in
     if(wasSignedIn){ // signing out clears this browser's copy
       wasSignedIn=false; store={likes:[],playlists:[]}; saveLocal(); try{ localStorage.removeItem("mzk:syncuid"); }catch(e){}
       refreshAfterSync(); if(activeList) go(activeTab); toast("Signed out");
@@ -1483,6 +1484,7 @@ function onUser(u){
     return;
   }
   wasSignedIn=true; let first=true;
+  alLoad();   // is this account linked to a VUS ID?
   unsubDoc=db.collection("users").doc(u.uid).onSnapshot(snap=>{
     if(snap.metadata.hasPendingWrites||pushTimer) return;
     const cloud=snap.exists?snap.data():null;
@@ -1699,6 +1701,7 @@ async function npPayload(){
 }
 // called whenever the player changes; writes only when something actually changed
 function npTouch(){
+  alTouch();
   if(!npDb) return;
   const st=npState(); if(!st||!st.on) return;
   clearTimeout(npTimer); npTimer=setTimeout(npPush,900);
@@ -1753,11 +1756,71 @@ fbReady.then(async()=>{
   try{ await npInit(); npStartBeat(); await npPush(true); }catch(e){ npSetStatus(npErrText(e),"err"); }
 });
 window.addEventListener("pagehide",()=>{
+  try{ if(alLink&&fbUser&&db) alRef().update({playing:false,updated:npStamp()}).catch(()=>{}); }catch(e){}
   const st=npState(); if(!st||!st.on||!npDb) return;
   try{ npRef(st.code).update({playing:false,updated:npStamp()}).catch(()=>{}); }catch(e){}
 });
+// ---------- account link: your signed-in MZK account <-> a VUS ID (permanent, no code to paste) ----------
+// links/{mzkUid} = { vusId } (written by you, or by VUS when you sign in to MZK from there)
+// nowPlaying/{mzkUid} = your current song. VUS only shows it if its own profile saved your MZK id AND links/{mzkUid}.vusId matches that profile.
+var alLink=null, alLast="", alTimer=null, alBeat=null, alBusy=false;
+const alRef=()=>db.collection("nowPlaying").doc(fbUser.uid);
+async function alLoad(){
+  if(!fbUser||!db){ alLink=null; return; }
+  try{ const s=await db.collection("links").doc(fbUser.uid).get(); alLink=s.exists&&s.data().vusId?{vusId:s.data().vusId}:null; }
+  catch(e){ alLink=null; }
+  if(alLink){ alStartBeat(); alPush(true); } else alStop();
+  if(activeTab==="Settings"&&!activeList&&!openGroup&&!$("q").value.trim()) render(false);
+}
+function alStop(){ clearInterval(alBeat); clearTimeout(alTimer); alBeat=null; alLast=""; }
+function alTouch(){ if(!alLink||!fbUser||!db) return; clearTimeout(alTimer); alTimer=setTimeout(alPush,900); }
+async function alPush(force){
+  if(!alLink||!fbUser||!db) return;
+  if(alBusy){ alTouch(); return; }
+  const body=await npPayload(), j=JSON.stringify(body);
+  if(!force&&j===alLast) return;
+  alBusy=true;
+  try{ await alRef().set({owner:fbUser.uid,...body,updated:npStamp()}); alLast=j; }
+  catch(e){ /* try again on the next change */ }
+  finally{ alBusy=false; }
+}
+function alStartBeat(){
+  clearInterval(alBeat);
+  alBeat=setInterval(()=>{ if(!alLink||!fbUser||!db||audio.paused||!queue[qi]) return; alRef().update({updated:npStamp()}).catch(()=>{}); },45000);
+}
+async function alSetId(id){
+  id=(id||"").trim();
+  if(!id||id.length>40){ toast("Enter a VUS ID (up to 40 characters)"); return false; }
+  try{ await db.collection("links").doc(fbUser.uid).set({vusId:id,updated:npStamp()}); alLink={vusId:id}; alStartBeat(); alPush(true); return true; }
+  catch(e){ toast("Couldn't save the link ("+(e.code||e.message)+")"); return false; }
+}
+async function alUnlink(){
+  try{ await db.collection("links").doc(fbUser.uid).delete(); await alRef().delete().catch(()=>{}); }
+  catch(e){ toast("Couldn't unlink ("+(e.code||e.message)+")"); return; }
+  alLink=null; alStop(); toast("VUS unlinked");
+}
+function alRows(){
+  const rows=[];
+  if(!fbUser){
+    rows.push(setRow("Permanent link","Sign in to MZK to link your VUS profile for good. It works on any device and never expires.",
+      pill("",pendingUser?"Verify email":"Sign in",()=>pendingUser?verifyDialog():authDialog())));
+    return rows;
+  }
+  if(!alLink){
+    rows.push(setRow("Link to VUS","Sign in to MZK from VUS, or enter your VUS ID here. Once linked, your song shows on your VUS profile automatically, with no code.",
+      pill("","Enter VUS ID",async()=>{ const v=await inputDialog("Your VUS ID","","Link"); if(v===null) return; if(await alSetId(v)) render(false); })));
+    return rows;
+  }
+  const r=el("div","setrow"), l=el("div"), box=el("div","npcode");
+  l.append(el("span","lbl","Linked VUS ID"),el("span","d","Your song shows on that VUS profile automatically, on any device you're signed in to MZK. VUS only accepts it if that profile also signed in to this MZK account."));
+  box.append(el("span","scode",alLink.vusId),
+    pill("","Change",async()=>{ const v=await inputDialog("Your VUS ID",alLink.vusId,"Save"); if(v===null) return; if(await alSetId(v)) render(false); }),
+    pill("","Unlink",async()=>{ if(!await confirmDialog("Unlink VUS?","Your song stops showing on your VUS profile. You can link again any time.","Unlink",true)) return; await alUnlink(); render(false); }));
+  r.append(l,box); rows.push(r);
+  return rows;
+}
 function npCard(){
-  const card=el("section","setcard"); card.append(el("h3",null,"VUS profile"));
+  const card=el("section","setcard"); card.append(el("h3",null,"VUS profile")); alRows().forEach(r=>card.append(r));
   const st=npState(), on=!!(st&&st.on);
   const seg=el("div","seg");
   [[false,"Off"],[true,"On"]].forEach(([v,lbl])=>{
@@ -1776,7 +1839,7 @@ function npCard(){
     };
     seg.append(b);
   });
-  card.append(setRow("Show my song in VUS","Puts what you're playing on your VUS profile, with the cover. Only the title, artist and cover are shared. Anyone who can see your VUS profile can see it.",seg));
+  card.append(setRow("Link by code (no account)","Puts what you're playing on your VUS profile, with the cover. Only the title, artist and cover are shared. Anyone who can see your VUS profile can see it.",seg));
   if(on){
     const r=el("div","setrow"), l=el("div"); l.append(el("span","lbl","Your link code"),el("span","d","In VUS, open your profile and paste this into “MZK link code”. It works on this browser only."));
     const cc=el("div","npcode");
