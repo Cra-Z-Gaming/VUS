@@ -660,10 +660,11 @@ async function linkMzkAccount(email, password) {
       return { ok: false, error: "Verify your email in MZK first (check your inbox), then try again." };
     }
     const fs = await loadMzkDb();
-    await fs.collection("links").doc(user.uid).set({ vusId: String(currentSession.id), updated: firebase.firestore.FieldValue.serverTimestamp() });
+    try { await fs.collection("links").doc(user.uid).set({ vusId: String(currentSession.id), updated: firebase.firestore.FieldValue.serverTimestamp() }); }
+    catch (e) { try { await auth.signOut(); } catch (_) {} return { ok: false, error: "MZK's Firestore rules refused links/" + user.uid.slice(0, 6) + "… (" + (e.code || e.message) + ")." }; }
     const k = usersRef.child(currentSession.accountKey);
-    await k.child("mzkUid").set(user.uid);
-    await k.child("mzk").set(null);   // the account link replaces any pasted code
+    try { await k.child("mzkUid").set(user.uid); await k.child("mzk").set(null); }
+    catch (e) { try { await auth.signOut(); } catch (_) {} return { ok: false, error: "VUS-DM database rules refused users/…/mzkUid. Add an mzkUid rule next to mzk in the vus-dm rules." }; }   // the account link replaces any pasted code
     delete profileCache[currentSession.accountKey];
     await auth.signOut().catch(() => {});
     return { ok: true, uid: user.uid };
@@ -682,7 +683,7 @@ async function clearMzkLink() {
     await Promise.all([k.child("mzk").set(null), k.child("mzkUid").set(null)]);
     delete profileCache[currentSession.accountKey];
     return { ok: true };
-  } catch (e) { return { ok: false, error: friendlyDbError(e, "Couldn't unlink") }; }
+  } catch (e) { return { ok: false, error: "VUS-DM database rules refused clearing mzk/mzkUid (" + (e.code || e.message) + ")." }; }
 }
 
 function friendlyDbError(e, prefix) {
