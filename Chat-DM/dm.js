@@ -2642,6 +2642,87 @@ $uploadImageBtn.addEventListener("click", () => $imageFileInput.click());
 $imageFileInput.addEventListener("change", () => stageImageFile($imageFileInput.files[0]));
 $cancelPendingImageBtn.addEventListener("click", clearPendingImage);
 
+/* ══════════════════════════════════════════════════════════
+   EMOJI PICKER — one shared picker for chat + DMs (search, categories, recent).
+   openEmojiPicker(anchorEl, onPick)  ·  window.VUS_UI.openEmojiPicker
+   ══════════════════════════════════════════════════════════ */
+const EMOJI_DATA = [
+  ["🙂", "Smileys", "😀 grin happy|😃 smile|😄 laugh|😁 beam|😆 haha|😅 sweat nervous|😂 joy lol tears|🤣 rofl|🙂 slight smile|🙃 upside down|😉 wink|😊 blush|😇 angel halo|🥰 love hearts|😍 heart eyes|🤩 star struck wow|😘 kiss|😋 yum tasty|😛 tongue|😜 crazy wink|🤪 zany|🤑 money|🤗 hug|🤭 oops giggle|🤫 shh quiet|🤔 think hmm|🫡 salute|🤐 zip mouth|😐 neutral|😑 expressionless|😶 silent|😏 smirk|😒 unamused|🙄 eyeroll|😬 grimace|😌 relieved|😔 pensive sad|😴 sleep|🤤 drool|😷 mask sick|🤒 fever|🤕 hurt|🤢 nauseated|🤮 vomit|🥵 hot|🥶 cold freezing|🥴 woozy drunk|😵 dizzy|🤯 mind blown|🤠 cowboy|🥳 party|😎 cool sunglasses|🤓 nerd|🧐 monocle|😕 confused|😟 worried|🙁 frown|😮 wow surprised|😲 astonished|😳 flushed|🥺 pleading puppy|😢 cry|😭 sob loud crying|😱 scream fear|😞 disappointed|😩 weary|😫 tired|🥱 yawn bored|😤 triumph huff|😡 angry rage|😠 mad|🤬 swearing|😈 devil|👿 imp|💀 skull dead|☠️ skull crossbones|💩 poop|🤡 clown|👻 ghost|👽 alien|🤖 robot|🙈 see no evil|🙉 hear no evil|🙊 speak no evil|🫠 melting|🫢 peeking|🫣 peek|🥹 holding back tears|😶‍🌫️ fog"],
+  ["👍", "Hands & people", "👍 thumbs up yes|👎 thumbs down no|👌 ok|✌️ peace victory|🤞 fingers crossed luck|🤟 love you|🤘 rock on|🤙 call me|👈 left|👉 right|👆 up|👇 down|☝️ point up|✋ hand stop|🖐️ splayed|👋 wave hello bye|🤚 raised back|🖖 vulcan|👏 clap|🙌 raised hands|🫶 heart hands|👐 open hands|🤲 palms up|🤝 handshake deal|🙏 pray please thanks|✍️ writing|💪 muscle strong flex|🦾 mechanical arm|👀 eyes look|👁️ eye|👅 tongue|👄 mouth|🧠 brain|🫀 heart organ|👶 baby|🧒 child|👦 boy|👧 girl|🧑 person|👨 man|👩 woman|🧓 older|🕵️ detective|👮 police|👷 builder|🧑‍💻 coder developer|🧑‍🎤 singer|🧑‍🚀 astronaut|🦸 hero|🧙 mage wizard|🧛 vampire|🧟 zombie|🧞 genie|🚶 walking|🏃 running|💃 dance|🕺 dancing"],
+  ["❤️", "Hearts & symbols", "❤️ red heart love|🧡 orange heart|💛 yellow heart|💚 green heart|💙 blue heart|💜 purple heart|🖤 black heart|🤍 white heart|🤎 brown heart|💔 broken heart|❣️ heart exclamation|💕 two hearts|💞 revolving hearts|💓 beating heart|💗 growing heart|💖 sparkling heart|💘 cupid|💝 gift heart|💯 100 hundred|💢 anger|💥 boom collision|💫 dizzy star|💦 sweat droplets|💨 dash wind|💬 speech bubble|💭 thought|💤 zzz sleep|✨ sparkles|⭐ star|🌟 glowing star|⚡ lightning bolt|🔥 fire lit|🎉 party popper tada|🎊 confetti|✅ check yes done|❌ cross no|❗ exclamation|❓ question|⚠️ warning|🚫 prohibited|⛔ no entry|➕ plus|➖ minus|➡️ right arrow|⬅️ left arrow|⬆️ up arrow|⬇️ down arrow|🔁 repeat|🔔 bell|🔕 muted bell|🔒 lock|🔓 unlock|🔑 key|🏁 finish flag|🚩 red flag|♻️ recycle|☑️ checkbox|🆗 ok|🆒 cool|🆕 new|🆙 up|🔴 red circle|🟠 orange circle|🟡 yellow circle|🟢 green circle|🔵 blue circle|🟣 purple circle|⚫ black circle|⚪ white circle"],
+  ["🐶", "Animals & nature", "🐶 dog|🐱 cat|🐭 mouse|🐹 hamster|🐰 rabbit bunny|🦊 fox|🐻 bear|🐼 panda|🐨 koala|🐯 tiger|🦁 lion|🐮 cow|🐷 pig|🐸 frog|🐵 monkey|🐔 chicken|🐧 penguin|🐦 bird|🐤 chick|🦆 duck|🦅 eagle|🦉 owl|🦇 bat|🐺 wolf|🐴 horse|🦄 unicorn|🐝 bee|🐛 bug|🦋 butterfly|🐌 snail|🐞 ladybug|🐜 ant|🕷️ spider|🐢 turtle|🐍 snake|🦎 lizard|🐙 octopus|🦑 squid|🦀 crab|🐠 fish|🐬 dolphin|🐳 whale|🦈 shark|🐊 crocodile|🐘 elephant|🦒 giraffe|🦓 zebra|🐪 camel|🐑 sheep|🐐 goat|🐕 dog2|🐈 cat2|🌵 cactus|🌲 tree pine|🌳 tree|🌴 palm|🌱 seedling|🍀 clover luck|🍁 maple leaf|🍂 fallen leaf|🌷 tulip|🌹 rose|🌻 sunflower|🌼 blossom|💐 bouquet|🍄 mushroom|🌍 earth globe|🌙 moon|☀️ sun|⛅ cloudy|☁️ cloud|🌧️ rain|⛈️ storm|❄️ snow|☃️ snowman|🌈 rainbow|🌊 wave water|🔥 fire"],
+  ["🍕", "Food & drink", "🍎 apple|🍊 orange|🍋 lemon|🍌 banana|🍉 watermelon|🍇 grapes|🍓 strawberry|🍒 cherries|🍑 peach|🥭 mango|🍍 pineapple|🥥 coconut|🥑 avocado|🍅 tomato|🥕 carrot|🌽 corn|🌶️ chili pepper|🥔 potato|🍞 bread|🥐 croissant|🧀 cheese|🍳 egg cooking|🥞 pancakes|🥓 bacon|🍔 burger|🍟 fries|🌭 hot dog|🍕 pizza|🌮 taco|🌯 burrito|🥪 sandwich|🍗 chicken leg|🍖 meat|🍝 spaghetti pasta|🍜 ramen noodles|🍣 sushi|🍤 shrimp|🍙 rice ball|🍚 rice|🍦 ice cream|🍧 shaved ice|🍩 donut|🍪 cookie|🎂 cake birthday|🍰 shortcake|🧁 cupcake|🍫 chocolate|🍬 candy|🍿 popcorn|☕ coffee|🍵 tea|🧋 bubble tea boba|🥤 soda cup|🍺 beer|🍻 cheers beers|🍷 wine|🥂 champagne toast|🍸 cocktail|🧃 juice|🥛 milk|💧 water drop"],
+  ["⚽", "Activities & objects", "⚽ soccer football|🏀 basketball|🏈 american football|⚾ baseball|🎾 tennis|🏐 volleyball|🏓 ping pong|🎱 8 ball pool|🥊 boxing|🎯 dart bullseye|🎮 video game controller|🕹️ joystick|🎲 dice|🧩 puzzle|♟️ chess|🎰 slot machine|🎧 headphones|🎵 music note|🎶 notes|🎤 microphone|🎸 guitar|🥁 drums|🎹 piano|🎬 movie clapper|📺 tv|📷 camera|📱 phone|💻 laptop|🖥️ desktop computer|⌨️ keyboard|🖱️ mouse|💾 floppy save|💿 disc|🔋 battery|🔌 plug|💡 idea bulb|🔦 flashlight|📚 books|📖 book|📝 memo note|✏️ pencil|🖊️ pen|📌 pin|📎 paperclip|✂️ scissors|🔧 wrench|🔨 hammer|⚙️ gear|🧰 toolbox|🔬 microscope|🔭 telescope|💊 pill|🩹 bandage|💰 money bag|💵 dollar|💎 gem diamond|👑 crown|🎁 gift present|🏆 trophy|🥇 gold medal first|🥈 silver|🥉 bronze|🎈 balloon|🧸 teddy bear|🛒 cart|🔍 search magnifier|🔗 link|📦 package|✉️ mail|📅 calendar|⏰ alarm clock|⌛ hourglass"],
+  ["🚗", "Travel & places", "🚗 car|🚕 taxi|🚌 bus|🚓 police car|🚑 ambulance|🚒 fire truck|🏎️ race car|🚲 bike|🛴 scooter|🏍️ motorcycle|🚂 train|🚀 rocket|✈️ airplane|🛸 ufo|🚁 helicopter|⛵ sailboat|🚢 ship|⚓ anchor|🏠 house home|🏢 office|🏫 school|🏥 hospital|🏰 castle|🗼 tower|🗽 statue of liberty|⛰️ mountain|🌋 volcano|🏖️ beach|🏝️ island|🏕️ camping|🌆 city sunset|🌃 night city|🌉 bridge|🎡 ferris wheel|🎢 roller coaster|⛽ fuel|🚦 traffic light|🗺️ map|🧭 compass|⏳ hourglass flowing|🌅 sunrise|🌄 sunrise mountains"]
+].map(([icon, name, raw]) => ({ icon, name, items: raw.split("|").map(s => { const i = s.indexOf(" "); return { e: i < 0 ? s : s.slice(0, i), k: i < 0 ? "" : s.slice(i + 1) }; }) }));
+const EMOJI_RECENT_KEY = "vus_emoji_recent_v1";
+let emojiRecent = [];
+try { emojiRecent = JSON.parse(localStorage.getItem(EMOJI_RECENT_KEY) || "[]").filter(x => typeof x === "string").slice(0, 24); } catch (e) { emojiRecent = []; }
+function rememberEmoji(e) {
+  emojiRecent = [e].concat(emojiRecent.filter(x => x !== e)).slice(0, 24);
+  try { localStorage.setItem(EMOJI_RECENT_KEY, JSON.stringify(emojiRecent)); } catch (err) {}
+}
+let emojiPopEl = null, emojiPopAnchor = null, emojiPopCleanup = null;
+function closeEmojiPicker() {
+  if (emojiPopEl) { emojiPopEl.remove(); emojiPopEl = null; }
+  if (emojiPopCleanup) { emojiPopCleanup(); emojiPopCleanup = null; }
+  emojiPopAnchor = null;
+}
+function openEmojiPicker(anchor, onPick) {
+  if (emojiPopEl && emojiPopAnchor === anchor) { closeEmojiPicker(); return; }   // clicking the same button again closes it
+  closeEmojiPicker();
+  emojiPopAnchor = anchor;
+  const pop = h("div", { className: "emoji-pop", role: "dialog", "aria-label": "Emoji picker" });
+  const search = h("input", { type: "text", className: "emoji-search", placeholder: "Search emoji (try “heart”, “fire”, “laugh”)", autocomplete: "off", spellcheck: "false" });
+  const tabs = h("div", { className: "emoji-tabs" });
+  const grid = h("div", { className: "emoji-grid" });
+  pop.append(search, tabs, grid);
+  const pick = (e, keep) => { rememberEmoji(e); onPick(e); if (!keep) closeEmojiPicker(); else paint(search.value); };
+  const cell = (item) => h("button", { type: "button", className: "emoji-cell", title: item.k || "", onclick: (ev) => pick(item.e, ev.shiftKey) }, item.e);
+  let activeCat = emojiRecent.length ? -1 : 0;
+  function paint(q) {
+    grid.replaceChildren();
+    tabs.querySelectorAll("button").forEach(b => b.classList.toggle("on", !q && Number(b.dataset.cat) === activeCat));
+    q = String(q || "").trim().toLowerCase();
+    if (q) {
+      const seen = new Set();
+      const hits = [];
+      EMOJI_DATA.forEach(c => c.items.forEach(it => { if (!seen.has(it.e) && (it.k.toLowerCase().includes(q) || it.e === q)) { seen.add(it.e); hits.push(it); } }));
+      if (!hits.length) grid.appendChild(h("div", { className: "emoji-empty" }, "No emoji found for “" + q + "”."));
+      hits.forEach(it => grid.appendChild(cell(it)));
+      return;
+    }
+    if (activeCat === -1) {
+      grid.appendChild(h("div", { className: "emoji-cat-name" }, "Recently used"));
+      emojiRecent.forEach(e => grid.appendChild(cell({ e, k: "" })));
+      return;
+    }
+    const cat = EMOJI_DATA[activeCat];
+    grid.appendChild(h("div", { className: "emoji-cat-name" }, cat.name));
+    cat.items.forEach(it => grid.appendChild(cell(it)));
+  }
+  if (emojiRecent.length) tabs.appendChild(h("button", { type: "button", "data-cat": "-1", title: "Recent", onclick: () => { activeCat = -1; search.value = ""; paint(""); } }, "🕘"));
+  EMOJI_DATA.forEach((c, i) => tabs.appendChild(h("button", { type: "button", "data-cat": String(i), title: c.name, onclick: () => { activeCat = i; search.value = ""; paint(""); } }, c.icon)));
+  search.addEventListener("input", () => paint(search.value));
+  document.body.appendChild(pop);
+  emojiPopEl = pop;
+  paint("");
+  // place it next to the button: above if there's room, else below; never off-screen
+  const r = anchor.getBoundingClientRect();
+  const w = Math.min(340, window.innerWidth - 16), hgt = 330;
+  pop.style.width = w + "px";
+  let top = r.top - hgt - 8; if (top < 8) top = Math.min(window.innerHeight - hgt - 8, r.bottom + 8);
+  let left = Math.min(Math.max(8, r.right - w), window.innerWidth - w - 8);
+  pop.style.top = Math.max(8, top) + "px"; pop.style.left = left + "px";
+  const onDoc = (e) => { if (!pop.contains(e.target) && !anchor.contains(e.target)) closeEmojiPicker(); };
+  const onKey = (e) => { if (e.key === "Escape") { e.stopImmediatePropagation(); closeEmojiPicker(); } };
+  setTimeout(() => document.addEventListener("mousedown", onDoc, true), 0);
+  document.addEventListener("keydown", onKey, true);
+  emojiPopCleanup = () => { document.removeEventListener("mousedown", onDoc, true); document.removeEventListener("keydown", onKey, true); };
+  search.focus({ preventScroll: true });
+}
+window.VUS_UI = Object.assign(window.VUS_UI || {}, { openEmojiPicker, closeEmojiPicker });
+
 function buildEmojiPicker() {
   $emojiPickerPopover.innerHTML = "";
   QUICK_EMOJIS.forEach(emoji => {
@@ -2658,11 +2739,7 @@ function insertAtCursor(textarea, text) {
   textarea.selectionStart = textarea.selectionEnd = start + text.length;
   autosizeChatInput();
 }
-buildEmojiPicker();
-$emojiPickerBtn.addEventListener("click", () => $emojiPickerPopover.classList.toggle("show"));
-document.addEventListener("click", (e) => {
-  if (!$emojiPickerPopover.contains(e.target) && e.target !== $emojiPickerBtn) $emojiPickerPopover.classList.remove("show");
-});
+$emojiPickerBtn.addEventListener("click", () => openEmojiPicker($emojiPickerBtn, e => { insertAtCursor($chatMsgInput, e); $chatMsgInput.focus(); }));
 
 function openImageLightbox(src) { if (!src) return; $imageLightboxImg.src = src; $imageLightbox.classList.add("show"); }
 function closeImageLightbox() { $imageLightbox.classList.remove("show"); $imageLightboxImg.removeAttribute("src"); }
@@ -2875,6 +2952,7 @@ function resetProfileCard() {
   $chatUserProfileAddBtn.style.display = "none";
   $chatUserProfileMsgBtn.style.display = "none";
   $chatUserProfileMuteBtn.style.display = "none";
+  { const sb = document.getElementById("chatUserProfileStaff"); if (sb) { sb.replaceChildren(); sb.style.display = "none"; } }
   $chatUserProfileRoles.replaceChildren();
   $chatUserProfileBioWrap.style.display = "none";
   stopProfileSong();
@@ -2887,10 +2965,26 @@ function resetProfileCard() {
 function setupProfileMute(prof) {
   const chat = window.VUS_CHAT;
   if (!chat || !chat.toggleMute || !prof.id) return;
-  const paint = () => { $chatUserProfileMuteBtn.textContent = chat.isMuted(prof.id) ? "Unmute" : "Mute"; };
+  const paint = () => { $chatUserProfileMuteBtn.textContent = chat.isMuted(prof.id) ? "Unmute for me" : "Mute for me"; };
   $chatUserProfileMuteBtn.style.display = "inline-block";
   $chatUserProfileMuteBtn.onclick = () => { chat.toggleMute(prof.id, prof.username); paint(); };
   paint();
+}
+
+// Mute / Ban / Kick for people whose rank allows it against this person (rules live in chat.js).
+function renderStaffActions(prof) {
+  const box = document.getElementById("chatUserProfileStaff");
+  const chat = window.VUS_CHAT;
+  if (!box || !chat || !chat.staffActionsFor || !prof.id) return;
+  const acts = chat.staffActionsFor(prof.id, prof.username);
+  box.replaceChildren();
+  if (!acts.length) { box.style.display = "none"; return; }
+  box.style.display = "block";
+  box.appendChild(h("div", { className: "pc-h" }, "Staff actions"));
+  const row = h("div", { className: "pc-staff-row" });
+  acts.forEach(a => row.appendChild(h("button", { type: "button", className: "pc-staff-btn" + (a.id === "mute" ? "" : " danger"),
+    onclick: () => { $chatUserProfileCloseBtn.click(); chat.runStaffAction(a.id, prof.id, prof.username); } }, a.label)));
+  box.appendChild(row);
 }
 
 function fillProfileCard(prof, accountKey) {
@@ -2903,6 +2997,7 @@ function fillProfileCard(prof, accountKey) {
 
   if (accountKey !== currentSession.accountKey) {
     setupProfileMute(prof);
+    renderStaffActions(prof);
     if (!(currentUserData && currentUserData.blockedUsers && currentUserData.blockedUsers[accountKey])) {
       $chatUserProfileMsgBtn.style.display = "inline-block";
       $chatUserProfileMsgBtn.onclick = () => {

@@ -1868,7 +1868,7 @@ body.hide-joinleave .msg.system.sys-joinleave { display: none; }
 .msg-meta { display: flex; align-items: center; flex-wrap: wrap; }
 .msg-meta .role-bubble-row { display: inline-flex; margin: 0 5px 0 0; gap: 0; flex-wrap: nowrap; }
 .msg-meta .role-bubble-row:empty { display: none; }
-.msg-meta .role-bubble-row > div { background: none !important; border: none !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; font-size: 14px; line-height: 1; min-width: 0 !important; }
+.msg-meta .role-bubble-row > div { align-self: center !important; margin: 0 !important; padding: 1px 7px !important; font-size: 13px !important; line-height: 1.25; min-width: 0 !important; border-radius: 7px !important; box-shadow: none; }
 .msg.mine .msg-meta .role-bubble-row { justify-content: flex-start; }
 
 /* ═══ One centered Settings window ═══ */
@@ -1960,3 +1960,84 @@ body.hide-joinleave .msg.system.sys-joinleave { display: none; }
 
 /* messages from senders with no real account behind them */
 .msg.anon-hidden { display: none !important; }
+
+/* ═══ Looks: text size, bubble size, bold (chat + DMs). Default is Large. ═══ */
+body.fs-s .msg-bubble, body.fs-s .chat-msg-bubble { font-size: 15px !important; }
+body.fs-m .msg-bubble, body.fs-m .chat-msg-bubble { font-size: 17px !important; }
+body.fs-l .msg-bubble, body.fs-l .chat-msg-bubble { font-size: 19px !important; }
+body.fs-xl .msg-bubble, body.fs-xl .chat-msg-bubble { font-size: 22px !important; }
+body.fs-s .msg-meta-name, body.fs-s .chat-msg-author { font-size: 15px !important; }
+body.fs-m .msg-meta-name, body.fs-m .chat-msg-author { font-size: 17px !important; }
+body.fs-l .msg-meta-name, body.fs-l .chat-msg-author { font-size: 19px !important; }
+body.fs-xl .msg-meta-name, body.fs-xl .chat-msg-author { font-size: 22px !important; }
+body.fs-s .msg-meta, body.fs-s .chat-msg-meta { font-size: 12px !important; }
+body.fs-m .msg-meta, body.fs-m .chat-msg-meta { font-size: 13px !important; }
+body.fs-l .msg-meta, body.fs-l .chat-msg-meta { font-size: 14px !important; }
+body.fs-xl .msg-meta, body.fs-xl .chat-msg-meta { font-size: 16px !important; }
+body.fs-s #msgInput, body.fs-s #chatMsgInput { font-size: 15px !important; }
+body.fs-m #msgInput, body.fs-m #chatMsgInput { font-size: 17px !important; }
+body.fs-l #msgInput, body.fs-l #chatMsgInput { font-size: 18px !important; }
+body.fs-xl #msgInput, body.fs-xl #chatMsgInput { font-size: 20px !important; }
+body.bold-text .msg-bubble, body.bold-text .chat-msg-bubble, body.bold-text #msgInput, body.bold-text #chatMsgInput { font-weight: 700 !important; }
+body.bold-text .msg-meta-name, body.bold-text .chat-msg-author { font-weight: 800 !important; }
+body.bs-compact .msg-bubble[style*="background"], body.bs-compact .chat-msg-bubble { padding: 3px 8px !important; border-radius: 8px !important; }
+body.bs-normal .msg-bubble[style*="background"], body.bs-normal .chat-msg-bubble { padding: 8px 14px !important; border-radius: 12px !important; }
+body.bs-roomy .msg-bubble[style*="background"], body.bs-roomy .chat-msg-bubble { padding: 13px 20px !important; border-radius: 16px !important; }
+body.bs-normal .msg { padding-top: 6px; padding-bottom: 6px; }
+body.bs-roomy .msg { padding-top: 10px; padding-bottom: 10px; }
+body.bs-compact .msg { padding-top: 2px; padding-bottom: 2px; }
+.cs-choice { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 2px; flex-wrap: wrap; }
+.cs-seg { display: inline-flex; border: 1px solid #334155; border-radius: 8px; overflow: hidden; }
+.cs-seg button { background: transparent; color: #94a3b8; border: none; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+.cs-seg button.on { background: #166534; color: #dcfce7; }
+.cs-seg button + button { border-left: 1px solid #334155; }
+
+/* role badge on the name line keeps its colored background so a name that merely says "Owner" can't pass for one */
+
+/* staff actions on profile cards */
+#chatUserProfileStaff { margin: 10px 0 2px; }
+.pc-staff-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.pc-staff-btn { background: #1e293b; color: #e2e8f0; border: 1px solid #334155; border-radius: 8px; font-size: 13px; padding: 6px 12px; cursor: pointer; }
+.pc-staff-btn:hover { border-color: #64748b; }
+.pc-staff-btn.danger { color: #fca5a5; border-color: #7f1d1d; }
+.pc-staff-btn.danger:hover { background: rgba(239,68,68,.12); }
+
+/* ═══ Emoji picker (shared by chat + DMs) ═══ */
+.emoji-pop { position: fixed; z-index: 500; height: 330px; display: flex; flex-direction: column; background: #0f172a; border: 1px solid #334155; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.55); overflow: hidden; }
+.emoji-search { margin: 8px 8px 4px; padding: 8px 10px; background: #111c33; border: 1px solid #243553; border-radius: 8px; color: #e2e8f0; font-size: 14px; outline: none; }
+.emoji-search:focus { border-color: #22c55e; }
+.emoji-tabs { display: flex; gap: 2px; padding: 2px 6px 4px; border-bottom: 1px solid #1c2638; overflow-x: auto; }
+.emoji-tabs button { background: transparent; border: none; border-radius: 6px; font-size: 17px; padding: 3px 6px; cursor: pointer; opacity: .6; flex-shrink: 0; }
+.emoji-tabs button:hover { opacity: 1; background: rgba(255,255,255,.06); }
+.emoji-tabs button.on { opacity: 1; background: rgba(34,197,94,.18); }
+.emoji-grid { flex: 1; overflow-y: auto; padding: 6px 8px 10px; display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; align-content: start; }
+.emoji-cat-name { grid-column: 1 / -1; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #64748b; padding: 4px 2px; }
+.emoji-empty { grid-column: 1 / -1; color: #64748b; font-size: 13px; padding: 14px 4px; text-align: center; }
+.emoji-cell { background: transparent; border: none; border-radius: 6px; font-size: 22px; line-height: 1.25; padding: 3px 0; cursor: pointer; }
+.emoji-cell:hover { background: rgba(255,255,255,.09); }
+
+/* ═══ Chat: reply quote, reactions, hover actions, edited tag ═══ */
+.msg { position: relative; }
+.msg-acts { position: absolute; top: -12px; right: 16px; display: none; gap: 0; background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 2px; z-index: 5; }
+.msg:hover .msg-acts, .msg.touch-active .msg-acts { display: flex; }
+.msg.system .msg-acts, .msg.anon-hidden .msg-acts { display: none !important; }
+.msg-acts button { background: transparent; border: none; color: #94a3b8; font-size: 15px; cursor: pointer; padding: 3px 7px; border-radius: 6px; }
+.msg-acts button:hover { background: rgba(255,255,255,.08); color: #e2e8f0; }
+.msg-reply { align-self: flex-start; max-width: 100%; margin: 2px 0 3px; padding: 2px 10px; border-left: 3px solid #22c55e; color: #94a3b8; font-size: .82em; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msg-reply b { color: #cbd5e1; font-weight: 600; }
+.msg-reply:hover { color: #e2e8f0; }
+.msg-reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.msg-reactions:empty { display: none; }
+.react-pill { background: #1e293b; border: 1px solid #334155; color: #cbd5e1; border-radius: 999px; padding: 1px 9px; font-size: 14px; cursor: pointer; }
+.react-pill:hover { border-color: #64748b; }
+.react-pill.mine { background: rgba(34,197,94,.16); border-color: #22c55e; color: #dcfce7; }
+.msg-edited { font-size: .72em; color: #64748b; font-weight: 400; }
+.msg-flash { animation: msgFlash 1.3s ease-out; }
+@keyframes msgFlash { 0% { background: rgba(34,197,94,.28); } 100% { background: transparent; } }
+#chatReplyBar { align-items: center; gap: 10px; padding: 7px 16px; background: #111827; border-top: 1px solid #1f2937; color: #94a3b8; font-size: 13px; flex-shrink: 0; }
+#chatReplyBar span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#chatReplyBar button { background: transparent; border: none; color: #94a3b8; font-size: 20px; line-height: 1; cursor: pointer; }
+#emojiBtn { background: transparent; border: none; font-size: 22px; cursor: pointer; padding: 0 6px; align-self: center; opacity: .8; }
+#emojiBtn:hover { opacity: 1; }
+
+.msg.silenced-hidden { display: none !important; }
