@@ -1,9 +1,12 @@
 {
-"updated":"October 14, 2026 - 9:37 PM",
+"updated":"October 17, 2026 - 12:54 PM",
 "message":"Huge update to VUS OS",
 "apps":[
 {"name":"VUS-OS","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS-OS/refs/heads/main/index.html","desc":"Desktop version of VUS Hub","icon":"OS","color":"white"},
 {"name":"VUS Launcher","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL","desc":"Main game hub — V17.4","icon":"🎮","color":"green"},
+
+{"name":"VUS D.C","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Chat-DM/Chat-DM.html","desc":"VUS Dm+Chat & Discord Layout","icon":"VDC","color":""},
+
 {"name":"VUS DM's","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/VUS-DM","desc":"add your friends and message them privately - V2","icon":"DM","color":"white"},
 {"name":"Chat Room","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/VUS-Chat","desc":"Talk to people who also use VUS Hub","icon":"Chat","color":"blue"},
 {"name":"BaSik (chat)","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/basic-chat.html","desc":"super light weight chat, no roles, no images, just text","icon":"BaSik","color":"blue"},
