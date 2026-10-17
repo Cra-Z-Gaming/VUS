@@ -390,7 +390,6 @@ const ChatBackend = {
       return ref.key;
     } catch (e) { return null; }   // rules not updated yet: the action still goes ahead, it just can't be verified
   },
-  castVote(node, id, yes) { return this._db.ref("rooms/" + MAIN_ROOM_ID + "/" + node + "/" + id + "/votes/" + String(myLoginId)).set(!!yes); },
   castVeto(node, id) { return this._db.ref("rooms/" + MAIN_ROOM_ID + "/" + node + "/" + id + "/veto").set(true); },
   watchVerify(cb) { this._db.ref("rooms/" + MAIN_ROOM_ID + "/verify/on").on("value", s => cb(s.val() === true)); },
   setVerify() { return this._db.ref("rooms/" + MAIN_ROOM_ID + "/verify/on").set(true); },
@@ -1560,14 +1559,11 @@ let liveSince = 0;                     // messages stamped after this arrived wh
    Bans made before this shipped (their time stamp is set by the server, so it can't be faked) still count.
    ══════════════════════════════════════════════════════════ */
 const VERIFY_EPOCH = 1792208707276;
-const VOTE_WAIT_MS = 5000;               // how long we wait for peers before judging an action on its own checks
-const VOTE_LIVE_MS = 30000;              // only actions this fresh get a live yes/no from us
-const VOTER_MIN_AGE_MS = 60 * 60 * 1000; // voters need an account at least this old (blunts throw-away accounts)
-const QUORUM_MAX = 2;                    // yes votes needed once at least this many eligible people are online
+const VETO_WAIT_MS = 3000;               // short window so the named issuer's own window can disown a forged record
+const LIVE_JUDGE_MS = 30000;             // only actions this fresh get a live "was the issuer online" check
 let verifyFlagOn = false;                // rooms/<main>/verify/on, switched on by the Owner
 const recs = { actions: {}, grants: {} };
 const liveVerdict = {};                  // my own live judgement per record id
-const voteCast = new Set();
 const ISSUED_KEY = "vus_chat_issued_v1";
 let issuedByMe = new Set();
 try { issuedByMe = new Set(JSON.parse(localStorage.getItem(ISSUED_KEY) || "[]")); } catch (e) {}
@@ -1579,12 +1575,6 @@ let attestCache = null, computingAttest = false, verifyRefreshQueued = false, ve
 function verifyActive() { return verifyFlagOn && chatPrefs.peerVerify !== false; }
 function srvNow() { return ChatBackend.serverNowSync(); }
 function presenceIds() { return [...new Set(latestPresenceList.map(e => String(e.loginId || "")).filter(Boolean))]; }
-function accountOldEnough(id) {
-  const c = createdAtCache[String(id)];
-  if (c === undefined) { accountCreatedAt(id).then(() => scheduleVerifyRefresh()); return false; }
-  return c > 0 && srvNow() - c >= VOTER_MIN_AGE_MS;
-}
-function eligibleVoter(v, r) { v = String(v); return /^\d{6}$/.test(v) && v !== String(r.b) && v !== String(r.t) && accountOldEnough(v); }
 function kickByRoomOwner(by) { return !!(currentRoomMeta && currentRoomMeta.ownerName && loginIdForName(currentRoomMeta.ownerName) === by); }
 
 // Would an honest client accept this record, judged only on ranks, limits and presence?
@@ -1608,21 +1598,23 @@ function recLooksValid(r, requireOnline) {
   return false;
 }
 
-// "ok" | "pending" | "no"
+// "ok" | "pending" | "no".  No voting: a record counts when (1) the person named as the issuer really holds a rank that
+// allows it (admin/co-owner/owner ranks can only be set from the database console, so they can't be faked),
+// (2) it is within that rank's limits, (3) when we saw it happen the issuer was online, and (4) the issuer's own
+// chat window didn't disown it (a forged record in someone's name is vetoed by that person's client).
+function recWhy(node, id) {
+  const r = (recs[node] || {})[id];
+  if (!r) return "missing";
+  if (r.veto === true) return "disowned by the person it names";
+  if (liveVerdict[id] === false) return "issuer wasn't online / allowed when it happened";
+  if (!recLooksValid(r, false)) return "rank or limit doesn't allow it";
+  return "";
+}
 function recStatus(node, id) {
   const r = (recs[node] || {})[id];
   if (!r) return "no";
-  if (r.veto === true) return "no";
-  if (liveVerdict[id] === false) return "no";
-  const age = srvNow() - (Number(r.ts) || 0);
-  let yes = 0, no = 0;
-  const votes = r.votes || {};
-  Object.keys(votes).forEach(v => { if (eligibleVoter(v, r)) { if (votes[v] === true) yes++; else no++; } });
-  const need = Math.min(QUORUM_MAX, presenceIds().filter(v => eligibleVoter(v, r)).length);
-  if (need > 0 && yes >= need && yes > no) return "ok";
-  if (age < VOTE_WAIT_MS) return "pending";
-  if (yes + no === 0) return recLooksValid(r, false) ? "ok" : "no";   // nobody was around to ask: the plain checks decide
-  return yes > no && yes >= 1 ? "ok" : "no";
+  if (srvNow() - (Number(r.ts) || 0) < VETO_WAIT_MS && r.veto !== true) return "pending";
+  return recWhy(node, id) ? "no" : "ok";
 }
 function matchStatus(node, pred) {
   let best = "no";
@@ -1712,18 +1704,11 @@ function onRec(node, id, val) {
   }
   scheduleVerifyRefresh();
 }
-function maybeVote(node, id, r) {
-  if (!verifyActive() || !myLoginId || !rolesReady) return;
+function judgeLive(node, id, r) {
+  if (!verifyActive() || !rolesReady || id in liveVerdict) return;
   const age = srvNow() - (Number(r.ts) || 0);
-  if (!(id in liveVerdict)) {
-    if (age > VOTE_LIVE_MS || age < -5000) return;          // too old to have been seen live
-    liveVerdict[id] = recLooksValid(r, true);
-  }
-  if (voteCast.has(id)) return;
-  const me = String(myLoginId);
-  if (me === String(r.b) || me === String(r.t) || !accountOldEnough(me)) return;
-  voteCast.add(id);
-  ChatBackend.castVote(node, id, liveVerdict[id]).catch(() => {});
+  if (age > LIVE_JUDGE_MS || age < -5000) return;           // not seen live: only the plain checks apply
+  liveVerdict[id] = recLooksValid(r, true);
 }
 function anyPendingRec() {
   return ["actions", "grants"].some(node => Object.keys(recs[node]).some(id => srvNow() - (Number(recs[node][id].ts) || 0) < 60000 && recStatus(node, id) === "pending"));
@@ -1734,12 +1719,13 @@ function scheduleVerifyRefresh() {
   setTimeout(() => {
     verifyRefreshQueued = false;
     attestCache = null;
-    ["actions", "grants"].forEach(node => Object.keys(recs[node]).forEach(id => maybeVote(node, id, recs[node][id])));
+    ["actions", "grants"].forEach(node => Object.keys(recs[node]).forEach(id => judgeLive(node, id, recs[node][id])));
     applyMyMute();
     rebuildRoleHolders();
     renderMembersPane();
     onMyRoleMaybeChanged();
     refreshSilencedMessages();
+    renderVerifyPanel();
     if (currentRoomMeta && currentRoomMeta.kicked && myLoginId && currentRoomMeta.kicked[ChatBackend._safeKey(String(myLoginId))]) onRoomMetaUpdate(currentRoomMeta);
     if (ChatBackend._banRecheck) ChatBackend._banRecheck();
     clearTimeout(verifyPollTimer);
@@ -1759,10 +1745,94 @@ function roomNameForId(id) {
 }
 function reportUnverifiedHolders() {
   if (myRank() < ROLES.crown.rank || !verifyActive()) return;
-  const list = describeUnverifiedHolders();
-  if (list.length) showComposerNotice("Verification is on. These ranks have no approval record yet and are ignored until you re-grant them (/grant mod perm name): " + list.slice(0, 8).join(", ") + (list.length > 8 ? " …" : ""));
+  const n = describeUnverifiedHolders().length;
+  if (n) showComposerNotice("Verification is on. " + n + " Mod/Normie rank" + (n === 1 ? " has" : "s have") + " no approval yet and " + (n === 1 ? "is" : "are") + " ignored. Type /verify to review and approve them.");
 }
-
+function nameOfId(id) {
+  id = String(id);
+  const e = latestPresenceList.find(x => String(x.loginId) === id);
+  if (e) return e.name;
+  const n2i = nameToLoginId(), k = Object.keys(n2i).find(k => String(n2i[k]) === id);
+  return k || "#" + id;
+}
+// ── Verification panel ──
+function ensureVerifyPanel() {
+  let o = document.getElementById("verifyOverlay");
+  if (o) return o;
+  o = document.createElement("div");
+  o.className = "chat-modal-overlay"; o.id = "verifyOverlay";
+  o.innerHTML = '<div class="chat-modal vp-modal"><h3>Verification</h3><div id="verifyBody"></div><div class="chat-modal-row"><button class="chat-modal-btn-secondary" id="verifyCloseBtn">Close</button></div></div>';
+  document.body.appendChild(o);
+  o.addEventListener("click", e => { if (e.target === o) closeVerifyPanel(); });
+  o.querySelector("#verifyCloseBtn").addEventListener("click", closeVerifyPanel);
+  return o;
+}
+function closeVerifyPanel() { const o = document.getElementById("verifyOverlay"); if (o) o.style.display = "none"; }
+function openVerifyPanel() { ensureVerifyPanel().style.display = "flex"; renderVerifyPanel(); }
+function actionSentence(r) {
+  const by = nameOfId(r.b), t = nameOfId(r.t), d = Number(r.d) || 0;
+  const dur = d ? " for " + formatDurationShort(Math.round(d / 1000) * 1000) : "";
+  switch (r.k) {
+    case "mute": return by + " muted " + t + dur;
+    case "ban": return by + (d ? " banned " : " permanently banned ") + t + dur;
+    case "kick": return by + " kicked " + t + " from a room";
+    case "image": return by + (r.v === "on" ? " gave " : " removed ") + t + (r.v === "on" ? " image access" : "'s image access");
+    case "role": return by + " made " + t + " " + (ROLES[r.v] ? ROLES[r.v].label : r.v) + (d ? dur : "");
+    case "unrole": return by + " removed " + t + "'s " + (ROLES[r.v] ? ROLES[r.v].label : r.v) + " rank";
+  }
+  return by + " did something to " + t;
+}
+function renderVerifyPanel() {
+  const body = document.getElementById("verifyBody");
+  const o = document.getElementById("verifyOverlay");
+  if (!body || !o || o.style.display !== "flex") return;
+  body.textContent = "";
+  const add = (tag, cls, text, parent) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; (parent || body).appendChild(e); return e; };
+  const on = verifyActive();
+  const st = add("div", "vp-status " + (on ? "on" : "off"));
+  st.textContent = !verifyFlagOn ? "Verification is OFF for this room. The Owner can turn it on with /verify on." : (chatPrefs.peerVerify === false ? "Verification is on for the room, but you turned it off on this device." : "Verification is ON");
+  add("p", "vp-help", "When it's on, a ban, mute, kick or rank grant only counts if the person who did it really has the rank for it. Admin, Co-owner and Owner ranks can only be set from the database, so they're trusted. Mod and Normie ranks and image access can be faked, so they only count when a real admin or owner approved them. Nothing here needs voting or clicking from regular users.");
+  // ranks
+  add("h4", null, "Ranks");
+  const rows = [];
+  ["crown", "coowner", "admin", "mod", "normie"].forEach(roleId => {
+    (roleIdHolders[roleId] || new Set()).forEach(id => {
+      const trusted = roleId !== "mod" && roleId !== "normie";
+      rows.push({ id: String(id), roleId, ok: !on || trusted || roleAttested(roleId, id), trusted });
+    });
+  });
+  if (!rows.length) add("div", "vp-empty", "No rank holders found.");
+  rows.forEach(r => {
+    const row = add("div", "vp-row");
+    add("span", "vp-name", nameOfId(r.id), row);
+    add("span", "vp-role", ROLES[r.roleId].label, row);
+    const chip = add("span", "vp-chip " + (r.ok ? "ok" : "bad"), r.ok ? (r.trusted ? "Verified (database)" : (on ? "Approved" : "Not checked")) : "Not approved – ignored", row);
+    if (!r.ok && myRank() >= ROLES.admin.rank && ROLES[r.roleId].rank < myRank()) {
+      const b = add("button", "vp-btn", "Approve", row);
+      b.addEventListener("click", async () => {
+        b.disabled = true; b.textContent = "…";
+        try { await ChatBackend.grantRoleToId(r.roleId, r.id); } catch (e) { b.textContent = "Failed"; return; }
+        setTimeout(() => { scheduleVerifyRefresh(); setTimeout(renderVerifyPanel, 600); }, 200);
+      });
+    }
+  });
+  // recent actions
+  add("h4", null, "Recent actions");
+  const list = [];
+  ["actions", "grants"].forEach(node => Object.keys(recs[node]).forEach(id => list.push({ node, id, r: recs[node][id] })));
+  list.sort((a, b) => (Number(b.r.ts) || 0) - (Number(a.r.ts) || 0));
+  if (!list.length) add("div", "vp-empty", "Nothing has been recorded yet.");
+  list.slice(0, 15).forEach(({ node, id, r }) => {
+    const row = add("div", "vp-row");
+    const when = new Date(Number(r.ts) || Date.now());
+    add("span", "vp-when", when.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }), row);
+    add("span", "vp-name", actionSentence(r), row);
+    const s = recStatus(node, id), why = recWhy(node, id);
+    const chip = add("span", "vp-chip " + (s === "ok" ? "ok" : s === "pending" ? "wait" : "bad"), s === "ok" ? "Approved" : s === "pending" ? "Checking…" : "Rejected", row);
+    if (s === "no" && why) chip.title = why;
+    if (s === "no" && why) add("small", "vp-why", why, row);
+  });
+}
 /* ══════════ Replies, edits, reactions ══════════ */
 const EDIT_WINDOW_MS = 15 * 60 * 1000;
 const msgEls = new Map();            // message id -> { el, bubble, reactRow, loginId, ts, isImage, mention, text }
@@ -2821,8 +2891,8 @@ const SLASH_COMMANDS = [
     desc: "Take away a rank below yours.", insert: "/remove " },
   { name: "/image",   args: "on|off username",        minRank: ROLES.admin.rank,
     desc: "Give or take away image access for someone below your rank.", insert: "/image " },
-  { name: "/verify", args: "on|status",              minRank: ROLES.crown.rank,
-    desc: "Turn peer verification on for this room (bans, mutes, grants and image access must be approved by other people's chat windows).", insert: "/verify " },
+  { name: "/verify", args: "[on]",              minRank: ROLES.crown.rank,
+    desc: "Open the Verification panel (who is verified, recent actions). Use /verify on to turn it on for the room.", insert: "/verify " },
   { name: "/unban",   args: "username or ID",         minRank: ROLES.crown.rank,
     desc: "Lift a ban by username or 6-digit account ID.", insert: "/unban " }
 ];
@@ -3013,13 +3083,11 @@ async function handleModerationCommand(text) {
 
   // ── /verify (Owner) ──
   if (command === "/verify") {
-    const mode = (parts[1] || "status").toLowerCase();
-    if (mode === "status") {
-      showComposerNotice("Peer verification: " + (verifyFlagOn ? "ON for this room" : "OFF for this room") + (chatPrefs.peerVerify === false ? " (disabled on this device)" : "") + ". Pending/unapproved grants: " + (describeUnverifiedHolders().length || "none") + ".");
-    } else if (mode === "on") {
-      try { await ChatBackend.setVerify(); showComposerNotice("Peer verification is now ON for this room."); }
+    const mode = (parts[1] || "").toLowerCase();
+    if (mode === "on") {
+      try { await ChatBackend.setVerify(); showComposerNotice("Verification is now ON for this room."); openVerifyPanel(); }
       catch (e) { showComposerNotice(isPermissionDenied(e) ? "The database rules don't allow this yet. Publish the updated chat rules first." : "Couldn't turn it on."); }
-    } else showComposerNotice("Use /verify on or /verify status.");
+    } else openVerifyPanel();
     return true;
   }
 
@@ -3573,9 +3641,10 @@ function renderChatSettings(container) {
     row.append(lab, seg);
     wrap.appendChild(row);
   };
-  toggle("Peer verification", verifyFlagOn ? "Other chat windows double-check bans, mutes and grants" : "Off in this room until the Owner runs /verify on", () => chatPrefs.peerVerify !== false, v => {
+  toggle("Peer verification", verifyFlagOn ? "Checks that bans, mutes and grants come from someone allowed to do them" : "Off in this room until the Owner runs /verify on", () => chatPrefs.peerVerify !== false, v => {
     chatPrefs.peerVerify = v; saveChatPrefs(); scheduleVerifyRefresh();
   });
+  { const r = document.createElement("button"); r.type = "button"; r.className = "cs-row"; r.innerHTML = '<span class="cs-label">Open Verification panel<small>See who is verified and what was approved or rejected</small></span>'; r.addEventListener("click", e => { e.stopPropagation(); if (window.VUS_UI && window.VUS_UI.closeSettings) window.VUS_UI.closeSettings(); openVerifyPanel(); }); wrap.appendChild(r); }
   choice("Text size", [["s", "Small"], ["m", "Medium"], ["l", "Large"], ["xl", "Huge"]], () => chatPrefs.textSize, v => { chatPrefs.textSize = v; saveChatPrefs(); applyAppearance(); keepPinned(); });
   choice("Bubble size", [["compact", "Compact"], ["normal", "Normal"], ["roomy", "Roomy"]], () => chatPrefs.bubbleSize, v => { chatPrefs.bubbleSize = v; saveChatPrefs(); applyAppearance(); keepPinned(); });
   toggle("Bold text", "Easier to read", () => !!chatPrefs.bold, v => { chatPrefs.bold = v; saveChatPrefs(); applyAppearance(); keepPinned(); });

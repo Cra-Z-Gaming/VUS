@@ -2041,3 +2041,16 @@ body.bs-compact .msg { padding-top: 2px; padding-bottom: 2px; }
 #emojiBtn:hover { opacity: 1; }
 
 .msg.silenced-hidden { display: none !important; }
+
+.vp-modal { max-width: 560px; width: 94vw; max-height: 84vh; overflow: auto; }
+.vp-modal h4 { margin: 14px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
+.vp-status { padding: 8px 12px; border-radius: 9px; font-weight: 600; font-size: 14px; }
+.vp-status.on { background: rgba(34,197,94,.15); color: #4ade80; } .vp-status.off { background: rgba(148,163,184,.15); color: #cbd5e1; }
+.vp-help { color: #94a3b8; font-size: 12.5px; line-height: 1.45; margin: 8px 0 0; }
+.vp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 7px 0; border-bottom: 1px solid rgba(148,163,184,.15); font-size: 13.5px; }
+.vp-name { flex: 1 1 140px; color: #e2e8f0; } .vp-role { color: #94a3b8; } .vp-when { color: #64748b; font-size: 12px; }
+.vp-chip { padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+.vp-chip.ok { background: rgba(34,197,94,.18); color: #4ade80; } .vp-chip.bad { background: rgba(239,68,68,.18); color: #f87171; } .vp-chip.wait { background: rgba(250,204,21,.18); color: #facc15; }
+.vp-why { flex-basis: 100%; color: #f87171; font-size: 12px; }
+.vp-btn { padding: 3px 11px; border-radius: 8px; border: 0; background: #3b82f6; color: #fff; font-weight: 600; cursor: pointer; }
+.vp-empty { color: #64748b; font-size: 13px; padding: 4px 0; }
