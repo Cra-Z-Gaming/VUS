@@ -82,6 +82,7 @@
   </div>
   <div class="hdr-title"><span class="ch-hash">#</span> VUS Chat</div>
   <div class="hdr-right">
+    <button id="notifBtn" type="button" title="Notifications" aria-label="Notifications">🔔<span id="notifBadge"></span></button>
     <button id="roomsToggleBtn" type="button" tabindex="-1">🚪 Rooms<span class="rooms-badge-dot" id="roomsBadgeDot"></span></button>
     <button id="inventoryBtn">🎒 Inventory</button>
     <span id="youAreAvatar" class="you-avatar" aria-label="Your profile picture"></span>
@@ -351,6 +352,7 @@
       <div id="inputStack">
         <div id="commandGhost" aria-hidden="true"></div>
         <textarea id="msgInput" rows="1" placeholder="Type a message… (@ to mention someone, / for commands)" maxlength="500"></textarea>
+        <div id="mentionMirror" aria-hidden="true"></div>
       </div>
     </div>
     <button id="emojiBtn" type="button" title="Emoji" aria-label="Emoji">🙂</button>
@@ -493,8 +495,20 @@
       <div class="settings-pane" id="paneChat"></div>
     </div>
     <div id="settingsFoot">
-      <span class="settings-hint">Esc, the X, or double-click outside to close</span>
-      <button type="button" id="settingsCloseBtn">Close</button>
+      <span class="settings-hint" id="settingsHint">Esc, the X, or clicking outside asks before closing if something is unsaved</span>
+      <span class="settings-foot-btns">
+        <button type="button" id="settingsSaveBtn">Save</button>
+        <button type="button" id="settingsCloseBtn">Close</button>
+      </span>
+    </div>
+    <div id="settingsLeave" role="alertdialog" aria-label="Unsaved changes">
+      <div class="settings-leave-card">
+        <div class="settings-leave-title">You have unsaved changes</div>
+        <div class="settings-leave-sub">Save them, or close and discard them.</div>
+        <button type="button" id="settingsLeaveSave" class="sl-primary">Save and close</button>
+        <button type="button" id="settingsLeaveDiscard" class="sl-danger">Close without saving</button>
+        <button type="button" id="settingsLeaveKeep" class="sl-ghost">Keep editing</button>
+      </div>
     </div>
   </div>
 </div>

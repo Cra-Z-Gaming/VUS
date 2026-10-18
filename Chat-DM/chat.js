@@ -1365,7 +1365,9 @@ let myName = "";
 let myLoginId = "";
 let messageCount = 0;
 const CHAT_PREFS_KEY = "vus_chat_prefs_v1";
-const chatPrefs = { autoScroll: true, showJoinLeave: true, peerVerify: true, textSize: "l", bubbleSize: "normal", bold: false };
+const chatPrefs = { autoScroll: true, showJoinLeave: true, peerVerify: true, textSize: "l", bubbleSize: "normal", bold: false,
+  radius: 12, bgMode: "default", bgColor: "#0f172a", bgLink: "", bgFile: "",
+  notifMentions: true, notifReplies: true, notifReactions: true, notifStaff: true };
 try { Object.assign(chatPrefs, JSON.parse(localStorage.getItem(CHAT_PREFS_KEY) || "{}")); } catch (e) {}
 function saveChatPrefs() { try { localStorage.setItem(CHAT_PREFS_KEY, JSON.stringify(chatPrefs)); } catch (e) {} }
 let autoScroll = chatPrefs.autoScroll !== false;
@@ -1377,6 +1379,57 @@ function applyAppearance() {
   ["s", "m", "l", "xl"].forEach(k => b.classList.toggle("fs-" + k, chatPrefs.textSize === k));
   ["compact", "normal", "roomy"].forEach(k => b.classList.toggle("bs-" + k, chatPrefs.bubbleSize === k));
   b.classList.toggle("bold-text", !!chatPrefs.bold);
+  b.classList.add("has-radius");
+  const r = Number(chatPrefs.radius);
+  b.style.setProperty("--bubble-radius", (r >= 0 && r <= 40 ? r : 12) + "px");
+  applyBackground();
+}
+// Backgrounds for the chat and DM message areas: default / dark / light / a colour / an image link / an image file.
+function safeBgUrl(u) {
+  u = String(u || "").trim();
+  return /^https?:\/\/[^\s"'()<>\\]{1,1500}$/i.test(u) ? u : "";
+}
+function isLightColor(hex) {
+  const n = parseInt(hex.slice(1), 16), r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 150;
+}
+function applyBackground() {
+  const b = document.body, mode = chatPrefs.bgMode || "default";
+  b.classList.remove("bg-on", "bg-light");
+  b.style.removeProperty("--chat-bg-color");
+  b.style.removeProperty("--chat-bg-img");
+  if (mode === "default") return;
+  let color = "", img = "", light = false;
+  if (mode === "dark") color = "#060a12";
+  else if (mode === "light") { color = "#eef2f8"; light = true; }
+  else if (mode === "color") { color = /^#[0-9a-fA-F]{6}$/.test(chatPrefs.bgColor) ? chatPrefs.bgColor : "#0f172a"; light = isLightColor(color); }
+  else if (mode === "link" || mode === "file") {
+    const src = mode === "link" ? safeBgUrl(chatPrefs.bgLink) : (/^data:image\/[a-z+.-]+;base64,[A-Za-z0-9+\/=]+$/.test(String(chatPrefs.bgFile || "")) ? chatPrefs.bgFile : "");
+    if (!src) return;
+    img = 'linear-gradient(rgba(8,12,22,.42), rgba(8,12,22,.42)), url("' + src + '")';
+    color = "#0b1220";
+  } else return;
+  b.style.setProperty("--chat-bg-color", color);
+  if (img) b.style.setProperty("--chat-bg-img", img);
+  b.classList.add("bg-on");
+  b.classList.toggle("bg-light", light);
+}
+// Everything the Settings window can change, as one string: used to tell if anything is unsaved, and to undo it.
+function getPrefsState() { return JSON.stringify(Object.keys(chatPrefs).sort().map(k => [k, chatPrefs[k]])); }
+function restorePrefsState(str) {
+  let arr = null;
+  try { arr = JSON.parse(str); } catch (e) { return; }
+  if (!Array.isArray(arr)) return;
+  const saved = {};
+  arr.forEach(p => { if (Array.isArray(p) && typeof p[0] === "string") saved[p[0]] = p[1]; });
+  Object.keys(chatPrefs).forEach(k => { if (!(k in saved)) delete chatPrefs[k]; });
+  Object.assign(chatPrefs, saved);
+  saveChatPrefs();
+  applyAppearance();
+  document.body.classList.toggle("hide-joinleave", chatPrefs.showJoinLeave === false);
+  autoScroll = chatPrefs.autoScroll !== false;
+  if (typeof setAutoScrollUI === "function") setAutoScrollUI();
+  if (typeof scheduleVerifyRefresh === "function") scheduleVerifyRefresh();
 }
 applyAppearance();
 let myTimeoutRemainingMs = 0; // live, kept in sync by watchMyTimeout()
@@ -1499,6 +1552,53 @@ function paintAvatar(container, loginId, name) {
 }
 function openProfileFor(loginId, name) { if (window.VUS_DM) window.VUS_DM.openChatUserProfile(loginId, name); }
 
+// Text with @mentions drawn as chips. Messages from older tabs (no markers) fall back to the single `mention` field.
+function fillBubbleText(bubble, text, legacy) {
+  text = String(text || "");
+  const toks = parseMentionTokens(text);
+  if (!toks.length) {
+    if (legacy) {
+      const chip = document.createElement("span");
+      chip.className = "mention-chip-inline";
+      chip.textContent = "@" + mentionTargetOf(legacy);
+      bubble.appendChild(chip);
+      if (text) bubble.appendChild(document.createTextNode(" " + text));
+    } else bubble.appendChild(document.createTextNode(text));
+    return;
+  }
+  let pos = 0;
+  toks.forEach(t => {
+    if (t.start > pos) bubble.appendChild(document.createTextNode(text.slice(pos, t.start)));
+    const chip = document.createElement("span");
+    chip.className = "mention-chip-inline" + (t.name === myName ? " mention-me" : "");
+    chip.textContent = "@" + t.name;
+    bubble.appendChild(chip);
+    pos = t.end;
+  });
+  if (pos < text.length) bubble.appendChild(document.createTextNode(text.slice(pos)));
+}
+function mentionInfoFor(msg) {
+  if (!myName || msg.imageData) return { me: false, ping: false };
+  const toks = parseMentionTokens(msg.text);
+  let me = false, ping = false;
+  toks.forEach(t => { if (t.name === myName) { me = true; if (t.ping) ping = true; } });
+  if (!toks.length && msg.mention && mentionTargetOf(msg.mention) === myName) { me = true; ping = !isSilentMention(msg.mention); }
+  return { me, ping };
+}
+const lastPingFrom = {};
+// People this device has seen in chat (verified senders), so @mentions can find people who are offline.
+const knownPeople = new Map();           // loginId -> name
+const PEOPLE_KEY = "vus_chat_people_v1";
+try { JSON.parse(localStorage.getItem(PEOPLE_KEY) || "[]").forEach(p => { if (Array.isArray(p) && /^\d{4,12}$/.test(String(p[0])) && typeof p[1] === "string") knownPeople.set(String(p[0]), p[1].slice(0, 40)); }); } catch (e) {}
+let peopleSaveTimer = null;
+function rememberPerson(id, name) {
+  id = String(id || ""); name = String(name || "").trim();
+  if (!/^\d{4,12}$/.test(id) || !name || name.length > 40 || /[\s@\u2063\u2064\u200b]/.test(name)) return;
+  if (knownPeople.get(id) === name) return;
+  knownPeople.delete(id); knownPeople.set(id, name);
+  clearTimeout(peopleSaveTimer);
+  peopleSaveTimer = setTimeout(() => { try { localStorage.setItem(PEOPLE_KEY, JSON.stringify([...knownPeople].slice(-400))); } catch (e) {} }, 1500);
+}
 // A mention is stored as the person's name. A "mention only" (no sound) mention carries an invisible
 // zero-width marker after the name -- no database change needed, and older tabs simply ignore it.
 const SILENT_MENTION_MARK = "\u200b";
@@ -1752,6 +1852,7 @@ function nameOfId(id) {
   id = String(id);
   const e = latestPresenceList.find(x => String(x.loginId) === id);
   if (e) return e.name;
+  if (knownPeople.has(id)) return knownPeople.get(id);
   const n2i = nameToLoginId(), k = Object.keys(n2i).find(k => String(n2i[k]) === id);
   return k || "#" + id;
 }
@@ -1765,6 +1866,7 @@ function ensureVerifyPanel() {
   document.body.appendChild(o);
   o.addEventListener("click", e => { if (e.target === o) closeVerifyPanel(); });
   o.querySelector("#verifyCloseBtn").addEventListener("click", closeVerifyPanel);
+  installBackButton(o, closeVerifyPanel);
   return o;
 }
 function closeVerifyPanel() { const o = document.getElementById("verifyOverlay"); if (o) o.style.display = "none"; }
@@ -1833,6 +1935,118 @@ function renderVerifyPanel() {
     if (s === "no" && why) add("small", "vp-why", why, row);
   });
 }
+/* ══════════ Notifications (the bell) ══════════ */
+const NOTIF_KEY = "vus_chat_notifs_v1";
+const NOTIF_TYPES = [
+  ["mentions", "notifMentions", "Mentions", "When someone @mentions you"],
+  ["replies", "notifReplies", "Replies", "When someone replies to your message"],
+  ["reactions", "notifReactions", "Reactions", "When someone reacts to your message"],
+  ["staff", "notifStaff", "Moderation", "When you are muted or removed from a room"]
+];
+let notifList = [];
+try { notifList = (JSON.parse(localStorage.getItem(NOTIF_KEY) || "[]") || []).filter(n => n && typeof n.id === "string" && typeof n.text === "string"); } catch (e) {}
+function saveNotifs() { try { localStorage.setItem(NOTIF_KEY, JSON.stringify(notifList.slice(0, 40))); } catch (e) {} }
+function notifOn(type) { const t = NOTIF_TYPES.find(x => x[0] === type); return !t || chatPrefs[t[1]] !== false; }
+function myNotifs() { return notifList.filter(n => n.uid === String(myLoginId || "")); }
+function pushNotif(n) {
+  if (!myLoginId || !notifOn(n.type) || notifList.some(x => x.id === n.id && x.uid === String(myLoginId))) return false;
+  notifList.unshift({ id: n.id, type: n.type, text: String(n.text || "").slice(0, 140), from: String(n.from || "").slice(0, 40), emoji: n.emoji || "", ts: Number(n.ts) || Date.now(), msgId: n.msgId ? String(n.msgId) : "", uid: String(myLoginId), read: !!n.read });
+  notifList = notifList.slice(0, 60);
+  saveNotifs(); paintNotifBadge(); renderNotifPanel();
+  return true;
+}
+const $notifBtn = document.getElementById("notifBtn"), $notifBadge = document.getElementById("notifBadge");
+function paintNotifBadge() {
+  const n = myNotifs().filter(x => !x.read).length;
+  $notifBadge.textContent = n > 9 ? "9+" : String(n);
+  $notifBadge.style.display = n ? "inline-block" : "none";
+}
+function notifAgo(ts) {
+  const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  if (s < 60) return "just now";
+  if (s < 3600) return Math.round(s / 60) + "m ago";
+  if (s < 86400) return Math.round(s / 3600) + "h ago";
+  return Math.round(s / 86400) + "d ago";
+}
+let notifPanel = null;
+function ensureNotifPanel() {
+  if (notifPanel) return notifPanel;
+  const p = document.createElement("div");
+  p.id = "notifPanel";
+  p.innerHTML = '<div class="np-head"><b>Notifications</b><span class="np-actions"><button type="button" id="npRead">Mark all read</button><button type="button" id="npClear">Clear</button></span></div><div class="np-list" id="npList"></div><button type="button" class="np-foot" id="npSettings">⚙ Notification settings</button>';
+  document.body.appendChild(p);
+  p.querySelector("#npRead").addEventListener("click", () => { myNotifs().forEach(n => { n.read = true; }); saveNotifs(); paintNotifBadge(); renderNotifPanel(); });
+  p.querySelector("#npClear").addEventListener("click", () => { notifList = notifList.filter(n => n.uid !== String(myLoginId || "")); saveNotifs(); paintNotifBadge(); renderNotifPanel(); });
+  p.querySelector("#npSettings").addEventListener("click", () => {
+    closeNotifPanel();
+    if (window.VUS_UI && window.VUS_UI.openSettings) window.VUS_UI.openSettings("chat");
+    setTimeout(() => { const s = document.getElementById("csNotifSection"); if (s) s.scrollIntoView({ block: "start" }); }, 200);
+  });
+  return (notifPanel = p);
+}
+function notifLine(n) {
+  switch (n.type) {
+    case "mentions": return [n.from + " mentioned you", n.text];
+    case "replies": return [n.from + " replied to you", n.text];
+    case "reactions": return [n.from + " reacted " + (n.emoji || "") + " to your message", n.text];
+    default: return [n.text, ""];
+  }
+}
+function renderNotifPanel() {
+  if (!notifPanel || notifPanel.style.display !== "block") return;
+  const list = notifPanel.querySelector("#npList");
+  list.textContent = "";
+  const items = myNotifs();
+  if (!items.length) { const e = document.createElement("div"); e.className = "np-empty"; e.textContent = "Nothing yet. Mentions, replies and reactions show up here, even ones from while you were away."; list.appendChild(e); return; }
+  items.slice(0, 30).forEach(n => {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "np-row" + (n.read ? "" : " unread");
+    const ico = document.createElement("span"); ico.className = "np-ico"; ico.textContent = n.type === "mentions" ? "@" : n.type === "replies" ? "↩" : n.type === "reactions" ? (n.emoji || "❤") : "🛡️";
+    const body = document.createElement("span"); body.className = "np-body";
+    const [t1, t2] = notifLine(n);
+    const a = document.createElement("span"); a.className = "np-t1"; a.textContent = t1;
+    body.appendChild(a);
+    if (t2) { const b = document.createElement("span"); b.className = "np-t2"; b.textContent = t2; body.appendChild(b); }
+    const tm = document.createElement("span"); tm.className = "np-time"; tm.textContent = notifAgo(n.ts);
+    row.append(ico, body, tm);
+    row.addEventListener("click", () => {
+      n.read = true; saveNotifs(); paintNotifBadge();
+      closeNotifPanel();
+      if (n.msgId) jumpToMessage(n.msgId);
+    });
+    list.appendChild(row);
+  });
+}
+function openNotifPanel() {
+  const p = ensureNotifPanel();
+  p.style.display = "block";
+  renderNotifPanel();
+}
+function closeNotifPanel() { if (notifPanel) notifPanel.style.display = "none"; }
+$notifBtn.addEventListener("click", e => { e.stopPropagation(); if (notifPanel && notifPanel.style.display === "block") closeNotifPanel(); else openNotifPanel(); });
+document.addEventListener("click", e => { if (notifPanel && notifPanel.style.display === "block" && !notifPanel.contains(e.target) && e.target !== $notifBtn && !$notifBtn.contains(e.target)) closeNotifPanel(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeNotifPanel(); });
+window.addEventListener("vus:logout", () => { closeNotifPanel(); paintNotifBadge(); });
+paintNotifBadge();
+// reactions on my messages
+const reactSeen = {};
+let reactBootUntil = 0;
+function notifyReactions(id, val) {
+  const m = msgEls.get(id);
+  const now = new Set();
+  if (val) Object.keys(val).forEach(em => { if (val[em] && typeof val[em] === "object") Object.keys(val[em]).forEach(uid => now.add(em + "|" + uid)); });
+  const prev = reactSeen[id] || (Date.now() >= reactBootUntil ? new Set() : null);
+  reactSeen[id] = now;
+  if (!prev || !m || m.loginId !== String(myLoginId) || Date.now() < reactBootUntil) return;
+  now.forEach(k => {
+    if (prev.has(k)) return;
+    const [em, uid] = k.split("|");
+    if (uid === String(myLoginId) || isMuted(uid) || !validEmojiKey(em)) return;
+    pushNotif({ id: "r:" + id + ":" + k, type: "reactions", from: nameOfId(uid), emoji: em, text: snippetOf(m), ts: Date.now(), msgId: id });
+  });
+}
+
 /* ══════════ Replies, edits, reactions ══════════ */
 const EDIT_WINDOW_MS = 15 * 60 * 1000;
 const msgEls = new Map();            // message id -> { el, bubble, reactRow, loginId, ts, isImage, mention, text }
@@ -1843,7 +2057,7 @@ let editingMsgId = null;
 let lastReactAt = 0, lastEditAt = 0;
 const EMOJI_KEY_OK = /^[^.$#\[\]\/\u0000-\u001f]{1,16}$/;
 function validEmojiKey(k) { return typeof k === "string" && EMOJI_KEY_OK.test(k) && /\p{Extended_Pictographic}/u.test(k); }
-function snippetOf(m) { return m.isImage ? "\uD83D\uDCF7 Image" : String(m.text || "").slice(0, 80); }
+function snippetOf(m) { return m.isImage ? "\uD83D\uDCF7 Image" : stripMentionMarks(m.text).slice(0, 80); }
 
 function jumpToMessage(id) {
   const m = msgEls.get(id);
@@ -1875,14 +2089,17 @@ function startEdit(id) {
   if (m.ts && Date.now() - m.ts > EDIT_WINDOW_MS) { showComposerNotice("You can only edit a message for 15 minutes."); return; }
   replyingTo = null;
   editingMsgId = id;
-  $msgInput.value = m.text || "";
+  picked.clear();
+  parseMentionTokens(m.text || "").forEach(t => picked.set(t.name, t.ping));
+  $msgInput.value = stripMentionMarks(m.text || "");
+  syncMentionMirror();
   autosizeInput(); updateCharCounter(); updateReplyBar();
   $msgInput.focus();
 }
 function cancelEdit(keepText) {
   if (!editingMsgId) return;
   editingMsgId = null;
-  if (!keepText) { $msgInput.value = ""; autosizeInput(); updateCharCounter(); }
+  if (!keepText) { $msgInput.value = ""; picked.clear(); syncMentionMirror(); autosizeInput(); updateCharCounter(); }
   updateReplyBar();
 }
 async function commitEdit(text) {
@@ -1909,13 +2126,7 @@ function applyEdit(id, e) {
   const text = e.text.slice(0, MAX_CHARS);
   m.text = text;
   m.bubble.textContent = "";
-  if (m.mention) {
-    const chip = document.createElement("span");
-    chip.className = "mention-chip-inline";
-    chip.textContent = "@" + mentionTargetOf(m.mention);
-    m.bubble.appendChild(chip);
-    m.bubble.appendChild(document.createTextNode(" " + text));
-  } else m.bubble.appendChild(document.createTextNode(text));
+  fillBubbleText(m.bubble, text, m.mention);
   const tag = document.createElement("span");
   tag.className = "msg-edited";
   tag.textContent = " (edited)";
@@ -1936,12 +2147,16 @@ function renderReactions(id) {
     pill.type = "button";
     pill.className = "react-pill" + (ids.includes(String(myLoginId)) ? " mine" : "");
     pill.textContent = emoji + " " + ids.length;
+    const who = ids.map(uid => uid === String(myLoginId) ? "You" : nameOfId(uid));
+    pill.dataset.tip = who.slice(0, 12).join("\n") + (who.length > 12 ? "\n+" + (who.length - 12) + " more" : "");
+    pill.setAttribute("aria-label", emoji + " from " + who.join(", "));
     pill.addEventListener("click", () => reactTo(id, emoji));
     m.reactRow.appendChild(pill);
   });
 }
 function onReactions(id, val) {
   if (val) reactionsByMsg[id] = val; else delete reactionsByMsg[id];
+  notifyReactions(id, val);
   renderReactions(id);
 }
 async function reactTo(id, emoji) {
@@ -2019,7 +2234,7 @@ const burstTimes = {};                 // loginId -> [ts]
 const createdAtCache = {};
 
 function normalizeForSpam(text) {
-  const t = String(text || "").toLowerCase();
+  const t = stripMentionMarks(text).toLowerCase();
   const stripped = t.replace(/[^\p{L}\p{N}]+/gu, "");
   return stripped || t.trim();
 }
@@ -2165,16 +2380,8 @@ function renderMessage(msg) {
     link.appendChild(img);
     bubble.appendChild(link);
     bubble.style.padding = "6px";
-  } else if (msg.mention) {
-    const chip = document.createElement("span");
-    chip.className = "mention-chip-inline";
-    chip.textContent = "@" + mentionTargetOf(msg.mention);
-    bubble.appendChild(chip);
-    if (msg.text) {
-      bubble.appendChild(document.createTextNode(" " + msg.text));
-    }
   } else {
-    bubble.textContent = msg.text;
+    fillBubbleText(bubble, msg.text, msg.mention);
   }
 
   if (!msg.imageData) {
@@ -2229,9 +2436,24 @@ function renderMessage(msg) {
   }
 
   const firePing = () => {
-    if (!hiddenForMe && !el.classList.contains("anon-hidden") && msg.mention && mentionTargetOf(msg.mention) === myName && msg.name !== myName && !(msg.loginId && isMuted(msg.loginId))) {
+    if (hiddenForMe || el.classList.contains("anon-hidden") || msg.name === myName || (msg.loginId && isMuted(msg.loginId))) return;
+    const recent = !msg.ts || Date.now() - msg.ts < 2 * 86400000;
+    const mm = mentionInfoFor(msg);
+    if (mm.me) {
       el.classList.add("mentions-me");
-      if (!isSilentMention(msg.mention)) triggerIncomingPing(msg.name, msg.text);
+      if (notifOn("mentions")) {
+        if (recent) pushNotif({ id: "m:" + (msg.id || msg.ts), type: "mentions", from: msg.name, text: stripMentionMarks(msg.text), ts: msg.ts, msgId: msg.id });
+        const live = liveSince > 0 && msg.ts >= liveSince;
+        if (mm.ping && live && Date.now() - (lastPingFrom[msg.loginId] || 0) > 30000) {
+          lastPingFrom[msg.loginId] = Date.now();
+          triggerIncomingPing(msg.name, stripMentionMarks(msg.text));
+        }
+      }
+    }
+    if (msg.replyTo && typeof msg.replyTo === "object" && recent) {
+      const target = msg.replyTo.id ? msgEls.get(String(msg.replyTo.id)) : null;
+      const toMe = target ? target.loginId === String(myLoginId) : String(msg.replyTo.name || "") === myName;
+      if (toMe) pushNotif({ id: "p:" + (msg.id || msg.ts), type: "replies", from: msg.name, text: stripMentionMarks(msg.text), ts: msg.ts, msgId: msg.id });
     }
   };
   if (needsVerify && window.VUS_DM && window.VUS_DM.verifySender) {
@@ -2241,7 +2463,7 @@ function renderMessage(msg) {
       let bad = !r.ok || (msg.imageData && !r.nameMatches);
       if (!bad && msg.imageData && !(await senderMayPostImages(String(msg.loginId)))) bad = true;
       if (bad && !(r.unknown && !msg.imageData)) { el.classList.add("anon-hidden"); }
-      else { el.classList.remove("anon-hidden"); firePing(); }
+      else { el.classList.remove("anon-hidden"); if (r.ok && r.nameMatches) rememberPerson(msg.loginId, msg.name); firePing(); }
       if (autoScroll && stickToBottom) scrollToBottom();
     }).catch(() => { if (msg.imageData) el.classList.add("anon-hidden"); else firePing(); });
   } else {
@@ -2714,7 +2936,9 @@ function applyMyMute() {
   if (eff > 0 && myMuteRaw.rec && myLoginId) {
     if (!muteLocalValid(myLoginId, myMuteRaw.rec) || muteStatus(myLoginId, myMuteRaw.rec) !== "ok") eff = 0;
   }
+  const wasMuted = myTimeoutRemainingMs > 0;
   myTimeoutRemainingMs = eff;
+  if (eff > 0 && !wasMuted && myMuteRaw.rec) pushNotif({ id: "s:mute:" + (myMuteRaw.rec.expiresAt || Date.now()), type: "staff", from: "Moderation", text: "You were muted for " + formatCountdown(eff) + ".", ts: Date.now() });
   updateComposerLockState();
   clearInterval(myTimeoutCountdownTimer);
   if (eff > 0) {
@@ -3273,8 +3497,6 @@ async function handleModerationCommand(text) {
 async function sendMessage() {
   const text = $msgInput.value.trim();
 
-  const mentionTarget = currentMentionTarget;
-
   // Moderation commands must run before timeout and send-cooldown guards so
   // an Owner/Admin can always issue them and receives a useful response.
   if (await handleModerationCommand(text)) {
@@ -3290,7 +3512,9 @@ async function sendMessage() {
     showComposerNotice("You're muted for " + formatCountdown(myTimeoutRemainingMs) + " more.");
     return;
   }
-  if (editingMsgId) { await commitEdit(text); return; }
+  const segs = composerSegments(text);
+  const silentText = segs.length ? markText(text, segs, new Set()) : text;
+  if (editingMsgId) { await commitEdit(silentText); return; }
   // Text and images each respect their own per-rank delay. Tell the person how
   // long is left instead of silently swallowing the Enter key.
   const textWait = currentMessageCooldownMs() - (Date.now() - lastSentAt);
@@ -3323,7 +3547,7 @@ async function sendMessage() {
     ChatBackend.sendImage(myName, imageToSend, myLoginId)
       .then(() => {
         if (text) {
-          return ChatBackend.send(myName, text, null, myLoginId, currentReplyPayload());
+          return ChatBackend.send(myName, silentText, segs.length ? { name: segs[0].name, silent: true } : null, myLoginId, currentReplyPayload());
         }
       })
       .then(() => {
@@ -3342,31 +3566,28 @@ async function sendMessage() {
     return;
   }
 
-  if (!text && !mentionTarget) return;
+  if (!text) return;
+  if (!segs.length) { finalizeSend(text, null); return; }
 
-  if (mentionTarget && !currentMentionSound) {
-    // mention only: no sound, so no cooldown
-    finalizeSend(text, { name: mentionTarget, silent: true });
-    return;
-  }
-  if (mentionTarget) {
-    $sendBtn.disabled = true;
-    ChatBackend.tryStartAtPingCooldown(mentionTarget).then(result => {
-      $sendBtn.disabled = false;
-      if (!result.ok) {
-        const secs = Math.ceil(result.remainingMs / 1000);
-        showComposerNotice(mentionTarget + " was just pinged — wait " + secs + "s before pinging them again.");
-        return;
-      }
-      finalizeSend(text, { name: mentionTarget });
-    }).catch(() => {
-      $sendBtn.disabled = false;
-      showComposerNotice("Couldn't check ping cooldown — try again.");
-    });
-    return;
-  }
-
-  finalizeSend(text, null);
+  // Pings with sound keep the 30s-per-person limit; anything that can't ping goes out as a silent mention.
+  const wantPing = [...new Set(segs.filter(sg => picked.get(sg.name)).map(sg => sg.name))];
+  $sendBtn.disabled = true;
+  (async () => {
+    const ok = new Set(), held = [];
+    for (const n of wantPing) {
+      try {
+        const r = await ChatBackend.tryStartAtPingCooldown(n);
+        if (r.ok) ok.add(n); else held.push(n + " (" + Math.ceil(r.remainingMs / 1000) + "s)");
+      } catch (e) { held.push(n); }
+    }
+    return { ok, held };
+  })().then(({ ok, held }) => {
+    $sendBtn.disabled = false;
+    const out = markText(text, segs, ok);
+    if (out.length > MAX_CHARS) { showComposerNotice("That's too long once the mentions are counted \u2014 shorten it a little."); return; }
+    if (held.length) showComposerNotice("Sent as a silent mention (just pinged): " + held.join(", "));
+    finalizeSend(out, { name: segs[0].name, silent: !ok.has(segs[0].name) });
+  });
 }
 
 function currentReplyPayload() {
@@ -3494,7 +3715,7 @@ $imageFileInput.addEventListener("change", () => {
 });
 
 function updateCharCounter() {
-  const remaining = MAX_CHARS - $msgInput.value.length;
+  const remaining = MAX_CHARS - $msgInput.value.length - composerSegments($msgInput.value).length;
   $charCounter.textContent = remaining;
   $charCounter.classList.toggle("warn", remaining <= 50 && remaining > 10);
   $charCounter.classList.toggle("limit", remaining <= 10);
@@ -3641,13 +3862,30 @@ function renderChatSettings(container) {
     row.append(lab, seg);
     wrap.appendChild(row);
   };
+  { const t = document.createElement("div"); t.className = "cs-subtitle"; t.id = "csNotifSection"; t.textContent = "Notifications"; wrap.appendChild(t); }
+  NOTIF_TYPES.forEach(([type, key, label, hint]) => toggle(label, hint, () => chatPrefs[key] !== false, v => { chatPrefs[key] = v; saveChatPrefs(); }));
+  { const t = document.createElement("div"); t.className = "cs-subtitle"; t.textContent = "Safety"; wrap.appendChild(t); }
   toggle("Peer verification", verifyFlagOn ? "Checks that bans, mutes and grants come from someone allowed to do them" : "Off in this room until the Owner runs /verify on", () => chatPrefs.peerVerify !== false, v => {
     chatPrefs.peerVerify = v; saveChatPrefs(); scheduleVerifyRefresh();
   });
-  { const r = document.createElement("button"); r.type = "button"; r.className = "cs-row"; r.innerHTML = '<span class="cs-label">Open Verification panel<small>See who is verified and what was approved or rejected</small></span>'; r.addEventListener("click", e => { e.stopPropagation(); if (window.VUS_UI && window.VUS_UI.closeSettings) window.VUS_UI.closeSettings(); openVerifyPanel(); }); wrap.appendChild(r); }
+  { const r = document.createElement("button"); r.type = "button"; r.className = "cs-row"; r.innerHTML = '<span class="cs-label">Open Verification panel<small>See who is verified and what was approved or rejected</small></span>'; r.addEventListener("click", e => { e.stopPropagation(); openFromSettings(openVerifyPanel); }); wrap.appendChild(r); }
   choice("Text size", [["s", "Small"], ["m", "Medium"], ["l", "Large"], ["xl", "Huge"]], () => chatPrefs.textSize, v => { chatPrefs.textSize = v; saveChatPrefs(); applyAppearance(); keepPinned(); });
   choice("Bubble size", [["compact", "Compact"], ["normal", "Normal"], ["roomy", "Roomy"]], () => chatPrefs.bubbleSize, v => { chatPrefs.bubbleSize = v; saveChatPrefs(); applyAppearance(); keepPinned(); });
   toggle("Bold text", "Easier to read", () => !!chatPrefs.bold, v => { chatPrefs.bold = v; saveChatPrefs(); applyAppearance(); keepPinned(); });
+  {
+    const row = document.createElement("div");
+    row.className = "cs-choice cs-slider";
+    const lab = document.createElement("span"); lab.className = "cs-label"; lab.textContent = "Bubble radius";
+    const val = document.createElement("span"); val.className = "cs-slider-val";
+    const rng = document.createElement("input");
+    rng.type = "range"; rng.min = "0"; rng.max = "28"; rng.step = "1";
+    rng.value = String(Number.isFinite(Number(chatPrefs.radius)) ? Number(chatPrefs.radius) : 12);
+    val.textContent = rng.value + "px";
+    rng.addEventListener("input", () => { chatPrefs.radius = Number(rng.value); val.textContent = rng.value + "px"; saveChatPrefs(); applyAppearance(); });
+    row.append(lab, rng, val);
+    wrap.appendChild(row);
+  }
+  renderBackgroundControls(wrap, choice);
 
   const action = (label, onClick, danger) => {
     const b = document.createElement("button");
@@ -3671,6 +3909,85 @@ function renderChatSettings(container) {
   divider.style.cssText = "height:1px;background:#334155;margin:10px 0";
   wrap.appendChild(divider);
   container.appendChild(wrap);
+}
+
+function renderBackgroundControls(wrap, choice) {
+  const box = document.createElement("div");
+  box.className = "cs-bg";
+  wrap.appendChild(box);
+  const draw = () => {
+    box.textContent = "";
+    const modes = [["default", "Default"], ["dark", "Dark"], ["light", "Light"], ["color", "Color"], ["link", "Link"], ["file", "File"]];
+    const head = document.createElement("div");
+    head.className = "cs-choice cs-choice-stack";
+    const lab = document.createElement("span"); lab.className = "cs-label"; lab.textContent = "Background";
+    const hint = document.createElement("small"); hint.textContent = "Chat and DMs, on this device only"; lab.appendChild(hint);
+    const seg = document.createElement("span"); seg.className = "cs-seg";
+    modes.forEach(([val, text]) => {
+      const bt = document.createElement("button");
+      bt.type = "button"; bt.textContent = text; bt.className = (chatPrefs.bgMode || "default") === val ? "on" : "";
+      bt.addEventListener("click", e => { e.stopPropagation(); chatPrefs.bgMode = val; saveChatPrefs(); applyAppearance(); draw(); });
+      seg.appendChild(bt);
+    });
+    head.append(lab, seg);
+    box.appendChild(head);
+    const mode = chatPrefs.bgMode || "default";
+    const note = (t, bad) => { const n = document.createElement("div"); n.className = "cs-bg-note" + (bad ? " bad" : ""); n.textContent = t; box.appendChild(n); return n; };
+    if (mode === "color") {
+      const row = document.createElement("div"); row.className = "cs-bg-row";
+      const pick = document.createElement("input"); pick.type = "color";
+      pick.value = /^#[0-9a-fA-F]{6}$/.test(chatPrefs.bgColor) ? chatPrefs.bgColor : "#0f172a";
+      pick.addEventListener("input", () => { chatPrefs.bgColor = pick.value; saveChatPrefs(); applyAppearance(); });
+      const t = document.createElement("span"); t.textContent = "Pick any colour";
+      row.append(pick, t); box.appendChild(row);
+    } else if (mode === "link") {
+      const row = document.createElement("div"); row.className = "cs-bg-row";
+      const inp = document.createElement("input"); inp.type = "text"; inp.placeholder = "https://\u2026 image link"; inp.value = chatPrefs.bgLink || ""; inp.maxLength = 1500;
+      const go = document.createElement("button"); go.type = "button"; go.textContent = "Apply";
+      const apply = () => {
+        const ok = safeBgUrl(inp.value);
+        if (!ok) { msg.textContent = inp.value.trim() ? "That doesn't look like a normal https image link." : "Paste an image link first."; msg.classList.add("bad"); return; }
+        chatPrefs.bgLink = ok; saveChatPrefs(); applyAppearance(); msg.textContent = "Applied."; msg.classList.remove("bad");
+      };
+      go.addEventListener("click", e => { e.stopPropagation(); apply(); });
+      inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); apply(); } });
+      row.append(inp, go); box.appendChild(row);
+      var msg = note("");
+    } else if (mode === "file") {
+      const row = document.createElement("div"); row.className = "cs-bg-row";
+      const file = document.createElement("input"); file.type = "file"; file.accept = "image/*";
+      const rm = document.createElement("button"); rm.type = "button"; rm.textContent = "Remove";
+      rm.addEventListener("click", e => { e.stopPropagation(); chatPrefs.bgFile = ""; saveChatPrefs(); applyAppearance(); draw(); });
+      row.append(file); if (chatPrefs.bgFile) row.append(rm); box.appendChild(row);
+      var fmsg = note(chatPrefs.bgFile ? "Image set." : "Choose a picture from your device. It is shrunk to fit and kept only on this device.");
+      file.addEventListener("change", async () => {
+        const f = file.files && file.files[0]; if (!f) return;
+        if (!f.type.startsWith("image/")) { fmsg.textContent = "That isn't an image."; fmsg.classList.add("bad"); return; }
+        try {
+          const url = await shrinkBackground(f);
+          chatPrefs.bgFile = url; saveChatPrefs(); applyAppearance();
+          fmsg.textContent = "Image set."; fmsg.classList.remove("bad");
+          if (!rm.isConnected) row.append(rm);
+        } catch (e) { fmsg.textContent = "Couldn't use that image."; fmsg.classList.add("bad"); }
+      });
+    }
+  };
+  draw();
+}
+function shrinkBackground(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const max = 1600, s = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(img.width * s)); c.height = Math.max(1, Math.round(img.height * s));
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL("image/jpeg", 0.72));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("bad image")); };
+    img.src = url;
+  });
 }
 
 async function renderModMenu() {
@@ -3858,11 +4175,11 @@ async function renderModMenu() {
     btn.addEventListener("click", handler);
     $globalClearPanel.appendChild(btn);
   };
-  addPanelButton("\uD83D\uDCD6 Rank guide", () => { closeClearPanel(); openRankGuide(); });
-  if (rank >= ROSTER_MIN_RANK)       addPanelButton("\uD83D\uDC65 Rank roster", () => { closeClearPanel(); openRoster(); });
-  if (rank >= ROLES.crown.rank)      addPanelButton("👑 Owner Menu", () => { closeClearPanel(); openOwnerMenu(); });
-  else if (rank >= ROLES.admin.rank) addPanelButton("🛡️ Admin Menu", () => { closeClearPanel(); openAdminMenuStaff(); });
-  else if (rank >= ROLES.mod.rank)   addPanelButton("🧩 Mod Menu", () => { closeClearPanel(); openModMenuStaff(); });
+  addPanelButton("\uD83D\uDCD6 Rank guide", () => openFromSettings(openRankGuide));
+  if (rank >= ROSTER_MIN_RANK)       addPanelButton("\uD83D\uDC65 Rank roster", () => openFromSettings(openRoster));
+  if (rank >= ROLES.crown.rank)      addPanelButton("👑 Owner Menu", () => openFromSettings(openOwnerMenu));
+  else if (rank >= ROLES.admin.rank) addPanelButton("🛡️ Admin Menu", () => openFromSettings(openAdminMenuStaff));
+  else if (rank >= ROLES.mod.rank)   addPanelButton("🧩 Mod Menu", () => openFromSettings(openModMenuStaff));
 
   const closeBtn = document.createElement("button");
   closeBtn.textContent = "Close";
@@ -3875,6 +4192,39 @@ async function renderModMenu() {
 // Re-renders whichever view of the settings panel is appropriate right now.
 function renderSettingsPanel() {
   renderModMenu();
+}
+
+/* ── Back buttons: every menu opened from Settings can step back instead of dropping you on the main screen ── */
+const navStack = [];                    // what "Back" does, innermost last
+function reopenSettings() { if (window.VUS_UI && window.VUS_UI.openSettings) window.VUS_UI.openSettings("chat"); }
+function reopenStaffMenu() { if (staffMenuMode === "owner") openOwnerMenu(); else if (staffMenuMode === "admin") openAdminMenuStaff(); else openModMenuStaff(); }
+function openFromSettings(openFn) {
+  navStack.length = 0;
+  navStack.push(reopenSettings);
+  closeClearPanel();
+  openFn();
+}
+const navOverlays = [];
+function installBackButton(ov, closeFn) {
+  if (!ov || ov.dataset.backInstalled) return;
+  ov.dataset.backInstalled = "1";
+  const modal = ov.querySelector(".chat-modal");
+  if (!modal) return;
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "modal-back"; b.textContent = "\u2039 Back"; b.style.display = "none";
+  modal.insertBefore(b, modal.firstChild);
+  let open = ov.style.display === "flex";
+  b.addEventListener("click", () => { const go = navStack.pop(); closeFn(); if (go) go(); });
+  navOverlays.push(ov);
+  new MutationObserver(() => {
+    const now = ov.style.display === "flex";
+    if (now && !open) b.style.display = navStack.length ? "" : "none";
+    if (!now && open) {
+      b.style.display = "none";
+      setTimeout(() => { if (!navOverlays.some(o => o.style.display === "flex")) navStack.length = 0; }, 0);
+    }
+    open = now;
+  }).observe(ov, { attributes: true, attributeFilter: ["style"] });
 }
 
 function closeClearPanel() {
@@ -4328,6 +4678,8 @@ function closeOwnerMenu() {
 }
 
 $ownerMenuCloseBtn.addEventListener("click", closeOwnerMenu);
+installBackButton($ownerMenuOverlay, closeOwnerMenu);
+installBackButton($modListOverlay, () => { $modListOverlay.style.display = "none"; });
 $ownerMenuOverlay.addEventListener("click", (e) => {
   if (e.target === $ownerMenuOverlay) closeOwnerMenu();
 });
@@ -4456,6 +4808,7 @@ $rosterRefreshBtn.addEventListener("click", async () => {
 });
 $rosterCloseBtn.addEventListener("click", closeRoster);
 $rosterOverlay.addEventListener("click", e => { if (e.target === $rosterOverlay) closeRoster(); });
+installBackButton($rosterOverlay, closeRoster);
 
 /* ══════════════════════════════════════════════════════════
    RANK GUIDE (everyone)
@@ -4568,6 +4921,7 @@ function openRankGuide() {
 }
 $rankGuideCloseBtn.addEventListener("click", closeRankGuide);
 $rankGuideOverlay.addEventListener("click", e => { if (e.target === $rankGuideOverlay) closeRankGuide(); });
+installBackButton($rankGuideOverlay, closeRankGuide);
 
 let staffRenderToken = 0;
 
@@ -4642,7 +4996,7 @@ async function renderOwnerMenuList() {
     const listBtn = document.createElement("button");
     listBtn.className = "toolbar-btn";
     listBtn.textContent = "Bans & mutes…";
-    listBtn.addEventListener("click", openModListMenu);
+    listBtn.addEventListener("click", () => { navStack.push(reopenStaffMenu); openModListMenu(); });
     listTools.appendChild(listBtn);
     $ownerMenuList.appendChild(listTools);
   }
@@ -5256,45 +5610,260 @@ $pingYouSend.addEventListener("click", () => {
     });
 });
 
-let currentMentionTarget = null;
 let mentionDropdownOpen = false;
 let mentionTriggerCharIndex = -1;
 let mentionDropdownMode = "mention";
+let mentionQuery = "";
+let mentionActiveIdx = 0;
+let mentionSearchToken = 0;
+let mentionSearchHits = [];
 
-const $mentionSoundBtn = document.getElementById("mentionSoundBtn");
-const $mentionCancelBtn = document.getElementById("mentionCancelBtn");
-let currentMentionSound = false;   // "mention only" is the default; the bell turns sound on for this one mention
-
-function paintMentionSound() {
-  $mentionSoundBtn.textContent = currentMentionSound ? "\uD83D\uDD14 Ping" : "\uD83D\uDD15 Silent";
-  $mentionSoundBtn.classList.toggle("on", currentMentionSound);
-  $mentionSoundBtn.title = currentMentionSound
-    ? "Plays a sound and a pop-up for them (30s limit per person). Click for mention only."
-    : "Mentions them without a sound (no limit). Click to ping with sound.";
+/* ══════════ Inline @mentions ══════════
+   A mention is "@Name" anywhere in the message, several per message. When it goes out, each one carries an invisible
+   marker after the name: silent or ping. (The first one is also written to the old single `mention` field, so older
+   tabs still show it.) In the box, mentions are highlighted; click into one (or just pick it) to switch Silent/Ping
+   from a popup above it, or press its x to remove it. */
+const MARK_SILENT = "⁣", MARK_PING = "⁤";
+const MENTION_MAX = 5;
+const picked = new Map();          // name -> true when it should ping with a sound
+let popupFor = null;               // name whose popup stays open right after picking
+let mirrorSegs = [];
+let lastMirrorText = null;
+const $mentionMirror = document.getElementById("mentionMirror");
+function stripMentionMarks(t) { return String(t || "").replace(/[⁣⁤]/g, ""); }
+function parseMentionTokens(text) {
+  const out = [], re = /@([^\s@⁣⁤​]{1,40})([⁣⁤])/g;
+  text = String(text || "");
+  let m;
+  while ((m = re.exec(text))) out.push({ start: m.index, end: m.index + m[0].length, name: m[1], ping: m[2] === MARK_PING });
+  return out;
 }
+// where the picked @Names sit in the box right now
+function composerSegments(text) {
+  const segs = [];
+  [...picked.keys()].sort((x, y) => y.length - x.length).forEach(n => {
+    const tok = "@" + n;
+    let i = 0;
+    while ((i = text.indexOf(tok, i)) >= 0) {
+      const end = i + tok.length, nx = text[end], pv = text[i - 1];
+      const okAfter = !nx || !/[\p{L}\p{N}_\-]/u.test(nx), okBefore = i === 0 || !/[\p{L}\p{N}_]/u.test(pv);
+      if (okAfter && okBefore && !segs.some(s => i < s.end && end > s.start)) segs.push({ start: i, end, name: n });
+      i = end;
+    }
+  });
+  return segs.sort((p, q) => p.start - q.start);
+}
+function markText(text, segs, pingOk) {
+  let out = "", pos = 0;
+  segs.forEach(s => { out += text.slice(pos, s.start) + "@" + s.name + (pingOk.has(s.name) ? MARK_PING : MARK_SILENT); pos = s.end; });
+  return out + text.slice(pos);
+}
+function syncMentionMirror() {
+  const text = $msgInput.value;
+  lastMirrorText = text;
+  const segs = composerSegments(text);
+  const present = new Set(segs.map(x => x.name));
+  [...picked.keys()].forEach(n => { if (!present.has(n)) picked.delete(n); });
+  mirrorSegs = segs;
+  if (!segs.length) { $mentionMirror.style.display = "none"; $mentionMirror.textContent = ""; updateMentionPopup(); return; }
+  const cs = getComputedStyle($msgInput);
+  ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft", "textIndent", "wordSpacing"].forEach(p => { $mentionMirror.style[p] = cs[p]; });
+  $mentionMirror.style.display = "block";
+  $mentionMirror.textContent = "";
+  let pos = 0;
+  segs.forEach((sg, i) => {
+    if (sg.start > pos) $mentionMirror.appendChild(document.createTextNode(text.slice(pos, sg.start)));
+    const sp = document.createElement("span");
+    sp.className = "mt" + (picked.get(sg.name) ? " ping" : "");
+    sp.dataset.idx = String(i);
+    sp.appendChild(document.createTextNode(text.slice(sg.start, sg.end)));
+    const x = document.createElement("span");
+    x.className = "mt-x"; x.dataset.idx = String(i); x.textContent = "×"; x.title = "Remove mention";
+    sp.appendChild(x);
+    if (picked.get(sg.name)) { const bl = document.createElement("span"); bl.className = "mt-bell"; bl.textContent = "🔔"; sp.appendChild(bl); }
+    $mentionMirror.appendChild(sp);
+    pos = sg.end;
+  });
+  if (pos < text.length) $mentionMirror.appendChild(document.createTextNode(text.slice(pos)));
+  if (text.endsWith("\n")) $mentionMirror.appendChild(document.createTextNode("​"));
+  $mentionMirror.scrollTop = $msgInput.scrollTop;
+  updateMentionPopup();
+}
+function removeMentionSeg(i) {
+  const v = $msgInput.value, sg = composerSegments(v)[i];
+  if (!sg) return;
+  let end = sg.end;
+  if (v[end] === " ") end++;
+  $msgInput.value = v.slice(0, sg.start) + v.slice(end);
+  $msgInput.selectionStart = $msgInput.selectionEnd = sg.start;
+  popupFor = null;
+  syncMentionMirror(); autosizeInput(); updateCharCounter(); $msgInput.focus();
+}
+$mentionMirror.addEventListener("click", e => {
+  const x = e.target.closest && e.target.closest(".mt-x");
+  if (x) { e.preventDefault(); removeMentionSeg(Number(x.dataset.idx)); }
+});
+$mentionMirror.addEventListener("mousedown", e => { if (e.target.closest && e.target.closest(".mt-x")) e.preventDefault(); });
 
+let mentionPopupEl = null, mentionPopupName = null, mentionPopupIdx = -1;
+function ensureMentionPopup() {
+  if (mentionPopupEl) return mentionPopupEl;
+  const p = document.createElement("div");
+  p.id = "mentionPopup";
+  p.innerHTML = '<span class="mp-name"></span><button type="button" data-a="silent">🔕 Silent</button><button type="button" data-a="ping">🔔 Ping</button><button type="button" data-a="remove" class="mp-x" title="Remove mention">✕</button>';
+  p.addEventListener("mousedown", e => e.preventDefault());   // keep the caret in the message box
+  p.addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if (!b || !mentionPopupName) return;
+    const n = mentionPopupName, act = b.dataset.a;
+    if (act === "remove") { removeMentionSeg(mentionPopupIdx); return; }
+    picked.set(n, act === "ping");
+    popupFor = null;
+    syncMentionMirror();
+    $msgInput.focus();
+  });
+  document.body.appendChild(p);
+  return (mentionPopupEl = p);
+}
+function hideMentionPopup() { if (mentionPopupEl) mentionPopupEl.style.display = "none"; mentionPopupName = null; }
+function updateMentionPopup() {
+  const segs = mirrorSegs;
+  if (!segs.length || document.activeElement !== $msgInput && !popupFor) { hideMentionPopup(); return; }
+  let idx = -1;
+  if (popupFor) idx = segs.findIndex(sg => sg.name === popupFor);
+  if (idx < 0 && $msgInput.selectionStart === $msgInput.selectionEnd) {
+    const c = $msgInput.selectionStart;
+    idx = segs.findIndex(sg => c >= sg.start && c <= sg.end);
+  }
+  if (idx < 0) { hideMentionPopup(); return; }
+  const sp = $mentionMirror.querySelector('.mt[data-idx="' + idx + '"]');
+  if (!sp) { hideMentionPopup(); return; }
+  const r = sp.getBoundingClientRect(), box = $mentionMirror.getBoundingClientRect();
+  if (r.bottom < box.top || r.top > box.bottom) { hideMentionPopup(); return; }
+  const p = ensureMentionPopup(), name = segs[idx].name, ping = !!picked.get(name);
+  mentionPopupName = name; mentionPopupIdx = idx;
+  p.querySelector(".mp-name").textContent = "@" + name;
+  p.querySelector('[data-a="silent"]').classList.toggle("on", !ping);
+  p.querySelector('[data-a="ping"]').classList.toggle("on", ping);
+  p.style.display = "flex";
+  const w = p.offsetWidth;
+  p.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + "px";
+  p.style.bottom = (window.innerHeight - r.top + 8) + "px";
+}
 function clearMention() {
-  currentMentionTarget = null;
-  currentMentionSound = false;
-  $mentionChip.style.display = "none";
-  $mentionChip.textContent = "";
-  $mentionSoundBtn.style.display = "none";
-  $mentionCancelBtn.style.display = "none";
+  picked.clear(); popupFor = null;
+  syncMentionMirror();
 }
+$msgInput.addEventListener("input", () => { popupFor = null; syncMentionMirror(); });
+["keyup", "click", "focus"].forEach(ev => $msgInput.addEventListener(ev, () => updateMentionPopup()));
+$msgInput.addEventListener("blur", () => setTimeout(() => { if (document.activeElement !== $msgInput) { popupFor = null; hideMentionPopup(); } }, 160));
+$msgInput.addEventListener("scroll", () => { $mentionMirror.scrollTop = $msgInput.scrollTop; updateMentionPopup(); });
+window.addEventListener("resize", () => { if (mirrorSegs.length) syncMentionMirror(); });
+setInterval(() => { if ($msgInput.value !== lastMirrorText) syncMentionMirror(); }, 200);   // catches changes made by code (send, edit)
 
-function setMention(name) {
-  currentMentionTarget = name;
-  currentMentionSound = false;
-  $mentionChip.textContent = "@" + name;
-  $mentionChip.style.display = "inline-flex";
-  $mentionSoundBtn.style.display = "inline-flex";
-  $mentionCancelBtn.style.display = "inline-flex";
-  paintMentionSound();
+function mentionCandidates(q) {
+  q = String(q || "").toLowerCase();
+  const onlineIds = new Set(latestPresenceList.map(e => String(e.loginId || "")));
+  const seen = new Set([myName]);
+  const usable = n => n && !/[\s@⁣⁤​]/.test(n) && n.length <= 40;
+  const online = [], offline = [];
+  latestPresenceList.forEach(e => { if (usable(e.name) && !seen.has(e.name)) { seen.add(e.name); online.push({ name: e.name, online: true }); } });
+  knownPeople.forEach((name, id) => { if (usable(name) && !seen.has(name) && !onlineIds.has(id)) { seen.add(name); offline.push({ name, online: false }); } });
+  mentionSearchHits.forEach(name => { if (usable(name) && !seen.has(name)) { seen.add(name); offline.push({ name, online: false }); } });
+  const rank = c => { const l = c.name.toLowerCase(); return !q || l.startsWith(q) ? 0 : l.includes(q) ? 1 : 2; };
+  const f = list => list.filter(c => rank(c) < 2).sort((p, r) => rank(p) - rank(r) || p.name.localeCompare(r.name));
+  return { online: f(online), offline: f(offline) };
 }
-$mentionSoundBtn.addEventListener("click", (e) => { e.stopPropagation(); currentMentionSound = !currentMentionSound; paintMentionSound(); $msgInput.focus(); });
-$mentionCancelBtn.addEventListener("click", (e) => { e.stopPropagation(); clearMention(); $msgInput.focus(); });
+function pickMention(name) {
+  if (picked.size >= MENTION_MAX && !picked.has(name)) { showComposerNotice("You can mention up to " + MENTION_MAX + " people in one message."); return; }
+  const v = $msgInput.value, cur = $msgInput.selectionStart;
+  const start = mentionTriggerCharIndex >= 0 ? mentionTriggerCharIndex : cur;
+  const before = v.slice(0, start), after = v.slice(cur).replace(/^ /, "");
+  const ins = "@" + name + " ";
+  $msgInput.value = before + ins + after;
+  $msgInput.selectionStart = $msgInput.selectionEnd = before.length + ins.length;
+  if (!picked.has(name)) picked.set(name, false);
+  closeMentionDropdown();
+  syncMentionMirror();
+  popupFor = name;
+  updateMentionPopup();
+  $msgInput.focus();
+  autosizeInput(); updateCharCounter();
+}
+function renderMentionDropdown() {
+  $mentionDropdown.innerHTML = "";
+  addMentionCancelRow(mentionQuery ? "Mention “" + mentionQuery + "”…" : "Mention someone");
+  const { online, offline } = mentionCandidates(mentionQuery);
+  const rows = [];
+  const group = (label, list) => {
+    if (!list.length) return;
+    const g = document.createElement("div");
+    g.className = "mention-group";
+    g.textContent = label + " — " + list.length;
+    $mentionDropdown.appendChild(g);
+    list.forEach(c => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "mention-option";
+      const dot = document.createElement("span"); dot.className = "mo-dot " + (c.online ? "on" : "off");
+      const nm = document.createElement("span"); nm.className = "mo-name"; nm.textContent = c.name;
+      btn.append(dot, nm);
+      if (!c.online) { const t = document.createElement("span"); t.className = "mo-tag"; t.textContent = "offline"; btn.appendChild(t); }
+      btn.addEventListener("mousedown", e => e.preventDefault());
+      btn.addEventListener("click", () => pickMention(c.name));
+      $mentionDropdown.appendChild(btn);
+      rows.push(btn);
+    });
+  };
+  group("Online", online);
+  group("Offline (they’ll see it when they’re back)", offline);
+  if (!rows.length) {
+    const empty = document.createElement("div");
+    empty.className = "mention-empty";
+    empty.textContent = mentionQuery ? "No one found. Keep typing the start of their name." : "No one to mention yet.";
+    $mentionDropdown.appendChild(empty);
+  }
+  mentionActiveIdx = Math.min(mentionActiveIdx, Math.max(0, rows.length - 1));
+  if (rows[mentionActiveIdx]) rows[mentionActiveIdx].classList.add("active");
+}
+function openMentionDropdown(triggerIndex, query) {
+  const q = query || "";
+  if (!mentionDropdownOpen || q !== mentionQuery) mentionActiveIdx = 0;
+  mentionDropdownMode = "mention";
+  mentionTriggerCharIndex = triggerIndex;
+  mentionQuery = q;
+  mentionDropdownOpen = true;
+  $mentionDropdown.style.display = "block";
+  renderMentionDropdown();
+  // people who haven't chatted on this device: look them up by the start of their name
+  const token = ++mentionSearchToken;
+  mentionSearchHits = [];
+  if (q.length >= 2 && window.VUS_DM && window.VUS_DM.searchUsernames) {
+    window.VUS_DM.searchUsernames(q).then(list => {
+      if (token !== mentionSearchToken || !mentionDropdownOpen || mentionDropdownMode !== "mention") return;
+      mentionSearchHits = list.map(x => x.username);
+      renderMentionDropdown();
+    }).catch(() => {});
+  }
+}
+// arrow keys + Enter/Tab pick from the list while it is open (before Enter would send the message)
+$msgInput.addEventListener("keydown", e => {
+  if (!mentionDropdownOpen || mentionDropdownMode !== "mention") return;
+  const rows = [...$mentionDropdown.querySelectorAll(".mention-option")];
+  if (!rows.length) return;
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault(); e.stopImmediatePropagation();
+    mentionActiveIdx = (mentionActiveIdx + (e.key === "ArrowDown" ? 1 : -1) + rows.length) % rows.length;
+    rows.forEach((r, i) => r.classList.toggle("active", i === mentionActiveIdx));
+    rows[mentionActiveIdx].scrollIntoView({ block: "nearest" });
+  } else if ((e.key === "Enter" && !e.shiftKey) || e.key === "Tab") {
+    e.preventDefault(); e.stopImmediatePropagation();
+    rows[mentionActiveIdx].click();
+  }
+}, true);
 
 function closeMentionDropdown() {
+  mentionSearchToken++;
   mentionDropdownOpen = false;
   mentionDropdownMode = "mention";
   $mentionDropdown.style.display = "none";
@@ -5314,52 +5883,6 @@ function addMentionCancelRow(labelText) {
   cancel.addEventListener("click", (e) => { e.stopPropagation(); closeMentionDropdown(); $msgInput.focus(); });
   row.append(label, cancel);
   $mentionDropdown.appendChild(row);
-}
-
-function renderMentionDropdown() {
-  $mentionDropdown.innerHTML = "";
-  addMentionCancelRow();
-
-  const candidates = latestPresenceList
-    .map(e => e.name)
-    .filter(name => name !== myName)
-    .sort((a, b) => a.localeCompare(b));
-
-  if (candidates.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "mention-empty";
-    empty.textContent = "No one else online to mention.";
-    $mentionDropdown.appendChild(empty);
-    return;
-  }
-
-  candidates.forEach(name => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "mention-option";
-    btn.textContent = name;
-    btn.addEventListener("click", () => {
-      setMention(name);
-      if (mentionTriggerCharIndex >= 0) {
-        const before = $msgInput.value.slice(0, mentionTriggerCharIndex);
-        const after = $msgInput.value.slice($msgInput.selectionStart);
-        $msgInput.value = before + after;
-        $msgInput.selectionStart = $msgInput.selectionEnd = before.length;
-      }
-      closeMentionDropdown();
-      $msgInput.focus();
-      updateCharCounter();
-    });
-    $mentionDropdown.appendChild(btn);
-  });
-}
-
-function openMentionDropdown(triggerIndex) {
-  mentionDropdownMode = "mention";
-  mentionTriggerCharIndex = triggerIndex;
-  mentionDropdownOpen = true;
-  $mentionDropdown.style.display = "block";
-  renderMentionDropdown();
 }
 
 function openModerationTargetDropdown(tokenStart) {
@@ -5413,13 +5936,8 @@ function refreshMentionDropdownIfOpen() {
 
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && mentionDropdownOpen) { closeMentionDropdown(); } });
 
-$mentionChip.addEventListener("click", (e) => {
-  e.stopPropagation();
-  openMentionDropdown(-1);
-});
-
 document.addEventListener("click", (e) => {
-  if (mentionDropdownOpen && !$mentionDropdown.contains(e.target) && e.target !== $mentionChip) {
+  if (mentionDropdownOpen && !$mentionDropdown.contains(e.target) && e.target !== $msgInput) {
     closeMentionDropdown();
   }
 });
@@ -5589,10 +6107,9 @@ function handleMentionTrigger() {
     openModerationTargetDropdown(cursor - moderationMatch[1].length);
     return;
   }
-  const charBeforeCursor = $msgInput.value.slice(cursor - 1, cursor);
-  if (charBeforeCursor === "@") {
-    openMentionDropdown(cursor - 1);
-  }
+  const am = before.match(/(^|\s)@([^\s@\u2063\u2064]{0,24})$/);
+  if (am) openMentionDropdown(cursor - am[2].length - 1, am[2]);
+  else if (mentionDropdownOpen && mentionDropdownMode === "mention") closeMentionDropdown();
 }
 
 let pingSoundReady = false;
@@ -6610,6 +7127,7 @@ function attachRoomListeners() {
   Object.keys(timeoutsAll).forEach(k => delete timeoutsAll[k]);
   ChatBackend.watchAllTimeouts((id, val) => { if (val) timeoutsAll[id] = val; else delete timeoutsAll[id]; refreshSilencedMessages(); });
   ChatBackend.watchEdits(applyEdit);
+  reactBootUntil = Date.now() + 3000;   // the burst of existing reactions at attach isn't news
   ChatBackend.watchReactions(onReactions);
   ChatBackend.watchMessages(renderMessage);
   ChatBackend.watchLeaveEvents();
@@ -6713,6 +7231,7 @@ function init() {
 
 /* Lets dm.js (profile cards) ask which ranks an account holds. */
 window.VUS_CHAT = {
+  getPrefsState, restorePrefsState,
   staffActionsFor, runStaffAction, timeoutLimitsForRank, banLimitsForRank,
   isMuted, toggleMute,
   getRolesFor(loginId) {

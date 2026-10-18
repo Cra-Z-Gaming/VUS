@@ -1406,6 +1406,7 @@ function paintMzkLinkState() {
   const code = uid ? "" : String((currentUserData && currentUserData.mzk) || "");
   const linked = !!(uid || code);
   if (profileMzkSongUnsub) { profileMzkSongUnsub(); profileMzkSongUnsub = null; }
+  { const st = document.getElementById("mzkOpenStatus"); if (st) st.textContent = linked ? "Linked \u00B7 tap to manage" : "Not linked \u00B7 tap to set up"; }
   $profileMzkLinked.style.display = linked ? "block" : "none";
   $profileMzkUnlinked.style.display = linked ? "none" : "block";
   if (!linked) return;
@@ -1503,6 +1504,8 @@ $profilePwSave.addEventListener("click", async () => {
 $profileLogoutBtn.addEventListener("click", () => doLogout());
 
 function prepareAccountPane() {
+  profileLoaded = true;
+  showMzkSub(false);
   pendingAvatarDataUrl = null;
   $profilePopoverError.textContent = "";
   $profilePwError.textContent = "";
@@ -1528,6 +1531,32 @@ const $chatPanelEl = document.getElementById("globalClearPanel");
 if ($chatPanelEl) document.getElementById("paneChat").appendChild($chatPanelEl);
 
 function settingsIsOpen() { return $settingsOverlay.classList.contains("show"); }
+
+/* ── MZK lives in its own sub-menu so the profile Save button isn't mixed up with it ── */
+const $settingsModalEl = document.getElementById("settingsModal");
+const $mzkSubView = document.createElement("div");
+$mzkSubView.id = "mzkSubView";
+{
+  const head = h("div", { className: "sv-head" },
+    h("button", { type: "button", className: "sv-back", id: "mzkBackBtn" }, "\u2039 Back"),
+    h("span", { className: "sv-title" }, "MZK music link"));
+  const body = h("div", { className: "sv-body" });
+  const field = document.getElementById("profileMzkField");
+  const row = h("button", { type: "button", className: "cs-row mzk-open-row", id: "mzkOpenRow" },
+    h("span", { className: "cs-label" }, "\uD83C\uDFB5 MZK music link", h("small", { id: "mzkOpenStatus" }, "Show what you're playing on your profile")),
+    h("span", { className: "sv-chev" }, "\u203A"));
+  if (field && field.parentNode) field.parentNode.insertBefore(row, field);
+  if (field) body.appendChild(field);
+  $mzkSubView.append(head, body);
+  document.getElementById("paneAccount").appendChild($mzkSubView);
+}
+function showMzkSub(on) {
+  $settingsModalEl.classList.toggle("sub-open", !!on);
+  if (on) { const b = document.getElementById("settingsBody"); if (b) b.scrollTop = 0; }
+}
+function mzkSubIsOpen() { return $settingsModalEl.classList.contains("sub-open"); }
+document.getElementById("mzkOpenRow").addEventListener("click", () => showMzkSub(true));
+document.getElementById("mzkBackBtn").addEventListener("click", () => showMzkSub(false));
 function showSettingsTab(tab) {
   settingsTab = tab === "chat" ? "chat" : "account";
   document.querySelectorAll("#settingsTabs .settings-tab").forEach(b => b.classList.toggle("active", b.dataset.tab === settingsTab));
@@ -1537,27 +1566,81 @@ function showSettingsTab(tab) {
   else { stopProfileMzkSong(); }
   window.dispatchEvent(new CustomEvent("vus:settings-tab", { detail: { tab: settingsTab } }));
 }
+let settingsBaseline = "";
+function prefsState() { return window.VUS_CHAT && window.VUS_CHAT.getPrefsState ? window.VUS_CHAT.getPrefsState() : ""; }
+let profileLoaded = false;   // the profile fields hold the saved values (set when the Profile tab is prepared)
+function profileDirty() {
+  if (!currentSession || !profileLoaded) return false;
+  return $profileNameInput.value.trim() !== currentSession.username
+    || ($profileBioInput.value || "") !== ((currentUserData && currentUserData.bio) || "")
+    || pendingAvatarDataUrl !== null
+    || $profileMzkInput.value.trim() !== "";
+}
+function settingsDirty() { return profileDirty() || prefsState() !== settingsBaseline; }
 function openSettings(tab) {
   if (!currentSession) return;
+  hideLeaveConfirm();
   $settingsOverlay.classList.add("show");
   showSettingsTab(tab || settingsTab);
+  settingsBaseline = prefsState();
 }
 function closeSettings() {
   if (!settingsIsOpen()) return;
+  hideLeaveConfirm();
+  showMzkSub(false);
+  profileLoaded = false;
   $settingsOverlay.classList.remove("show");
   $profilePopover.classList.remove("show");
   stopProfileMzkSong();
   resetUnlinkButton();
   window.dispatchEvent(new CustomEvent("vus:settings-closed"));
 }
+const $settingsLeave = document.getElementById("settingsLeave");
+function hideLeaveConfirm() { $settingsLeave.classList.remove("show"); }
+function leaveConfirmOpen() { return $settingsLeave.classList.contains("show"); }
+// X, Esc, the Close button and clicking outside all come here: nothing unsaved closes straight away.
+function requestCloseSettings() {
+  if (!settingsIsOpen()) return;
+  if (!settingsDirty()) { closeSettings(); return; }
+  $settingsLeave.classList.add("show");
+}
+const $settingsSaveBtn = document.getElementById("settingsSaveBtn");
+let saveFlashTimer = null;
+async function saveSettings() {
+  $settingsSaveBtn.disabled = true;
+  let ok = true;
+  if (profileDirty()) ok = await saveProfileFields();
+  $settingsSaveBtn.disabled = false;
+  if (!ok) return false;
+  settingsBaseline = prefsState();
+  $settingsSaveBtn.textContent = "Saved \u2713";
+  clearTimeout(saveFlashTimer);
+  saveFlashTimer = setTimeout(() => { $settingsSaveBtn.textContent = "Save"; }, 1400);
+  return true;
+}
+function discardSettings() {
+  if (window.VUS_CHAT && window.VUS_CHAT.restorePrefsState) window.VUS_CHAT.restorePrefsState(settingsBaseline);
+  closeSettings();
+}
 function stopProfileMzkSong() { if (profileMzkSongUnsub) { profileMzkSongUnsub(); profileMzkSongUnsub = null; } }
 function openProfilePopover() { openSettings("account"); }
 document.querySelectorAll("#settingsTabs .settings-tab").forEach(b => b.addEventListener("click", () => showSettingsTab(b.dataset.tab)));
-document.getElementById("settingsX").addEventListener("click", closeSettings);
-document.getElementById("settingsCloseBtn").addEventListener("click", closeSettings);
-// double-click on the dimmed area (not inside the window) closes it
-$settingsOverlay.addEventListener("dblclick", (e) => { if (e.target === $settingsOverlay) closeSettings(); });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && settingsIsOpen()) closeSettings(); });
+document.getElementById("settingsX").addEventListener("click", requestCloseSettings);
+document.getElementById("settingsCloseBtn").addEventListener("click", requestCloseSettings);
+$settingsSaveBtn.addEventListener("click", saveSettings);
+document.getElementById("settingsLeaveSave").addEventListener("click", async () => { if (await saveSettings()) closeSettings(); else hideLeaveConfirm(); });
+document.getElementById("settingsLeaveDiscard").addEventListener("click", discardSettings);
+document.getElementById("settingsLeaveKeep").addEventListener("click", hideLeaveConfirm);
+// clicking the dimmed area (press and release both outside the window) asks/closes
+let settingsPressOnBackdrop = false;
+$settingsOverlay.addEventListener("mousedown", (e) => { settingsPressOnBackdrop = e.target === $settingsOverlay; });
+$settingsOverlay.addEventListener("click", (e) => { if (e.target === $settingsOverlay && settingsPressOnBackdrop) requestCloseSettings(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !settingsIsOpen()) return;
+  if (leaveConfirmOpen()) hideLeaveConfirm();
+  else if (mzkSubIsOpen()) showMzkSub(false);
+  else requestCloseSettings();
+});
 window.VUS_UI = Object.assign(window.VUS_UI || {}, { openSettings, closeSettings });
 function updateBioCount() { $profileBioCount.textContent = $profileBioInput.value.length + "/" + BIO_MAX_LENGTH; }
 $profileBioInput.addEventListener("input", updateBioCount);
@@ -1585,17 +1668,18 @@ $profileAvatarFileInput.addEventListener("change", async () => {
     renderProfileAvatarButton(pendingAvatarDataUrl);
   } catch (e) { $profilePopoverError.textContent = e.message || "Couldn't process that image."; }
 });
-$profileSaveBtn.addEventListener("click", async () => {
-  $profileSaveBtn.disabled = true;
+async function saveProfileFields() {
   $profilePopoverError.textContent = "";
   const result = await updateProfile($profileNameInput.value, pendingAvatarDataUrl !== null ? pendingAvatarDataUrl : undefined, $profileBioInput.value, ($currentMzk() ? undefined : $profileMzkInput.value));
-  $profileSaveBtn.disabled = false;
-  if (!result.ok) { $profilePopoverError.textContent = result.error; return; }
+  if (!result.ok) { showMzkSub(false); $profilePopoverError.textContent = result.error; return false; }
   pendingAvatarDataUrl = null;
-  closeProfilePopover();
+  $profileMzkInput.value = "";
+  $profileNameInput.value = currentSession ? currentSession.username : $profileNameInput.value;
   refreshOwnRailAvatar();
   window.dispatchEvent(new CustomEvent("vus:profile"));   // chat redraws the members list (picture, song)
-});
+  return true;
+}
+$profileSaveBtn.addEventListener("click", saveSettings);
 
 function refreshOwnRailAvatar() {
   if (!currentSession) return;
@@ -3077,6 +3161,7 @@ window.VUS_DM = {
     const prof = key ? await fetchAccountProfile(key) : null;
     return prof ? prof.createdAt : 0;
   },
+  searchUsernames: async (q) => { try { return (await searchByUsernamePrefix(q)).map(a => ({ username: a.username, id: a.id })); } catch (e) { return []; } },
   getSession: () => currentSession ? { accountKey: currentSession.accountKey, username: currentSession.username, id: currentSession.id } : null,
   logout: () => doLogout()
 };

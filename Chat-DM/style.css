@@ -2054,3 +2054,96 @@ body.bs-compact .msg { padding-top: 2px; padding-bottom: 2px; }
 .vp-why { flex-basis: 100%; color: #f87171; font-size: 12px; }
 .vp-btn { padding: 3px 11px; border-radius: 8px; border: 0; background: #3b82f6; color: #fff; font-weight: 600; cursor: pointer; }
 .vp-empty { color: #64748b; font-size: 13px; padding: 4px 0; }
+
+/* ── Settings: footer Save, unsaved-changes prompt, sub-menus ── */
+#profileSaveBtn { display: none !important; }
+.settings-foot-btns { display: flex; gap: 8px; }
+#settingsSaveBtn { background: #22c55e; border: none; color: #052e12; border-radius: 8px; padding: 7px 18px; font-size: 13px; font-weight: 700; cursor: pointer; }
+#settingsSaveBtn:hover { background: #4ade80; } #settingsSaveBtn:disabled { opacity: .6; cursor: default; }
+#settingsModal { position: relative; }
+#settingsLeave { display: none; position: absolute; inset: 0; z-index: 5; background: rgba(8,12,22,.72); align-items: center; justify-content: center; padding: 16px; }
+#settingsLeave.show { display: flex; }
+.settings-leave-card { width: min(340px, 100%); background: #1a2438; border: 1px solid #2f3e58; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.settings-leave-title { font-size: 16px; font-weight: 700; color: #f1f5f9; }
+.settings-leave-sub { font-size: 13px; color: #94a3b8; margin-bottom: 6px; }
+.settings-leave-card button { padding: 9px 12px; border-radius: 9px; border: 1px solid #334155; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.sl-primary { background: #22c55e; color: #052e12; border-color: #22c55e !important; }
+.sl-danger { background: rgba(239,68,68,.14); color: #f87171; border-color: rgba(239,68,68,.4) !important; }
+.sl-ghost { background: transparent; color: #cbd5e1; }
+#mzkSubView { display: none; max-width: 420px; margin: 0 auto; }
+#settingsModal.sub-open #mzkSubView { display: block; }
+#settingsModal.sub-open #profilePopover { display: none !important; }
+.sv-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.sv-title { font-size: 15px; font-weight: 700; color: #f1f5f9; }
+.sv-back { background: #1e293b; border: 1px solid #334155; color: #e2e8f0; border-radius: 8px; padding: 5px 12px; font-size: 13px; cursor: pointer; }
+.sv-back:hover { background: #26354d; }
+.mzk-open-row { width: 100%; margin: 6px 0; }
+.sv-chev { font-size: 22px; color: #94a3b8; margin-left: auto; }
+.modal-back { align-self: flex-start; background: #1e293b; border: 1px solid #334155; color: #e2e8f0; border-radius: 8px; padding: 5px 12px; font-size: 13px; cursor: pointer; margin: 0 0 8px; }
+.modal-back:hover { background: #26354d; }
+
+/* ── Bubble radius, backgrounds, role/name gap, reaction names ── */
+body.has-radius .msg:not(.system) .msg-bubble, body.has-radius .chat-msg-bubble { border-radius: var(--bubble-radius, 12px) !important; }
+.msg-meta .role-bubble-row { margin-right: 10px !important; }
+.cs-slider { display: flex; align-items: center; gap: 10px; }
+.cs-slider input[type=range] { flex: 1; accent-color: #22c55e; min-width: 80px; }
+.cs-slider-val { width: 44px; text-align: right; color: #94a3b8; font-size: 12.5px; }
+.cs-choice-stack { flex-direction: column; align-items: stretch; gap: 8px; }
+.cs-choice-stack .cs-seg { flex-wrap: wrap; }
+.cs-bg-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.cs-bg-row input[type=text] { flex: 1; min-width: 0; padding: 7px 10px; background: #0f172a; border: 1.5px solid #334155; border-radius: 8px; color: #f1f5f9; font-size: 13px; }
+.cs-bg-row input[type=color] { width: 44px; height: 32px; padding: 0; border: 1px solid #334155; border-radius: 8px; background: none; cursor: pointer; }
+.cs-bg-row input[type=file] { flex: 1; min-width: 0; font-size: 12.5px; color: #94a3b8; }
+.cs-bg-row button { background: #1e293b; border: 1px solid #334155; color: #e2e8f0; border-radius: 8px; padding: 6px 12px; font-size: 12.5px; cursor: pointer; }
+.cs-bg-note { font-size: 12px; color: #64748b; min-height: 14px; } .cs-bg-note.bad { color: #f87171; }
+body.bg-on #messages, body.bg-on #chatMessages { background-color: var(--chat-bg-color); background-image: var(--chat-bg-img, none); background-size: cover; background-position: center; }
+body.bg-light .msg-bubble:not([style*="background"]), body.bg-light .chat-msg-bubble:not([style*="background"]) { color: #0f172a; }
+body.bg-light .msg-meta, body.bg-light .chat-msg-meta, body.bg-light .chat-msg-author, body.bg-light .msg-time { color: #334155 !important; }
+body.bg-light .msg-meta-name:not([style*="color"]) { color: #0f172a; }
+body.bg-light .msg.system .msg-bubble, body.bg-light .chat-date-sep { color: #475569; }
+body.bg-light .mention-chip-inline { color: #15803d !important; }
+body.bg-light .msg-reply { color: #334155; }
+.react-pill { position: relative; }
+.react-pill[data-tip]:hover::after { content: attr(data-tip); position: absolute; left: 0; bottom: calc(100% + 6px); white-space: pre; background: #0b1220; color: #e2e8f0; border: 1px solid #334155; border-radius: 8px; padding: 6px 10px; font-size: 12.5px; line-height: 1.4; z-index: 40; pointer-events: none; box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+
+/* ── Inline @mentions ── */
+#inputStack { position: relative; }
+#mentionMirror { display: none; position: absolute; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; white-space: pre-wrap; overflow-wrap: break-word; color: transparent; box-sizing: border-box; border: 0; margin: 0; }
+#mentionMirror .mt { position: relative; background: rgba(34,197,94,.20); box-shadow: 0 0 0 1px rgba(34,197,94,.5); border-radius: 5px; }
+#mentionMirror .mt.ping { background: rgba(245,158,11,.22); box-shadow: 0 0 0 1px rgba(245,158,11,.6); }
+#mentionMirror .mt-x { position: absolute; top: -9px; right: -7px; width: 15px; height: 15px; line-height: 14px; text-align: center; font-size: 12px; font-weight: 700; color: #fff; background: #475569; border-radius: 50%; pointer-events: auto; cursor: pointer; font-family: system-ui, sans-serif; letter-spacing: 0; padding: 0; }
+#mentionMirror .mt-x:hover { background: #ef4444; }
+#mentionMirror .mt-bell { position: absolute; top: -10px; left: -6px; font-size: 11px; letter-spacing: 0; }
+#mentionPopup { display: none; position: fixed; z-index: 2000; align-items: center; gap: 4px; background: #1e293b; border: 1.5px solid #334155; border-radius: 10px; padding: 4px 6px; box-shadow: 0 8px 26px rgba(0,0,0,.5); font-size: 13px; }
+#mentionPopup .mp-name { color: #4ade80; font-weight: 700; padding: 0 6px 0 4px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#mentionPopup button { background: transparent; border: 1px solid #334155; color: #cbd5e1; border-radius: 7px; padding: 3px 9px; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+#mentionPopup button.on { background: rgba(34,197,94,.18); border-color: #22c55e; color: #bbf7d0; }
+#mentionPopup button[data-a="ping"].on { background: rgba(245,158,11,.2); border-color: #f59e0b; color: #fde68a; }
+#mentionPopup .mp-x { padding: 3px 7px; }
+#mentionDropdown { width: 260px !important; max-height: 280px !important; overflow-y: auto !important; }
+.mention-group { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #64748b; padding: 6px 8px 2px; }
+.mention-option { display: flex !important; align-items: center; gap: 8px; }
+.mention-option.active { background: rgba(34,197,94,.14) !important; }
+.mo-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 8px; } .mo-dot.on { background: #22c55e; } .mo-dot.off { background: #475569; }
+.mo-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mo-tag { font-size: 11px; color: #64748b; }
+.mention-chip-inline.mention-me { background: rgba(34,197,94,.2); border-radius: 5px; padding: 0 4px; }
+#mentionChip, #mentionSoundBtn, #mentionCancelBtn { display: none !important; }
+/* ── Notifications bell ── */
+#notifBtn { position: relative; background: transparent; border: 1px solid #334155; color: #cbd5e1; border-radius: 9px; padding: 3px 9px; font-size: 15px; cursor: pointer; }
+#notifBtn:hover { border-color: #64748b; }
+#notifBadge { display: none; position: absolute; top: -7px; right: -7px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: #ef4444; color: #fff; font-size: 11px; font-weight: 700; line-height: 17px; text-align: center; box-sizing: border-box; }
+#notifPanel { display: none; position: fixed; top: 58px; right: 14px; width: min(360px, calc(100vw - 20px)); max-height: 70vh; z-index: 1500; background: #172033; border: 1px solid #2f3e58; border-radius: 12px; box-shadow: 0 16px 48px rgba(0,0,0,.55); overflow: hidden; flex-direction: column; }
+#notifPanel[style*="block"] { display: flex !important; }
+.np-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid #263248; color: #f1f5f9; }
+.np-actions button { background: none; border: none; color: #94a3b8; font-size: 12px; cursor: pointer; padding: 2px 6px; } .np-actions button:hover { color: #f1f5f9; }
+.np-list { overflow-y: auto; flex: 1; }
+.np-empty { color: #64748b; font-size: 13px; padding: 18px 14px; line-height: 1.45; }
+.np-row { display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid rgba(148,163,184,.1); padding: 9px 12px; cursor: pointer; color: #cbd5e1; }
+.np-row:hover { background: rgba(255,255,255,.04); } .np-row.unread { background: rgba(34,197,94,.07); }
+.np-ico { flex: 0 0 24px; height: 24px; border-radius: 50%; background: #243149; color: #4ade80; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+.np-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.np-t1 { font-size: 13.5px; color: #e2e8f0; font-weight: 600; } .np-t2 { font-size: 12.5px; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-time { font-size: 11px; color: #64748b; white-space: nowrap; }
+.np-foot { background: #1e293b; border: none; border-top: 1px solid #263248; color: #cbd5e1; padding: 9px; font-size: 13px; cursor: pointer; }
+.cs-subtitle { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: #64748b; margin: 14px 0 4px; }
