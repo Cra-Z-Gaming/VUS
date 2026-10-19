@@ -252,17 +252,20 @@ function showVideo(post, media) {
 // ===== Background posting: the form keeps working while hidden, a small pill shows progress =====
 // Browsers can't split bandwidth 50/50, so instead we pause our own preloading while a post is uploading.
 let bgPosting = false, pillEl = null;
-function showPill(label, frac) {
+function showPill(label, frac, done) {
   if (!pillEl) {
     pillEl = document.createElement('div');
     pillEl.style.cssText = 'position:fixed;left:16px;bottom:16px;z-index:250;width:min(300px,calc(100vw - 32px));background:#161616;border:1px solid var(--border);border-radius:12px;padding:10px 14px;font-size:13px;color:var(--text);box-shadow:0 8px 24px rgba(0,0,0,.5)';
     pillEl.innerHTML = '<div></div><div style="height:6px;border-radius:99px;background:#2a2a2a;overflow:hidden;margin-top:8px"><i style="display:block;height:100%;width:0;background:var(--accent);transition:width .2s"></i></div>';
     document.body.appendChild(pillEl);
   }
-  pillEl.firstChild.textContent = '⬆ ' + (label || 'Posting…');
+  clearTimeout(pillEl._t);
+  pillEl.style.borderColor = done ? '#4dff9a' : 'var(--border)';
+  pillEl.firstChild.textContent = (done ? '' : '⬆ ') + (label || 'Posting…');
+  if (done) { pillEl.style.cursor = 'pointer'; pillEl.onclick = hidePill; pillEl._t = setTimeout(hidePill, 12000); }
   pillEl.querySelector('i').style.width = Math.round(Math.max(0, Math.min(1, frac || 0)) * 100) + '%';
 }
-function hidePill() { if (pillEl) { pillEl.remove(); pillEl = null; } }
+function hidePill() { if (pillEl) { clearTimeout(pillEl._t); pillEl.remove(); pillEl = null; } }
 window.addEventListener('beforeunload', (e) => { if (bgPosting) { e.preventDefault(); e.returnValue = ''; } });
 
 const newPostEl = $('new-post-btn');
@@ -307,7 +310,7 @@ function openSubmitWindow(e) {
       close.style.display = 'none';
       showPill('Getting your video ready…', 0);
     } else if (d.type === 'statik-progress' && bgPosting) showPill(d.label, d.frac);
-    else if (d.type === 'statik-done') { forceShut(); showToast('Submitted! Posts can take up to 3 days to be published after review.'); }
+    else if (d.type === 'statik-done') { forceShut(); showPill('✅ Submitted! Your post is waiting for admin review. This can take up to 3 days, no need to do anything else. (tap to close)', 1, true); }
     else if (d.type === 'statik-error') {
       bgPosting = false; hidePill(); ov.id = 'submit-overlay'; ov.style.cssText = ovCss; close.style.display = '';
       showToast(d.message || 'Posting failed. Your video is still in the form, try again.');
