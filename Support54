@@ -1,1 +1,402 @@
-placeholder :D
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Hearts</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>❤️</text></svg>">
+<style>
+  :root {
+    --bg: #fff1f3;
+    --panel: rgba(255,255,255,.72);
+    --ink: #3a0d1a;
+    --muted: #8a5a66;
+    --heart: #e11d48;
+    --heart-dark: #9f1239;
+    --live: #16a34a;
+    --line: rgba(159,18,57,.14);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a0a10;
+      --panel: rgba(46,16,26,.72);
+      --ink: #ffe4ea;
+      --muted: #c58a99;
+      --heart: #fb3a64;
+      --heart-dark: #be123c;
+      --live: #4ade80;
+      --line: rgba(255,160,185,.16);
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    background: radial-gradient(circle at 60% 50%, color-mix(in srgb, var(--heart) 14%, var(--bg)), var(--bg) 70%);
+    color: var(--ink);
+    font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    overflow: hidden;
+    user-select: none; -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  /* Info panel (squircle) */
+  .panel {
+    position: fixed; z-index: 2;
+    left: calc(20px + env(safe-area-inset-left, 0px));
+    top: 50%; transform: translateY(-50%);
+    width: min(300px, 26vw);
+    padding: 26px 26px 28px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 40px;
+    corner-shape: squircle;           /* true squircle where supported */
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  }
+  .panel h1 { font-size: 1.6rem; line-height: 1.15; font-weight: 700; letter-spacing: -.02em; }
+  .panel p { margin-top: 12px; font-size: .95rem; line-height: 1.55; color: var(--muted); }
+
+  /* Presence */
+  .presence {
+    position: fixed; z-index: 2;
+    top: calc(20px + env(safe-area-inset-top, 0px));
+    right: calc(20px + env(safe-area-inset-right, 0px));
+    display: flex; align-items: center; gap: 9px;
+    padding: 10px 18px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    corner-shape: squircle;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    font-size: .9rem; font-variant-numeric: tabular-nums;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--live); box-shadow: 0 0 0 0 var(--live); animation: ping 2s infinite; }
+  .presence.off .dot { background: var(--muted); animation: none; }
+  @keyframes ping { 70% { box-shadow: 0 0 0 8px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+
+  /* Stage */
+  .stage {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    --side: min(340px, 28vw);
+    --h: min(70vmin, 760px, calc(100vw - 2 * var(--side) - 24px));
+    padding: 0 var(--side);
+  }
+  #heart {
+    width: var(--h); height: var(--h);
+    cursor: pointer; display: block;
+    filter: drop-shadow(0 18px 40px color-mix(in srgb, var(--heart) 45%, transparent));
+    will-change: transform;
+    outline: none;
+  }
+  #heart:focus-visible { outline: 3px solid var(--ink); outline-offset: 8px; border-radius: 24px; }
+  #count {
+    margin-top: 2vmin;
+    font-size: clamp(2rem, 7vmin, 5rem);
+    font-weight: 800; letter-spacing: -.03em;
+    font-variant-numeric: tabular-nums;
+    color: var(--heart-dark);
+  }
+  @media (prefers-color-scheme: dark) { #count { color: var(--ink); } }
+
+  .pop {
+    position: fixed; pointer-events: none; z-index: 1;
+    font-size: 1.6rem; will-change: transform, opacity;
+  }
+
+  /* Chat */
+  .chat {
+    position: fixed; z-index: 2;
+    right: calc(20px + env(safe-area-inset-right, 0px));
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    width: min(300px, 26vw);
+    height: min(58vh, 520px);
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .feed {
+    position: relative; flex: 1; overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 45%);
+    mask-image: linear-gradient(to bottom, transparent 0, #000 45%);
+  }
+  .list {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  }
+  .bubble {
+    max-width: 100%; padding: 9px 14px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 20px; corner-shape: squircle;
+    font-size: .92rem; line-height: 1.35; overflow-wrap: anywhere;
+    transform-origin: left bottom;
+  }
+  .chat-form { position: relative; }
+  .chat-form input {
+    width: 100%; padding: 13px 18px;
+    font: inherit; font-size: 16px; color: var(--ink);
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 22px; corner-shape: squircle;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    outline: none; user-select: text; -webkit-user-select: text;
+  }
+  .chat-form input::placeholder { color: var(--muted); }
+  .chat-form input:focus-visible { border-color: var(--heart); }
+  .chat-form::after {
+    content: ""; position: absolute; left: 20px; right: 20px; bottom: 1px; height: 2px;
+    border-radius: 2px; background: var(--heart);
+    transform-origin: left; transform: scaleX(0); pointer-events: none;
+  }
+  .chat-form.cool::after { animation: cool 1s linear forwards; }
+  @keyframes cool { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+  @media (max-width: 760px) {
+    .panel { top: calc(16px + env(safe-area-inset-top, 0px)); left: 16px; transform: none; width: min(62vw, 300px); padding: 16px 18px 18px; border-radius: 28px; }
+    .panel h1 { font-size: 1.15rem; }
+    .panel p { font-size: .8rem; margin-top: 6px; }
+    .presence { top: calc(16px + env(safe-area-inset-top, 0px)); right: 16px; padding: 8px 12px; }
+    .stage { --side: 0px; --h: min(80vw, 38vh); padding: 14vh 0 36vh; }
+    .chat { left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: auto; height: 34vh; }
+  }
+</style>
+</head>
+<body>
+
+<aside class="panel">
+  <h1>Click Heart for 54</h1>
+  <p>54 AKA 54BAWO, AKA 546564564 is going through sum stuff rn, if u alr know, then yk. spam the heart to show how much yall want him to be here</p>
+</aside>
+
+<div class="presence off" id="presence"><span class="dot"></span><span id="online">Connecting…</span></div>
+
+<main class="stage">
+  <svg id="heart" viewBox="0 0 100 92" role="button" tabindex="0" aria-label="Send a heart">
+    <defs>
+      <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="var(--heart)"/>
+        <stop offset="1" stop-color="var(--heart-dark)"/>
+      </linearGradient>
+    </defs>
+    <path fill="url(#g)" d="M50 88C50 88 4 58 4 28C4 13 15 4 27 4C37 4 45 9 50 18C55 9 63 4 73 4C85 4 96 13 96 28C96 58 50 88 50 88Z"/>
+    <path fill="#fff" opacity=".22" d="M20 22C20 15 26 11 32 11C28 12 24 16 24 24C24 28 22 29 21 28C20 27 20 24 20 22Z"/>
+  </svg>
+  <div id="count">?</div>
+</main>
+
+<section class="chat" aria-label="Chat">
+  <div class="feed" id="feed" aria-live="polite"><div class="list" id="list"></div></div>
+  <form class="chat-form" id="chatForm" autocomplete="off">
+    <input id="chatInput" type="text" maxlength="100" placeholder="Say something" enterkeyhint="send" aria-label="Message">
+  </form>
+</section>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import {
+    getDatabase, ref, onValue, update, increment,
+    push, set, remove, onDisconnect, query, limitToLast, onChildAdded, serverTimestamp
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyA_1TTLBXt5Xql3JgwSJNtpMlQ_5TrThmI",
+    authDomain: "hearts-54.firebaseapp.com",
+    databaseURL: "https://hearts-54-default-rtdb.firebaseio.com",
+    projectId: "hearts-54",
+    storageBucket: "hearts-54.firebasestorage.app",
+    messagingSenderId: "639363327952",
+    appId: "1:639363327952:web:7758f60f0a5b0354023bd5"
+    // measurementId / Analytics intentionally left out: no data collected except clicks
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  const rootRef = ref(db);
+
+  const heart = document.getElementById("heart");
+  const countEl = document.getElementById("count");
+  const presenceEl = document.getElementById("presence");
+  const onlineEl = document.getElementById("online");
+  const fmt = new Intl.NumberFormat("en-US");
+
+  let serverTotal = null; // null = not loaded yet (shows "?"); otherwise the shared total, including clicks already handed to Firebase
+  let unsent = 0;        // clicks waiting for the next batch
+  let drawQueued = false;
+
+  function draw() {
+    drawQueued = false;
+    countEl.textContent = serverTotal === null ? "?" : fmt.format(serverTotal + unsent);
+  }
+  function queueDraw() {
+    if (!drawQueued) { drawQueued = true; requestAnimationFrame(draw); }
+  }
+
+  // Live global total
+  onValue(ref(db, "clicks/total"), snap => {
+    serverTotal = Number(snap.val()) || 0;
+    queueDraw();
+  });
+
+  // Batch clicks: UI updates instantly, database gets one atomic increment per tick
+  function flush() {
+    if (!unsent) return;
+    const n = unsent;
+    unsent = 0;
+    update(rootRef, { "clicks/total": increment(n) }).catch(() => { unsent += n; queueDraw(); });
+  }
+  setInterval(flush, 250);
+  addEventListener("pagehide", flush);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) flush(); });
+
+  // Presence: one anonymous entry per open tab holding only a server timestamp.
+  // The tab refreshes it every 15s, and anyone whose timestamp is older than 40s is not counted,
+  // so a crashed tab or killed process drops off even if Firebase never notices the disconnect.
+  const BEAT = 15000, ALIVE = 40000, PURGE = 90000;
+  let offset = 0;
+  onValue(ref(db, ".info/serverTimeOffset"), s => { offset = s.val() || 0; });
+  const serverNow = () => Date.now() + offset;
+
+  const me = push(ref(db, "presence"));   // one key per page load, reused if the connection drops and returns
+  let beatTimer = null;
+  const beat = () => set(me, { t: serverTimestamp() }).catch(() => {});
+
+  onValue(ref(db, ".info/connected"), snap => {
+    if (!snap.val()) {
+      presenceEl.classList.add("off");
+      onlineEl.textContent = "Offline";
+      clearInterval(beatTimer); beatTimer = null;
+      return;
+    }
+    presenceEl.classList.remove("off");
+    onDisconnect(me).remove().then(() => {   // must be re-registered after every reconnect
+      beat();
+      clearInterval(beatTimer);
+      beatTimer = setInterval(beat, BEAT);
+    });
+  });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && beatTimer) beat(); });
+  addEventListener("pagehide", () => { remove(me).catch(() => {}); });   // best effort on tab close
+
+  let entries = {};
+  function renderOnline() {
+    if (presenceEl.classList.contains("off")) return;
+    const now = serverNow();
+    let n = 0;
+    for (const [id, v] of Object.entries(entries)) {
+      const t = v && typeof v === "object" ? v.t : null;
+      const age = typeof t === "number" ? now - t : Infinity;   // old-format or malformed entries count as stale
+      if (age <= ALIVE) n++;
+      else if (age > PURGE && id !== me.key) remove(ref(db, "presence/" + id)).catch(() => {});
+    }
+    onlineEl.textContent = fmt.format(Math.max(n, 1)) + " online";
+  }
+  onValue(ref(db, "presence"), snap => { entries = snap.val() || {}; renderOnline(); });
+  setInterval(renderOnline, 5000);
+
+  // Animation: restarts on every click, so it keeps up with any click speed
+  let anim = null;
+  function pulse() {
+    if (anim) anim.cancel();
+    anim = heart.animate(
+      [{ transform: "scale(1)" }, { transform: "scale(.9)", offset: .35 }, { transform: "scale(1)" }],
+      { duration: 110, easing: "ease-out" }
+    );
+  }
+
+  // Small floating hearts, capped so spamming never lags
+  let floating = 0;
+  function float(x, y) {
+    if (floating > 24 || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    floating++;
+    const el = document.createElement("div");
+    el.className = "pop";
+    el.textContent = "❤️";
+    el.style.left = x - 14 + "px";
+    el.style.top = y - 14 + "px";
+    document.body.appendChild(el);
+    const dx = (Math.random() - .5) * 120;
+    el.animate(
+      [{ transform: "translate(0,0) scale(.6)", opacity: 1 },
+       { transform: `translate(${dx}px,-140px) scale(1.1)`, opacity: 0 }],
+      { duration: 650, easing: "ease-out" }
+    ).onfinish = () => { el.remove(); floating--; };
+  }
+
+  function hit(x, y) {
+    unsent++;
+    queueDraw();
+    pulse();
+    float(x, y);
+  }
+
+  // pointerdown = no click delay; multi-touch works because each finger fires its own event
+  heart.addEventListener("pointerdown", e => { e.preventDefault(); hit(e.clientX, e.clientY); });
+  heart.addEventListener("keydown", e => {
+    if (e.key === " " || e.key === "Enter") {
+      e.preventDefault();
+      const r = heart.getBoundingClientRect();
+      hit(r.left + r.width / 2, r.top + r.height / 2);
+    }
+  });
+  heart.addEventListener("contextmenu", e => e.preventDefault());
+
+  // ---- Chat: anonymous text bubbles, newest at the bottom, oldest fade out at the top ----
+  const MAX_LEN = 100, COOLDOWN = 1000, MAX_BUBBLES = 14;
+  const feed = document.getElementById("feed");
+  const list = document.getElementById("list");
+  const form = document.getElementById("chatForm");
+  const input = document.getElementById("chatInput");
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
+  let live = false;                       // false while the initial history loads (no animation)
+  setTimeout(() => { live = true; }, 1200);
+
+  function addBubble(text, animate) {
+    const b = document.createElement("div");
+    b.className = "bubble";
+    b.textContent = text;                 // textContent only: messages can never inject HTML
+    list.appendChild(b);
+
+    // Drop whatever no longer fits at the top
+    while (list.children.length > 1 &&
+           (list.children.length > MAX_BUBBLES || list.offsetHeight > feed.clientHeight + 60)) {
+      list.firstChild.remove();
+    }
+
+    if (animate && !reduceMotion.matches) {
+      const h = b.offsetHeight + 8;
+      list.animate(
+        [{ transform: `translateY(${h}px)` }, { transform: "none" }],
+        { duration: 220, easing: "cubic-bezier(.2,.8,.2,1)" }
+      );
+      b.animate(
+        [{ opacity: 0, transform: "scale(.9)" }, { opacity: 1, transform: "scale(1)" }],
+        { duration: 220, easing: "ease-out" }
+      );
+    }
+  }
+
+  onChildAdded(query(ref(db, "messages"), limitToLast(12)), snap => {
+    const t = snap.val() && snap.val().t;
+    if (typeof t === "string" && t) addBubble(t.slice(0, MAX_LEN), live);
+  });
+
+  // 1 message per second: the line under the box counts down the cooldown
+  let cooling = false;
+  form.addEventListener("submit", e => {
+    e.preventDefault();
+    const text = input.value.replace(/\s+/g, " ").trim().slice(0, MAX_LEN);
+    if (!text) return;
+    if (cooling) {
+      input.animate(
+        [{ transform: "translateX(0)" }, { transform: "translateX(-4px)" }, { transform: "translateX(4px)" }, { transform: "translateX(0)" }],
+        { duration: 160 }
+      );
+      return;                             // keep the text so it can be sent once the line runs out
+    }
+    cooling = true;
+    form.classList.add("cool");
+    setTimeout(() => { cooling = false; form.classList.remove("cool"); }, COOLDOWN);
+    input.value = "";
+    push(ref(db, "messages"), { t: text, ts: serverTimestamp() })
+      .catch(() => { if (!input.value) input.value = text; });
+  });
+</script>
+</body>
+</html>
