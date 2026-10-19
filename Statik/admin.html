@@ -116,6 +116,7 @@ function watchPending() {
       const s = submissions[id];
       return `<div class="card" data-id="${esc(id)}">
         ${s.imageData ? '<img class="pic" alt="">' : ''}
+        ${s.hasVideo ? '<div class="vid"><button data-act="loadvid">▶ Load video preview</button></div>' : ''}
         <h3>${esc(s.title)}</h3><p>${esc(s.description)}</p>
         <div class="row"><span class="dim">${new Date(s.createdAt).toLocaleString()}</span>
           <span style="flex:1"></span>
@@ -128,24 +129,44 @@ function watchPending() {
     });
   });
 }
+async function loadVideoPreview(id, btn) {
+  btn.disabled = true; btn.textContent = 'Loading…';
+  try {
+    const v = (await db.ref('submissionVideos/' + id).once('value')).val();
+    if (!v || !v.chunks) throw new Error('Video upload is incomplete');
+    const parts = [];
+    for (let i = 0; i < v.n; i++) { const bin = atob(v.chunks[i]), a = new Uint8Array(bin.length); for (let j = 0; j < bin.length; j++) a[j] = bin.charCodeAt(j); parts.push(a); }
+    const el = document.createElement('video');
+    el.controls = true; el.style.cssText = 'width:100%;max-height:360px;background:#000;border-radius:8px;margin-bottom:10px';
+    el.src = URL.createObjectURL(new Blob(parts, { type: v.mime || 'video/webm' }));
+    btn.parentNode.replaceChildren(el);
+  } catch (err) { btn.disabled = false; btn.textContent = '▶ Load video preview'; alert(err.message); }
+}
 $('pending-list').addEventListener('click', async (e) => {
   const act = e.target.dataset.act;
   if (!act) return;
   const id = e.target.closest('.card').dataset.id, s = submissions[id];
+  if (act === 'loadvid') { loadVideoPreview(id, e.target); return; }
   e.target.disabled = true;
   try {
     if (act === 'approve') {
+      let vid = null;
+      if (s.hasVideo) {
+        vid = (await db.ref('submissionVideos/' + id).once('value')).val();
+        if (!vid || !vid.chunks) throw new Error("This submission's video upload is incomplete.");
+      }
       const u = {};
       u['posts/' + id] = {
         authorName: 'Anonymous', title: s.title, description: s.description || '',
-        hasImage: !!s.imageData, createdAt: firebase.database.ServerValue.TIMESTAMP
+        hasImage: !!s.imageData, hasVideo: !!vid, createdAt: firebase.database.ServerValue.TIMESTAMP
       };
       if (s.imageData) u['images/' + id] = s.imageData;
+      if (vid) { u['videos/' + id] = { mime: vid.mime, n: vid.n, dur: vid.dur, chunks: vid.chunks }; u['submissionVideos/' + id] = null; }
       u['submissions/' + id] = null;
       await db.ref().update(u);
     } else {
       if (!confirm('Reject and delete this submission?')) { e.target.disabled = false; return; }
-      await db.ref('submissions/' + id).remove();
+      await db.ref().update({ ['submissions/' + id]: null, ['submissionVideos/' + id]: null });
     }
   } catch (err) { alert(err.message); e.target.disabled = false; }
 });
@@ -164,7 +185,7 @@ function watchReports() {
     $('reports-list').innerHTML = items.map(({ id, count, post, img }) => `
       <div class="card" data-id="${esc(id)}">
         <div class="flag" style="margin-bottom:8px">🚩 ${count} report${count === 1 ? '' : 's'}</div>
-        ${post ? `${img ? '<img class="pic" alt="">' : ''}<h3>${esc(post.title)}</h3><p>${esc(post.description)}</p>`
+        ${post ? `${img ? '<img class="pic" alt="">' : ''}${post.hasVideo ? '<p class="dim">🎬 Video post</p>' : ''}<h3>${esc(post.title)}</h3><p>${esc(post.description)}</p>`
                : '<p class="dim">Post no longer exists.</p>'}
         <div class="row"><span style="flex:1"></span>
           <button data-act="dismiss">Dismiss reports</button>
@@ -185,7 +206,7 @@ $('reports-list').addEventListener('click', async (e) => {
     } else {
       if (!confirm('Permanently delete this post and its comments/likes?')) return;
       const u = {};
-      ['posts', 'images', 'likes', 'comments', 'replies', 'commentLikes', 'reports'].forEach(n => { u[`${n}/${id}`] = null; });
+      ['posts', 'images', 'videos', 'likes', 'comments', 'replies', 'commentLikes', 'reports'].forEach(n => { u[`${n}/${id}`] = null; });
       await db.ref().update(u);
     }
   } catch (err) { alert(err.message); }
