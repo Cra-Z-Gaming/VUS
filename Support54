@@ -96,8 +96,19 @@
     font-weight: 800; letter-spacing: -.03em;
     font-variant-numeric: tabular-nums;
     color: var(--heart-dark);
+    white-space: nowrap; line-height: 1.1;
   }
   @media (prefers-color-scheme: dark) { #count { color: var(--ink); } }
+  .meta {
+    margin-top: 1.2vmin; display: flex; align-items: center; gap: 12px;
+    font-size: .9rem; color: var(--muted); font-variant-numeric: tabular-nums;
+  }
+  .meta button {
+    font: inherit; color: var(--ink); cursor: pointer;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 16px; corner-shape: squircle; padding: 5px 13px;
+  }
+  .meta button:focus-visible { outline: 2px solid var(--heart); outline-offset: 2px; }
 
   .pop {
     position: fixed; pointer-events: none; z-index: 1;
@@ -179,6 +190,10 @@
     <path fill="#fff" opacity=".22" d="M20 22C20 15 26 11 32 11C28 12 24 16 24 24C24 28 22 29 21 28C20 27 20 24 20 22Z"/>
   </svg>
   <div id="count">?</div>
+  <div class="meta">
+    <span id="cps" title="Global clicks per second (last 5 seconds)">– clicks/s</span>
+    <button id="fmtBtn" type="button">Show short</button>
+  </div>
 </main>
 
 <section class="chat" aria-label="Chat">
@@ -214,25 +229,72 @@
   const countEl = document.getElementById("count");
   const presenceEl = document.getElementById("presence");
   const onlineEl = document.getElementById("online");
+  const stage = document.querySelector(".stage");
+  const cpsEl = document.getElementById("cps");
+  const fmtBtn = document.getElementById("fmtBtn");
   const fmt = new Intl.NumberFormat("en-US");
+  const fmtShort = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 2 });
 
   let serverTotal = null; // null = not loaded yet (shows "?"); otherwise the shared total, including clicks already handed to Firebase
   let unsent = 0;        // clicks waiting for the next batch
   let drawQueued = false;
+  let compact = false;   // default: show the full number
+  let fitLen = -1;       // length of the text the font size was last fitted for
+
+  // Shrink the number's font only when it would overflow, so any size of number stays on screen
+  function fit() {
+    countEl.style.fontSize = "";
+    const cs = getComputedStyle(stage);
+    const avail = stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 8;
+    const w = countEl.getBoundingClientRect().width;
+    if (w > avail) {
+      const base = parseFloat(getComputedStyle(countEl).fontSize);
+      countEl.style.fontSize = Math.max(14, base * avail / w) + "px";
+    }
+  }
 
   function draw() {
     drawQueued = false;
-    countEl.textContent = serverTotal === null ? "?" : fmt.format(serverTotal + unsent);
+    let text = "?";
+    if (serverTotal !== null) text = (compact ? fmtShort : fmt).format(serverTotal + unsent);
+    if (countEl.textContent !== text) {
+      countEl.textContent = text;
+      if (text.length !== fitLen) { fitLen = text.length; fit(); }
+    }
   }
   function queueDraw() {
     if (!drawQueued) { drawQueued = true; requestAnimationFrame(draw); }
   }
+  addEventListener("resize", () => { fitLen = -1; queueDraw(); });
 
-  // Live global total
-  onValue(ref(db, "clicks/total"), snap => {
-    serverTotal = Number(snap.val()) || 0;
+  fmtBtn.addEventListener("click", () => {
+    compact = !compact;
+    fmtBtn.textContent = compact ? "Show full" : "Show short";
+    fitLen = -1;
+    countEl.textContent = "";             // force a redraw and refit
     queueDraw();
   });
+
+  // Live global total, plus samples used for the global clicks-per-second readout
+  const WINDOW = 5000;
+  let samples = [];
+  onValue(ref(db, "clicks/total"), snap => {
+    serverTotal = Number(snap.val()) || 0;
+    samples.push({ t: performance.now(), v: serverTotal });
+    queueDraw();
+  });
+
+  // Global clicks/sec = growth of the shared total over the last 5 seconds (everyone's clicks, not just yours)
+  setInterval(() => {
+    if (serverTotal === null || !samples.length) return;
+    const now = performance.now();
+    while (samples.length > 1 && samples[1].t <= now - WINDOW) samples.shift();
+    const base = samples[0];
+    const span = Math.min(now - base.t, WINDOW) / 1000;
+    if (span < 1.5) return;
+    const rate = Math.max(0, (serverTotal - base.v) / span);
+    cpsEl.textContent = (rate >= 100 ? fmt.format(Math.round(rate)) : rate.toFixed(1)) + " clicks/s";
+  }, 500);
 
   // Batch clicks: UI updates instantly, database gets one atomic increment per tick
   function flush() {
