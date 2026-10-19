@@ -23,18 +23,24 @@
   button:disabled { opacity: .5; cursor: default; }
   #status { margin-top: 10px; font-size: 13px; color: #9a9a9a; min-height: 18px; }
   #status.ok { color: #4dff9a; } #status.err { color: #ff8a9e; }
+  #vpreview { width: 100%; max-height: 220px; background: #000; border-radius: 8px; margin-bottom: 12px; display: none; }
+  .bar { height: 6px; border-radius: 99px; background: #2a2a2a; overflow: hidden; margin-top: 10px; display: none; }
+  .bar i { display: block; height: 100%; width: 0; background: #4da3ff; transition: width .2s; }
 </style>
 </head>
 <body>
 <main class="box">
   <h1>Submit a post</h1>
-  <p class="note">Submissions are reviewed before anything goes live. Paste (Ctrl/Cmd+V) works for images.</p>
+  <p class="note">Posts are reviewed by admins and can take up to 3 days to be published. Paste (Ctrl/Cmd+V) works for images.</p>
   <input type="text" id="title" placeholder="Title" maxlength="100">
   <div class="ctr" id="title-ctr">0/100</div>
   <textarea id="desc" placeholder="Description (optional)" maxlength="1000"></textarea>
   <div class="ctr" id="desc-ctr">0/1000</div>
   <label class="file"><input type="file" id="file" accept="image/*"><span id="file-text">Attach image (optional)</span></label>
   <img id="preview" alt="">
+  <label class="file"><input type="file" id="vfile" accept="video/*"><span id="vfile-text">Attach video (optional, up to 1 minute)</span></label>
+  <video id="vpreview" controls playsinline></video>
+  <div class="bar" id="vbar"><i></i></div>
   <button id="submit">Submit for review</button>
   <p id="status"></p>
 </main>
@@ -81,7 +87,7 @@ function processImage(file, label) {
     URL.revokeObjectURL(img.src);
     const data = c.toDataURL('image/jpeg', QUALITY);
     if (data.length >= 2800000) return setStatus('Image is too large even after compression.', 'err');
-    imageData = data;
+    imageData = data; clearVideo();
     $('preview').src = data; $('preview').style.display = 'block';
     $('file-text').textContent = label || file.name || 'Pasted image';
     setStatus('');
@@ -96,9 +102,134 @@ document.addEventListener('paste', (e) => {
   }
 });
 
+/* ---------- video: re-encoded in the browser, stored as base64 chunks in the database ---------- */
+const VIDEO_MAX_SEC = 60, VIDEO_TARGET = 2200000, VIDEO_MAX_BYTES = 2800000, CHUNK = 240000;
+let pendingVideo = null, busyEncode = false;
+function setVideoProgress(label, frac) {
+  const bar = $('vbar');
+  if (label == null) { bar.style.display = 'none'; return; }
+  bar.style.display = 'block'; bar.firstElementChild.style.width = Math.round(Math.max(0, Math.min(1, frac || 0)) * 100) + '%';
+  setStatus(label);
+}
+function clearVideo() {
+  if (pendingVideo && pendingVideo.url) URL.revokeObjectURL(pendingVideo.url);
+  pendingVideo = null;
+  $('vpreview').pause(); $('vpreview').removeAttribute('src'); $('vpreview').style.display = 'none';
+  $('vfile-text').textContent = 'Attach video (optional, up to 1 minute)';
+}
+const readAsDataURL = (blob) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error('Could not read file')); r.readAsDataURL(blob); });
+function pickMime() {
+  if (!window.MediaRecorder) return null;
+  for (const c of ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4']) {
+    try { if (MediaRecorder.isTypeSupported(c)) return c; } catch (e) {}
+  }
+  return '';
+}
+function loadVideoEl(file) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file), v = document.createElement('video');
+    v.preload = 'auto'; v.playsInline = true; v.setAttribute('playsinline', ''); v.src = url;
+    v.onloadedmetadata = () => res({ v, url });
+    v.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Could not read that video')); };
+  });
+}
+function encodeAttempt(file, meta, scale, attempt, onProgress) {
+  return new Promise((resolve, reject) => {
+    loadVideoEl(file).then((m) => {
+      const v = m.v, chunks = [];
+      let actx = null, finished = false, timer = null, rec = null;
+      const canvas = document.createElement('canvas'); canvas.width = meta.w; canvas.height = meta.h;
+      const ctx = canvas.getContext('2d'), stream = canvas.captureStream(24);
+      const cleanup = () => { clearTimeout(timer); try { if (actx) actx.close(); } catch (e) {} URL.revokeObjectURL(m.url); };
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        actx = new AC();
+        const src = actx.createMediaElementSource(v), dst = actx.createMediaStreamDestination();
+        src.connect(dst);
+        dst.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
+        if (actx.state === 'suspended') actx.resume();
+      } catch (e) { actx = null; }
+      const vbps = Math.max(60000, Math.min(800000, Math.floor((VIDEO_TARGET * 8 / meta.dur - 40000) * scale)));
+      const mime = pickMime(), opts = { videoBitsPerSecond: vbps, audioBitsPerSecond: 32000 };
+      if (mime) opts.mimeType = mime;
+      try { rec = new MediaRecorder(stream, opts); } catch (e) { cleanup(); reject(new Error('Could not start video compression')); return; }
+      rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+      rec.onstop = () => {
+        cleanup();
+        const type = (rec.mimeType || mime || 'video/webm').split(';')[0];
+        const blob = new Blob(chunks, { type });
+        if (!blob.size) { reject(new Error('Video compression failed')); return; }
+        if (blob.size > VIDEO_MAX_BYTES) {
+          if (attempt < 2) { resolve(encodeAttempt(file, meta, scale * (VIDEO_TARGET / blob.size) * 0.8, attempt + 1, onProgress)); return; }
+          reject(new Error('That clip is too detailed to fit. Try a shorter or calmer one.')); return;
+        }
+        resolve({ blob, mime: type, dur: meta.dur });
+      };
+      const stopRec = () => { try { if (rec.state !== 'inactive') rec.stop(); } catch (e) {} };
+      const finish = () => { if (finished) return; finished = true; setTimeout(stopRec, 150); };
+      const frame = () => {
+        if (finished) return;
+        try { ctx.drawImage(v, 0, 0, meta.w, meta.h); } catch (e) {}
+        onProgress(Math.min(1, v.currentTime / meta.dur), attempt);
+        requestAnimationFrame(frame);
+      };
+      v.onended = finish;
+      v.onerror = () => { if (!finished) { finished = true; stopRec(); } };
+      timer = setTimeout(finish, (meta.dur + 10) * 1000);
+      rec.start(1000);
+      const go = () => requestAnimationFrame(frame);
+      const p = v.play();
+      if (p && p.then) {
+        p.then(go).catch(() => {
+          v.muted = true;
+          v.play().then(go).catch(() => { finished = true; stopRec(); cleanup(); reject(new Error('Your browser blocked video processing. Try again.')); });
+        });
+      } else go();
+    }).catch(reject);
+  });
+}
+async function processVideo(file, onProgress) {
+  if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) throw new Error("This browser can't compress videos. Try Chrome, Edge or Firefox.");
+  if (file.size > 400 * 1024 * 1024) throw new Error('That video file is too large');
+  const m = await loadVideoEl(file), v = m.v, dur = v.duration;
+  URL.revokeObjectURL(m.url);
+  if (!isFinite(dur) || dur <= 0) throw new Error('Could not read that video');
+  if (dur > VIDEO_MAX_SEC + 0.5) throw new Error('Videos can be up to 1 minute (this one is ' + Math.round(dur) + 's)');
+  const vw = v.videoWidth || 640, vh = v.videoHeight || 360, sc = Math.min(1, 480 / Math.max(vw, vh));
+  const meta = { dur, w: Math.max(2, Math.round(vw * sc / 2) * 2), h: Math.max(2, Math.round(vh * sc / 2) * 2) };
+  return encodeAttempt(file, meta, 1, 1, onProgress);
+}
+async function uploadVideo(id, uid, v) {
+  const d = await readAsDataURL(v.blob), b64 = d.slice(d.indexOf(',') + 1), n = Math.ceil(b64.length / CHUNK);
+  if (n > 16) throw new Error('Video is too big to store');
+  const base = db.ref('submissionVideos/' + id);
+  try {
+    await base.set({ owner: uid, mime: v.mime, n, dur: Math.round(v.dur) });
+    for (let k = 0; k < n; k++) {
+      await base.child('chunks/' + k).set(b64.slice(k * CHUNK, (k + 1) * CHUNK));
+      setVideoProgress('Uploading video… ' + Math.round(((k + 1) / n) * 100) + '%', (k + 1) / n);
+    }
+  } catch (e) { base.remove().catch(() => {}); throw e; }
+}
+$('vfile').addEventListener('change', async () => {
+  const f = $('vfile').files[0]; $('vfile').value = '';
+  if (!f || busyEncode) return;
+  clearVideo(); imageData = null; $('preview').style.display = 'none'; $('file-text').textContent = 'Attach image (optional)';
+  busyEncode = true; $('submit').disabled = true;
+  try {
+    setVideoProgress('Preparing video…', 0);
+    const r = await processVideo(f, (fr, at) => setVideoProgress((at > 1 ? 'Re-compressing… ' : 'Compressing video… ') + Math.round(fr * 100) + '% · keep this tab open', fr));
+    pendingVideo = r; r.url = URL.createObjectURL(r.blob);
+    $('vpreview').src = r.url; $('vpreview').style.display = 'block'; $('vfile-text').textContent = f.name;
+    setStatus('');
+  } catch (e) { setStatus(e.message, 'err'); }
+  setVideoProgress(null); busyEncode = false; $('submit').disabled = false;
+});
+
 $('submit').addEventListener('click', async () => {
   const title = $('title').value.trim(), description = $('desc').value.trim();
   if (!title) return setStatus('Title is required.', 'err');
+  if (busyEncode) return setStatus('Still compressing your video…', 'err');
   const wait = Math.ceil((+localStorage.getItem('statik_last_submit') + COOLDOWN_MS - Date.now()) / 1000);
   if (wait > 0) return setStatus(`Please wait ${wait}s before submitting again.`, 'err');
 
@@ -108,17 +239,19 @@ $('submit').addEventListener('click', async () => {
     const user = await ready;
     const data = { title, description, authorUid: user.uid, createdAt: firebase.database.ServerValue.TIMESTAMP };
     if (imageData) data.imageData = imageData;
-    await db.ref('submissions').push(data);
+    const ref = db.ref('submissions').push();
+    if (pendingVideo) { data.hasVideo = true; await uploadVideo(ref.key, user.uid, pendingVideo); }
+    try { await ref.set(data); } catch (e) { if (pendingVideo) db.ref('submissionVideos/' + ref.key).remove().catch(() => {}); throw e; }
     localStorage.setItem('statik_last_submit', String(Date.now()));
     $('title').value = ''; $('desc').value = ''; $('file').value = '';
     $('title-ctr').textContent = '0/100'; $('desc-ctr').textContent = '0/1000';
     $('preview').style.display = 'none'; $('file-text').textContent = 'Attach image (optional)';
     imageData = null;
-    setStatus('Submitted! It will appear once it has been reviewed.', 'ok');
+    clearVideo(); setStatus('Submitted! Posts can take up to 3 days to be published after review.', 'ok');
   } catch (err) {
     console.error(err);
     setStatus('Submission failed. Try again.', 'err');
-  } finally { $('submit').disabled = false; }
+  } finally { $('submit').disabled = false; setVideoProgress(null); }
 });
 </script>
 </body>
