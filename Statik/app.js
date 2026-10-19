@@ -71,6 +71,16 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .post-card.text-only .title{font-size:32px;line-height:1.2}
 .post-card.text-only .desc{flex:0 1 auto;max-height:50vh;font-size:17px;line-height:1.55}
 .post-info .title,.post-info .desc,.comment .c-text{overflow-wrap:anywhere}
+.chip{position:relative;display:inline-flex;align-items:center;cursor:pointer;user-select:none;flex-shrink:0}
+.chip input{position:absolute;opacity:0;width:0;height:0;pointer-events:none}
+.chip>span,button.chip{padding:8px 14px;border-radius:999px;border:1px solid var(--border);background:#1f1f1f;color:var(--text-dim);font-family:inherit;font-size:13px;font-weight:600;line-height:1;white-space:nowrap;transition:background .15s,border-color .15s,color .15s}
+.chip:hover>span,button.chip:hover{border-color:var(--accent);color:var(--text)}
+.chip input:checked+span,button.chip.on{background:var(--accent);border-color:var(--accent);color:#06172b}
+.chip input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+.sort-select{appearance:none;-webkit-appearance:none;padding:8px 32px 8px 14px;border-radius:999px;font-weight:600;line-height:1;background:#1f1f1f url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%239a9a9a' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 13px center}
+.sort-select:hover{border-color:var(--accent)}
+.post-media video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;z-index:1;background:#000}
+.submit-note{background:rgba(77,163,255,.12);border:1px solid var(--accent);color:#cfe6ff;border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.4}
 @media (max-width:1200px) and (min-width:901px){.post-stage{padding:24px 20px 24px 70px}.post-card{gap:18px}.post-media{flex-basis:55%}}
 @media (max-width:900px){
 .topbar{padding:8px 10px;gap:8px}
@@ -92,6 +102,153 @@ const syncTopbar = () => document.documentElement.style.setProperty('--topbar-h'
 syncTopbar();
 if (window.ResizeObserver) new ResizeObserver(syncTopbar).observe(topbarEl); else window.addEventListener('resize', syncTopbar);
 
+// ===== Type filters (Video / Image), mute, nicer toggles =====
+// Video is on by default, Image is off. Both off = show everything (including text-only posts).
+function makeChip(id, label, checked) {
+  const l = document.createElement('label'), i = document.createElement('input'), t = document.createElement('span');
+  l.className = 'chip'; i.type = 'checkbox'; i.id = id; i.checked = checked; t.textContent = label;
+  l.append(i, t);
+  return { label: l, input: i };
+}
+const vChip = makeChip('filter-video', '🎬 Video', true);
+const iChip = makeChip('filter-image', '🖼️ Image', false);
+const filterVideoEl = vChip.input, filterImageEl = iChip.input;
+const skipLabel = skipViewedCheckbox.closest('label');
+const skipText = document.createElement('span');
+skipText.textContent = 'Skip viewed';
+skipLabel.className = 'chip';
+skipLabel.textContent = '';
+skipLabel.append(skipViewedCheckbox, skipText);
+sortSelect.after(vChip.label, iChip.label);
+
+const typeOk = (p) => {
+  const wv = filterVideoEl.checked, wi = filterImageEl.checked;
+  if (!wv && !wi) return true;
+  return (wv && !!p.hasVideo) || (wi && !!(p.hasImage || p.imageData));
+};
+// Auto-fallback: if there are no videos at all, also show images. It waits until posts have loaded
+// plus a grace period (re-checked on every update), and never fires once the visitor has touched a filter.
+const GRACE_MS = 3000;
+let postsLoaded = false, fallbackPending = false, fallbackTimer = null, filtersTouched = false;
+const noVideosYet = () => postsLoaded && allPosts.length > 0 && !allPosts.some((p) => p.hasVideo);
+function cancelFallback() { clearTimeout(fallbackTimer); fallbackPending = false; }
+function checkFallback() {
+  clearTimeout(fallbackTimer);
+  const armed = !filtersTouched && filterVideoEl.checked && !filterImageEl.checked;
+  if (!armed || !noVideosYet()) { fallbackPending = false; return; }
+  fallbackPending = true;
+  fallbackTimer = setTimeout(() => {
+    fallbackPending = false;
+    if (filtersTouched || !noVideosYet() || filterImageEl.checked) { renderCurrentPost(); return; }
+    filterImageEl.checked = true;
+    showToast('No videos yet, so images are showing too.');
+    rebuildVisiblePosts({ resetIndex: true, forceReshuffle: true });
+  }, GRACE_MS);
+}
+const onTypeFilter = () => { filtersTouched = true; cancelFallback(); rebuildVisiblePosts({ resetIndex: true, forceReshuffle: true }); };
+filterVideoEl.addEventListener('change', onTypeFilter);
+filterImageEl.addEventListener('change', onTypeFilter);
+
+const typeState = document.createElement('div');
+typeState.className = 'empty-state hidden';
+typeState.innerHTML = '<div class="state-icon">◌</div><p></p>';
+emptyState.after(typeState);
+
+// Mute: every visit starts muted, nothing is remembered.
+let isMuted = true;
+const muteBtn = document.createElement('button');
+muteBtn.type = 'button'; muteBtn.id = 'mute-btn'; muteBtn.className = 'chip';
+function setMuted(m, apply = true) {
+  isMuted = m;
+  muteBtn.classList.toggle('on', m);
+  muteBtn.textContent = m ? '🔇 Muted' : '🔊 Sound on';
+  muteBtn.setAttribute('aria-pressed', String(m));
+  if (apply) { const v = postStage.querySelector('video'); if (v) v.muted = m; }
+}
+setMuted(true, false);
+muteBtn.addEventListener('click', () => setMuted(!isMuted));
+skipLabel.after(muteBtn);
+
+// Videos live in the database as base64 chunks (videos/<postId>); rebuild them into a playable file.
+const videoCache = new Map();
+let videoTimer = null;
+
+// ===== Preloading: fetch the next few posts quietly so they open instantly =====
+const PRELOAD_VIDEOS = 2, PRELOAD_IMAGES = 4, PRELOAD_WINDOW = 5; // window matches the shuffle's 5-post cycle
+const videoInflight = new Map(), imageInflight = new Map();
+let preloadToken = 0;
+const warmImage = (d) => { if (d) { const im = new Image(); im.src = d; } };
+const saveDataOn = () => !!(navigator.connection && navigator.connection.saveData);
+// Drop the oldest cached items, but never the current post or the ones about to be shown.
+function trimCache(cache, max, onDrop) {
+  const keep = new Set(visiblePosts.slice(currentIndex, currentIndex + PRELOAD_WINDOW + 1).map((p) => p.id));
+  for (const k of cache.keys()) {
+    if (cache.size <= max) break;
+    if (keep.has(k)) continue;
+    if (onDrop) onDrop(cache.get(k));
+    cache.delete(k);
+  }
+}
+// Runs only after the current post has finished loading, one download at a time, and stops if you move on.
+async function preloadAhead() {
+  const token = preloadToken;
+  if (saveDataOn()) return;
+  const jobs = [];
+  let v = 0, i = 0;
+  visiblePosts.slice(currentIndex + 1, currentIndex + 1 + PRELOAD_WINDOW).forEach((p) => {
+    if (p.hasVideo) { if (v++ < PRELOAD_VIDEOS) jobs.push(() => getVideoUrl(p.id)); }
+    else if (p.hasImage || p.imageData) { if (i++ < PRELOAD_IMAGES) jobs.push(() => getImage(p).then(warmImage)); }
+  });
+  for (const job of jobs) {
+    if (token !== preloadToken) return;
+    try { await job(); } catch (e) {}
+  }
+}
+function getVideoUrl(id) {
+  if (videoCache.has(id)) return Promise.resolve(videoCache.get(id));
+  if (videoInflight.has(id)) return videoInflight.get(id);
+  const pr = db.ref('videos/' + id).once('value').then((snap) => {
+    const v = snap.val();
+    if (!v || !v.chunks) throw new Error('Video not found');
+    const parts = [];
+    for (let i = 0; i < v.n; i++) {
+      const c = v.chunks[i];
+      if (typeof c !== 'string') throw new Error('Video is incomplete');
+      const bin = atob(c), arr = new Uint8Array(bin.length);
+      for (let j = 0; j < bin.length; j++) arr[j] = bin.charCodeAt(j);
+      parts.push(arr);
+    }
+    const url = URL.createObjectURL(new Blob(parts, { type: v.mime || 'video/webm' }));
+    videoCache.set(id, url);
+    trimCache(videoCache, 6, (u) => URL.revokeObjectURL(u));
+    return url;
+  });
+  videoInflight.set(id, pr);
+  const done = () => videoInflight.delete(id);
+  pr.then(done, done);
+  return pr;
+}
+function showVideo(post, media) {
+  const msg = media.querySelector('.no-image-text');
+  media.classList.add('no-image');
+  msg.textContent = 'Loading video…';
+  // Tiny delay so flicking quickly past a post doesn't download its whole video.
+  videoTimer = setTimeout(() => {
+    getVideoUrl(post.id).then((url) => {
+      if (currentId !== post.id) return;
+      const v = document.createElement('video');
+      v.controls = true; v.loop = true; v.autoplay = true; v.playsInline = true;
+      v.muted = isMuted; v.src = url;
+      v.addEventListener('volumechange', () => { if (v.muted !== isMuted) setMuted(v.muted, false); });
+      media.textContent = '';
+      media.append(v);
+      preloadAhead();
+      const pr = v.play();
+      if (pr && pr.catch) pr.catch(() => { v.muted = true; setMuted(true, false); v.play().catch(() => {}); });
+    }).catch(() => { if (currentId === post.id) msg.textContent = 'Could not load this video.'; });
+  }, videoCache.has(post.id) ? 0 : 400);
+}
+
 const newPostEl = $('new-post-btn');
 // New Post opens the submit form in an overlay on this same page: submit.html is fetched
 // from GitHub (same trick as the loader) and shown in an iframe, so no new tab or hosting needed.
@@ -107,8 +264,14 @@ function openSubmitWindow(e) {
   close.setAttribute('aria-label', 'Close');
   close.style.cssText = 'position:fixed;top:14px;right:18px;z-index:151;width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;font-size:18px;cursor:pointer';
   const frame = document.createElement('iframe');
-  frame.style.cssText = 'width:min(520px,100%);height:min(92vh,760px);border:0;border-radius:12px;background:#0e0e0e';
-  ov.append(frame, close);
+  frame.style.cssText = 'width:100%;height:min(82vh,700px);border:0;border-radius:12px;background:#0e0e0e';
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'width:min(520px,100%);display:flex;flex-direction:column;gap:10px';
+  const note = document.createElement('div');
+  note.className = 'submit-note';
+  note.textContent = 'ℹ️ Heads up: posts are reviewed by admins and can take up to 3 days to be published.';
+  wrap.append(note, frame);
+  ov.append(wrap, close);
   document.body.appendChild(ov);
   const shut = () => ov.remove();
   close.onclick = shut;
@@ -185,6 +348,8 @@ function startPosts() {
     allPosts = Object.keys(val).map(id => ({ id, ...val[id] })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     loadingState.classList.add('hidden');
     totalCountEl.textContent = allPosts.length === 1 ? '1 post' : `${allPosts.length} posts`;
+    postsLoaded = true;
+    checkFallback();
     rebuildVisiblePosts();
   }, (err) => {
     console.error(err);
@@ -201,6 +366,7 @@ function rebuildVisiblePosts({ resetIndex = false, forceReshuffle = false } = {}
   // The post you're looking at is never filtered out from under you.
   let base = allPosts.filter(p =>
     (!q || (p.title || '').toLowerCase().includes(q)) &&
+    typeOk(p) &&
     (!skip || !viewed[p.id] || p.id === currentId));
 
   const mode = sortSelect.value;
@@ -301,22 +467,43 @@ function getImage(post) {
   if (post.imageData) return Promise.resolve(post.imageData); // old-style posts keep the image inline
   const id = post.id;
   if (imageCache.has(id)) return Promise.resolve(imageCache.get(id));
-  return db.ref(`images/${id}`).once('value').then((s) => {
+  if (imageInflight.has(id)) return imageInflight.get(id);
+  const pr = db.ref(`images/${id}`).once('value').then((s) => {
     imageCache.set(id, s.val());
-    if (imageCache.size > 8) imageCache.delete(imageCache.keys().next().value); // keep memory bounded
+    trimCache(imageCache, 12); // keep memory bounded
     return s.val();
   }).catch((err) => { console.warn('Could not load image for', id, err); return null; });
+  imageInflight.set(id, pr);
+  const done = () => imageInflight.delete(id);
+  pr.then(done, done);
+  return pr;
 }
 
 function renderCurrentPost() {
   detachLive();
+  clearTimeout(videoTimer);
+  preloadToken++;
   const old = postStage.querySelector('.post-card');
   if (old) old.remove();
   endPage.classList.add('hidden');
   emptyState.classList.add('hidden');
+  typeState.classList.add('hidden');
+  if (postsLoaded && !fallbackPending) loadingState.classList.add('hidden');
 
   if (visiblePosts.length === 0) {
-    (allPosts.length === 0 ? emptyState : endPage).classList.remove('hidden');
+    const typeBlocked = allPosts.length > 0 && !allPosts.some(typeOk);
+    if (typeBlocked) {
+      const wv = filterVideoEl.checked, wi = filterImageEl.checked;
+      typeState.querySelector('p').textContent = wv && !wi ? 'No video posts yet. Turn on Image to see image posts.'
+        : wi && !wv ? 'No image posts yet. Turn on Video to see video posts.'
+        : 'No video or image posts yet. Turn both off to see text posts.';
+    }
+    if (typeBlocked && fallbackPending) {
+      loadingState.querySelector('p').textContent = 'Looking for videos…';
+      loadingState.classList.remove('hidden');
+    } else {
+      (allPosts.length === 0 ? emptyState : typeBlocked ? typeState : endPage).classList.remove('hidden');
+    }
     postCounter.textContent = '';
     prevBtn.disabled = nextBtn.disabled = true;
     commentsList.innerHTML = '';
@@ -326,15 +513,16 @@ function renderCurrentPost() {
 
   const post = visiblePosts[currentIndex];
   const hasImg = !!(post.hasImage || post.imageData);
+  const hasVid = !!post.hasVideo;
   markViewed(post.id);
   postCounter.textContent = `${currentIndex + 1} / ${visiblePosts.length}`;
   prevBtn.disabled = currentIndex === 0;
   nextBtn.disabled = currentIndex === visiblePosts.length - 1;
 
   const card = document.createElement('div');
-  card.className = `post-card${hasImg ? '' : ' text-only'}`;
+  card.className = `post-card${(hasImg || hasVid) ? '' : ' text-only'}`;
   card.innerHTML = `
-    ${hasImg ? '<div class="post-media"><div class="no-image-text">Loading…</div></div>' : ''}
+    ${(hasImg || hasVid) ? '<div class="post-media"><div class="no-image-text">Loading…</div></div>' : ''}
     <div class="post-info">
       <div class="author">${escapeHtml(post.authorName || 'Anonymous')}</div>
       <div class="title">${escapeHtml(post.title)}</div>
@@ -347,11 +535,12 @@ function renderCurrentPost() {
     </div>`;
   postStage.appendChild(card);
 
-  if (hasImg) {
+  if (hasVid) showVideo(post, card.querySelector('.post-media'));
+  if (hasImg && !hasVid) {
     const media = card.querySelector('.post-media');
     getImage(post).then((data) => {
       if (currentId !== post.id) return;
-      if (!data) { media.remove(); card.classList.add('text-only'); return; }
+      if (!data) { media.remove(); card.classList.add('text-only'); preloadAhead(); return; }
       // Built via DOM properties (never innerHTML) so image data can't inject markup.
       const bg = new Image(), fg = new Image(), btn = document.createElement('button');
       bg.className = 'bg'; fg.className = 'fg'; bg.alt = fg.alt = '';
@@ -360,9 +549,8 @@ function renderCurrentPost() {
       media.textContent = '';
       media.append(bg, fg, btn);
       media.onclick = () => openFullscreen(data);
+      preloadAhead();
     });
-    const nxt = visiblePosts[currentIndex + 1];
-    if (nxt && (nxt.hasImage || nxt.imageData)) getImage(nxt); // prefetch for snappy navigation
   }
 
   card.querySelector('#post-like-btn').addEventListener('click', () => {
@@ -380,6 +568,7 @@ function renderCurrentPost() {
   });
 
   attachLive(post.id);
+  if (!hasImg && !hasVid) preloadAhead();
 }
 
 // ===== Live per-post data: likes, comments, replies, comment likes =====
