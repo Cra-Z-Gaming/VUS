@@ -192,7 +192,7 @@ function trimCache(cache, max, onDrop) {
 // Runs only after the current post has finished loading, one download at a time, and stops if you move on.
 async function preloadAhead() {
   const token = preloadToken;
-  if (saveDataOn()) return;
+  if (saveDataOn() || bgPosting) return;
   const jobs = [];
   let v = 0, i = 0;
   visiblePosts.slice(currentIndex + 1, currentIndex + 1 + PRELOAD_WINDOW).forEach((p) => {
@@ -200,7 +200,7 @@ async function preloadAhead() {
     else if (p.hasImage || p.imageData) { if (i++ < PRELOAD_IMAGES) jobs.push(() => getImage(p).then(warmImage)); }
   });
   for (const job of jobs) {
-    if (token !== preloadToken) return;
+    if (token !== preloadToken || bgPosting) return;
     try { await job(); } catch (e) {}
   }
 }
@@ -249,12 +249,29 @@ function showVideo(post, media) {
   }, videoCache.has(post.id) ? 0 : 400);
 }
 
+// ===== Background posting: the form keeps working while hidden, a small pill shows progress =====
+// Browsers can't split bandwidth 50/50, so instead we pause our own preloading while a post is uploading.
+let bgPosting = false, pillEl = null;
+function showPill(label, frac) {
+  if (!pillEl) {
+    pillEl = document.createElement('div');
+    pillEl.style.cssText = 'position:fixed;left:16px;bottom:16px;z-index:250;width:min(300px,calc(100vw - 32px));background:#161616;border:1px solid var(--border);border-radius:12px;padding:10px 14px;font-size:13px;color:var(--text);box-shadow:0 8px 24px rgba(0,0,0,.5)';
+    pillEl.innerHTML = '<div></div><div style="height:6px;border-radius:99px;background:#2a2a2a;overflow:hidden;margin-top:8px"><i style="display:block;height:100%;width:0;background:var(--accent);transition:width .2s"></i></div>';
+    document.body.appendChild(pillEl);
+  }
+  pillEl.firstChild.textContent = '⬆ ' + (label || 'Posting…');
+  pillEl.querySelector('i').style.width = Math.round(Math.max(0, Math.min(1, frac || 0)) * 100) + '%';
+}
+function hidePill() { if (pillEl) { pillEl.remove(); pillEl = null; } }
+window.addEventListener('beforeunload', (e) => { if (bgPosting) { e.preventDefault(); e.returnValue = ''; } });
+
 const newPostEl = $('new-post-btn');
 // New Post opens the submit form in an overlay on this same page: submit.html is fetched
 // from GitHub (same trick as the loader) and shown in an iframe, so no new tab or hosting needed.
 const SUBMIT_SRC = 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Statik/submit.html';
 function openSubmitWindow(e) {
   if (e) e.preventDefault();
+  if (bgPosting) { showToast('Still posting your last video, one moment.'); return; }
   if (document.getElementById('submit-overlay')) return;
   const ov = document.createElement('div');
   ov.id = 'submit-overlay';
@@ -273,7 +290,30 @@ function openSubmitWindow(e) {
   wrap.append(note, frame);
   ov.append(wrap, close);
   document.body.appendChild(ov);
-  const shut = () => ov.remove();
+  const ovCss = ov.style.cssText;
+  let formBusy = false;
+  const forceShut = () => { window.removeEventListener('message', onMsg); hidePill(); bgPosting = false; ov.remove(); };
+  const shut = () => {
+    if (formBusy && !bgPosting && !confirm('Your video has not been posted yet. Close and lose it?')) return;
+    forceShut();
+  };
+  const onMsg = (ev) => {
+    const d = ev.data;
+    if (ev.source !== frame.contentWindow || !d || typeof d !== 'object') return;
+    if (d.type === 'statik-busy') formBusy = !!d.busy;
+    else if (d.type === 'statik-background') {
+      bgPosting = true; ov.id = 'submit-overlay-bg';
+      ov.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;z-index:-1';
+      close.style.display = 'none';
+      showPill('Getting your video ready…', 0);
+    } else if (d.type === 'statik-progress' && bgPosting) showPill(d.label, d.frac);
+    else if (d.type === 'statik-done') { forceShut(); showToast('Submitted! Posts can take up to 3 days to be published after review.'); }
+    else if (d.type === 'statik-error') {
+      bgPosting = false; hidePill(); ov.id = 'submit-overlay'; ov.style.cssText = ovCss; close.style.display = '';
+      showToast(d.message || 'Posting failed. Your video is still in the form, try again.');
+    }
+  };
+  window.addEventListener('message', onMsg);
   close.onclick = shut;
   ov.addEventListener('click', (ev) => { if (ev.target === ov) shut(); });
   fetch(SUBMIT_SRC, { cache: 'no-store' })
