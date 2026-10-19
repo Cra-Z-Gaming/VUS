@@ -104,7 +104,7 @@ document.addEventListener('paste', (e) => {
 
 /* ---------- video: re-encoded in the browser, stored as base64 chunks in the database ---------- */
 const VIDEO_MAX_SEC = 60, VIDEO_TARGET = 2200000, VIDEO_MAX_BYTES = 2800000, CHUNK = 240000;
-let pendingVideo = null, encodePromise = null, localUrl = null, videoToken = 0, bg = false, lastLabel = '';
+let pendingVideo = null, encodePromise = null, localUrl = null, videoToken = 0, bg = false, lastLabel = '', videoId = null, uploaded = false;
 // Messages to the page that hosts this form (it shows a small progress pill while we post in the background).
 const tell = (msg) => { try { parent.postMessage(msg, '*'); } catch (e) {} };
 function setVideoProgress(label, frac) {
@@ -114,8 +114,11 @@ function setVideoProgress(label, frac) {
   setStatus(label);
   if (bg && label !== lastLabel) { lastLabel = label; tell({ type: 'statik-progress', label, frac }); }
 }
-function clearVideo() {
+function clearVideo(keep) {
+  const oldId = videoId;
   videoToken++;
+  if (oldId && !keep) db.ref('submissionVideos/' + oldId).remove().catch(() => {});
+  videoId = null; uploaded = false;
   if (localUrl) URL.revokeObjectURL(localUrl);
   localUrl = null; pendingVideo = null; encodePromise = null;
   $('vpreview').pause(); $('vpreview').removeAttribute('src'); $('vpreview').style.display = 'none';
@@ -140,62 +143,74 @@ function loadVideoEl(file) {
     v.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Could not read that video')); };
   });
 }
-function encodeAttempt(file, meta, scale, attempt, onProgress) {
+function encodeAttempt(file, meta, scale, attempt, onProgress, noAudio) {
   return new Promise((resolve, reject) => {
     loadVideoEl(file).then((m) => {
       const v = m.v, chunks = [];
-      let actx = null, finished = false, timer = null, rec = null, drawTimer = null;
+      let actx = null, finished = false, aborted = null, timer = null, watch = null, rec = null, drawTimer = null;
+      // iPhones/iPads only decode video that is really in the page, so keep a tiny invisible copy attached.
+      v.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;opacity:.01;pointer-events:none';
+      document.body.appendChild(v);
       const canvas = document.createElement('canvas'); canvas.width = meta.w; canvas.height = meta.h;
       const ctx = canvas.getContext('2d'), stream = canvas.captureStream(24);
-      const cleanup = () => { clearTimeout(timer); clearInterval(drawTimer); try { if (actx) actx.close(); } catch (e) {} URL.revokeObjectURL(m.url); };
-      try {
-        const AC = window.AudioContext || window.webkitAudioContext;
-        actx = new AC();
-        const src = actx.createMediaElementSource(v), dst = actx.createMediaStreamDestination();
-        src.connect(dst);
-        dst.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
-        if (actx.state === 'suspended') actx.resume();
-      } catch (e) { actx = null; }
+      const cleanup = () => { clearTimeout(timer); clearTimeout(watch); clearInterval(drawTimer); try { if (actx) actx.close(); } catch (e) {} v.remove(); URL.revokeObjectURL(m.url); };
+      if (noAudio) v.muted = true;
+      else {
+        try {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          actx = new AC();
+          const src = actx.createMediaElementSource(v), dst = actx.createMediaStreamDestination();
+          src.connect(dst);
+          dst.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
+          if (actx.state === 'suspended') actx.resume();
+        } catch (e) { actx = null; }
+      }
       const vbps = Math.max(60000, Math.min(800000, Math.floor((VIDEO_TARGET * 8 / meta.dur - 40000) * scale)));
       const mime = pickMime(), opts = { videoBitsPerSecond: vbps, audioBitsPerSecond: 32000 };
       if (mime) opts.mimeType = mime;
-      try { rec = new MediaRecorder(stream, opts); } catch (e) { cleanup(); reject(new Error('Could not start video compression')); return; }
+      try { rec = new MediaRecorder(stream, opts); } catch (e) { cleanup(); reject(new Error('BLOCKED')); return; }
       rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
       rec.onstop = () => {
         cleanup();
+        if (aborted) { reject(new Error(aborted)); return; }
         const type = (rec.mimeType || mime || 'video/webm').split(';')[0];
         const blob = new Blob(chunks, { type });
-        if (!blob.size) { reject(new Error('Video compression failed')); return; }
+        if (!blob.size) { reject(new Error('BLOCKED')); return; }
         if (blob.size > VIDEO_MAX_BYTES) {
-          if (attempt < 2) { resolve(encodeAttempt(file, meta, scale * (VIDEO_TARGET / blob.size) * 0.8, attempt + 1, onProgress)); return; }
+          if (attempt < 2) { resolve(encodeAttempt(file, meta, scale * (VIDEO_TARGET / blob.size) * 0.8, attempt + 1, onProgress, noAudio)); return; }
           reject(new Error('That clip is too detailed to fit. Try a shorter or calmer one.')); return;
         }
         resolve({ blob, mime: type, dur: meta.dur });
       };
       const stopRec = () => { try { if (rec.state !== 'inactive') rec.stop(); } catch (e) {} };
       const finish = () => { if (finished) return; finished = true; setTimeout(stopRec, 150); };
+      const abort = (why) => {
+        if (finished) return;
+        finished = true; aborted = why;
+        if (rec.state === 'inactive') { cleanup(); reject(new Error(why)); } else stopRec();
+      };
       const frame = () => {
         if (finished) { clearInterval(drawTimer); return; }
         try { ctx.drawImage(v, 0, 0, meta.w, meta.h); } catch (e) {}
         onProgress(Math.min(1, v.currentTime / meta.dur), attempt);
       };
       v.onended = finish;
-      v.onerror = () => { if (!finished) { finished = true; stopRec(); } };
+      v.onerror = () => abort('BLOCKED');
       timer = setTimeout(finish, (meta.dur + 10) * 1000);
       rec.start(1000);
-      const go = () => { drawTimer = setInterval(frame, 42); };
+      // If the video never starts moving (common on iPhones), give up on this method instead of sitting at 0%.
+      const go = () => {
+        drawTimer = setInterval(frame, 42);
+        watch = setTimeout(() => { if (!finished && v.currentTime < 0.05) abort('STALL'); }, noAudio ? 5000 : 3000);
+      };
       const p = v.play();
-      if (p && p.then) {
-        p.then(go).catch(() => {
-          v.muted = true;
-          v.play().then(go).catch(() => { finished = true; stopRec(); cleanup(); reject(new Error('Your browser blocked video processing. Try again.')); });
-        });
-      } else go();
+      if (p && p.then) p.then(go).catch(() => { v.muted = true; v.play().then(go).catch(() => abort('BLOCKED')); });
+      else go();
     }).catch(reject);
   });
 }
 async function processVideo(file, onProgress) {
-  if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) throw new Error("This browser can't compress videos. Try Chrome, Edge or Firefox.");
+  if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) throw new Error("This browser can't compress videos. Try Chrome on a computer or Chromebook.");
   if (file.size > 400 * 1024 * 1024) throw new Error('That video file is too large');
   const m = await loadVideoEl(file), v = m.v, dur = v.duration;
   URL.revokeObjectURL(m.url);
@@ -203,40 +218,64 @@ async function processVideo(file, onProgress) {
   if (dur > VIDEO_MAX_SEC + 0.5) throw new Error('Videos can be up to 1 minute (this one is ' + Math.round(dur) + 's)');
   const vw = v.videoWidth || 640, vh = v.videoHeight || 360, sc = Math.min(1, 480 / Math.max(vw, vh));
   const meta = { dur, w: Math.max(2, Math.round(vw * sc / 2) * 2), h: Math.max(2, Math.round(vh * sc / 2) * 2) };
-  return encodeAttempt(file, meta, 1, 1, onProgress);
+  let silent = false;
+  const cb = (fr, at) => onProgress(fr, at, silent);
+  try { return await encodeAttempt(file, meta, 1, 1, cb, false); }
+  catch (e) { if (e.message !== 'STALL' && e.message !== 'BLOCKED') throw e; }
+  silent = true; // second try: no sound capture (works on more phones)
+  try { const r = await encodeAttempt(file, meta, 1, 1, cb, true); r.silent = true; return r; }
+  catch (e) { if (e.message !== 'STALL' && e.message !== 'BLOCKED') throw e; }
+  // last resort: a small clip can be sent as-is
+  if (file.size <= VIDEO_MAX_BYTES) return { blob: file, mime: file.type === 'video/webm' ? 'video/webm' : 'video/mp4', dur, passthrough: true };
+  throw new Error("This device couldn't process that video. Try a shorter clip (under about 2 MB) or post from a computer or Chromebook.");
 }
-async function uploadVideo(id, uid, v) {
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('The upload timed out. Check your connection and try again.')), ms))]);
+async function uploadVideo(id, uid, v, cancelled) {
   const d = await readAsDataURL(v.blob), b64 = d.slice(d.indexOf(',') + 1), n = Math.ceil(b64.length / CHUNK);
   if (n > 16) throw new Error('Video is too big to store');
   const base = db.ref('submissionVideos/' + id);
   try {
-    await base.set({ owner: uid, mime: v.mime, n, dur: Math.round(v.dur) });
+    setVideoProgress('Uploading video… 0%', 0);
+    await withTimeout(base.set({ owner: uid, mime: v.mime, n, dur: Math.round(v.dur) }), 30000);
     for (let k = 0; k < n; k++) {
-      await base.child('chunks/' + k).set(b64.slice(k * CHUNK, (k + 1) * CHUNK));
+      if (cancelled()) throw new Error('cancelled');
+      await withTimeout(base.child('chunks/' + k).set(b64.slice(k * CHUNK, (k + 1) * CHUNK)), 30000);
       setVideoProgress('Uploading video… ' + Math.round(((k + 1) / n) * 100) + '%', (k + 1) / n);
     }
   } catch (e) { base.remove().catch(() => {}); throw e; }
 }
+// Picking a video starts everything straight away: show it, prepare it, upload it.
 $('vfile').addEventListener('change', () => {
   const f = $('vfile').files[0]; $('vfile').value = '';
   if (!f) return;
   clearVideo(); imageData = null; $('preview').style.display = 'none'; $('file-text').textContent = 'Attach image (optional)';
-  const my = videoToken;
-  // Show the picked video right away (the original file) so people can see it worked.
+  const my = videoToken, id = db.ref('submissions').push().key;
+  videoId = id;
   localUrl = URL.createObjectURL(f);
   $('vpreview').src = localUrl; $('vpreview').style.display = 'block';
   $('vfile-text').textContent = '✓ Picked: ' + f.name;
   $('submit').textContent = 'Post (keeps going in background)';
   tell({ type: 'statik-busy', busy: true });
   setVideoProgress('Getting your video ready… 0%', 0);
-  encodePromise = processVideo(f, (fr, at) => {
-    if (my === videoToken) setVideoProgress((at > 1 ? 'Re-compressing… ' : 'Getting your video ready… ') + Math.round(fr * 100) + '% · keep this tab open', fr);
-  }).then((r) => {
-    if (my === videoToken) { pendingVideo = r; setVideoProgress(null); if (!bg) setStatus('Video ready ✓ Add a title and post.'); }
-    return r;
-  });
+  encodePromise = (async () => {
+    const r = await processVideo(f, (fr, at, silent) => {
+      if (my === videoToken) setVideoProgress((silent ? 'Trying again without sound… ' : at > 1 ? 'Re-compressing… ' : 'Getting your video ready… ') + Math.round(fr * 100) + '% · keep this tab open', fr);
+    });
+    if (my !== videoToken) throw new Error('cancelled');
+    pendingVideo = r;
+    const user = await ready;
+    await uploadVideo(id, user.uid, r, () => my !== videoToken);
+    if (my !== videoToken) throw new Error('cancelled');
+    uploaded = true;
+    setVideoProgress(null);
+    $('submit').textContent = 'Submit for review';
+    if (!bg) setStatus('✓ Video uploaded' + (r.silent ? ' (without sound: this device can\'t capture audio)' : '') + '. Add a title and press Submit.', 'ok');
+    return id;
+  })();
   encodePromise.catch((e) => { if (my !== videoToken || bg) return; setStatus(e.message, 'err'); clearVideo(); });
 });
+// If the form is closed with an uploaded-but-unposted video, try to clean it up.
+window.addEventListener('pagehide', () => { if (videoId) db.ref('submissionVideos/' + videoId).remove().catch(() => {}); });
 
 $('submit').addEventListener('click', async () => {
   const title = $('title').value.trim(), description = $('desc').value.trim();
@@ -247,30 +286,28 @@ $('submit').addEventListener('click', async () => {
   const withVideo = !!encodePromise;
   $('submit').disabled = true;
   setStatus('Submitting…');
-  if (withVideo) { bg = true; lastLabel = ''; tell({ type: 'statik-background' }); } // form hides, posting continues
+  if (withVideo && !uploaded) { bg = true; lastLabel = ''; tell({ type: 'statik-background' }); } // form hides, video keeps going
   let ref = null;
   try {
     const user = await ready;
     const data = { title, description, authorUid: user.uid, createdAt: firebase.database.ServerValue.TIMESTAMP };
     if (imageData) data.imageData = imageData;
-    ref = db.ref('submissions').push();
     if (withVideo) {
-      const v = await encodePromise;           // waits here if the video is still being prepared
+      const vid = await encodePromise;         // already finished if the upload completed, otherwise we wait here
       data.hasVideo = true;
-      await uploadVideo(ref.key, user.uid, v);
-    }
+      ref = db.ref('submissions/' + vid);      // same id as the video so the two stay linked
+    } else ref = db.ref('submissions').push();
     await ref.set(data);
     localStorage.setItem('statik_last_submit', String(Date.now()));
     $('title').value = ''; $('desc').value = ''; $('file').value = '';
     $('title-ctr').textContent = '0/100'; $('desc-ctr').textContent = '0/1000';
     $('preview').style.display = 'none'; $('file-text').textContent = 'Attach image (optional)';
-    imageData = null; clearVideo();
-    setStatus('Submitted! Posts can take up to 3 days to be published after review.', 'ok');
+    imageData = null; clearVideo(true);
+    setStatus('✅ Submitted! Your post is now waiting for admin review. This can take up to 3 days, and you don\'t need to do anything else.', 'ok');
     if (bg) tell({ type: 'statik-done' });
   } catch (err) {
     console.error(err);
-    if (ref && withVideo) db.ref('submissionVideos/' + ref.key).remove().catch(() => {});
-    if (withVideo && !pendingVideo) clearVideo();   // the video itself failed to compress
+    if (withVideo && !uploaded) clearVideo();   // the video itself failed, so pick it again
     const msg = err && err.code === 'PERMISSION_DENIED'
       ? 'The database rejected the upload. The latest database rules may not be published yet.'
       : (err && err.message) || 'Submission failed. Try again.';
