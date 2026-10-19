@@ -104,18 +104,25 @@ document.addEventListener('paste', (e) => {
 
 /* ---------- video: re-encoded in the browser, stored as base64 chunks in the database ---------- */
 const VIDEO_MAX_SEC = 60, VIDEO_TARGET = 2200000, VIDEO_MAX_BYTES = 2800000, CHUNK = 240000;
-let pendingVideo = null, busyEncode = false;
+let pendingVideo = null, encodePromise = null, localUrl = null, videoToken = 0, bg = false, lastLabel = '';
+// Messages to the page that hosts this form (it shows a small progress pill while we post in the background).
+const tell = (msg) => { try { parent.postMessage(msg, '*'); } catch (e) {} };
 function setVideoProgress(label, frac) {
   const bar = $('vbar');
   if (label == null) { bar.style.display = 'none'; return; }
   bar.style.display = 'block'; bar.firstElementChild.style.width = Math.round(Math.max(0, Math.min(1, frac || 0)) * 100) + '%';
   setStatus(label);
+  if (bg && label !== lastLabel) { lastLabel = label; tell({ type: 'statik-progress', label, frac }); }
 }
 function clearVideo() {
-  if (pendingVideo && pendingVideo.url) URL.revokeObjectURL(pendingVideo.url);
-  pendingVideo = null;
+  videoToken++;
+  if (localUrl) URL.revokeObjectURL(localUrl);
+  localUrl = null; pendingVideo = null; encodePromise = null;
   $('vpreview').pause(); $('vpreview').removeAttribute('src'); $('vpreview').style.display = 'none';
   $('vfile-text').textContent = 'Attach video (optional, up to 1 minute)';
+  $('submit').textContent = 'Submit for review';
+  setVideoProgress(null);
+  tell({ type: 'statik-busy', busy: false });
 }
 const readAsDataURL = (blob) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error('Could not read file')); r.readAsDataURL(blob); });
 function pickMime() {
@@ -137,10 +144,10 @@ function encodeAttempt(file, meta, scale, attempt, onProgress) {
   return new Promise((resolve, reject) => {
     loadVideoEl(file).then((m) => {
       const v = m.v, chunks = [];
-      let actx = null, finished = false, timer = null, rec = null;
+      let actx = null, finished = false, timer = null, rec = null, drawTimer = null;
       const canvas = document.createElement('canvas'); canvas.width = meta.w; canvas.height = meta.h;
       const ctx = canvas.getContext('2d'), stream = canvas.captureStream(24);
-      const cleanup = () => { clearTimeout(timer); try { if (actx) actx.close(); } catch (e) {} URL.revokeObjectURL(m.url); };
+      const cleanup = () => { clearTimeout(timer); clearInterval(drawTimer); try { if (actx) actx.close(); } catch (e) {} URL.revokeObjectURL(m.url); };
       try {
         const AC = window.AudioContext || window.webkitAudioContext;
         actx = new AC();
@@ -168,16 +175,15 @@ function encodeAttempt(file, meta, scale, attempt, onProgress) {
       const stopRec = () => { try { if (rec.state !== 'inactive') rec.stop(); } catch (e) {} };
       const finish = () => { if (finished) return; finished = true; setTimeout(stopRec, 150); };
       const frame = () => {
-        if (finished) return;
+        if (finished) { clearInterval(drawTimer); return; }
         try { ctx.drawImage(v, 0, 0, meta.w, meta.h); } catch (e) {}
         onProgress(Math.min(1, v.currentTime / meta.dur), attempt);
-        requestAnimationFrame(frame);
       };
       v.onended = finish;
       v.onerror = () => { if (!finished) { finished = true; stopRec(); } };
       timer = setTimeout(finish, (meta.dur + 10) * 1000);
       rec.start(1000);
-      const go = () => requestAnimationFrame(frame);
+      const go = () => { drawTimer = setInterval(frame, 42); };
       const p = v.play();
       if (p && p.then) {
         p.then(go).catch(() => {
@@ -211,47 +217,66 @@ async function uploadVideo(id, uid, v) {
     }
   } catch (e) { base.remove().catch(() => {}); throw e; }
 }
-$('vfile').addEventListener('change', async () => {
+$('vfile').addEventListener('change', () => {
   const f = $('vfile').files[0]; $('vfile').value = '';
-  if (!f || busyEncode) return;
+  if (!f) return;
   clearVideo(); imageData = null; $('preview').style.display = 'none'; $('file-text').textContent = 'Attach image (optional)';
-  busyEncode = true; $('submit').disabled = true;
-  try {
-    setVideoProgress('Preparing video…', 0);
-    const r = await processVideo(f, (fr, at) => setVideoProgress((at > 1 ? 'Re-compressing… ' : 'Compressing video… ') + Math.round(fr * 100) + '% · keep this tab open', fr));
-    pendingVideo = r; r.url = URL.createObjectURL(r.blob);
-    $('vpreview').src = r.url; $('vpreview').style.display = 'block'; $('vfile-text').textContent = f.name;
-    setStatus('');
-  } catch (e) { setStatus(e.message, 'err'); }
-  setVideoProgress(null); busyEncode = false; $('submit').disabled = false;
+  const my = videoToken;
+  // Show the picked video right away (the original file) so people can see it worked.
+  localUrl = URL.createObjectURL(f);
+  $('vpreview').src = localUrl; $('vpreview').style.display = 'block';
+  $('vfile-text').textContent = '✓ Picked: ' + f.name;
+  $('submit').textContent = 'Post (keeps going in background)';
+  tell({ type: 'statik-busy', busy: true });
+  setVideoProgress('Getting your video ready… 0%', 0);
+  encodePromise = processVideo(f, (fr, at) => {
+    if (my === videoToken) setVideoProgress((at > 1 ? 'Re-compressing… ' : 'Getting your video ready… ') + Math.round(fr * 100) + '% · keep this tab open', fr);
+  }).then((r) => {
+    if (my === videoToken) { pendingVideo = r; setVideoProgress(null); if (!bg) setStatus('Video ready ✓ Add a title and post.'); }
+    return r;
+  });
+  encodePromise.catch((e) => { if (my !== videoToken || bg) return; setStatus(e.message, 'err'); clearVideo(); });
 });
 
 $('submit').addEventListener('click', async () => {
   const title = $('title').value.trim(), description = $('desc').value.trim();
   if (!title) return setStatus('Title is required.', 'err');
-  if (busyEncode) return setStatus('Still compressing your video…', 'err');
   const wait = Math.ceil((+localStorage.getItem('statik_last_submit') + COOLDOWN_MS - Date.now()) / 1000);
   if (wait > 0) return setStatus(`Please wait ${wait}s before submitting again.`, 'err');
 
+  const withVideo = !!encodePromise;
   $('submit').disabled = true;
   setStatus('Submitting…');
+  if (withVideo) { bg = true; lastLabel = ''; tell({ type: 'statik-background' }); } // form hides, posting continues
+  let ref = null;
   try {
     const user = await ready;
     const data = { title, description, authorUid: user.uid, createdAt: firebase.database.ServerValue.TIMESTAMP };
     if (imageData) data.imageData = imageData;
-    const ref = db.ref('submissions').push();
-    if (pendingVideo) { data.hasVideo = true; await uploadVideo(ref.key, user.uid, pendingVideo); }
-    try { await ref.set(data); } catch (e) { if (pendingVideo) db.ref('submissionVideos/' + ref.key).remove().catch(() => {}); throw e; }
+    ref = db.ref('submissions').push();
+    if (withVideo) {
+      const v = await encodePromise;           // waits here if the video is still being prepared
+      data.hasVideo = true;
+      await uploadVideo(ref.key, user.uid, v);
+    }
+    await ref.set(data);
     localStorage.setItem('statik_last_submit', String(Date.now()));
     $('title').value = ''; $('desc').value = ''; $('file').value = '';
     $('title-ctr').textContent = '0/100'; $('desc-ctr').textContent = '0/1000';
     $('preview').style.display = 'none'; $('file-text').textContent = 'Attach image (optional)';
-    imageData = null;
-    clearVideo(); setStatus('Submitted! Posts can take up to 3 days to be published after review.', 'ok');
+    imageData = null; clearVideo();
+    setStatus('Submitted! Posts can take up to 3 days to be published after review.', 'ok');
+    if (bg) tell({ type: 'statik-done' });
   } catch (err) {
     console.error(err);
-    setStatus('Submission failed. Try again.', 'err');
-  } finally { $('submit').disabled = false; setVideoProgress(null); }
+    if (ref && withVideo) db.ref('submissionVideos/' + ref.key).remove().catch(() => {});
+    if (withVideo && !pendingVideo) clearVideo();   // the video itself failed to compress
+    const msg = err && err.code === 'PERMISSION_DENIED'
+      ? 'The database rejected the upload. The latest database rules may not be published yet.'
+      : (err && err.message) || 'Submission failed. Try again.';
+    setStatus(msg, 'err');
+    if (bg) tell({ type: 'statik-error', message: msg });
+  } finally { bg = false; $('submit').disabled = false; setVideoProgress(null); }
 });
 </script>
 </body>
