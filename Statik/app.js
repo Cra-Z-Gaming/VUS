@@ -251,19 +251,23 @@ function showVideo(post, media) {
 
 // ===== Background posting: the form keeps working while hidden, a small pill shows progress =====
 // Browsers can't split bandwidth 50/50, so instead we pause our own preloading while a post is uploading.
-let bgPosting = false, pillEl = null;
+let bgPosting = false, pillEl = null, pillCancel = null;
 function showPill(label, frac, done) {
   if (!pillEl) {
     pillEl = document.createElement('div');
     pillEl.style.cssText = 'position:fixed;left:16px;bottom:16px;z-index:250;width:min(300px,calc(100vw - 32px));background:#161616;border:1px solid var(--border);border-radius:12px;padding:10px 14px;font-size:13px;color:var(--text);box-shadow:0 8px 24px rgba(0,0,0,.5)';
-    pillEl.innerHTML = '<div></div><div style="height:6px;border-radius:99px;background:#2a2a2a;overflow:hidden;margin-top:8px"><i style="display:block;height:100%;width:0;background:var(--accent);transition:width .2s"></i></div>';
+    pillEl.innerHTML = '<div style="display:flex;align-items:center;gap:10px"><span style="flex:1"></span><button type="button" style="background:#2a2a2a;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">Cancel</button></div><div style="height:6px;border-radius:99px;background:#2a2a2a;overflow:hidden;margin-top:8px"><i style="display:block;height:100%;width:0;background:var(--accent);transition:width .2s"></i></div>';
+    pillEl.querySelector('button').onclick = (e) => { e.stopPropagation(); if (pillCancel) pillCancel(); };
     document.body.appendChild(pillEl);
   }
   clearTimeout(pillEl._t);
   pillEl.style.borderColor = done ? '#4dff9a' : 'var(--border)';
-  pillEl.firstChild.textContent = (done ? '' : '⬆ ') + (label || 'Posting…');
-  if (done) { pillEl.style.cursor = 'pointer'; pillEl.onclick = hidePill; pillEl._t = setTimeout(hidePill, 12000); }
+  pillEl.style.cursor = done ? 'pointer' : '';
+  pillEl.onclick = done ? hidePill : null;
+  pillEl.querySelector('span').textContent = (done ? '' : '⬆ ') + (label || 'Posting…');
+  pillEl.querySelector('button').style.display = done ? 'none' : '';
   pillEl.querySelector('i').style.width = Math.round(Math.max(0, Math.min(1, frac || 0)) * 100) + '%';
+  if (done) pillEl._t = setTimeout(hidePill, 12000);
 }
 function hidePill() { if (pillEl) { clearTimeout(pillEl._t); pillEl.remove(); pillEl = null; } }
 window.addEventListener('beforeunload', (e) => { if (bgPosting) { e.preventDefault(); e.returnValue = ''; } });
@@ -308,7 +312,8 @@ function openSubmitWindow(e) {
       bgPosting = true; ov.id = 'submit-overlay-bg';
       ov.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;z-index:-1';
       close.style.display = 'none';
-      showPill('Getting your video ready…', 0);
+      pillCancel = () => { try { frame.contentWindow.postMessage({ type: 'statik-cancel' }, '*'); } catch (e) {} setTimeout(() => { forceShut(); showToast('Posting cancelled.'); }, 700); };
+      showPill('Posting your video…', 0);
     } else if (d.type === 'statik-progress' && bgPosting) showPill(d.label, d.frac);
     else if (d.type === 'statik-done') { forceShut(); showPill('✅ Submitted! Your post is waiting for admin review. This can take up to 3 days, no need to do anything else. (tap to close)', 1, true); }
     else if (d.type === 'statik-error') {
