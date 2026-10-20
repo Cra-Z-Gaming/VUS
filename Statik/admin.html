@@ -129,18 +129,42 @@ function watchPending() {
     });
   });
 }
+const b64ToBytes = (c) => { const bin = atob(c), a = new Uint8Array(bin.length); for (let j = 0; j < bin.length; j++) a[j] = bin.charCodeAt(j); return a; };
+// Videos can be large, so they're read and copied one chunk at a time.
 async function loadVideoPreview(id, btn) {
   btn.disabled = true; btn.textContent = 'Loading…';
   try {
-    const v = (await db.ref('submissionVideos/' + id).once('value')).val();
-    if (!v || !v.chunks) throw new Error('Video upload is incomplete');
+    const src = db.ref('submissionVideos/' + id);
+    const [n, mime] = await Promise.all(['n', 'mime'].map(async (k) => (await src.child(k).once('value')).val()));
+    if (!n) throw new Error('Video upload is incomplete');
     const parts = [];
-    for (let i = 0; i < v.n; i++) { const bin = atob(v.chunks[i]), a = new Uint8Array(bin.length); for (let j = 0; j < bin.length; j++) a[j] = bin.charCodeAt(j); parts.push(a); }
+    for (let k = 0; k < n; k++) {
+      btn.textContent = 'Loading… ' + Math.round((k / n) * 100) + '%';
+      const c = (await src.child('chunks/' + k).once('value')).val();
+      if (typeof c !== 'string') throw new Error('Video upload is incomplete');
+      parts.push(b64ToBytes(c));
+    }
     const el = document.createElement('video');
     el.controls = true; el.style.cssText = 'width:100%;max-height:360px;background:#000;border-radius:8px;margin-bottom:10px';
-    el.src = URL.createObjectURL(new Blob(parts, { type: v.mime || 'video/webm' }));
+    el.src = URL.createObjectURL(new Blob(parts, { type: mime || 'video/webm' }));
     btn.parentNode.replaceChildren(el);
   } catch (err) { btn.disabled = false; btn.textContent = '▶ Load video preview'; alert(err.message); }
+}
+async function copyVideo(id, btn) {
+  const src = db.ref('submissionVideos/' + id);
+  const [n, mime, dur] = await Promise.all(['n', 'mime', 'dur'].map(async (k) => (await src.child(k).once('value')).val()));
+  if (!n || !mime) throw new Error("This submission's video upload is incomplete.");
+  const dst = db.ref('videos/' + id);
+  try {
+    await dst.set({ mime, n, dur: dur || 0 });
+    for (let k = 0; k < n; k++) {
+      btn.textContent = 'Copying video… ' + Math.round((k / n) * 100) + '%';
+      const c = (await src.child('chunks/' + k).once('value')).val();
+      if (typeof c !== 'string') throw new Error("This submission's video upload is incomplete.");
+      await dst.child('chunks/' + k).set(c);
+    }
+  } catch (e) { btn.textContent = 'Approve'; dst.remove().catch(() => {}); throw e; }
+  return true;
 }
 $('pending-list').addEventListener('click', async (e) => {
   const act = e.target.dataset.act;
@@ -152,8 +176,8 @@ $('pending-list').addEventListener('click', async (e) => {
     if (act === 'approve') {
       let vid = null;
       if (s.hasVideo) {
-        vid = (await db.ref('submissionVideos/' + id).once('value')).val();
-        if (!vid || !vid.chunks) throw new Error("This submission's video upload is incomplete.");
+        vid = await copyVideo(id, e.target);
+        
       }
       const u = {};
       u['posts/' + id] = {
@@ -161,7 +185,7 @@ $('pending-list').addEventListener('click', async (e) => {
         hasImage: !!s.imageData, hasVideo: !!vid, createdAt: firebase.database.ServerValue.TIMESTAMP
       };
       if (s.imageData) u['images/' + id] = s.imageData;
-      if (vid) { u['videos/' + id] = { mime: vid.mime, n: vid.n, dur: vid.dur, chunks: vid.chunks }; u['submissionVideos/' + id] = null; }
+      if (vid) u['submissionVideos/' + id] = null;
       u['submissions/' + id] = null;
       await db.ref().update(u);
     } else {
