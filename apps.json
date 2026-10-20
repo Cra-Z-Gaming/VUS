@@ -2,11 +2,9 @@
 "updated":"October 20, 2026 - 5:13 AM",
 "message":"Statik now allows 2 minute videos, Faster uploads + higher quality",
 "apps":[
-{"name":"Support 54","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Support54","desc":"dedicated app for showing 54 how much we care","icon":"❤️","color":"red"},
 {"name":"VUS-OS","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS-OS/refs/heads/main/index.html","desc":"Desktop version of VUS Hub","icon":"OS","color":"white"},
 {"name":"VUS Launcher","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL","desc":"Main game hub — V17.4","icon":"🎮","color":"green"},
 {"name":"VUS D.C","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Chat-DM/Chat-DM.html","desc":"VUS Dm+Chat & Discord Layout","icon":"VDC","color":""},
-{"name":"54's ChatHub","url":"https://raw.githubusercontent.com/speedrunnerthis/chathub/refs/heads/main/index.html","desc":"Newst Chat hub, still in development, but still PEAK","icon":"54","color":""},
 {"name":"VUS DM's","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/VUS-DM","desc":"add your friends and message them privately - V2","icon":"DM","color":"white"},
 {"name":"Chat Room","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/VUS-Chat","desc":"Talk to people who also use VUS Hub","icon":"Chat","color":"blue"},
 {"name":"BaSik (chat)","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/basic-chat.html","desc":"super light weight chat, no roles, no images, just text","icon":"BaSik","color":"blue"},
