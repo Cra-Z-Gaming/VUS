@@ -207,22 +207,29 @@ async function preloadAhead() {
 function getVideoUrl(id) {
   if (videoCache.has(id)) return Promise.resolve(videoCache.get(id));
   if (videoInflight.has(id)) return videoInflight.get(id);
-  const pr = db.ref('videos/' + id).once('value').then((snap) => {
-    const v = snap.val();
-    if (!v || !v.chunks) throw new Error('Video not found');
-    const parts = [];
-    for (let i = 0; i < v.n; i++) {
-      const c = v.chunks[i];
-      if (typeof c !== 'string') throw new Error('Video is incomplete');
-      const bin = atob(c), arr = new Uint8Array(bin.length);
-      for (let j = 0; j < bin.length; j++) arr[j] = bin.charCodeAt(j);
-      parts.push(arr);
-    }
-    const url = URL.createObjectURL(new Blob(parts, { type: v.mime || 'video/webm' }));
+  // Read the video chunk by chunk (4 at a time) so big videos don't need one giant download.
+  const pr = (async () => {
+    const base = db.ref('videos/' + id);
+    const [n, mime] = await Promise.all(['n', 'mime'].map(async (k) => (await base.child(k).once('value')).val()));
+    if (!n) throw new Error('Video not found');
+    const parts = new Array(n);
+    let next = 0;
+    const worker = async () => {
+      while (next < n) {
+        const k = next++;
+        const c = (await base.child('chunks/' + k).once('value')).val();
+        if (typeof c !== 'string') throw new Error('Video is incomplete');
+        const bin = atob(c), arr = new Uint8Array(bin.length);
+        for (let j = 0; j < bin.length; j++) arr[j] = bin.charCodeAt(j);
+        parts[k] = arr;
+      }
+    };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+    const url = URL.createObjectURL(new Blob(parts, { type: mime || 'video/webm' }));
     videoCache.set(id, url);
     trimCache(videoCache, 6, (u) => URL.revokeObjectURL(u));
     return url;
-  });
+  })();
   videoInflight.set(id, pr);
   const done = () => videoInflight.delete(id);
   pr.then(done, done);
