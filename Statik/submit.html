@@ -28,6 +28,12 @@
   .bar i { display: block; height: 100%; width: 0; background: #4da3ff; transition: width .2s; }
   .rm { display: none; width: auto; background: #2a2a2a; color: #f2f2f2; font-size: 12px; padding: 6px 12px; margin: -4px 0 12px; }
   .rm.show { display: inline-block; }
+  .qual { display: none; border: 1px solid #2a2a2a; border-radius: 8px; padding: 10px; margin-bottom: 12px; font-size: 13px; color: #9a9a9a; line-height: 1.5; }
+  .qual.show { display: block; }
+  .qrow { display: flex; gap: 10px; margin-bottom: 8px; }
+  .qrow label { flex: 1; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+  .qrow select { background: #1f1f1f; color: #f2f2f2; border: 1px solid #2a2a2a; border-radius: 6px; padding: 8px; font-size: 14px; }
+  .qwarn { color: #ffb84d; }
 </style>
 </head>
 <body>
@@ -41,9 +47,16 @@
   <label class="file"><input type="file" id="file" accept="image/*"><span id="file-text">Attach image (optional)</span></label>
   <img id="preview" alt="">
   <button type="button" class="rm" id="rm-img">✕ Remove image</button>
-  <label class="file"><input type="file" id="vfile" accept="video/*"><span id="vfile-text">Attach video (optional, up to 1 minute)</span></label>
+  <label class="file"><input type="file" id="vfile" accept="video/*"><span id="vfile-text">Attach video (optional, up to 2 minutes)</span></label>
   <video id="vpreview" controls playsinline></video>
   <button type="button" class="rm" id="rm-vid">✕ Remove video</button>
+  <div class="qual" id="qual">
+    <div class="qrow">
+      <label>Resolution<select id="q-res"></select></label>
+      <label>Frame rate<select id="q-fps"></select></label>
+    </div>
+    <div id="q-info"></div>
+  </div>
   <div class="bar" id="vbar"><i></i></div>
   <button id="submit">Submit for review</button>
   <p id="status"></p>
@@ -113,7 +126,8 @@ document.addEventListener('paste', (e) => {
 });
 
 /* ---------- video: re-encoded in the browser, stored as base64 chunks in the database ---------- */
-const VIDEO_MAX_SEC = 60, VIDEO_TARGET = 2200000, VIDEO_MAX_BYTES = 2800000, CHUNK = 240000;
+const VIDEO_MAX_SEC = 120, MAX_RAW = 28000000, CHUNK = 240000, MAX_CHUNKS = 160;
+const BASE_BPS = 600000, AUDIO_BPS = 48000, PASSTHROUGH_MAX = 8000000, RES_OPTIONS = [480, 720, 1080];
 let pendingVideo = null, encodePromise = null, localUrl = null, videoToken = 0, bg = false, lastLabel = '', videoId = null, uploaded = false;
 // Messages to the page that hosts this form (it shows a small progress pill while we post in the background).
 const tell = (msg) => { try { parent.postMessage(msg, '*'); } catch (e) {} };
@@ -131,8 +145,9 @@ function clearVideo(keep) {
   videoId = null; uploaded = false;
   if (localUrl) URL.revokeObjectURL(localUrl);
   localUrl = null; pendingVideo = null; encodePromise = null;
+  pickedFile = null; srcInfo = null; clearTimeout(restartT); $('qual').classList.remove('show');
   $('vpreview').pause(); $('vpreview').removeAttribute('src'); $('vpreview').style.display = 'none'; $('rm-vid').classList.remove('show');
-  $('vfile-text').textContent = 'Attach video (optional, up to 1 minute)';
+  $('vfile-text').textContent = 'Attach video (optional, up to 2 minutes)';
   $('submit').textContent = 'Submit for review';
   setVideoProgress(null);
   tell({ type: 'statik-busy', busy: false });
@@ -162,7 +177,7 @@ function encodeAttempt(file, meta, scale, attempt, onProgress, noAudio) {
       v.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;opacity:.01;pointer-events:none';
       document.body.appendChild(v);
       const canvas = document.createElement('canvas'); canvas.width = meta.w; canvas.height = meta.h;
-      const ctx = canvas.getContext('2d'), stream = canvas.captureStream(24);
+      const ctx = canvas.getContext('2d'), stream = canvas.captureStream(meta.fps);
       const cleanup = () => { clearTimeout(timer); clearTimeout(watch); clearInterval(drawTimer); try { if (actx) actx.close(); } catch (e) {} v.remove(); URL.revokeObjectURL(m.url); };
       if (noAudio) v.muted = true;
       else {
@@ -175,8 +190,8 @@ function encodeAttempt(file, meta, scale, attempt, onProgress, noAudio) {
           if (actx.state === 'suspended') actx.resume();
         } catch (e) { actx = null; }
       }
-      const vbps = Math.max(60000, Math.min(800000, Math.floor((VIDEO_TARGET * 8 / meta.dur - 40000) * scale)));
-      const mime = pickMime(), opts = { videoBitsPerSecond: vbps, audioBitsPerSecond: 32000 };
+      const vbps = Math.max(60000, Math.floor(Math.min(meta.bps, MAX_RAW * 8 / meta.dur - 60000) * scale));
+      const mime = pickMime(), opts = { videoBitsPerSecond: vbps, audioBitsPerSecond: AUDIO_BPS };
       if (mime) opts.mimeType = mime;
       try { rec = new MediaRecorder(stream, opts); } catch (e) { cleanup(); reject(new Error('BLOCKED')); return; }
       rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
@@ -186,8 +201,8 @@ function encodeAttempt(file, meta, scale, attempt, onProgress, noAudio) {
         const type = (rec.mimeType || mime || 'video/webm').split(';')[0];
         const blob = new Blob(chunks, { type });
         if (!blob.size) { reject(new Error('BLOCKED')); return; }
-        if (blob.size > VIDEO_MAX_BYTES) {
-          if (attempt < 2) { resolve(encodeAttempt(file, meta, scale * (VIDEO_TARGET / blob.size) * 0.8, attempt + 1, onProgress, noAudio)); return; }
+        if (blob.size > MAX_RAW) {
+          if (attempt < 2) { resolve(encodeAttempt(file, meta, scale * ((MAX_RAW * 0.85) / blob.size) * 0.8, attempt + 1, onProgress, noAudio)); return; }
           reject(new Error('That clip is too detailed to fit. Try a shorter or calmer one.')); return;
         }
         resolve({ blob, mime: type, dur: meta.dur });
@@ -210,7 +225,7 @@ function encodeAttempt(file, meta, scale, attempt, onProgress, noAudio) {
       rec.start(1000);
       // If the video never starts moving (common on iPhones), give up on this method instead of sitting at 0%.
       const go = () => {
-        drawTimer = setInterval(frame, 42);
+        drawTimer = setInterval(frame, Math.round(1000 / meta.fps));
         watch = setTimeout(() => { if (!finished && v.currentTime < 0.05) abort('STALL'); }, noAudio ? 5000 : 3000);
       };
       const p = v.play();
@@ -219,15 +234,16 @@ function encodeAttempt(file, meta, scale, attempt, onProgress, noAudio) {
     }).catch(reject);
   });
 }
-async function processVideo(file, onProgress) {
+async function processVideo(file, cfg, onProgress) {
   if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) throw new Error("This browser can't compress videos. Try Chrome on a computer or Chromebook.");
-  if (file.size > 400 * 1024 * 1024) throw new Error('That video file is too large');
+  if (file.size > 800 * 1024 * 1024) throw new Error('That video file is too large');
   const m = await loadVideoEl(file), v = m.v, dur = v.duration;
   URL.revokeObjectURL(m.url);
   if (!isFinite(dur) || dur <= 0) throw new Error('Could not read that video');
-  if (dur > VIDEO_MAX_SEC + 0.5) throw new Error('Videos can be up to 1 minute (this one is ' + Math.round(dur) + 's)');
-  const vw = v.videoWidth || 640, vh = v.videoHeight || 360, sc = Math.min(1, 480 / Math.max(vw, vh));
-  const meta = { dur, w: Math.max(2, Math.round(vw * sc / 2) * 2), h: Math.max(2, Math.round(vh * sc / 2) * 2) };
+  if (dur > VIDEO_MAX_SEC + 0.5) throw new Error('Videos can be up to 2 minutes (this one is ' + Math.round(dur) + 's)');
+  // never scale UP: the target is capped at the original's own resolution
+  const vw = v.videoWidth || 640, vh = v.videoHeight || 360, short = Math.min(vw, vh), target = Math.min(cfg.res, short), sc = target / short;
+  const meta = { dur, fps: cfg.fps, w: Math.max(2, Math.round(vw * sc / 2) * 2), h: Math.max(2, Math.round(vh * sc / 2) * 2), bps: bpsFor(cfg.res, cfg.fps, short) };
   let silent = false;
   const cb = (fr, at) => onProgress(fr, at, silent);
   try { return await encodeAttempt(file, meta, 1, 1, cb, false); }
@@ -236,13 +252,13 @@ async function processVideo(file, onProgress) {
   try { const r = await encodeAttempt(file, meta, 1, 1, cb, true); r.silent = true; return r; }
   catch (e) { if (e.message !== 'STALL' && e.message !== 'BLOCKED') throw e; }
   // last resort: a small clip can be sent as-is
-  if (file.size <= VIDEO_MAX_BYTES) return { blob: file, mime: file.type === 'video/webm' ? 'video/webm' : 'video/mp4', dur, passthrough: true };
-  throw new Error("This device couldn't process that video. Try a shorter clip (under about 2 MB) or post from a computer or Chromebook.");
+  if (file.size <= PASSTHROUGH_MAX) return { blob: file, mime: file.type === 'video/webm' ? 'video/webm' : 'video/mp4', dur, passthrough: true };
+  throw new Error("This device couldn't process that video. Try a shorter clip (under about 8 MB) or post from a computer or Chromebook.");
 }
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('The server is taking too long to respond. Please try again in a moment.')), ms))]);
 async function uploadVideo(id, uid, v, cancelled) {
   const d = await readAsDataURL(v.blob), b64 = d.slice(d.indexOf(',') + 1), n = Math.ceil(b64.length / CHUNK);
-  if (n > 16) throw new Error('Video is too big to store');
+  if (n > MAX_CHUNKS) throw new Error('Video is too big to store');
   const base = db.ref('submissionVideos/' + id);
   try {
     setVideoProgress('Connecting to the server…', 0);
@@ -256,21 +272,82 @@ async function uploadVideo(id, uid, v, cancelled) {
     }
   } catch (e) { base.remove().catch(() => {}); throw e; }
 }
-// Picking a video starts everything straight away: show it, prepare it, upload it.
-$('vfile').addEventListener('change', () => {
-  const f = $('vfile').files[0]; $('vfile').value = '';
+// ---- Picking a video: show it, start preparing + uploading at the default quality right away, and offer quality options ----
+let pickedFile = null, srcInfo = null, settings = { res: 480, fps: 30 }, jobSettings = null, restartT = null;
+const bpsFor = (res, fps, short) => BASE_BPS * Math.pow(Math.min(res, short) / 480, 1.7) * (fps >= 60 ? 1.5 : 1);
+const estBytes = (res, fps, info) => {
+  const bps = Math.min(bpsFor(res, fps, Math.min(info.w, info.h)), MAX_RAW * 8 / info.dur - AUDIO_BPS);
+  return (bps + AUDIO_BPS) * info.dur / 8;
+};
+function detectFps(v) {   // measures real frame timing; returns null if the browser can't tell
+  return new Promise((resolve) => {
+    if (!('requestVideoFrameCallback' in v)) return resolve(null);
+    const times = []; let done = false;
+    const end = () => {
+      if (done) return; done = true; try { v.pause(); } catch (e) {}
+      if (times.length < 6) return resolve(null);
+      const d = []; for (let i = 1; i < times.length; i++) d.push(times[i] - times[i - 1]);
+      d.sort((a, b) => a - b); const med = d[Math.floor(d.length / 2)];
+      resolve(med > 0 ? 1 / med : null);
+    };
+    const tick = (now, md) => { times.push(md.mediaTime); if (times.length >= 20) end(); else v.requestVideoFrameCallback(tick); };
+    v.muted = true; v.requestVideoFrameCallback(tick);
+    v.play().then(() => setTimeout(end, 1500)).catch(end);
+    setTimeout(end, 4000);
+  });
+}
+async function probeVideo(file) {
+  const m = await loadVideoEl(file), v = m.v;
+  const info = { w: v.videoWidth || 640, h: v.videoHeight || 360, dur: v.duration, fps: null };
+  info.fps = await detectFps(v);
+  URL.revokeObjectURL(m.url);
+  return info;
+}
+function updateInfo() {
+  const info = srcInfo, size = estBytes(settings.res, settings.fps, info), mult = size / estBytes(480, 30, info);
+  let html = 'Your video: ' + info.w + '×' + info.h + (info.fps ? ', about ' + Math.round(info.fps) + ' fps' : ', frame rate unknown') +
+    ' (options never go above this).<br>Estimated size: about ' + (size / 1e6).toFixed(1) + ' MB.';
+  if (mult > 1.2) html += '<br><span class="qwarn">⚠ Higher quality means a bigger file, so uploading takes about ' + mult.toFixed(1).replace('.0', '') + '× longer than the default. Slower devices may also struggle while preparing it.</span>';
+  $('q-info').innerHTML = html;
+}
+function buildQuality(info) {
+  const short = Math.min(info.w, info.h);
+  const resOpts = RES_OPTIONS.filter((r) => r <= short * 1.05);
+  if (!resOpts.length) resOpts.push(short);
+  $('q-res').innerHTML = resOpts.map((r, i) => '<option value="' + r + '">' + r + 'p' + (i === 0 ? ' (default)' : '') + '</option>').join('');
+  $('q-fps').innerHTML = '<option value="30">30 fps (default)</option>' + (info.fps && info.fps >= 50 ? '<option value="60">60 fps</option>' : '');
+  settings = { res: resOpts[0], fps: 30 };
+  $('qual').classList.add('show');
+  updateInfo();
+}
+const onQuality = () => {
+  settings = { res: +$('q-res').value, fps: +$('q-fps').value };
+  updateInfo();
+  clearTimeout(restartT);
+  if (!jobSettings || (settings.res === jobSettings.res && settings.fps === jobSettings.fps)) return;
+  setStatus('Quality changed. Preparing your video again…');
+  restartT = setTimeout(() => { if (pickedFile && !bg) launchJob(); }, 700);
+};
+$('q-res').onchange = onQuality; $('q-fps').onchange = onQuality;
+
+function cancelJob() {   // stops any running job and removes its uploaded copy
+  const old = videoId;
+  videoToken++;
+  if (old) db.ref('submissionVideos/' + old).remove().catch(() => {});
+  videoId = null; uploaded = false; pendingVideo = null; encodePromise = null;
+}
+function launchJob() {
+  const f = pickedFile;
   if (!f) return;
-  clearVideo(); imageData = null; $('preview').style.display = 'none'; $('rm-img').classList.remove('show'); $('file-text').textContent = 'Attach image (optional)';
-  const my = videoToken, id = db.ref('submissions').push().key;
+  cancelJob();
+  jobSettings = { res: settings.res, fps: settings.fps };
+  const my = videoToken, id = db.ref('submissions').push().key, cfg = jobSettings;
   videoId = id;
-  localUrl = URL.createObjectURL(f);
-  $('vpreview').src = localUrl; $('vpreview').style.display = 'block'; $('rm-vid').classList.add('show');
-  $('vfile-text').textContent = '✓ Picked: ' + f.name;
   $('submit').textContent = 'Post (keeps going in background)';
   tell({ type: 'statik-busy', busy: true });
   setVideoProgress('Getting your video ready… 0%', 0);
   encodePromise = (async () => {
-    const r = await processVideo(f, (fr, at, silent) => {
+    const r = await processVideo(f, cfg, (fr, at, silent) => {
       if (my === videoToken) setVideoProgress((silent ? 'Trying again without sound… ' : at > 1 ? 'Re-compressing… ' : 'Getting your video ready… ') + Math.round(fr * 100) + '% · keep this tab open', fr);
     });
     if (my !== videoToken) throw new Error('cancelled');
@@ -285,6 +362,17 @@ $('vfile').addEventListener('change', () => {
     return id;
   })();
   encodePromise.catch((e) => { if (my !== videoToken || bg) return; setStatus(e.message, 'err'); clearVideo(); });
+}
+$('vfile').addEventListener('change', () => {
+  const f = $('vfile').files[0]; $('vfile').value = '';
+  if (!f) return;
+  clearVideo(); imageData = null; $('preview').style.display = 'none'; $('rm-img').classList.remove('show'); $('file-text').textContent = 'Attach image (optional)';
+  pickedFile = f; settings = { res: 480, fps: 30 };
+  localUrl = URL.createObjectURL(f);
+  $('vpreview').src = localUrl; $('vpreview').style.display = 'block'; $('rm-vid').classList.add('show');
+  $('vfile-text').textContent = '✓ Picked: ' + f.name;
+  launchJob();   // starts at 480p / 30 fps straight away
+  probeVideo(f).then((info) => { if (pickedFile !== f) return; srcInfo = info; buildQuality(info); }).catch(() => {});
 });
 // Remove / cancel buttons
 $('rm-img').onclick = () => {
