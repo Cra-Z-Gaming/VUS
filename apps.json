@@ -2,6 +2,7 @@
 "updated":"October 20, 2026 - 5:13 AM",
 "message":"Statik now allows 2 minute videos, Faster uploads + higher quality",
 "apps":[
+{"name":"54's ChatHub","url":"https://raw.githubusercontent.com/speedrunnerthis/chathub/refs/heads/main/index.html","desc":"possibly temporarily here for now","icon":"54","color":""},
 {"name":"VUS-OS","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS-OS/refs/heads/main/index.html","desc":"Desktop version of VUS Hub","icon":"OS","color":"white"},
 {"name":"VUS Launcher","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL","desc":"Main game hub — V17.4","icon":"🎮","color":"green"},
 {"name":"VUS D.C","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Chat-DM/Chat-DM.html","desc":"VUS Dm+Chat & Discord Layout","icon":"VDC","color":""},
