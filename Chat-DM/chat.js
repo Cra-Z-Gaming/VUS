@@ -432,9 +432,11 @@ const ChatBackend = {
     this._presenceRef = this._db.ref("rooms/" + roomId + "/presence");
     this._atPingCooldownRef = this._db.ref("rooms/" + roomId + "/atPingCooldowns");
     this._leaveEventsRef = this._db.ref("rooms/" + roomId + "/leaveEvents");
-    this._timeoutsRef = this._db.ref("rooms/" + roomId + "/timeouts");
-    this._modRetimeoutRef = this._db.ref("rooms/" + roomId + "/modRetimeoutCooldowns");
-    this._commandHistoryRef = this._db.ref("rooms/" + roomId + "/commandHistory");
+    // Channels (ch-*) share the main room's mutes and staff-command log, so a mute can't be dodged by switching channel.
+    const modRoom = /^ch-/.test(roomId) ? MAIN_ROOM_ID : roomId;
+    this._timeoutsRef = this._db.ref("rooms/" + modRoom + "/timeouts");
+    this._modRetimeoutRef = this._db.ref("rooms/" + modRoom + "/modRetimeoutCooldowns");
+    this._commandHistoryRef = this._db.ref("rooms/" + modRoom + "/commandHistory");
     this._editsRef = this._db.ref("rooms/" + roomId + "/edits");
     this._reactionsRef = this._db.ref("rooms/" + roomId + "/reactions");
   },
@@ -2692,6 +2694,7 @@ function shutdownChatSession() {
   teardownCurrentRoomMetaWatch();
   currentRoomCode = null;
   currentRoomMeta = null;
+  activeChannelId = "main";
   ChatBackend.detachAllListeners();
   if (typeof stopChannelCounts === "function") stopChannelCounts();
   ChatBackend.bindToRoom(MAIN_ROOM_ID);
@@ -6391,6 +6394,15 @@ $navChatBtn.addEventListener("click", () => {
   if (wasChat && myName && currentRoomCode !== null) switchToMainRoom();
   setTimeout(renderRailRooms, 0);
 }, true);
+
+// Going to DMs always closes the rooms list, so the rail never shows both lit.
+window.addEventListener("vus:mode", (e) => {
+  if (e.detail && e.detail.mode === "dm") {
+    const shell = document.getElementById("appShell");
+    if (shell) shell.classList.remove("rooms-open");
+    $navRooms.classList.remove("active");
+  }
+});
 
 $navRooms.addEventListener("click", () => {
   const shell = document.getElementById("appShell");
