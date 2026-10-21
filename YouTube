@@ -1,4 +1,4 @@
-<title>YouTube V20</title>
+<title>YouTube V21</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -757,7 +757,8 @@ const S = {
     SEARCH_COUNT: 50,
     COOLDOWN: 3,
     TUTORIAL_URL: 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Tutorials/YT-API-Key/HowTo',
-    PUBLIC_KEYS_URL: 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/YT-Keys',
+    // Public key list, served from the Firebase Realtime Database (REST)
+    PUBLIC_KEYS_URL: 'https://temp-2212-default-rtdb.firebaseio.com/publicKeys.json',
     CONTRIBUTE_URL: 'https://docs.google.com/forms/d/e/1FAIpQLScAo4xewC8FWKY9a8CG5uyCfb0d7UgnmlRG-xuStz5zySLN3g/viewform',
     PUBLIC_SEARCH_LIMIT: 15,
     FILTER_LABELS: {
@@ -1134,19 +1135,41 @@ async function loadPublicKeys(force) {
     if (publicKeysLoaded && !force) return publicKeys;
     if (publicKeysLoading) return publicKeys;
     publicKeysLoading = true;
+    publicKeys = [];
+    publicKeysLoaded = false;
     try {
         const res = await fetch(S.PUBLIC_KEYS_URL, { cache: 'no-store' });
         if (!res.ok) throw new Error('fetch failed: ' + res.status);
-        const text = await res.text();
-        publicKeys = text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
-        publicKeysLoaded = true;
-    } catch (e) {
-        publicKeys = [];
-        publicKeysLoaded = false;
-    } finally {
-        publicKeysLoading = false;
-    }
+        const list = parseKeyList(await res.text());
+        if (list.length) { publicKeys = list; publicKeysLoaded = true; }
+    } catch (e) { /* leave the list empty */ }
+    publicKeysLoading = false;
     return publicKeys;
+}
+
+// Accepts plain text (one key per line), a JSON array, a JSON object of keys, or a JSON string with newlines.
+function parseKeyList(text) {
+    let items;
+    try {
+        const j = JSON.parse(text);
+        if (j === null) return [];
+        if (typeof j === 'string') items = j.split(/\r?\n/);
+        else if (Array.isArray(j)) items = j;
+        else if (typeof j === 'object') {
+            // Object form: the key can be the node name ({"AIza...": ""}) or the value ({"a": "AIza..."})
+            const looksLikeKey = x => /^AIza[\w-]{30,}$/.test(x);
+            items = Object.entries(j).map(([k, v]) => {
+                if (looksLikeKey(k)) return k;
+                if (v && typeof v === 'object') return v.key || '';
+                return (typeof v === 'string' && v.trim()) ? v : '';
+            });
+        }
+        else items = [String(j)];
+    } catch { items = text.split(/\r?\n/); }
+    return items
+        .map(v => (v && typeof v === 'object') ? (v.key || '') : v)
+        .map(v => String(v || '').trim())
+        .filter(v => v && !v.startsWith('#'));
 }
 
 function isKeyPublic(keyStr) { return publicKeys.includes(keyStr); }
