@@ -714,8 +714,9 @@ async function linkMzkAccount(email, password) {
     try { await fs.collection("links").doc(user.uid).set({ vusId: String(currentSession.id), updated: firebase.firestore.FieldValue.serverTimestamp() }); }
     catch (e) { try { await auth.signOut(); } catch (_) {} return { ok: false, error: "MZK's Firestore rules refused links/" + user.uid.slice(0, 6) + "… (" + (e.code || e.message) + ")." }; }
     const k = usersRef.child(currentSession.accountKey);
-    try { await k.child("mzkUid").set(user.uid); await k.child("mzk").set(null); }
-    catch (e) { try { await auth.signOut(); } catch (_) {} return { ok: false, error: "VUS-DM database rules refused users/…/mzkUid. Add an mzkUid rule next to mzk in the vus-dm rules." }; }   // the account link replaces any pasted code
+    try { await k.child("mzkUid").set(user.uid); }
+    catch (e) { try { await auth.signOut(); } catch (_) {} return { ok: false, error: "VUS-DM database refused users/…/mzkUid (" + (e.code || e.message || "unknown") + "). Publish the latest vus-dm-rules.json — it has an mzkUid rule next to mzk." }; }
+    try { await k.child("mzk").set(null); } catch (e) { /* the old pasted code is just cleanup; the link itself is saved */ }   // the account link replaces any pasted code
     delete profileCache[currentSession.accountKey];
     clearVerifiedCache();
     await auth.signOut().catch(() => {});
