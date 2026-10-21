@@ -2973,7 +2973,7 @@ $cancelPendingImageBtn.addEventListener("click", clearPendingImage);
    EMOJI PICKER — one shared picker for chat + DMs (search, categories, recent).
    openEmojiPicker(anchorEl, onPick)  ·  window.VUS_UI.openEmojiPicker
    ══════════════════════════════════════════════════════════ */
-const EMOJI_DATA = [
+let EMOJI_DATA = [
   ["🙂", "Smileys", "😀 grin happy|😃 smile|😄 laugh|😁 beam|😆 haha|😅 sweat nervous|😂 joy lol tears|🤣 rofl|🙂 slight smile|🙃 upside down|😉 wink|😊 blush|😇 angel halo|🥰 love hearts|😍 heart eyes|🤩 star struck wow|😘 kiss|😋 yum tasty|😛 tongue|😜 crazy wink|🤪 zany|🤑 money|🤗 hug|🤭 oops giggle|🤫 shh quiet|🤔 think hmm|🫡 salute|🤐 zip mouth|😐 neutral|😑 expressionless|😶 silent|😏 smirk|😒 unamused|🙄 eyeroll|😬 grimace|😌 relieved|😔 pensive sad|😴 sleep|🤤 drool|😷 mask sick|🤒 fever|🤕 hurt|🤢 nauseated|🤮 vomit|🥵 hot|🥶 cold freezing|🥴 woozy drunk|😵 dizzy|🤯 mind blown|🤠 cowboy|🥳 party|😎 cool sunglasses|🤓 nerd|🧐 monocle|😕 confused|😟 worried|🙁 frown|😮 wow surprised|😲 astonished|😳 flushed|🥺 pleading puppy|😢 cry|😭 sob loud crying|😱 scream fear|😞 disappointed|😩 weary|😫 tired|🥱 yawn bored|😤 triumph huff|😡 angry rage|😠 mad|🤬 swearing|😈 devil|👿 imp|💀 skull dead|☠️ skull crossbones|💩 poop|🤡 clown|👻 ghost|👽 alien|🤖 robot|🙈 see no evil|🙉 hear no evil|🙊 speak no evil|🫠 melting|🫢 peeking|🫣 peek|🥹 holding back tears|😶‍🌫️ fog"],
   ["👍", "Hands & people", "👍 thumbs up yes|👎 thumbs down no|👌 ok|✌️ peace victory|🤞 fingers crossed luck|🤟 love you|🤘 rock on|🤙 call me|👈 left|👉 right|👆 up|👇 down|☝️ point up|✋ hand stop|🖐️ splayed|👋 wave hello bye|🤚 raised back|🖖 vulcan|👏 clap|🙌 raised hands|🫶 heart hands|👐 open hands|🤲 palms up|🤝 handshake deal|🙏 pray please thanks|✍️ writing|💪 muscle strong flex|🦾 mechanical arm|👀 eyes look|👁️ eye|👅 tongue|👄 mouth|🧠 brain|🫀 heart organ|👶 baby|🧒 child|👦 boy|👧 girl|🧑 person|👨 man|👩 woman|🧓 older|🕵️ detective|👮 police|👷 builder|🧑‍💻 coder developer|🧑‍🎤 singer|🧑‍🚀 astronaut|🦸 hero|🧙 mage wizard|🧛 vampire|🧟 zombie|🧞 genie|🚶 walking|🏃 running|💃 dance|🕺 dancing"],
   ["❤️", "Hearts & symbols", "❤️ red heart love|🧡 orange heart|💛 yellow heart|💚 green heart|💙 blue heart|💜 purple heart|🖤 black heart|🤍 white heart|🤎 brown heart|💔 broken heart|❣️ heart exclamation|💕 two hearts|💞 revolving hearts|💓 beating heart|💗 growing heart|💖 sparkling heart|💘 cupid|💝 gift heart|💯 100 hundred|💢 anger|💥 boom collision|💫 dizzy star|💦 sweat droplets|💨 dash wind|💬 speech bubble|💭 thought|💤 zzz sleep|✨ sparkles|⭐ star|🌟 glowing star|⚡ lightning bolt|🔥 fire lit|🎉 party popper tada|🎊 confetti|✅ check yes done|❌ cross no|❗ exclamation|❓ question|⚠️ warning|🚫 prohibited|⛔ no entry|➕ plus|➖ minus|➡️ right arrow|⬅️ left arrow|⬆️ up arrow|⬇️ down arrow|🔁 repeat|🔔 bell|🔕 muted bell|🔒 lock|🔓 unlock|🔑 key|🏁 finish flag|🚩 red flag|♻️ recycle|☑️ checkbox|🆗 ok|🆒 cool|🆕 new|🆙 up|🔴 red circle|🟠 orange circle|🟡 yellow circle|🟢 green circle|🔵 blue circle|🟣 purple circle|⚫ black circle|⚪ white circle"],
@@ -2995,7 +2995,7 @@ function closeEmojiPicker() {
   if (emojiPopCleanup) { emojiPopCleanup(); emojiPopCleanup = null; }
   emojiPopAnchor = null;
 }
-function openEmojiPicker(anchor, onPick) {
+function openEmojiPicker(anchor, onPick, opts) {
   if (emojiPopEl && emojiPopAnchor === anchor) { closeEmojiPicker(); return; }   // clicking the same button again closes it
   closeEmojiPicker();
   emojiPopAnchor = anchor;
@@ -3003,9 +3003,23 @@ function openEmojiPicker(anchor, onPick) {
   const search = h("input", { type: "text", className: "emoji-search", placeholder: "Search emoji (try “heart”, “fire”, “laugh”)", autocomplete: "off", spellcheck: "false" });
   const tabs = h("div", { className: "emoji-tabs" });
   const grid = h("div", { className: "emoji-grid" });
-  pop.append(search, tabs, grid);
+  const foot = h("div", { className: "emoji-foot" });
+  pop.append(search, tabs, grid, foot);
+  if (!emojiDb) loadEmojiDb().then(() => { if (emojiDb && emojiPopEl === pop && !search.value) { closeEmojiPicker(); openEmojiPicker(anchor, onPick, opts); } });
+  // skin tone + device picker
+  const toneRow = h("div", { className: "emoji-tones" });
+  ["", "\uD83C\uDFFB", "\uD83C\uDFFC", "\uD83C\uDFFD", "\uD83C\uDFFE", "\uD83C\uDFFF"].forEach((mod, i) => {
+    toneRow.appendChild(h("button", { type: "button", className: "emoji-tone" + (emojiTone === i ? " on" : ""), title: i ? "Skin tone " + i : "Default (yellow)", onclick: () => { emojiTone = i; try { localStorage.setItem(EMOJI_TONE_KEY, String(i)); } catch (e) {} toneRow.querySelectorAll("button").forEach((b, j) => b.classList.toggle("on", j === i)); paint(search.value); } }, "\uD83D\uDC4D" + mod));
+  });
+  const hint = h("div", { className: "emoji-device-hint" });
+  const devBtn = h("button", { type: "button", className: "emoji-device-btn", onclick: () => {
+    if (opts && opts.input) opts.input.focus();
+    hint.textContent = deviceEmojiHint();
+    hint.style.display = "block";
+  } }, "Use my device's emoji picker");
+  foot.append(toneRow, devBtn, hint);
   const pick = (e, keep) => { rememberEmoji(e); onPick(e); if (!keep) closeEmojiPicker(); else paint(search.value); };
-  const cell = (item) => h("button", { type: "button", className: "emoji-cell", title: item.k || "", onclick: (ev) => pick(item.e, ev.shiftKey) }, item.e);
+  const cell = (item) => { const ch = toneOf(item); return h("button", { type: "button", className: "emoji-cell", title: item.n || item.k || "", onclick: (ev) => pick(ch, ev.shiftKey) }, ch); };
   let activeCat = emojiRecent.length ? -1 : 0;
   function paint(q) {
     grid.replaceChildren();
@@ -3036,7 +3050,7 @@ function openEmojiPicker(anchor, onPick) {
   paint("");
   // place it next to the button: above if there's room, else below; never off-screen
   const r = anchor.getBoundingClientRect();
-  const w = Math.min(340, window.innerWidth - 16), hgt = 330;
+  const w = Math.min(360, window.innerWidth - 16), hgt = 400;
   pop.style.width = w + "px";
   let top = r.top - hgt - 8; if (top < 8) top = Math.min(window.innerHeight - hgt - 8, r.bottom + 8);
   let left = Math.min(Math.max(8, r.right - w), window.innerWidth - w - 8);
@@ -3049,6 +3063,156 @@ function openEmojiPicker(anchor, onPick) {
   search.focus({ preventScroll: true });
 }
 window.VUS_UI = Object.assign(window.VUS_UI || {}, { openEmojiPicker, closeEmojiPicker });
+
+/* ══════════ Full emoji database (every Unicode emoji) + :shortcode suggestions ══════════
+   The list comes from the emojibase-data package on jsDelivr (pinned version) and is cached in this browser,
+   so it downloads once. If it can't be loaded, the built-in list above is used instead. */
+const EMOJI_DB_BASE = "https://cdn.jsdelivr.net/npm/emojibase-data@15.3.2/en/";
+const EMOJI_DB_CACHE_KEY = "vus_emoji_db_v1";
+const EMOJI_TONE_KEY = "vus_emoji_tone_v1";
+const EMOJI_GROUPS = [[0, "\uD83D\uDE00", "Smileys & emotion"], [1, "\uD83D\uDC4B", "People & body"], [3, "\uD83D\uDC36", "Animals & nature"], [4, "\uD83C\uDF55", "Food & drink"], [5, "\uD83D\uDE97", "Travel & places"], [6, "\u26BD", "Activities"], [7, "\uD83D\uDCA1", "Objects"], [8, "\u2764\uFE0F", "Symbols"], [9, "\uD83C\uDFC1", "Flags"]];
+let emojiDb = null, emojiDbPromise = null, emojiByShortcode = {};
+let emojiTone = 0;
+try { emojiTone = Math.min(5, Math.max(0, Number(localStorage.getItem(EMOJI_TONE_KEY)) || 0)); } catch (e) {}
+function toneOf(item) {
+  if (!emojiTone || !item.skins) return item.e;
+  const s = item.skins.find(x => x[0] === emojiTone);
+  return s ? s[1] : item.e;
+}
+function deviceEmojiHint() {
+  const p = String(navigator.platform || "") + " " + String(navigator.userAgent || "");
+  if (/Win/i.test(p)) return "Browsers can't open it for you. Click the message box, then press the Windows key + . (period).";
+  if (/Mac/i.test(p) && !/iPhone|iPad/i.test(p)) return "Browsers can't open it for you. Click the message box, then press Control + Command + Space.";
+  if (/Android|iPhone|iPad/i.test(p)) return "Tap the message box, then tap the emoji key (😀 or 🌐) on your keyboard.";
+  return "Browsers can't open it for you. Click the message box and use your system's emoji shortcut.";
+}
+function buildEmojiDb(rows) {   // rows: [emoji, label, tags, group, shortcodes, skins]
+  const list = rows.map(r => ({ e: r[0], n: r[1], k: (r[1] + " " + r[2] + " " + r[4]).toLowerCase(), g: r[3], sc: r[4] ? r[4].split(" ") : [], skins: r[5] && r[5].length ? r[5] : null }));
+  const byCode = {};
+  list.forEach(it => it.sc.forEach(c => { if (!byCode[c]) byCode[c] = it; }));
+  emojiByShortcode = byCode;
+  emojiDb = list;
+  const cats = EMOJI_GROUPS.map(([g, icon, name]) => ({ icon, name, items: list.filter(it => it.g === g) })).filter(c => c.items.length);
+  if (cats.length) EMOJI_DATA = cats;
+}
+function loadEmojiDb() {
+  if (emojiDb) return Promise.resolve(emojiDb);
+  if (emojiDbPromise) return emojiDbPromise;
+  emojiDbPromise = (async () => {
+    try { const raw = localStorage.getItem(EMOJI_DB_CACHE_KEY); if (raw) { const rows = JSON.parse(raw); if (Array.isArray(rows) && rows.length > 1000) { buildEmojiDb(rows); return emojiDb; } } } catch (e) {}
+    try {
+      const [cr, sr] = await Promise.all([fetch(EMOJI_DB_BASE + "compact.json"), fetch(EMOJI_DB_BASE + "shortcodes/github.json")]);
+      if (!cr.ok || !sr.ok) throw new Error("emoji data unavailable");
+      const compact = await cr.json(), codes = await sr.json();
+      const rows = compact.filter(x => x.group !== undefined && x.group !== 2).map(x => {
+        const sc = codes[x.hexcode]; const scs = Array.isArray(sc) ? sc : (sc ? [sc] : []);
+        const skins = [];
+        (x.skins || []).forEach(s => {
+          const m = String(s.hexcode).match(/1F3F[B-F]/g);
+          if (m && m.every(t => t === m[0])) { const tone = m[0].charCodeAt(4) - "B".charCodeAt(0) + 1; if (!skins.some(q => q[0] === tone)) skins.push([tone, s.unicode]); }
+        });
+        return [x.unicode, x.label, (x.tags || []).join(" "), x.group, scs.join(" "), skins];
+      });
+      buildEmojiDb(rows);
+      try { localStorage.setItem(EMOJI_DB_CACHE_KEY, JSON.stringify(rows)); } catch (e) {}
+      return emojiDb;
+    } catch (e) { emojiDbPromise = null; return null; }
+  })();
+  return emojiDbPromise;
+}
+// Best matches for what was typed after a colon (":laug" -> laughing, joy, ...).
+function suggestEmojis(q, max) {
+  q = String(q || "").toLowerCase().replace(/^:/, "");
+  if (q.length < 2) return [];
+  const pool = emojiDb || [].concat(...EMOJI_DATA.map(c => c.items)).map(it => ({ e: it.e, n: (it.k || "").split(" ")[0], k: (it.k || "").toLowerCase(), sc: (it.k || "").split(/\s+/).filter(Boolean).slice(0, 1).map(w => w.replace(/\W+/g, "_")), skins: null }));
+  const scored = [];
+  const seen = new Set();
+  pool.forEach((it, i) => {
+    if (seen.has(it.e)) return;
+    let s = -1;
+    if (it.sc.some(c => c === q)) s = 0;
+    else if (it.sc.some(c => c.startsWith(q))) s = 1;
+    else if (it.n && it.n.toLowerCase().startsWith(q)) s = 2;
+    else if (it.sc.some(c => c.includes(q))) s = 3;
+    else if (it.k.split(/[\s_]+/).some(w => w.startsWith(q))) s = 4;
+    else if (it.k.includes(q)) s = 5;
+    if (s >= 0) { seen.add(it.e); scored.push([s, i, it]); }
+  });
+  scored.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  return scored.slice(0, max || 8).map(x => x[2]);
+}
+const EMOJI_TOKEN_RE = /(^|[\s(])(:[A-Za-z0-9_+\-]{2,})$/;
+const EMOJI_DONE_RE = /(^|[\s(]):([A-Za-z0-9_+\-]{2,}):$/;
+let emojiSuggestEl = null;
+function closeEmojiSuggest() { if (emojiSuggestEl) { emojiSuggestEl.remove(); emojiSuggestEl = null; } }
+/* Type ":" + 2 letters in this box to get emoji suggestions; Up/Down + Enter/Tab picks; a finished ":name:" turns into the emoji. */
+function attachEmojiSuggest(input) {
+  if (!input || input.dataset.emojiSuggest) return;
+  input.dataset.emojiSuggest = "1";
+  let items = [], idx = 0, tokenStart = -1;
+  const fits = (txt) => !(input.maxLength > 0 && txt.length > input.maxLength);
+  function replaceRange(from, to, text) {
+    const next = input.value.slice(0, from) + text + input.value.slice(to);
+    if (!fits(next)) return false;
+    input.value = next;
+    input.selectionStart = input.selectionEnd = from + text.length;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    return true;
+  }
+  function choose(i) {
+    const it = items[i]; if (!it || tokenStart < 0) return;
+    const caret = input.selectionStart;
+    const ch = toneOf(it);
+    if (replaceRange(tokenStart, caret, ch)) { rememberEmoji(ch); }
+    close();
+    input.focus();
+  }
+  function close() { closeEmojiSuggest(); items = []; tokenStart = -1; }
+  function paintList() {
+    closeEmojiSuggest();
+    if (!items.length) return;
+    const box = h("div", { className: "emoji-suggest", role: "listbox" });
+    items.forEach((it, i) => {
+      const code = (it.sc && it.sc[0]) || (it.n || "").replace(/\W+/g, "_");
+      box.appendChild(h("div", { className: "emoji-suggest-row" + (i === idx ? " on" : ""), role: "option", onmousedown: (ev) => { ev.preventDefault(); choose(i); } },
+        h("span", { className: "emoji-suggest-ch" }, toneOf(it)), h("span", { className: "emoji-suggest-name" }, ":" + code + ":")));
+    });
+    document.body.appendChild(box);
+    emojiSuggestEl = box;
+    const r = input.getBoundingClientRect();
+    box.style.left = Math.max(8, Math.min(r.left, window.innerWidth - box.offsetWidth - 8)) + "px";
+    box.style.top = Math.max(8, r.top - box.offsetHeight - 6) + "px";
+    box.style.minWidth = Math.min(260, Math.max(180, r.width * 0.5)) + "px";
+  }
+  function update() {
+    const caret = input.selectionStart == null ? input.value.length : input.selectionStart;
+    const before = input.value.slice(0, caret);
+    // finished :name: -> emoji
+    const done = before.match(EMOJI_DONE_RE);
+    if (done && emojiDb && emojiByShortcode[done[2].toLowerCase()]) {
+      const it = emojiByShortcode[done[2].toLowerCase()];
+      const from = caret - done[2].length - 2;
+      if (replaceRange(from, caret, toneOf(it))) { rememberEmoji(toneOf(it)); close(); return; }
+    }
+    const m = before.match(EMOJI_TOKEN_RE);
+    if (!m) { close(); return; }
+    tokenStart = caret - m[2].length;
+    if (!emojiDb) loadEmojiDb().then(() => { if (tokenStart >= 0 && document.activeElement === input) update(); });
+    items = suggestEmojis(m[2], 8); idx = 0;
+    paintList();
+  }
+  input.addEventListener("input", update);
+  input.addEventListener("click", update);
+  input.addEventListener("blur", () => setTimeout(close, 120));
+  input.addEventListener("keydown", (e) => {
+    if (!emojiSuggestEl) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); e.stopImmediatePropagation(); idx = (idx + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length; paintList(); }
+    else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); e.stopImmediatePropagation(); choose(idx); }
+    else if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); close(); }
+  }, true);
+}
+window.VUS_UI = Object.assign(window.VUS_UI || {}, { attachEmojiSuggest, loadEmojiDb, suggestEmojis });
+setTimeout(() => { try { loadEmojiDb(); } catch (e) {} }, 4000);   // warm the cache in the background
 
 function buildEmojiPicker() {
   $emojiPickerPopover.innerHTML = "";
@@ -3066,7 +3230,8 @@ function insertAtCursor(textarea, text) {
   textarea.selectionStart = textarea.selectionEnd = start + text.length;
   autosizeChatInput();
 }
-$emojiPickerBtn.addEventListener("click", () => openEmojiPicker($emojiPickerBtn, e => { insertAtCursor($chatMsgInput, e); $chatMsgInput.focus(); }));
+$emojiPickerBtn.addEventListener("click", () => openEmojiPicker($emojiPickerBtn, e => { insertAtCursor($chatMsgInput, e); $chatMsgInput.focus(); }, { input: $chatMsgInput }));
+attachEmojiSuggest($chatMsgInput);
 
 function openImageLightbox(src) { if (!src) return; $imageLightboxImg.src = src; $imageLightbox.classList.add("show"); }
 function closeImageLightbox() { $imageLightbox.classList.remove("show"); $imageLightboxImg.removeAttribute("src"); }

@@ -2228,3 +2228,29 @@ body.hide-verified .verified-tag { display: none !important; }
 @media (max-width: 720px) { #chatMenuBtn { width: 40px; height: 40px; } #chatThreadHeader { padding: 10px 10px; gap: 10px; } #chatBackBtn { display: inline-block !important; font-size: 22px; padding: 4px 8px 4px 2px; } #groupInfoBtn { display: none !important; } }
 .list-row.dm-row .list-row-sub { font-family: inherit; }
 .list-row.dm-row .list-row-info { min-width: 0; }
+
+/* ── Emoji picker: full set, skin tones, :shortcode suggestions ── */
+.emoji-pop { height: 400px; max-height: calc(100vh - 16px); }
+.emoji-foot { border-top: 1px solid #1f2937; padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+.emoji-tones { display: flex; gap: 4px; }
+.emoji-tone { flex: 1; background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 3px 0; cursor: pointer; font-size: 16px; }
+.emoji-tone:hover { background: rgba(255,255,255,.06); }
+.emoji-tone.on { border-color: #22c55e; background: rgba(34,197,94,.1); }
+.emoji-device-btn { background: transparent; border: 1px dashed #334155; color: #94a3b8; border-radius: 8px; padding: 6px 10px; cursor: pointer; font-size: 12.5px; }
+.emoji-device-btn:hover { color: #e2e8f0; border-color: #64748b; }
+.emoji-device-hint { display: none; font-size: 12px; color: #fde68a; line-height: 1.4; }
+.emoji-suggest { position: fixed; z-index: 1100; background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 5px; box-shadow: 0 12px 32px rgba(0,0,0,.5); max-height: 320px; overflow-y: auto; }
+.emoji-suggest-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; cursor: pointer; color: #cbd5e1; font-size: 14px; }
+.emoji-suggest-row.on, .emoji-suggest-row:hover { background: rgba(34,197,94,.16); color: #fff; }
+.emoji-suggest-ch { font-size: 20px; width: 26px; text-align: center; }
+
+/* ── Video clips ── */
+.video-bubble { max-width: min(420px, 100%); }
+.vid-card { display: flex; align-items: center; gap: 12px; width: 100%; background: rgba(15,23,42,.55); border: 1px solid #334155; border-radius: 12px; padding: 12px 14px; cursor: pointer; color: inherit; text-align: left; }
+.vid-card:hover { border-color: #22c55e; }
+.vid-play { width: 42px; height: 42px; border-radius: 50%; background: #22c55e; color: #052e16; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+.vid-info { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.vid-sub { font-size: 12.5px; opacity: .7; }
+.vid-el { display: block; max-width: 100%; max-height: 340px; border-radius: 10px; background: #000; }
+.vid-count { font-size: 11.5px; opacity: .65; margin-top: 6px; }
+.vid-gone { font-size: 13.5px; opacity: .75; padding: 4px 2px; }

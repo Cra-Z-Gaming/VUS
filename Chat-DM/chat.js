@@ -22,6 +22,20 @@ const FIREBASE_APP_NAME = "vusChat";
 let dmAuthDb = null; // accounts database (vus-dm), shared with dm.js
 
 const MAIN_ROOM_ID = "vus-hub-main";
+const VIDEO_MAX_SECONDS = 60;
+const VIDEO_MAX_BYTES = 24 * 1024 * 1024;        // the chat database caps what one clip can be
+const VIDEO_TTL_MS = 5 * 60 * 1000;               // a clip disappears 5 minutes after it is posted
+const VIDEO_UPLOAD_WINDOW_MS = 15 * 60 * 1000;
+const VIDEO_CHUNK_BYTES = 786432;                 // 768 KB -> 1 MB of base64 per database value
+const localVideoUrls = new Map();                 // clip id -> blob URL (the sender's own copy, or one already loaded)
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(",")[1] || "");
+    r.onerror = () => reject(r.error || new Error("read failed"));
+    r.readAsDataURL(blob);
+  });
+}
 
 const ROOM_DURATION_MS = 15 * 60 * 1000;
 const ROOM_WARNING_MS = 60 * 1000;
@@ -200,6 +214,8 @@ const ChatBackend = {
   _timeoutsRef: null,
   _modRetimeoutRef: null,
   _commandHistoryRef: null,
+  _mediaMetaRef: null,
+  _mediaDataRef: null,
   _bansRef: null,
   _imageAccessRef: null,
   _temporaryRoleTimers: {},
@@ -437,6 +453,8 @@ const ChatBackend = {
     this._timeoutsRef = this._db.ref("rooms/" + modRoom + "/timeouts");
     this._modRetimeoutRef = this._db.ref("rooms/" + modRoom + "/modRetimeoutCooldowns");
     this._commandHistoryRef = this._db.ref("rooms/" + modRoom + "/commandHistory");
+    this._mediaMetaRef = this._db.ref("rooms/" + roomId + "/mediaMeta");
+    this._mediaDataRef = this._db.ref("rooms/" + roomId + "/mediaData");
     this._editsRef = this._db.ref("rooms/" + roomId + "/edits");
     this._reactionsRef = this._db.ref("rooms/" + roomId + "/reactions");
   },
@@ -447,8 +465,63 @@ const ChatBackend = {
     if (this._presenceRef) this._presenceRef.off();
     if (this._leaveEventsRef) this._leaveEventsRef.off();
     if (this._editsRef) this._editsRef.off();
+    if (this._mediaMetaRef) this._mediaMetaRef.off();
     if (this._timeoutsRef) this._timeoutsRef.off();
     if (this._reactionsRef) this._reactionsRef.off();
+  },
+
+  // ── Videos: mediaMeta/<id> = expiry time (ms); mediaData/<id>/<n> = base64 chunks. Anyone who sees the expiry pass deletes both. ──
+  watchMedia(cb) {
+    this._mediaMetaRef.on("child_added", s => cb(s.key, s.val()));
+    this._mediaMetaRef.on("child_changed", s => cb(s.key, s.val()));
+    this._mediaMetaRef.on("child_removed", s => cb(s.key, null));
+  },
+  async deleteMedia(id) {
+    try { await this._mediaDataRef.child(id).remove(); } catch (e) {}
+    try { await this._mediaMetaRef.child(id).remove(); } catch (e) {}
+  },
+  async sendVideo(name, file, dur, loginId, onProgress) {
+    const id = this._mediaDataRef.push().key;
+    const n = Math.ceil(file.size / VIDEO_CHUNK_BYTES);
+    // The expiry goes up FIRST (generous upload window) so a dead upload is still swept away.
+    await this._mediaMetaRef.child(id).set((await this._serverNow()) + VIDEO_UPLOAD_WINDOW_MS);
+    let next = 0, done = 0;
+    const worker = async () => {
+      for (;;) {
+        const i = next++; if (i >= n) return;
+        const b64 = await blobToBase64(file.slice(i * VIDEO_CHUNK_BYTES, (i + 1) * VIDEO_CHUNK_BYTES));
+        await this._mediaDataRef.child(id).child(String(i)).set(b64);
+        done++; if (onProgress) onProgress(done / n);
+      }
+    };
+    try { await Promise.all([worker(), worker(), worker()]); }
+    catch (e) { await this.deleteMedia(id); throw e; }
+    const exp = (await this._serverNow()) + VIDEO_TTL_MS;
+    await this._mediaMetaRef.child(id).set(exp);
+    const color = await this.getNameColor(loginId);
+    localVideoUrls.set(id, URL.createObjectURL(file));
+    await this._ref.push({
+      name: name,
+      ...(loginId ? { loginId: String(loginId) } : {}),
+      ts: firebase.database.ServerValue.TIMESTAMP,
+      video: { id, n, size: file.size, mime: file.type, dur: Math.round(dur * 10) / 10, exp }
+    });
+    return id;
+  },
+  async fetchVideo(id, n, mime, onProgress) {
+    const parts = new Array(n); let next = 0, done = 0;
+    const worker = async () => {
+      for (;;) {
+        const i = next++; if (i >= n) return;
+        const snap = await this._mediaDataRef.child(id).child(String(i)).get();
+        const b64 = snap.val(); if (typeof b64 !== "string") throw new Error("gone");
+        const bin = atob(b64); const u8 = new Uint8Array(bin.length);
+        for (let k = 0; k < bin.length; k++) u8[k] = bin.charCodeAt(k);
+        parts[i] = u8; done++; if (onProgress) onProgress(done / n);
+      }
+    };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+    return new Blob(parts, { type: mime });
   },
 
   // ── Edits: edits/<messageId> = { text, by, ts }. Readers only apply an edit whose `by` is the message's author. ──
@@ -1581,7 +1654,7 @@ function fillBubbleText(bubble, text, legacy) {
   if (pos < text.length) bubble.appendChild(document.createTextNode(text.slice(pos)));
 }
 function mentionInfoFor(msg) {
-  if (!myName || msg.imageData) return { me: false, ping: false };
+  if (!myName || msg.imageData || msg.video) return { me: false, ping: false };
   const toks = parseMentionTokens(msg.text);
   let me = false, ping = false;
   toks.forEach(t => { if (t.name === myName) { me = true; if (t.ping) ping = true; } });
@@ -2058,7 +2131,7 @@ const reactionsByMsg = {};           // message id -> { emoji: { loginId: true }
 let replyingTo = null;               // { id, name, text }
 let editingMsgId = null;
 let lastReactAt = 0, lastEditAt = 0;
-const EMOJI_KEY_OK = /^[^.$#\[\]\/\u0000-\u001f]{1,16}$/;
+const EMOJI_KEY_OK = /^[^.$#\[\]\/\u0000-\u001f]{1,32}$/;
 function validEmojiKey(k) { return typeof k === "string" && EMOJI_KEY_OK.test(k) && /\p{Extended_Pictographic}/u.test(k); }
 function snippetOf(m) { return m.isImage ? "\uD83D\uDCF7 Image" : stripMentionMarks(m.text).slice(0, 80); }
 
@@ -2210,15 +2283,15 @@ function violatesRateLimit(msg) {
   if (!msg.loginId || !msg.ts || msg.ts < liveSince || !rolesReady) return false;
   const id = String(msg.loginId);
   const role = effectiveRoleForLoginId(id);
-  const table = msg.imageData ? ROLE_IMAGE_COOLDOWNS_MS : ROLE_MESSAGE_COOLDOWNS_MS;
+  const table = (msg.imageData || msg.video) ? ROLE_IMAGE_COOLDOWNS_MS : ROLE_MESSAGE_COOLDOWNS_MS;
   const cd = table[role] != null ? table[role] : 10000;
   const prev = lastAccepted[id];
   if (prev) {
     const gap = msg.ts - prev.ts;
-    const captionAfterImage = prev.image && !msg.imageData && gap < 2500;   // an image and its caption go out together
+    const captionAfterImage = prev.image && !msg.imageData && !msg.video && gap < 2500;   // an image and its caption go out together
     if (!captionAfterImage && gap < cd - RATE_TOLERANCE_MS) return true;     // too soon for their role: not accepted, doesn't reset their timer
   }
-  lastAccepted[id] = { ts: msg.ts, image: !!msg.imageData };
+  lastAccepted[id] = { ts: msg.ts, image: !!(msg.imageData || msg.video) };
   return false;
 }
 const imgAccessCache = {};
@@ -2334,7 +2407,7 @@ function renderMessage(msg) {
     if (!/^\d{6}$/.test(String(msg.loginId || "")) || !String(msg.name || "").trim()) { el.classList.add("anon-hidden"); hiddenForMe = true; }
     else {
       needsVerify = true;
-      if (msg.imageData) el.classList.add("anon-hidden");   // images stay hidden until the sender is confirmed
+      if (msg.imageData || msg.video) el.classList.add("anon-hidden");   // images and videos stay hidden until the sender is confirmed
     }
   }
 
@@ -2384,11 +2457,14 @@ function renderMessage(msg) {
     link.appendChild(img);
     bubble.appendChild(link);
     bubble.style.padding = "6px";
+  } else if (msg.video && typeof msg.video === "object") {
+    buildVideoBubble(bubble, msg);
+    bubble.style.padding = "8px";
   } else {
     fillBubbleText(bubble, msg.text, msg.mention);
   }
 
-  if (!msg.imageData) {
+  if (!msg.imageData && !msg.video) {
     if (msg.bubble) bubble.style.background = msg.bubble;
     if (msg.textColor) bubble.style.color = msg.textColor;
   }
@@ -2407,7 +2483,7 @@ function renderMessage(msg) {
   reactRow.className = "msg-reactions";
   el.appendChild(reactRow);
   if (msg.id) {
-    msgEls.set(String(msg.id), { el, bubble, reactRow, loginId: String(msg.loginId || ""), ts: Number(msg.ts) || 0, isImage: !!msg.imageData, mention: msg.mention || "" , text: msg.text || "" });
+    msgEls.set(String(msg.id), { el, bubble, reactRow, loginId: String(msg.loginId || ""), ts: Number(msg.ts) || 0, isImage: !!(msg.imageData || msg.video), mention: msg.mention || "" , text: msg.text || "" });
     el.appendChild(buildMessageActions(msg, mine));
     el.addEventListener("click", (ev) => {
       if (!(window.matchMedia && window.matchMedia("(hover: none)").matches)) return;
@@ -2465,12 +2541,13 @@ function renderMessage(msg) {
     window.VUS_DM.verifySender(msg.loginId, msg.name).then(async r => {
       // Text: hidden only if the id isn't a real account. Images: the account must be real, the name must match it,
       // and the sender must actually have image access (rank above Normie, or granted by a higher-up).
-      let bad = !r.ok || (msg.imageData && !r.nameMatches);
-      if (!bad && msg.imageData && !(await senderMayPostImages(String(msg.loginId)))) bad = true;
-      if (bad && !(r.unknown && !msg.imageData)) { el.classList.add("anon-hidden"); }
+      const isMedia = !!(msg.imageData || msg.video);
+      let bad = !r.ok || (isMedia && !r.nameMatches);
+      if (!bad && isMedia && !(await senderMayPostImages(String(msg.loginId)))) bad = true;
+      if (bad && !(r.unknown && !isMedia)) { el.classList.add("anon-hidden"); }
       else { el.classList.remove("anon-hidden"); if (r.ok && r.nameMatches) rememberPerson(msg.loginId, msg.name); firePing(); }
       if (autoScroll && stickToBottom) scrollToBottom();
-    }).catch(() => { if (msg.imageData) el.classList.add("anon-hidden"); else firePing(); });
+    }).catch(() => { if (msg.imageData || msg.video) el.classList.add("anon-hidden"); else firePing(); });
   } else {
     firePing();
   }
@@ -3531,6 +3608,24 @@ async function sendMessage() {
     return;
   }
 
+  if (pendingVideo) {
+    if (!canPostImages()) { clearPendingImage(); showComposerNotice("You don't have image/video access. Ask an Admin or higher."); return; }
+    const vWait = currentImageCooldownMs() - (Date.now() - lastImageSentAt);
+    if (vWait > 0) { showComposerNotice("Images and videos have a " + Math.round(currentImageCooldownMs() / 1000) + "s delay for your rank — wait " + Math.ceil(vWait / 1000) + "s."); return; }
+    const pv = pendingVideo;
+    const lbl = document.getElementById("chatPendingLabel");
+    pendingVideo = null;
+    $sendBtn.disabled = true; $uploadImageBtn.disabled = true;
+    lastSentAt = Date.now(); lastImageSentAt = Date.now();
+    stopTyping();
+    ChatBackend.sendVideo(myName, pv.file, pv.dur, myLoginId, p => { lbl.textContent = "Uploading video… " + Math.round(p * 100) + "%"; })
+      .then(() => { clearPendingImage(); if (text) return ChatBackend.send(myName, silentText, segs.length ? { name: segs[0].name, silent: true } : null, myLoginId, currentReplyPayload()); })
+      .then(() => { cancelReply(); $msgInput.value = ""; autosizeInput(); updateCharCounter(); autoScroll = true; setAutoScrollUI(); })
+      .catch(() => { clearPendingImage(); $connError.textContent = "Video failed to send — check your connection (or the clip may be too large)."; $connError.style.display = "block"; })
+      .finally(() => { $sendBtn.disabled = false; $uploadImageBtn.disabled = false; updateSendButtonState(); $msgInput.focus(); });
+    return;
+  }
+
   if (pendingImageDataUrl) {
     // Enforce, don't just hide the button: the pending image could have been
     // staged before access was revoked.
@@ -3670,16 +3765,61 @@ function compressImageFile(file) {
 
 let pendingImageDataUrl = null;
 
+let pendingVideo = null;   // { file, dur }
 function clearPendingImage() {
   pendingImageDataUrl = null;
+  pendingVideo = null;
   $pendingImageBar.style.display = "none";
   $pendingImagePreview.src = "";
+  const lbl = document.getElementById("chatPendingLabel"); if (lbl) lbl.textContent = "Image ready — click Send to post it";
+}
+function fmtBytes(n) { return n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB"; }
+// Reads a video's length and a poster frame without uploading anything.
+function probeVideo(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const v = document.createElement("video");
+    v.preload = "metadata"; v.muted = true; v.playsInline = true;
+    const fail = (m) => { URL.revokeObjectURL(url); reject(new Error(m)); };
+    const t = setTimeout(() => fail("timeout"), 15000);
+    const grab = () => {
+      let poster = "";
+      try {
+        const cv = document.createElement("canvas"); const w = 160, ratio = (v.videoHeight || 90) / (v.videoWidth || 160);
+        cv.width = w; cv.height = Math.max(1, Math.round(w * ratio));
+        cv.getContext("2d").drawImage(v, 0, 0, cv.width, cv.height); poster = cv.toDataURL("image/jpeg", 0.6);
+      } catch (e) {}
+      clearTimeout(t); URL.revokeObjectURL(url); resolve({ dur: v.duration, poster });
+    };
+    v.onerror = () => fail("unplayable");
+    v.onloadedmetadata = () => {
+      if (!isFinite(v.duration)) { v.currentTime = 1e9; v.ontimeupdate = () => { v.ontimeupdate = null; v.currentTime = 0; }; v.onseeked = () => { v.onseeked = null; v.currentTime = 0.05; v.onseeked = grab; }; }
+      else { v.onseeked = grab; v.currentTime = Math.min(0.1, v.duration / 2); }
+    };
+    v.src = url;
+  });
+}
+async function stageVideoFile(file) {
+  const note = (m) => { $connError.textContent = m; $connError.style.display = "block"; };
+  if (file.size > VIDEO_MAX_BYTES) { note("That video is " + fmtBytes(file.size) + ". The chat can hold clips up to " + fmtBytes(VIDEO_MAX_BYTES) + " (about 1 minute of normal-quality video)."); return; }
+  $uploadImageBtn.disabled = true; $uploadImageBtn.textContent = "Checking…";
+  try {
+    const info = await probeVideo(file);
+    if (info.dur > VIDEO_MAX_SECONDS + 0.5) { note("Videos can be at most " + VIDEO_MAX_SECONDS + " seconds. This one is " + Math.round(info.dur) + "s."); return; }
+    pendingImageDataUrl = null;
+    pendingVideo = { file, dur: info.dur };
+    $pendingImagePreview.src = info.poster || "";
+    document.getElementById("chatPendingLabel").textContent = "Video ready (" + Math.round(info.dur) + "s, " + fmtBytes(file.size) + ") — click Send. It disappears 5 minutes after posting.";
+    $pendingImageBar.style.display = "flex";
+  } catch (e) { note("Couldn't read that video — try an MP4 or WebM."); }
+  finally { $uploadImageBtn.disabled = false; $uploadImageBtn.textContent = "\uD83D\uDCCE Image / video"; $imageFileInput.value = ""; }
 }
 
 function stageImageFile(file) {
   if (!canPostImages()) return;
 
   if (!file) return;
+  if (/^video\//.test(file.type)) { stageVideoFile(file); return; }
   if (!file.type.startsWith("image/")) {
     $connError.textContent = "That file isn't an image.";
     $connError.style.display = "block";
@@ -3706,7 +3846,7 @@ function stageImageFile(file) {
     })
     .finally(() => {
       $uploadImageBtn.disabled = false;
-      $uploadImageBtn.textContent = "📎 Image";
+      $uploadImageBtn.textContent = "\uD83D\uDCCE Image / video";
       $imageFileInput.value = "";
     });
 }
@@ -7151,6 +7291,8 @@ function attachRoomListeners() {
   replyingTo = null; editingMsgId = null; updateReplyBar();
   Object.keys(timeoutsAll).forEach(k => delete timeoutsAll[k]);
   ChatBackend.watchAllTimeouts((id, val) => { if (val) timeoutsAll[id] = val; else delete timeoutsAll[id]; refreshSilencedMessages(); });
+  Object.keys(mediaExp).forEach(k => delete mediaExp[k]);
+  ChatBackend.watchMedia(onMediaMeta);
   ChatBackend.watchEdits(applyEdit);
   reactBootUntil = Date.now() + 3000;   // the burst of existing reactions at attach isn't news
   ChatBackend.watchReactions(onReactions);
@@ -7174,8 +7316,9 @@ let chatBooted = false;
       el.selectionStart = el.selectionEnd = s + emoji.length;
       el.dispatchEvent(new Event("input", { bubbles: true }));
       el.focus();
-    });
+    }, { input: $msgInput });
   });
+  if (window.VUS_UI && window.VUS_UI.attachEmojiSuggest) window.VUS_UI.attachEmojiSuggest($msgInput);
   const cancel = document.getElementById("chatReplyCancel");
   if (cancel) cancel.addEventListener("click", () => { if (editingMsgId) cancelEdit(); else cancelReply(); });
   $msgInput.addEventListener("keydown", (e) => {
@@ -7255,6 +7398,73 @@ function init() {
 }
 
 /* Lets dm.js (profile cards) ask which ranks an account holds. */
+/* ══════════ Video clips: click to load, gone 5 minutes after posting ══════════ */
+const mediaExp = {};            // clip id -> expiry (ms), from rooms/<room>/mediaMeta
+const mediaJitter = {};         // so every browser doesn't try the cleanup in the same instant
+const videoRecs = new Set();
+function onMediaMeta(id, exp) {
+  if (exp == null) { delete mediaExp[id]; return; }
+  mediaExp[id] = Number(exp) || 0;
+  if (mediaJitter[id] === undefined) mediaJitter[id] = Math.floor(Math.random() * 3000);
+}
+function fmtCountdown(ms) { const s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+function buildVideoBubble(bubble, msg) {
+  const v = msg.video;
+  const rec = { id: String(v.id || ""), v, bubble, exp: Number(v.exp) || 0, state: "", countEl: null, vidEl: null };
+  videoRecs.add(rec);
+  bubble.classList.add("video-bubble");
+  paintVideo(rec);
+}
+function paintVideo(rec) {
+  const { bubble, v } = rec;
+  const expired = ChatBackend.serverNowSync() >= rec.exp;
+  const want = expired ? "expired" : (localVideoUrls.has(rec.id) ? "playing" : "card");
+  if (rec.state === want) return;
+  rec.state = want; rec.vidEl = null; rec.countEl = null;
+  bubble.replaceChildren();
+  if (want === "expired") {
+    const url = localVideoUrls.get(rec.id); if (url) { URL.revokeObjectURL(url); localVideoUrls.delete(rec.id); }
+    const t = document.createElement("div"); t.className = "vid-gone"; t.textContent = "\u23F1 Countdown reached \u2014 this video was removed.";
+    bubble.appendChild(t); return;
+  }
+  const count = document.createElement("div"); count.className = "vid-count"; rec.countEl = count;
+  if (want === "playing") {
+    const vid = document.createElement("video");
+    vid.src = localVideoUrls.get(rec.id); vid.controls = true; vid.playsInline = true; vid.preload = "auto";
+    vid.className = "vid-el"; rec.vidEl = vid;
+    bubble.append(vid, count);
+    return;
+  }
+  const card = document.createElement("button"); card.type = "button"; card.className = "vid-card";
+  const play = document.createElement("span"); play.className = "vid-play"; play.textContent = "\u25B6";
+  const info = document.createElement("span"); info.className = "vid-info";
+  const l1 = document.createElement("b"); l1.textContent = "Video \u00b7 " + Math.round(Number(v.dur) || 0) + "s \u00b7 " + fmtBytes(Number(v.size) || 0);
+  const l2 = document.createElement("span"); l2.className = "vid-sub"; l2.textContent = "Click to load";
+  info.append(l1, l2); card.append(play, info);
+  card.addEventListener("click", async () => {
+    if (card.dataset.busy) return; card.dataset.busy = "1"; l2.textContent = "Loading\u2026 0%";
+    try {
+      const blob = await ChatBackend.fetchVideo(rec.id, Number(v.n) || 0, String(v.mime || "video/mp4"), p => { l2.textContent = "Loading\u2026 " + Math.round(p * 100) + "%"; });
+      localVideoUrls.set(rec.id, URL.createObjectURL(blob));
+      rec.state = ""; paintVideo(rec);
+      if (rec.vidEl) rec.vidEl.play().catch(() => {});
+    } catch (e) { delete card.dataset.busy; l2.textContent = "Couldn't load \u2014 it may have expired. Click to retry."; }
+  });
+  bubble.append(card, count);
+}
+function videoTick() {
+  const now = ChatBackend.serverNowSync();
+  videoRecs.forEach(rec => {
+    if (!rec.bubble.isConnected) { videoRecs.delete(rec); return; }
+    paintVideo(rec);
+    if (rec.countEl) rec.countEl.textContent = "disappears in " + fmtCountdown(rec.exp - now);
+  });
+  Object.keys(mediaExp).forEach(id => {
+    if (now >= mediaExp[id] + (mediaJitter[id] || 0)) { delete mediaExp[id]; ChatBackend.deleteMedia(id); }
+  });
+}
+setInterval(() => { try { if (ChatBackend._db) videoTick(); } catch (e) {} }, 1000);
+
 /* ══════════ Channels (Discord-style list) ══════════
    Main is everyone. Mods / Admins / Owners are rank channels: anyone at that rank OR HIGHER can enter.
    Verified is its own channel (MZK-linked accounts only), independent of rank.

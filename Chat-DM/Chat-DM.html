@@ -329,13 +329,13 @@
   <div id="typingBar" class="idle" style="padding:0 21px;font-size:17.2px;color:#64748b;font-style:italic;flex-shrink:0"></div>
   <div id="chatPendingImageBar" style="display:none;padding:10px 21px;border-top:1.5px solid #1f2937;align-items:center;gap:12px;flex-shrink:0">
     <img id="chatPendingImagePreview" style="max-height:60px;max-width:90px;border-radius:8px;object-fit:cover;display:block">
-    <span style="flex:1;font-size:14.5px;color:#94a3b8">Image ready — click Send to post it</span>
+    <span id="chatPendingLabel" style="flex:1;font-size:14.5px;color:#94a3b8">Image ready — click Send to post it</span>
     <button id="chatCancelPendingImageBtn" class="toolbar-btn">Cancel</button>
   </div>
   <div id="chatReplyBar" style="display:none"><span id="chatReplyText"></span><button type="button" id="chatReplyCancel" aria-label="Cancel">&times;</button></div>
   <div id="toolbar">
-    <button id="chatUploadImageBtn" class="toolbar-btn" style="display:none">📎 Image</button>
-    <input id="chatImageFileInput" type="file" accept="image/*" style="display:none">
+    <button id="chatUploadImageBtn" class="toolbar-btn" style="display:none">📎 Image / video</button>
+    <input id="chatImageFileInput" type="file" accept="image/*,video/*" style="display:none">
     <span id="charCounter">500</span>
     <div style="flex:1"></div>
     <div style="position:relative">
