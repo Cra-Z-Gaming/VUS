@@ -79,4 +79,6 @@ this project is free to make and is fully open source. i do not mind you using a
 
 2 - Donations: this is 100% optional but GREATLY appreciated: Cashapp $vlad118
 
-Donations would definitely make me happy and motivated to make more projects that live in VUS Hub
+Donations would help motivate me to keep building and improving projects within VUS
+
+I’d also be able to rent proxy servers and bring more proxy options to VUS for those interested.
