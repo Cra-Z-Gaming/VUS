@@ -13,7 +13,7 @@
   <div id="rail">
     <button class="rail-nav-btn active" id="navChat" title="Chat" aria-label="Chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-8l-4.5 4v-4H6a2 2 0 0 1-2-2V5z"/></svg></button>
     <div id="railRooms"></div>
-    <button class="rail-nav-btn rail-browse" id="navRooms" title="Browse rooms" aria-label="Browse rooms"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="rail-dot" id="roomsRailDot"></span></button>
+    <button class="rail-nav-btn rail-browse" id="navRooms" title="Browse rooms" aria-label="Browse rooms"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 21V4.5A1.5 1.5 0 0 1 7.5 3h9A1.5 1.5 0 0 1 18 4.5V21"/><path d="M3.5 21h17"/><circle cx="14.5" cy="12.5" r="0.9" fill="currentColor" stroke="none"/></svg><span class="rail-dot" id="roomsRailDot"></span></button>
     <div class="rail-sep"></div>
     <button class="rail-nav-btn" id="navChats" title="Direct messages" aria-label="Direct messages"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7.5 8 5.5 8-5.5"/></svg><span class="rail-dot" id="dmRailDot"></span></button>
   </div>
@@ -72,15 +72,21 @@
   </div>
 
 
+<div id="channelsCol" aria-label="Channels">
+  <div id="channelsHeader"><span>Channels</span><button type="button" id="channelsCloseBtn" title="Hide channels" aria-label="Hide channels">&laquo;</button></div>
+  <div id="channelsList"></div>
+</div>
+
 <div id="chatRoomPane">
 <div class="chat-header" id="chatHeader">
   <div class="hdr-left">
     <button class="mobile-menu-btn" aria-label="Open menu">&#9776;</button>
+    <button type="button" id="channelsToggleBtn" title="Show / hide channels" aria-label="Show or hide channels"><span class="ch-hash">#</span></button>
     <span id="onlineDot" class="chat-online-dot offline" title="Connection status"></span>
     <span id="onlineCount" class="online-count"></span>
     <div id="onlineListPanel" style="display:none;position:absolute;top:34px;left:0;background:#1e293b;border:1.5px solid #334155;border-radius:10px;padding:12px;z-index:30;width:220px;font-size:14px;font-weight:400;max-height:280px;overflow-y:auto"></div>
   </div>
-  <div class="hdr-title"><span class="ch-hash">#</span> VUS Chat</div>
+  <div class="hdr-title" id="hdrTitle"><span class="ch-hash">#</span> <span id="hdrTitleText">VUS Chat</span></div>
   <div class="hdr-right">
     <button id="notifBtn" type="button" title="Notifications" aria-label="Notifications">🔔<span id="notifBadge"></span></button>
     <button id="roomsToggleBtn" type="button" tabindex="-1">🚪 Rooms<span class="rooms-badge-dot" id="roomsBadgeDot"></span></button>
@@ -653,6 +659,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script>
 /* EXTERNAL FILE LOADER
    raw.githubusercontent.com serves text/plain, which browsers refuse to run as

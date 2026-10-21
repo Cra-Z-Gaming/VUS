@@ -33,6 +33,53 @@ let usersRef = null, usernameIndexRef = null, idIndexRef = null;
 let presenceRef = null, connectedRef = null, myPresenceRef = null;
 let dmsRef = null, groupChatsRef = null;
 
+/* ── Account ownership (anonymous sign-in claim) ──
+   Each browser signs in anonymously to the vus-dm project; the first browser to
+   log into an account stores its uid at users/<key>/ownerUid. The database rules
+   only let that uid change the password / username. */
+let authPromise = null, authErrorCode = "", claimPromise = null, ownedElsewhere = false, ownerClaimed = false;
+function ensureAuth() {
+  if (authPromise) return authPromise;
+  authPromise = (async () => {
+    try {
+      const a = firebase.apps.find(x => x.name === FIREBASE_APP_NAME).auth();
+      if (a.currentUser) return a.currentUser.uid;
+      const cred = await a.signInAnonymously();
+      return cred.user.uid;
+    } catch (e) {
+      authErrorCode = String((e && e.code) || (e && e.message) || "auth");
+      authPromise = null;
+      return null;
+    }
+  })();
+  return authPromise;
+}
+function claimOwnership(accountKey) {
+  ownedElsewhere = false; ownerClaimed = false;
+  claimPromise = (async () => {
+    const uid = await ensureAuth();
+    if (!uid) return;
+    try {
+      const ref = usersRef.child(accountKey).child("ownerUid");
+      const cur = (await ref.get()).val();
+      // Logging in with the right password re-claims the account for THIS browser/site,
+      // so people who move between sites keep full control of their account.
+      if (cur !== uid) await ref.set(uid);
+      ownerClaimed = true;
+    } catch (e) { /* rules not updated yet: stays unclaimed */ }
+  })();
+  return claimPromise;
+}
+async function accountWriteBlock() {
+  if (claimPromise) await claimPromise;
+  if (ownedElsewhere) return "This account is locked to the browser that first signed in to it. Ask the Owner to reset it, then log in again.";
+  if (!ownerClaimed) {
+    if (/operation-not-allowed|admin-restricted/.test(authErrorCode)) return "Anonymous sign-in is switched off in the vus-dm Firebase console (Authentication → Sign-in method → Anonymous).";
+    if (authErrorCode) return "Couldn't verify this browser with the database (" + authErrorCode + ").";
+  }
+  return null;
+}
+
 function initFirebase() {
   const app = firebase.apps.find(a => a.name === FIREBASE_APP_NAME) || firebase.initializeApp(FIREBASE_CONFIG, FIREBASE_APP_NAME);
   db = app.database();
@@ -581,6 +628,10 @@ async function updateProfile(newUsername, newAvatarDataUrl, newBio, newMzk) {
   if (Object.keys(updates).length === 0 && bioToSave === undefined && mzkToSave === undefined) return { ok: true, username: currentSession.username };
 
   if (Object.keys(updates).length > 0) {
+    if (usernameChanged) {
+      const block = await accountWriteBlock();
+      if (block) return { ok: false, error: block };
+    }
     try {
       await db.ref().update(updates);
     } catch (e) {
@@ -666,6 +717,7 @@ async function linkMzkAccount(email, password) {
     try { await k.child("mzkUid").set(user.uid); await k.child("mzk").set(null); }
     catch (e) { try { await auth.signOut(); } catch (_) {} return { ok: false, error: "VUS-DM database rules refused users/…/mzkUid. Add an mzkUid rule next to mzk in the vus-dm rules." }; }   // the account link replaces any pasted code
     delete profileCache[currentSession.accountKey];
+    clearVerifiedCache();
     await auth.signOut().catch(() => {});
     return { ok: true, uid: user.uid };
   } catch (e) {
@@ -682,8 +734,42 @@ async function clearMzkLink() {
     const k = usersRef.child(currentSession.accountKey);
     await Promise.all([k.child("mzk").set(null), k.child("mzkUid").set(null)]);
     delete profileCache[currentSession.accountKey];
+    clearVerifiedCache();
     return { ok: true };
   } catch (e) { return { ok: false, error: "VUS-DM database rules refused clearing mzk/mzkUid (" + (e.code || e.message) + ")." }; }
+}
+
+/* ── Verified = an MZK account (email verified at link time) linked to this VUS id ── */
+const verifiedMap = {}, verifiedInflight = {};
+const VERIFIED_TTL = 5 * 60 * 1000;
+function verifiedCached(loginId) {
+  const e = verifiedMap[String(loginId || "")];
+  return e && Date.now() - e.at < VERIFIED_TTL ? e.v : undefined;
+}
+function clearVerifiedCache() { Object.keys(verifiedMap).forEach(k => delete verifiedMap[k]); }
+function isVerifiedLoginId(loginId) {
+  const id = String(loginId || "");
+  if (!/^\d{6}$/.test(id)) return Promise.resolve(false);
+  const hit = verifiedCached(id);
+  if (hit !== undefined) return Promise.resolve(hit);
+  if (verifiedInflight[id]) return verifiedInflight[id];
+  const p = (async () => {
+    let v = false;
+    try {
+      const key = await accountKeyForLoginId(id);
+      const prof = key ? await fetchAccountProfile(key) : null;
+      if (prof && prof.mzkUid && String(prof.id) === id) {
+        const fs = await loadMzkDb();
+        const snap = await fs.collection("links").doc(prof.mzkUid).get();
+        v = snap.exists && String((snap.data() || {}).vusId) === id;
+      }
+    } catch (e) { delete verifiedInflight[id]; return false; }
+    verifiedMap[id] = { v, at: Date.now() };
+    delete verifiedInflight[id];
+    return v;
+  })();
+  verifiedInflight[id] = p;
+  return p;
 }
 
 function friendlyDbError(e, prefix) {
@@ -696,11 +782,13 @@ async function changePassword(currentPassword, newPassword) {
   if (!currentSession) return { ok: false, error: "Not logged in." };
   if (!newPassword || newPassword.length < 4) return { ok: false, error: "New password must be at least 4 characters." };
   try {
+    const block = await accountWriteBlock();
+    if (block) return { ok: false, error: block };
     const snap = await usersRef.child(currentSession.accountKey).child("password").get();
     if (!(await verifyPassword(currentPassword, snap.val()))) return { ok: false, error: "Current password is incorrect." };
     await usersRef.child(currentSession.accountKey).child("password").set(await hashPassword(newPassword));
     return { ok: true };
-  } catch (e) { return { ok: false, error: "Couldn't change password — try again." }; }
+  } catch (e) { return { ok: false, error: friendlyDbError(e, "Couldn't change password") }; }
 }
 
 let currentUserData = null;
@@ -2244,6 +2332,7 @@ $authForm.addEventListener("submit", async (e) => {
       if (!result.ok) { $authError.textContent = result.error; return; }
       saveSession(result.accountKey, result.username, result.id);
       currentSession = result;
+      claimOwnership(result.accountKey);
       claimPresence(result.accountKey, result.username);
       watchOwnAccount(result.accountKey, renderAllRelationshipUI);
       watchMyGroupChats(renderGroupsList);
@@ -2968,6 +3057,7 @@ function init() {
         }
       } catch (e) { /* offline: trust the saved session */ }
       currentSession = session;
+      claimOwnership(session.accountKey);
       claimPresence(session.accountKey, session.username);
       watchOwnAccount(session.accountKey, renderAllRelationshipUI);
       watchMyGroupChats(renderGroupsList);
@@ -3076,6 +3166,10 @@ function fillProfileCard(prof, accountKey) {
   $chatUserProfileId.textContent = "#" + prof.id;
   renderAvatarInto($chatUserProfileAvatar, prof.username, prof.avatar);
   fillRoles($chatUserProfileRoles, prof.id);
+  isVerifiedLoginId(prof.id).then(v => {
+    if (!v || $chatUserProfileName.textContent !== prof.username) return;
+    $chatUserProfileRoles.appendChild(h("span", { className: "verified-tag in-card" }, "\u2713 Verified"));
+  });
   if (prof.bio) { $chatUserProfileBio.textContent = prof.bio; $chatUserProfileBioWrap.style.display = "block"; }
   if (mzkSourceOf(prof) && $chatUserProfileOverlay.style.display === "flex") profileSongUnsub = mountSong($chatUserProfileSong, mzkSourceOf(prof));
 
@@ -3162,6 +3256,8 @@ window.VUS_DM = {
     return prof ? prof.createdAt : 0;
   },
   searchUsernames: async (q) => { try { return (await searchByUsernamePrefix(q)).map(a => ({ username: a.username, id: a.id })); } catch (e) { return []; } },
+  isVerified: isVerifiedLoginId,
+  verifiedCached,
   getSession: () => currentSession ? { accountKey: currentSession.accountKey, username: currentSession.username, id: currentSession.id } : null,
   logout: () => doLogout()
 };

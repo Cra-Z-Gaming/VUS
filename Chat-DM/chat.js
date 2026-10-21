@@ -1379,6 +1379,7 @@ function applyAppearance() {
   ["s", "m", "l", "xl"].forEach(k => b.classList.toggle("fs-" + k, chatPrefs.textSize === k));
   ["compact", "normal", "roomy"].forEach(k => b.classList.toggle("bs-" + k, chatPrefs.bubbleSize === k));
   b.classList.toggle("bold-text", !!chatPrefs.bold);
+  b.classList.toggle("hide-verified", chatPrefs.showVerified === false);
   b.classList.add("has-radius");
   const r = Number(chatPrefs.radius);
   b.style.setProperty("--bubble-radius", (r >= 0 && r <= 40 ? r : 12) + "px");
@@ -2352,6 +2353,7 @@ function renderMessage(msg) {
     nameLink.addEventListener("click", () => openProfileFor(msg.loginId, msg.name));
   }
   meta.appendChild(nameLink);
+  if (msg.loginId) { const vt = document.createElement("span"); vt.className = "verified-tag"; vt.dataset.vid = String(msg.loginId); vt.textContent = "\u2713 Verified"; meta.appendChild(vt); paintVerifiedTag(vt); }
   if (msg.ts) meta.appendChild(document.createTextNode(" · " + formatTime(msg.ts)));
   el.appendChild(meta);
 
@@ -2412,6 +2414,7 @@ function renderMessage(msg) {
       el.classList.toggle("touch-active");
     });
   }
+  if (msg.loginId && !mine) gateChannelEl(el, msg.loginId);
   $messages.appendChild(el);
   if (msg.id) {
     if (pendingEdits[msg.id]) applyEdit(String(msg.id), pendingEdits[msg.id]);
@@ -3508,6 +3511,7 @@ async function sendMessage() {
 
   // Chatting but missing from the online list? Put them back.
   if (myLoginId && !latestPresenceList.some(e => String(e.loginId || "") === String(myLoginId))) ChatBackend.ensurePresence();
+  if (!channelAllowedFor(activeChannel(), myLoginId)) { showComposerNotice("You can't post in this channel."); return; }
   if (myTimeoutRemainingMs > 0) {
     showComposerNotice("You're muted for " + formatCountdown(myTimeoutRemainingMs) + " more.");
     return;
@@ -3832,6 +3836,9 @@ function renderChatSettings(container) {
   };
 
   toggle("Auto scroll", "Keeps the newest message in view", () => autoScroll, v => setAutoScroll(v));
+  toggle("Verified tag", "Show the green \u201cVerified\u201d tag next to verified people", () => chatPrefs.showVerified !== false, v => {
+    chatPrefs.showVerified = v; saveChatPrefs(); applyAppearance();
+  });
   toggle("Show join / leave", "\u201cX joined\u201d and \u201cX left\u201d lines", () => chatPrefs.showJoinLeave !== false, v => {
     chatPrefs.showJoinLeave = v;
     saveChatPrefs();
@@ -4321,6 +4328,7 @@ const nameToLoginId = () => {
 };
 
 function rebuildRoleHolders() {
+  if (typeof onRolesChangedForChannels === "function") setTimeout(onRolesChangedForChannels, 0);
   const n2i = nameToLoginId();
   const idToName = {};
   Object.entries(n2i).forEach(([safeName, id]) => { idToName[id] = safeName; });
@@ -6611,6 +6619,7 @@ async function joinRoomByCode(code) {
 
   teardownCurrentRoomMetaWatch();
   currentRoomCode = code;
+  activeChannelId = null; paintChannelsUi();
   ChatBackend.bindToRoom(code);
   await ChatBackend.claimPresence(myName, false, myLoginId);
   watchMyTimeout();
@@ -6625,7 +6634,8 @@ async function joinRoomByCode(code) {
 }
 
 async function switchToMainRoom() {
-  if (currentRoomCode === null) return;
+  if (currentRoomCode === null && activeChannelId === "main") return;
+  activeChannelId = "main";
 
   teardownCurrentRoomMetaWatch();
   currentRoomCode = null;
@@ -6642,6 +6652,7 @@ async function switchToMainRoom() {
   $roomTopBar.style.display = "none";
   clearInterval(topBarCountdownTimer);
   extendPromptShownForCode = null;
+  paintChannelsUi();
 }
 
 function teardownCurrentRoomMetaWatch() {
@@ -6963,6 +6974,7 @@ let memberSongUnsubs = [];   // live "now playing" listeners for the rows curren
 
 let showOfflineRanks = false;   // offline rank-holders are tucked away until you expand the list
 function renderMembersPane() {
+  if (typeof renderChannelList === "function") renderChannelList();
   if (!$membersList) return;
   memberSongUnsubs.forEach(f => { try { f(); } catch (e) {} });
   memberSongUnsubs = [];
@@ -7230,7 +7242,130 @@ function init() {
 }
 
 /* Lets dm.js (profile cards) ask which ranks an account holds. */
+/* ══════════ Channels (Discord-style list) ══════════
+   Main is everyone. Mods / Admins / Owners are rank channels: anyone at that rank OR HIGHER can enter.
+   Verified is its own channel (MZK-linked accounts only), independent of rank.
+   Each channel is its own chat room (own messages, presence, typing). Access is enforced in this client
+   (the chat database has no per-user auth), so it keeps honest users out and hides other senders' posts. */
+const CHANNELS = [
+  { id: "main",     room: MAIN_ROOM_ID,   label: "main",     icon: "#", hint: "Everyone" },
+  { id: "verified", room: "ch-verified",  label: "verified", icon: "\u2713", hint: "Verified accounts only", verified: true },
+  { id: "mods",     room: "ch-mods",      label: "mods",     icon: "\uD83D\uDEE1\uFE0F", hint: "Mods and above", minRank: ROLES.mod.rank },
+  { id: "admins",   room: "ch-admins",    label: "admins",   icon: "\u2694\uFE0F", hint: "Admins and above", minRank: ROLES.admin.rank },
+  { id: "owners",   room: "ch-owners",    label: "owners",   icon: "\uD83D\uDC51", hint: "Owner and Co-Owner", minRank: ROLES.coowner.rank }
+];
+let activeChannelId = "main";
+const CHANNELS_OPEN_KEY = "vusChannelsOpen";
+function activeChannel() { return CHANNELS.find(c => c.id === activeChannelId) || CHANNELS[0]; }
+function verifiedOf(id) { return window.VUS_DM && window.VUS_DM.verifiedCached ? window.VUS_DM.verifiedCached(id) : false; }
+function channelStateFor(ch, loginId) {
+  if (!ch || ch.id === "main") return true;
+  if (!loginId) return false;
+  if (ch.verified) return verifiedOf(loginId);
+  if (ch.minRank) return rankOfLoginId(loginId) >= ch.minRank;
+  return true;
+}
+function channelAllowedFor(ch, loginId) { return channelStateFor(ch, loginId) === true; }
+function paintVerifiedTag(el) {
+  const id = el.dataset.vid, v = verifiedOf(id);
+  if (v === true) { el.classList.add("on"); return; }
+  if (v === false || !window.VUS_DM || !window.VUS_DM.isVerified) return;
+  window.VUS_DM.isVerified(id).then(ok => {
+    document.querySelectorAll('.verified-tag[data-vid="' + id + '"]').forEach(t => t.classList.toggle("on", ok));
+    regateChannelMessages(); renderChannelList();
+  });
+}
+function gateChannelEl(el, loginId) {
+  const ch = activeChannel();
+  if (activeChannelId === null || ch.id === "main") { el.classList.remove("chan-hidden"); return; }
+  const st = channelStateFor(ch, loginId);
+  el.classList.toggle("chan-hidden", st !== true);
+  if (st === undefined && window.VUS_DM) window.VUS_DM.isVerified(loginId).then(() => regateChannelMessages());
+}
+function regateChannelMessages() {
+  document.querySelectorAll("#messages .msg[data-sender-id]").forEach(el => {
+    if (el.classList.contains("mine")) return;
+    gateChannelEl(el, el.dataset.senderId);
+  });
+}
+function renderChannelList() {
+  const list = document.getElementById("channelsList");
+  if (!list) return;
+  if (myLoginId && window.VUS_DM && verifiedOf(myLoginId) === undefined) window.VUS_DM.isVerified(myLoginId).then(() => renderChannelList());
+  list.replaceChildren();
+  CHANNELS.forEach(ch => {
+    const ok = channelStateFor(ch, myLoginId) === true;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "channel-row" + (ch.id === activeChannelId ? " active" : "") + (ok ? "" : " locked");
+    b.dataset.channel = ch.id;
+    b.title = ok ? ch.hint : ch.hint + " \u2014 locked";
+    const ic = document.createElement("span"); ic.className = "channel-ic"; ic.textContent = ch.icon;
+    const nm = document.createElement("span"); nm.className = "channel-name"; nm.textContent = ch.label;
+    b.append(ic, nm);
+    if (!ok) { const lk = document.createElement("span"); lk.className = "channel-lock"; lk.textContent = "\uD83D\uDD12"; b.appendChild(lk); }
+    b.addEventListener("click", () => openChannel(ch.id));
+    list.appendChild(b);
+  });
+}
+function paintChannelsUi() {
+  renderChannelList();
+  const t = document.getElementById("hdrTitleText");
+  if (t) t.textContent = activeChannelId ? (activeChannelId === "main" ? "VUS Chat" : activeChannel().label) : (currentRoomMeta && currentRoomMeta.name ? currentRoomMeta.name : "Room");
+  regateChannelMessages();
+}
+async function openChannel(id) {
+  const ch = CHANNELS.find(c => c.id === id);
+  if (!ch || !myName) return;
+  if (id !== "main" && channelStateFor(ch, myLoginId) !== true) {
+    if (ch.verified && verifiedOf(myLoginId) === undefined && window.VUS_DM) await window.VUS_DM.isVerified(myLoginId);
+    if (channelStateFor(ch, myLoginId) !== true) {
+      showComposerNotice(ch.verified ? "The verified channel is only for accounts linked to a verified MZK email (Settings \u2192 MZK)." : ch.hint + " can use #" + ch.label + ".");
+      renderChannelList();
+      return;
+    }
+  }
+  if (id === "main") { await switchToMainRoom(); return; }
+  if (activeChannelId === id && currentRoomCode === null) return;
+  teardownCurrentRoomMetaWatch();
+  currentRoomCode = null;
+  currentRoomMeta = null;
+  activeChannelId = id;
+  ChatBackend.bindToRoom(ch.room);
+  await ChatBackend.claimPresence(myName, false, myLoginId);
+  watchMyTimeout();
+  attachRoomListeners();
+  $messages.innerHTML = "";
+  messageCount = 0;
+  $emptyState.style.display = "flex";
+  $roomTopBar.style.display = "none";
+  clearInterval(topBarCountdownTimer);
+  paintChannelsUi();
+}
+function onRolesChangedForChannels() {
+  renderChannelList();
+  const ch = activeChannel();
+  if (activeChannelId && activeChannelId !== "main" && channelStateFor(ch, myLoginId) === false) { showComposerNotice("You no longer have access to #" + ch.label + "."); switchToMainRoom(); return; }
+  regateChannelMessages();
+}
+function setChannelsOpen(open) {
+  const shell = document.getElementById("appShell");
+  if (shell) shell.classList.toggle("channels-closed", !open);
+  try { localStorage.setItem(CHANNELS_OPEN_KEY, open ? "1" : "0"); } catch (e) {}
+}
+(function initChannelsUi() {
+  let open = true;
+  try { if (localStorage.getItem(CHANNELS_OPEN_KEY) === "0") open = false; } catch (e) {}
+  setChannelsOpen(open);
+  const tg = document.getElementById("channelsToggleBtn"), cl = document.getElementById("channelsCloseBtn");
+  const flip = () => setChannelsOpen(document.getElementById("appShell").classList.contains("channels-closed"));
+  if (tg) tg.addEventListener("click", flip);
+  if (cl) cl.addEventListener("click", () => setChannelsOpen(false));
+  renderChannelList();
+})();
+
 window.VUS_CHAT = {
+  channels: { list: CHANNELS, open: openChannel, active: () => activeChannelId },
   getPrefsState, restorePrefsState,
   staffActionsFor, runStaffAction, timeoutLimitsForRank, banLimitsForRank,
   isMuted, toggleMute,

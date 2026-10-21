@@ -2147,3 +2147,27 @@ body.bg-light .msg-reply { color: #334155; }
 .np-time { font-size: 11px; color: #64748b; white-space: nowrap; }
 .np-foot { background: #1e293b; border: none; border-top: 1px solid #263248; color: #cbd5e1; padding: 9px; font-size: 13px; cursor: pointer; }
 .cs-subtitle { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: #64748b; margin: 14px 0 4px; }
+
+/* ── Channels column + Verified tag ── */
+#channelsCol { display: none; flex-direction: column; width: 200px; flex: 0 0 200px; background: #111a2e; border-right: 1px solid #233049; min-height: 0; }
+#appShell.mode-chat #channelsCol { display: flex; }
+#appShell.mode-chat.channels-closed #channelsCol { display: none; }
+#channelsHeader { display: flex; align-items: center; justify-content: space-between; padding: 14px 12px 8px 14px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; }
+#channelsCloseBtn, #channelsToggleBtn { background: transparent; border: 0; color: #94a3b8; cursor: pointer; font-size: 16px; border-radius: 6px; padding: 2px 8px; }
+#channelsCloseBtn:hover, #channelsToggleBtn:hover { background: #1e293b; color: #e2e8f0; }
+#channelsToggleBtn { font-weight: 700; margin-right: 4px; }
+#appShell.mode-dm #channelsToggleBtn { display: none; }
+#channelsList { display: flex; flex-direction: column; gap: 2px; padding: 4px 8px; overflow-y: auto; }
+.channel-row { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 8px; padding: 8px 10px; color: #cbd5e1; cursor: pointer; font-size: 15px; }
+.channel-row:hover { background: #1e293b; }
+.channel-row.active { background: #263554; color: #fff; }
+.channel-row.locked { opacity: .55; }
+.channel-ic { width: 20px; text-align: center; color: #64748b; }
+.channel-row.active .channel-ic { color: #cbd5e1; }
+.channel-name { flex: 1; }
+.channel-lock { font-size: 12px; }
+.verified-tag { display: none; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: rgba(34,197,94,.16); color: #4ade80; border: 1px solid rgba(34,197,94,.45); font-size: 11px; font-weight: 700; vertical-align: middle; }
+.verified-tag.on, .verified-tag.in-card { display: inline-block; }
+body.hide-verified .verified-tag { display: none !important; }
+.msg.chan-hidden { display: none !important; }
+@media (max-width: 700px) { #appShell.mode-chat #channelsCol { position: absolute; left: 0; top: 0; bottom: 0; z-index: 40; box-shadow: 4px 0 16px rgba(0,0,0,.4); } }
