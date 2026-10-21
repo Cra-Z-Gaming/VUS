@@ -1799,6 +1799,7 @@ async function doLogout() {
 
 function renderOnlineList(list) {
   latestPresenceAccountKeys = new Set(list.map(e => e.accountKey));
+  if (currentSession && currentUserData) { renderFriendsList(currentUserData); renderGroupsList(myGroupChats); }
   $onlineCountText.textContent = list.length + " online";
   $onlineList.innerHTML = "";
   const sorted = [...list].sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
@@ -1977,7 +1978,7 @@ function ensureUnreadWatch(key, isGroup) {
   threadMsgs[key] = [];
   ref.on("child_added", snap => {
     const v = snap.val() || {};
-    threadMsgs[key].push({ ts: v.ts || 0, from: v.fromAccountKey });
+    threadMsgs[key].push({ ts: v.ts || 0, from: v.fromAccountKey, text: v.text ? String(v.text).slice(0, 80) : (v.imageData ? "\uD83D\uDCF7 Photo" : "") });
     scheduleUnread();
   });
   unreadRefs[key] = ref;
@@ -2004,7 +2005,7 @@ function recomputeUnread() {
     const lr = Math.max(lastReadMap[k] || 0, localLastRead[k] || 0);
     unreadCounts[k] = threadMsgs[k].filter(m => m.ts > lr && m.from !== currentSession.accountKey).length;
   });
-  const sig = JSON.stringify(unreadCounts) + "|" + open;
+  const sig = JSON.stringify(unreadCounts) + "|" + open + "|" + Object.keys(threadMsgs).map(k => lastActivity(k)).join(",");
   if (sig !== lastUnreadSig) {
     lastUnreadSig = sig;
     if (currentUserData) renderFriendsList(currentUserData);
@@ -2042,6 +2043,173 @@ function deriveOtherChats(userData) {
 }
 
 const otherChatNames = {};
+
+/* ── Pins: users/<me>/pinnedFriends|pinnedGroups/<key> = server timestamp (old `true` pins count as oldest).
+   Newest pin goes on TOP; unpin and re-pin and it jumps back to the top. Friends and groups share ONE Pinned list. ── */
+function pinField(isGroup) { return isGroup ? "pinnedGroups" : "pinnedFriends"; }
+function pinValue(isGroup, key) {
+  const v = ((currentUserData && currentUserData[pinField(isGroup)]) || {})[key];
+  if (v === undefined || v === null || v === false) return 0;
+  return v === true ? 1 : (Number(v) || 1);
+}
+function isPinned(isGroup, key) { return pinValue(isGroup, key) > 0; }
+async function setPinned(isGroup, key, on) {
+  if (!currentSession) return;
+  const ref = usersRef.child(currentSession.accountKey).child(pinField(isGroup)).child(key);
+  try { if (on) await ref.set(firebase.database.ServerValue.TIMESTAMP); else await ref.remove(); }
+  catch (e) { showComposerNotice(friendlyDbError(e, "Couldn't change the pin")); }
+}
+function lastActivity(key) { const a = threadMsgs[key]; let m = 0; if (a) a.forEach(x => { if (x.ts > m) m = x.ts; }); return m; }
+function lastPreview(key) {
+  const a = threadMsgs[key]; if (!a || !a.length) return null;
+  let last = a[0]; a.forEach(x => { if (x.ts >= last.ts) last = x; });
+  if (!last.text) return null;
+  return (last.from === (currentSession && currentSession.accountKey) ? "You: " : "") + last.text;
+}
+function shortTime(ts) {
+  if (!ts) return "";
+  const d = new Date(ts), now = new Date();
+  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const days = Math.floor((now - d) / 86400000);
+  if (days < 7) return d.toLocaleDateString([], { weekday: "short" });
+  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+/* Small popup menu used by every row's ⋮ button and the chat header. */
+let openDmMenuEl = null;
+function closeDmMenu() { if (openDmMenuEl) { openDmMenuEl.remove(); openDmMenuEl = null; } }
+document.addEventListener("click", closeDmMenu);
+window.addEventListener("resize", closeDmMenu);
+function showDmMenu(anchor, items) {
+  closeDmMenu();
+  const menu = h("div", { className: "dm-menu", role: "menu" });
+  items.filter(Boolean).forEach(it => {
+    if (it.sep) { menu.appendChild(h("div", { className: "dm-menu-sep" })); return; }
+    menu.appendChild(h("button", { type: "button", className: "dm-menu-item" + (it.danger ? " danger" : ""), onclick: (e) => { e.stopPropagation(); closeDmMenu(); it.run(); } }, h("span", { className: "dm-menu-ic" }, it.icon || ""), it.label));
+  });
+  document.body.appendChild(menu);
+  const r = anchor.getBoundingClientRect();
+  const mw = menu.offsetWidth, mh = menu.offsetHeight;
+  let left = Math.min(Math.max(8, r.right - mw), window.innerWidth - mw - 8);
+  let top = r.bottom + 4;
+  if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 4);
+  menu.style.left = left + "px"; menu.style.top = top + "px";
+  openDmMenuEl = menu;
+  menu.addEventListener("click", e => e.stopPropagation());
+}
+function confirmAction(title, text, label, run) {
+  $modalBox.innerHTML = "";
+  $modalBox.appendChild(h("h3", {}, title));
+  $modalBox.appendChild(h("div", { className: "modal-note" }, text));
+  const go = h("button", { className: "primary-btn", onclick: async () => { go.disabled = true; await run(); closeModal(); } }, label);
+  $modalBox.appendChild(h("div", { className: "modal-actions" }, h("button", { className: "plain-link", onclick: closeModal }, "Cancel"), go));
+  $modalOverlay.classList.add("show");
+}
+
+async function leaveGroupWithConfirm(gc) {
+  confirmAction("Leave " + gc.name + "?", "You'll stop getting its messages. Someone can invite you back.", "Leave group", async () => {
+    const res = await leaveGroupChat(gc.gcId);
+    if (!res.ok) showComposerNotice(res.error);
+  });
+}
+function removeFriendWithConfirm(key, name) {
+  confirmAction("Unfriend " + name + "?", "You'll no longer be friends. The chat moves to Other chats.", "Unfriend", async () => {
+    const res = await unfriend(key); if (!res.ok) showComposerNotice(res.error);
+  });
+}
+function blockWithConfirm(key, name) {
+  confirmAction("Block " + name + "?", "They won't be able to message you or send requests.", "Block", async () => {
+    const res = await blockUser(key, name); if (!res.ok) showComposerNotice(res.error);
+  });
+}
+async function hideOtherChat(threadKey, other) {
+  try { await usersRef.child(currentSession.accountKey).child("lastRead").child(threadKey).remove(); }
+  catch (e) { showComposerNotice(friendlyDbError(e, "Couldn't remove the chat")); return; }
+  if (openChatAccountKey === other) closeOpenChat();
+}
+async function addFriendFromChat(key, name) {
+  const res = await sendFriendRequest(key, name);
+  showComposerNotice(res.ok ? "Friend request sent." : res.error);
+}
+
+function friendMenuItems(key, name) {
+  return [
+    { icon: isPinned(false, key) ? "📌" : "📌", label: isPinned(false, key) ? "Unpin" : "Pin to top", run: () => setPinned(false, key, !isPinned(false, key)) },
+    { icon: "👤", label: "View profile", run: () => openAccountProfile(key, name) },
+    { sep: true },
+    { icon: "➖", label: "Unfriend", danger: true, run: () => removeFriendWithConfirm(key, name) },
+    { icon: "⛔", label: "Block", danger: true, run: () => blockWithConfirm(key, name) }
+  ];
+}
+function otherMenuItems(threadKey, key, name) {
+  const st = getRelationshipStatus(key);
+  return [
+    st === "outgoing" ? { icon: "⏳", label: "Request sent" , run: () => {} } : { icon: "➕", label: "Add friend", run: () => addFriendFromChat(key, name) },
+    { icon: "👤", label: "View profile", run: () => openAccountProfile(key, name) },
+    { sep: true },
+    { icon: "🗑️", label: "Remove chat", run: () => hideOtherChat(threadKey, key) },
+    { icon: "⛔", label: "Block", danger: true, run: () => blockWithConfirm(key, name) }
+  ];
+}
+function groupMenuItems(gc) {
+  return [
+    { icon: "📌", label: isPinned(true, gc.gcId) ? "Unpin" : "Pin to top", run: () => setPinned(true, gc.gcId, !isPinned(true, gc.gcId)) },
+    { icon: "⚙️", label: "Group info", run: () => openManageGroupModal(gc.gcId) },
+    { sep: true },
+    { icon: "🚪", label: "Leave group", danger: true, run: () => leaveGroupWithConfirm(gc) }
+  ];
+}
+
+function buildDmRow(o) {
+  const n = unreadCounts[o.threadKey] || 0;
+  const pv = lastPreview(o.threadKey);
+  const sub = o.subOverride || pv || o.sub;
+  const menuBtn = h("button", { className: "list-row-menu-btn", type: "button", title: "More", "aria-label": "More options", onclick: (e) => { e.stopPropagation(); showDmMenu(menuBtn, o.menu()); } }, "⋮");
+  const row = h("div", { className: "list-row dm-row" + (o.selected ? " selected" : "") + (n > 0 ? " has-unread" : "") + (o.pinned ? " pinned" : ""), onclick: o.open },
+    buildAvatarWithPresence(o.name, o.avatarKey, o.isGroup),
+    h("div", { className: "list-row-info" },
+      h("div", { className: "dm-row-top" },
+        h("div", { className: "list-row-name" }, o.name),
+        o.pinned ? h("span", { className: "dm-pin-ic", title: "Pinned" }, "📌") : null,
+        h("span", { className: "dm-row-time" }, shortTime(lastActivity(o.threadKey)))
+      ),
+      h("div", { className: "list-row-sub" }, sub)
+    ),
+    h("div", { className: "list-row-unread-badge" }, badgeText(n)),
+    menuBtn
+  );
+  row.dataset.threadKey = o.threadKey;
+  return row;
+}
+
+function groupOnlineCount(gc) { return Object.keys(gc.members || {}).filter(k => latestPresenceAccountKeys.has(k)).length; }
+function groupRowOpts(gc, pinned) {
+  const count = Object.keys(gc.members || {}).length, on = groupOnlineCount(gc);
+  return { name: gc.name, avatarKey: gc.gcId, isGroup: true, threadKey: gc.gcId, pinned, selected: openChatGcId === gc.gcId,
+    sub: count + " member" + (count === 1 ? "" : "s") + (on ? " · " + on + " online" : ""),
+    open: () => openGroupChat(gc.gcId), menu: () => groupMenuItems(gc) };
+}
+function friendRowOpts(key, data, pinned) {
+  const threadKey = threadIdFor(currentSession.accountKey, key);
+  return { name: data.username, avatarKey: key, isGroup: false, threadKey, pinned, selected: openChatAccountKey === key,
+    sub: latestPresenceAccountKeys.has(key) ? "online" : "offline",
+    open: () => openChatWith(key, data.username), menu: () => friendMenuItems(key, data.username) };
+}
+const byRecent = (ka, kb, na, nb) => (lastActivity(kb) - lastActivity(ka)) || String(na).localeCompare(String(nb));
+
+function renderPinned() {
+  const list = document.getElementById("pinnedList"), label = document.getElementById("pinnedLabel");
+  if (!list) return;
+  list.innerHTML = "";
+  const items = [];
+  myGroupChats.forEach(gc => { const v = pinValue(true, gc.gcId); if (v) items.push({ v, build: () => buildDmRow(groupRowOpts(gc, true)) }); });
+  const friends = (currentUserData && currentUserData.friends) || {};
+  Object.entries(friends).forEach(([k, d]) => { const v = pinValue(false, k); if (v) items.push({ v, build: () => buildDmRow(friendRowOpts(k, d, true)) }); });
+  items.sort((a, b) => b.v - a.v);   // newest pin first
+  label.style.display = items.length ? "block" : "none";
+  items.forEach(it => list.appendChild(it.build()));
+}
+
 function renderOtherChats() {
   const list = document.getElementById("otherChatsList");
   const label = document.getElementById("otherChatsLabel");
@@ -2054,46 +2222,28 @@ function renderOtherChats() {
       fetchAccountProfile(other).then(p => { if (p && !otherChatNames[other]) { otherChatNames[other] = p.username; renderOtherChats(); } });
       return;
     }
-    const n = unreadCounts[key] || 0;
-    const addLink = h("span", { className: "unfriend-link", onclick: async (e) => {
-      e.stopPropagation();
-      const res = await sendFriendRequest(other, name);
-      showComposerNotice(res.ok ? "Friend request sent." : res.error);
-    }}, "Add friend");
-    const row = h("div", { className: "list-row" + (openChatAccountKey === other ? " selected" : "") + (n > 0 ? " has-unread" : ""), onclick: () => openChatWith(other, name) },
-      buildAvatarWithPresence(name, other, false),
-      h("div", { className: "list-row-info" },
-        h("div", { className: "list-row-name" }, name),
-        h("div", { className: "list-row-sub" }, "not friends")
-      ),
-      h("div", { className: "list-row-unread-badge" }, badgeText(n))
-    );
-    list.appendChild(h("div", {}, row, h("div", { className: "list-row-actions-row show" }, addLink)));
+    const st = getRelationshipStatus(other);
+    const row = buildDmRow({ name, avatarKey: other, isGroup: false, threadKey: key, pinned: false, selected: openChatAccountKey === other,
+      sub: st === "outgoing" ? "friend request sent" : "not friends", open: () => openChatWith(other, name), menu: () => otherMenuItems(key, other, name) });
+    const actions = h("div", { className: "list-row-actions-row show" });
+    if (st === "outgoing") actions.appendChild(h("span", { className: "unfriend-link muted" }, "Request sent"));
+    else actions.appendChild(h("span", { className: "unfriend-link add", onclick: (e) => { e.stopPropagation(); addFriendFromChat(other, name); } }, "Add friend"));
+    actions.appendChild(h("span", { className: "block-link", onclick: (e) => { e.stopPropagation(); blockWithConfirm(other, name); } }, "Block"));
+    actions.appendChild(h("span", { className: "block-link", onclick: (e) => { e.stopPropagation(); hideOtherChat(key, other); } }, "Remove"));
+    list.appendChild(h("div", {}, row, actions));
   });
 }
 
 function renderGroupsList(groups) {
   myGroupChats = groups;
   $groupsList.innerHTML = "";
+  groups.forEach(gc => { ensureUnreadWatch(gc.gcId, true); if (openChatGcId === gc.gcId) currentGroupInfo = gc; });
+  const rest = groups.filter(gc => !isPinned(true, gc.gcId)).sort((a, b) => byRecent(a.gcId, b.gcId, a.name, b.name));
   $groupsEmpty.style.display = groups.length === 0 ? "block" : "none";
-
-  groups.forEach(gc => {
-    ensureUnreadWatch(gc.gcId, true);
-    const count = Object.keys(gc.members || {}).length;
-    const n = unreadCounts[gc.gcId] || 0;
-    const row = h("div", { className: "list-row" + (openChatGcId === gc.gcId ? " selected" : "") + (n > 0 ? " has-unread" : ""), onclick: () => openGroupChat(gc.gcId) },
-      buildAvatarWithPresence(gc.name, gc.gcId, true),
-      h("div", { className: "list-row-info" },
-        h("div", { className: "list-row-name" }, gc.name),
-        h("div", { className: "list-row-sub" }, count + " member" + (count === 1 ? "" : "s"))
-      ),
-      h("div", { className: "list-row-unread-badge" }, badgeText(n))
-    );
-    $groupsList.appendChild(row);
-    if (openChatGcId === gc.gcId) currentGroupInfo = gc;
-  });
-
+  rest.forEach(gc => $groupsList.appendChild(buildDmRow(groupRowOpts(gc, false))));
+  renderPinned();
   if (openChatGcId && !groups.some(g => g.gcId === openChatGcId)) closeOpenChat();
+  updateOpenChatMenuState();
 }
 
 function renderFriendsList(userData) {
@@ -2101,43 +2251,13 @@ function renderFriendsList(userData) {
   const entries = Object.entries(friends);
   $friendsList.innerHTML = "";
   $friendsEmpty.style.display = entries.length === 0 ? "block" : "none";
-
-  entries.forEach(([friendAccountKey, friendData]) => {
-    const threadKey = threadIdFor(currentSession.accountKey, friendAccountKey);
-    ensureUnreadWatch(threadKey, false);
-    const n = unreadCounts[threadKey] || 0;
-    const isOnline = latestPresenceAccountKeys.has(friendAccountKey);
-    const row = h("div", { className: "list-row" + (openChatAccountKey === friendAccountKey ? " selected" : "") + (n > 0 ? " has-unread" : ""), onclick: () => openChatWith(friendAccountKey, friendData.username) },
-      buildAvatarWithPresence(friendData.username, friendAccountKey, false),
-      h("div", { className: "list-row-info" },
-        h("div", { className: "list-row-name" }, friendData.username),
-        h("div", { className: "list-row-sub" }, isOnline ? "online" : "offline")
-      ),
-      h("div", { className: "list-row-unread-badge" }, badgeText(n))
-    );
-
-    const actionsRow = h("div", { className: "list-row-actions-row" });
-    const unfriendLink = h("span", { className: "unfriend-link", onclick: async (e) => {
-      e.stopPropagation();
-      const result = await unfriend(friendAccountKey);
-      if (!result.ok) showComposerNotice(result.error);
-    }}, "Unfriend");
-    const blockLink = h("span", { className: "block-link", onclick: async (e) => {
-      e.stopPropagation();
-      const result = await blockUser(friendAccountKey, friendData.username);
-      if (!result.ok) showComposerNotice(result.error);
-    }}, "Block");
-    actionsRow.appendChild(unfriendLink);
-    actionsRow.appendChild(blockLink);
-
-    const menuBtn = h("button", { className: "list-row-menu-btn", onclick: (e) => {
-      e.stopPropagation();
-      actionsRow.classList.toggle("show");
-    }}, "⋮");
-    row.appendChild(menuBtn);
-
-    $friendsList.appendChild(h("div", {}, row, actionsRow));
-  });
+  entries.forEach(([k]) => ensureUnreadWatch(threadIdFor(currentSession.accountKey, k), false));
+  const rest = entries.filter(([k]) => !isPinned(false, k)).sort((a, b) => byRecent(threadIdFor(currentSession.accountKey, a[0]), threadIdFor(currentSession.accountKey, b[0]), a[1].username, b[1].username));
+  rest.forEach(([k, d]) => $friendsList.appendChild(buildDmRow(friendRowOpts(k, d, false))));
+  const on = entries.filter(([k]) => latestPresenceAccountKeys.has(k)).length;
+  const fl = document.getElementById("friendsLabelCount"); if (fl) fl.textContent = on ? " · " + on + " online" : "";
+  renderPinned();
+  updateOpenChatMenuState();
 }
 
 function renderBlockedList(userData) {
@@ -2281,6 +2401,37 @@ function openManageGroupModal(gcId) {
 }
 $groupInfoBtn.addEventListener("click", () => { if (openChatGcId) openManageGroupModal(openChatGcId); });
 
+const $chatMenuBtn = document.getElementById("chatMenuBtn");
+const $chatNotFriendBar = document.getElementById("chatNotFriendBar");
+function openChatMenuItems() {
+  if (openChatGcId) {
+    const gc = myGroupChats.find(g => g.gcId === openChatGcId);
+    return gc ? [...groupMenuItems(gc), { sep: true }, { icon: "\u2190", label: "Close chat", run: closeOpenChat }] : [];
+  }
+  if (openChatAccountKey) {
+    const key = openChatAccountKey, name = openChatUsername || "this user";
+    const friends = (currentUserData && currentUserData.friends) || {};
+    const base = friends[key] ? friendMenuItems(key, name) : otherMenuItems(threadIdFor(currentSession.accountKey, key), key, name);
+    return [...base, { sep: true }, { icon: "\u2190", label: "Close chat", run: closeOpenChat }];
+  }
+  return [];
+}
+$chatMenuBtn.addEventListener("click", (e) => { e.stopPropagation(); showDmMenu($chatMenuBtn, openChatMenuItems()); });
+function updateOpenChatMenuState() {
+  if (!$chatNotFriendBar) return;
+  const show = !!openChatAccountKey && !openChatGcId && !!currentUserData && !((currentUserData.friends || {})[openChatAccountKey]);
+  $chatNotFriendBar.style.display = show ? "flex" : "none";
+  if (!show) return;
+  const st = getRelationshipStatus(openChatAccountKey);
+  $chatNotFriendBar.replaceChildren(
+    h("span", { className: "nf-text" }, "You're not friends with " + (openChatUsername || "this user") + "."),
+    st === "outgoing" ? h("span", { className: "nf-sent" }, "Request sent") :
+      h("button", { type: "button", className: "nf-btn", onclick: () => addFriendFromChat(openChatAccountKey, openChatUsername) }, "Add friend"),
+    h("button", { type: "button", className: "nf-btn ghost", onclick: () => blockWithConfirm(openChatAccountKey, openChatUsername) }, "Block")
+  );
+}
+$chatThreadHeaderName.addEventListener("click", () => { if (openChatAccountKey) openAccountProfile(openChatAccountKey, openChatUsername); else if (openChatGcId) openManageGroupModal(openChatGcId); });
+
 $searchBtn.addEventListener("click", async () => {
   const query = $searchInput.value;
   $searchBtn.disabled = true;
@@ -2374,9 +2525,11 @@ let threadReadsState = {};
 
 function updateChatThreadHeaderStatus() {
   setTimeout(renderDmProfile, 0);
+  setTimeout(updateOpenChatMenuState, 0);
   if (openChatGcId) {
     const count = currentGroupInfo ? Object.keys(currentGroupInfo.members || {}).length : 0;
-    $chatThreadHeaderStatus.textContent = count + " member" + (count === 1 ? "" : "s");
+    const on = currentGroupInfo ? groupOnlineCount(currentGroupInfo) : 0;
+    $chatThreadHeaderStatus.textContent = count + " member" + (count === 1 ? "" : "s") + (on ? " \u00b7 " + on + " online" : "");
     $chatThreadHeaderStatus.classList.remove("online");
     return;
   }

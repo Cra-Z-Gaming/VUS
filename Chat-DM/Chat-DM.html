@@ -50,10 +50,12 @@
 
       <div class="list-view" id="viewChats">
         <div class="list-new-group-row" id="newGroupBtn">+ New group</div>
+        <div class="list-section-label" id="pinnedLabel" style="display:none">Pinned</div>
+        <div id="pinnedList"></div>
         <div class="list-section-label">Groups</div>
         <div id="groupsList"></div>
         <div id="groupsEmpty" class="list-empty" style="padding-left:14px">No groups yet.</div>
-        <div class="list-section-label">Friends</div>
+        <div class="list-section-label">Friends<span id="friendsLabelCount"></span></div>
         <div id="friendsList"></div>
         <div id="friendsEmpty" class="list-empty" style="padding-left:14px">No friends yet — use Find to add someone.</div>
         <div class="list-section-label" id="otherChatsLabel" style="display:none">Other chats</div>
@@ -385,7 +387,9 @@
           <div id="chatThreadHeaderStatus"></div>
         </div>
         <button id="groupInfoBtn" style="display:none">Manage</button>
+        <button id="chatMenuBtn" type="button" title="Chat options" aria-label="Chat options">&#8942;</button>
       </div>
+      <div id="chatNotFriendBar" style="display:none"></div>
       <div id="chatMessages"></div>
       <div id="typingIndicatorBar"></div>
       <div id="replyPreviewBar">

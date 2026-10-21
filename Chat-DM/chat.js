@@ -2693,6 +2693,7 @@ function shutdownChatSession() {
   currentRoomCode = null;
   currentRoomMeta = null;
   ChatBackend.detachAllListeners();
+  if (typeof stopChannelCounts === "function") stopChannelCounts();
   ChatBackend.bindToRoom(MAIN_ROOM_ID);
   roomListenersLive = false;
   latestPresenceList = [];
@@ -7288,9 +7289,21 @@ function regateChannelMessages() {
     gateChannelEl(el, el.dataset.senderId);
   });
 }
+const channelCounts = {};
+let channelCountRefs = [];
+function watchChannelCounts() {
+  if (channelCountRefs.length || !ChatBackend._db) return;
+  CHANNELS.forEach(ch => {
+    const ref = ChatBackend._db.ref("rooms/" + ch.room + "/presence");
+    ref.on("value", snap => { const n = snap.numChildren(); if (channelCounts[ch.id] !== n) { channelCounts[ch.id] = n; renderChannelList(); } });
+    channelCountRefs.push(ref);
+  });
+}
+function stopChannelCounts() { channelCountRefs.forEach(r => { try { r.off("value"); } catch (e) {} }); channelCountRefs = []; Object.keys(channelCounts).forEach(k => delete channelCounts[k]); }
 function renderChannelList() {
   const list = document.getElementById("channelsList");
   if (!list) return;
+  if (myLoginId) watchChannelCounts();
   if (myLoginId && window.VUS_DM && verifiedOf(myLoginId) === undefined) window.VUS_DM.isVerified(myLoginId).then(() => renderChannelList());
   list.replaceChildren();
   CHANNELS.forEach(ch => {
@@ -7303,6 +7316,7 @@ function renderChannelList() {
     const ic = document.createElement("span"); ic.className = "channel-ic"; ic.textContent = ch.icon;
     const nm = document.createElement("span"); nm.className = "channel-name"; nm.textContent = ch.label;
     b.append(ic, nm);
+    if (ok && channelCounts[ch.id] > 0) { const ct = document.createElement("span"); ct.className = "channel-count"; ct.title = channelCounts[ch.id] + " online"; ct.textContent = channelCounts[ch.id]; b.appendChild(ct); }
     if (!ok) { const lk = document.createElement("span"); lk.className = "channel-lock"; lk.textContent = "\uD83D\uDD12"; b.appendChild(lk); }
     b.addEventListener("click", () => openChannel(ch.id));
     list.appendChild(b);
