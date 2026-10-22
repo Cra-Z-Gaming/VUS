@@ -244,8 +244,8 @@ const ChatBackend = {
     this._bansRef = this._db.ref("rooms/" + MAIN_ROOM_ID + "/bannedUsers");
     this._imageAccessRef = this._db.ref("rooms/" + MAIN_ROOM_ID + "/imageAccess");
     this._chatStateRef = this._db.ref("chatState");
-    // Banned-word list lives in the database (chatFilter/words), never in the source files.
-    this._db.ref("chatFilter/words").on("value", s => { try { setFilterWords(Object.values(s.val() || {})); } catch (e) {} }, () => {});
+    // Banned-word list lives in the database (chatFilter/<word> = 1 or 0), never in the source files.
+    this._db.ref("chatFilter").on("value", s => { try { setFilterWords(filterListFromDb(s.val())); } catch (e) {} }, () => {});
     this._profilesRef = this._db.ref("userProfiles");
     this.initRoles();
     this.bindToRoom(MAIN_ROOM_ID);
@@ -1455,7 +1455,7 @@ let myName = "";
 let myLoginId = "";
 let messageCount = 0;
 const CHAT_PREFS_KEY = "vus_chat_prefs_v1";
-const chatPrefs = { autoScroll: true, showJoinLeave: true, peerVerify: true, textSize: "l", bubbleSize: "normal", bold: false,
+const chatPrefs = { autoScroll: true, showJoinLeave: true, peerVerify: true, wordFilter: true, textSize: "l", bubbleSize: "normal", bold: false,
   radius: 12, bgMode: "default", bgColor: "#0f172a", bgLink: "", bgFile: "",
   notifMentions: true, notifReplies: true, notifReactions: true, notifStaff: true };
 try { Object.assign(chatPrefs, JSON.parse(localStorage.getItem(CHAT_PREFS_KEY) || "{}")); } catch (e) {}
@@ -1653,7 +1653,7 @@ function openProfileFor(loginId, name) { if (window.VUS_DM) window.VUS_DM.openCh
 const FILTER_LEET = { "0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t" };
 const FILTER_LEET_SYM = { "@": "a", "$": "s", "!": "i", "|": "i", "+": "t", "(": "c" };
 const FILTER_HOMO = { "\u0430": "a", "\u0435": "e", "\u043E": "o", "\u0440": "p", "\u0441": "c", "\u0445": "x", "\u0443": "y", "\u0456": "i", "\u0455": "s" };
-let filterWords = [], filterDeep = [];
+let filterWords = [], filterDeep = [], filterPhrases = [];
 function normalizeForFilter(s) {
   return String(s || "").normalize("NFD").replace(/[\u0300-\u036f\u200b-\u200f\u2060\u00ad\ufeff]/g, "").toLowerCase().split("").map(ch => FILTER_HOMO[ch] || FILTER_LEET[ch] || ch).join("").replace(/[^a-z]/g, "");
 }
@@ -1670,17 +1670,33 @@ function filterPattern(word, anchored) {
   }
   return new RegExp(anchored ? "^" + src + "$" : src, anchored ? "" : "g");
 }
+// chatFilter holds one child per word: chatFilter/<word> = 1 (on) or 0 (off). A leading * means "also inside other words".
+// (Older layout still works: any child whose value is a text string is taken as the word itself.)
+function filterListFromDb(val) {
+  const out = [];
+  const walk = obj => Object.entries(obj || {}).forEach(([k, v]) => {
+    if (v && typeof v === "object") { walk(v); return; }
+    if (v === 0 || v === false || v === "0" || v == null) return;                 // switched off
+    out.push(typeof v === "string" && v !== "1" ? v : k);
+  });
+  walk(val);
+  return out;
+}
 function setFilterWords(list) {
-  const plain = [], deep = [];
+  const plain = [], deep = [], phrases = [];
   (list || []).forEach(w => {
     w = String(w || "").trim();
     if (!w) return;
     const isDeep = w[0] === "*";
-    const re = filterPattern(isDeep ? w.slice(1) : w, !isDeep);
-    if (re) (isDeep ? deep : plain).push(re);
+    const isPhrase = !isDeep && /\s/.test(w);          // "word word": two or more words in a row
+    const re = filterPattern(isDeep ? w.slice(1) : w, !isDeep && !isPhrase);
+    if (re) (isDeep ? deep : isPhrase ? phrases : plain).push(re);
   });
-  filterWords = plain; filterDeep = deep;
-  // Re-mask what's already on screen.
+  filterWords = plain; filterDeep = deep; filterPhrases = phrases;
+  refreshFilteredText();
+}
+// Re-mask what's already on screen (after the list or the setting changes).
+function refreshFilteredText() {
   try {
     msgEls.forEach(m => {
       if (m.isImage || !m.bubble) return;
@@ -1694,7 +1710,7 @@ function setFilterWords(list) {
 // Returns [[start, end), ...] ranges of the original text that hit the list.
 function filterHits(text) {
   text = String(text || "");
-  if (!text || (!filterWords.length && !filterDeep.length)) return [];
+  if (!text || (!filterWords.length && !filterDeep.length && !filterPhrases.length)) return [];
   const hits = [];
   for (const symbolsAreLetters of [true, false]) {
     // Build the kept letters with a map back to the original text; anything else is a word break.
@@ -1715,6 +1731,19 @@ function filterHits(text) {
     };
     items.forEach(it => { if (it.ch) run.push(it); else flush(); });
     flush();
+    if (filterPhrases.length) {
+      // A phrase matches across spaces or any separators, but must start and end on word edges.
+      const sq = [];
+      items.forEach((x, n) => { if (x.ch) sq.push({ ch: x.ch, i: x.i, start: n === 0 || !items[n - 1].ch, end: n === items.length - 1 || !items[n + 1].ch }); });
+      const str = sq.map(x => x.ch).join("");
+      filterPhrases.forEach(re => {
+        re.lastIndex = 0; let m;
+        while ((m = re.exec(str)) && m[0].length) {
+          const a = sq[m.index], z = sq[m.index + m[0].length - 1];
+          if (a.start && z.end) hits.push([a.i, z.i + 1]);
+        }
+      });
+    }
     if (filterDeep.length) {
       const sq = items.filter(x => x.ch);
       const str = sq.map(x => x.ch).join("");
@@ -1726,12 +1755,19 @@ function filterHits(text) {
   }
   return hits;
 }
+// Shows a filtered word as f•••d (first and last letter kept); very short ones are hidden completely.
+// The "Chat filter" setting (on by default, this device only) turns the hiding off for what you see.
 function maskFiltered(text) {
   text = String(text || "");
+  if (chatPrefs.wordFilter === false) return text;
   const hits = filterHits(text);
   if (!hits.length) return text;
   const chars = text.split("");
-  hits.forEach(([a, b]) => { for (let k = a; k < b && k < chars.length; k++) if (!/\s/.test(chars[k])) chars[k] = "\u2022"; });
+  hits.forEach(([a, b]) => {
+    const idx = []; for (let k = a; k < b && k < chars.length; k++) if (!/\s/.test(chars[k])) idx.push(k);
+    const keep = idx.length >= 4;
+    idx.forEach((k, n) => { if (!keep || (n > 0 && n < idx.length - 1)) chars[k] = "\u2022"; });
+  });
   return chars.join("");
 }
 function hasFilteredWord(text) { return filterHits(text).length > 0; }
@@ -4141,6 +4177,9 @@ function renderChatSettings(container) {
   { const t = document.createElement("div"); t.className = "cs-subtitle"; t.textContent = "Safety"; wrap.appendChild(t); }
   toggle("Peer verification", verifyFlagOn ? "Checks that bans, mutes and grants come from someone allowed to do them" : "Off in this room until the Owner runs /verify on", () => chatPrefs.peerVerify !== false, v => {
     chatPrefs.peerVerify = v; saveChatPrefs(); scheduleVerifyRefresh();
+  });
+  toggle("Chat filter", "Hides most of banned words (f•••d). Turn off to see them. Sending them stays blocked either way.", () => chatPrefs.wordFilter !== false, v => {
+    chatPrefs.wordFilter = v; saveChatPrefs(); refreshFilteredText();
   });
   { const r = document.createElement("button"); r.type = "button"; r.className = "cs-row"; r.innerHTML = '<span class="cs-label">Open Verification panel<small>See who is verified and what was approved or rejected</small></span>'; r.addEventListener("click", e => { e.stopPropagation(); openFromSettings(openVerifyPanel); }); wrap.appendChild(r); }
   choice("Text size", [["s", "Small"], ["m", "Medium"], ["l", "Large"], ["xl", "Huge"]], () => chatPrefs.textSize, v => { chatPrefs.textSize = v; saveChatPrefs(); applyAppearance(); keepPinned(); });
