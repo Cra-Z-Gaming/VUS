@@ -1755,7 +1755,7 @@ function filterHits(text) {
   }
   return hits;
 }
-// Shows a filtered word as f•••d (first and last letter kept); very short ones are hidden completely.
+// Messages are never blocked. A filtered word is shown as w**d (first and last letter kept); very short ones are fully starred.
 // The "Chat filter" setting (on by default, this device only) turns the hiding off for what you see.
 function maskFiltered(text) {
   text = String(text || "");
@@ -1766,12 +1766,10 @@ function maskFiltered(text) {
   hits.forEach(([a, b]) => {
     const idx = []; for (let k = a; k < b && k < chars.length; k++) if (!/\s/.test(chars[k])) idx.push(k);
     const keep = idx.length >= 4;
-    idx.forEach((k, n) => { if (!keep || (n > 0 && n < idx.length - 1)) chars[k] = "\u2022"; });
+    idx.forEach((k, n) => { if (!keep || (n > 0 && n < idx.length - 1)) chars[k] = "*"; });
   });
   return chars.join("");
 }
-function hasFilteredWord(text) { return filterHits(text).length > 0; }
-const FILTER_NOTICE = "That message has a word that isn't allowed here, so it wasn't sent.";
 
 function fillBubbleText(bubble, text, legacy) {
   text = maskFiltered(String(text || ""));
@@ -2331,7 +2329,6 @@ async function commitEdit(text) {
   const id = editingMsgId, m = msgEls.get(id);
   if (!m || !text) { cancelEdit(); return; }
   if (text === m.text) { cancelEdit(); return; }
-  if (hasFilteredWord(text)) { showComposerNotice(FILTER_NOTICE); return; }
   if (Date.now() - lastEditAt < 1500) { showComposerNotice("Slow down a little."); return; }
   if (m.ts && ChatBackend.serverNowSync() - m.ts > EDIT_WINDOW_MS) { showComposerNotice("You can only edit a message for 15 minutes."); cancelEdit(); return; }
   lastEditAt = Date.now();
@@ -3751,7 +3748,6 @@ async function sendMessage() {
   // Chatting but missing from the online list? Put them back.
   if (myLoginId && !latestPresenceList.some(e => String(e.loginId || "") === String(myLoginId))) ChatBackend.ensurePresence();
   if (!channelAllowedFor(activeChannel(), myLoginId)) { showComposerNotice("You can't post in this channel."); return; }
-  if (hasFilteredWord(text)) { showComposerNotice(FILTER_NOTICE); return; }
   if (myTimeoutRemainingMs > 0) {
     showComposerNotice("You're muted for " + formatCountdown(myTimeoutRemainingMs) + " more.");
     return;
@@ -4178,7 +4174,7 @@ function renderChatSettings(container) {
   toggle("Peer verification", verifyFlagOn ? "Checks that bans, mutes and grants come from someone allowed to do them" : "Off in this room until the Owner runs /verify on", () => chatPrefs.peerVerify !== false, v => {
     chatPrefs.peerVerify = v; saveChatPrefs(); scheduleVerifyRefresh();
   });
-  toggle("Chat filter", "Hides most of banned words (f•••d). Turn off to see them. Sending them stays blocked either way.", () => chatPrefs.wordFilter !== false, v => {
+  toggle("Chat filter", "Stars out banned words (w**d). On for everyone by default; turn off to see them. Remembered on this device.", () => chatPrefs.wordFilter !== false, v => {
     chatPrefs.wordFilter = v; saveChatPrefs(); refreshFilteredText();
   });
   { const r = document.createElement("button"); r.type = "button"; r.className = "cs-row"; r.innerHTML = '<span class="cs-label">Open Verification panel<small>See who is verified and what was approved or rejected</small></span>'; r.addEventListener("click", e => { e.stopPropagation(); openFromSettings(openVerifyPanel); }); wrap.appendChild(r); }
