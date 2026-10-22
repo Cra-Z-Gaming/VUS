@@ -132,6 +132,7 @@ const TIME_LIMITS = {
   modTimeout: { min: 60000, max: MOD_TIMEOUT_MAX_MS },  // Mod: 1 minute to 1 day
   tempban:    { min: 60000, max: TIMEOUT_MAX_MS },      // Co-owner and Owner: 30 days
   adminTempban: { min: 60000, max: ADMIN_MUTE_MAX_MS }, // Admin: 1 week
+  modTempban:   { min: 60000, max: 12 * 60 * 60 * 1000 }, // Mod: up to 12 hours
   tempGrant:  { min: 60000, max: TIMEOUT_MAX_MS }       // temporary ranks (/grant rank <time> name)
 };
 const TIME_INPUT_HINT = "Try 30s, 10m, 2h, 3d or 1w (a bare number means minutes).";
@@ -150,7 +151,14 @@ function timeoutLimitsForRank(rank) {
   return rank >= ROLES.coowner.rank ? TIME_LIMITS.timeout : rank >= ROLES.admin.rank ? TIME_LIMITS.adminMute : TIME_LIMITS.modTimeout;
 }
 function banLimitsForRank(rank) {
-  return rank >= ROLES.coowner.rank ? TIME_LIMITS.tempban : TIME_LIMITS.adminTempban;
+  return rank >= ROLES.coowner.rank ? TIME_LIMITS.tempban : rank >= ROLES.admin.rank ? TIME_LIMITS.adminTempban : TIME_LIMITS.modTempban;
+}
+// What a rank may hand out / take away with /grant and /remove: Mods only Normie, Admins and up Mod and below.
+function canGrantRole(rank, roleId) {
+  const r = ROLES[roleId];
+  if (!r || r.implicit || roleId === "crown") return false;
+  if (r.rank >= rank) return false;
+  return rank >= ROLES.admin.rank || (rank >= ROLES.mod.rank && roleId === "normie");
 }
 // Returns "" when ms is fine, otherwise a message telling the person exactly why not.
 function checkDurationLimits(ms, limits) {
@@ -236,6 +244,8 @@ const ChatBackend = {
     this._bansRef = this._db.ref("rooms/" + MAIN_ROOM_ID + "/bannedUsers");
     this._imageAccessRef = this._db.ref("rooms/" + MAIN_ROOM_ID + "/imageAccess");
     this._chatStateRef = this._db.ref("chatState");
+    // Banned-word list lives in the database (chatFilter/words), never in the source files.
+    this._db.ref("chatFilter/words").on("value", s => { try { setFilterWords(Object.values(s.val() || {})); } catch (e) {} }, () => {});
     this._profilesRef = this._db.ref("userProfiles");
     this.initRoles();
     this.bindToRoom(MAIN_ROOM_ID);
@@ -1005,7 +1015,12 @@ const ChatBackend = {
     ]);
     const byRank = ROLES[byRole].rank, targetRank = ROLES[targetRole].rank;
     if (targetRank >= ROLES.coowner.rank) return false;
-    return byRank >= ROLES.admin.rank && byRank > targetRank;
+    if (byRank < ROLES.mod.rank || byRank <= targetRank) return false;
+    if (byRank < ROLES.admin.rank) { // a Mod's ban only counts when it's temporary and within the Mod limit
+      const len = Number(ban.expiresAt) - Number(ban.bannedAt);
+      return Number.isFinite(len) && len > 0 && len <= TIME_LIMITS.modTempban.max + 20000;
+    }
+    return true;
   },
 
   async getBan(loginId) {
@@ -1629,8 +1644,101 @@ function paintAvatar(container, loginId, name) {
 function openProfileFor(loginId, name) { if (window.VUS_DM) window.VUS_DM.openChatUserProfile(loginId, name); }
 
 // Text with @mentions drawn as chips. Messages from older tabs (no markers) fall back to the single `mention` field.
-function fillBubbleText(bubble, text, legacy) {
+/* ══════════ Word filter ══════════
+   The list is read from the database (chatFilter/words/<key> = "word"), so no banned word ever sits in the
+   GitHub files. A plain entry matches a whole word however it's dressed up (caps, l33t, accents, spacing tricks
+   inside the word's own letters like n!gg3r, repeated letters). An entry starting with * also matches inside
+   other words and with separators between its letters (n.i.g.g.e.r) -- use that only for words that can never
+   appear in a normal one. */
+const FILTER_LEET = { "0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t" };
+const FILTER_LEET_SYM = { "@": "a", "$": "s", "!": "i", "|": "i", "+": "t", "(": "c" };
+const FILTER_HOMO = { "\u0430": "a", "\u0435": "e", "\u043E": "o", "\u0440": "p", "\u0441": "c", "\u0445": "x", "\u0443": "y", "\u0456": "i", "\u0455": "s" };
+let filterWords = [], filterDeep = [];
+function normalizeForFilter(s) {
+  return String(s || "").normalize("NFD").replace(/[\u0300-\u036f\u200b-\u200f\u2060\u00ad\ufeff]/g, "").toLowerCase().split("").map(ch => FILTER_HOMO[ch] || FILTER_LEET[ch] || ch).join("").replace(/[^a-z]/g, "");
+}
+// A word becomes a pattern where a letter that appears once may be stretched (sluuur) and a doubled letter
+// (nigger) must stay doubled or longer. That keeps "Niger" the country from matching a longer word.
+function filterPattern(word, anchored) {
+  const w = normalizeForFilter(word);
+  if (w.length < 2) return null;
+  let src = "";
+  for (let i = 0; i < w.length;) {
+    let j = i; while (j < w.length && w[j] === w[i]) j++;
+    src += w[i] + (j - i >= 2 ? "{2,}" : "+");
+    i = j;
+  }
+  return new RegExp(anchored ? "^" + src + "$" : src, anchored ? "" : "g");
+}
+function setFilterWords(list) {
+  const plain = [], deep = [];
+  (list || []).forEach(w => {
+    w = String(w || "").trim();
+    if (!w) return;
+    const isDeep = w[0] === "*";
+    const re = filterPattern(isDeep ? w.slice(1) : w, !isDeep);
+    if (re) (isDeep ? deep : plain).push(re);
+  });
+  filterWords = plain; filterDeep = deep;
+  // Re-mask what's already on screen.
+  try {
+    msgEls.forEach(m => {
+      if (m.isImage || !m.bubble) return;
+      const edited = m.bubble.querySelector(".msg-edited");
+      m.bubble.textContent = "";
+      fillBubbleText(m.bubble, m.text, m.mention);
+      if (edited) m.bubble.appendChild(edited);
+    });
+  } catch (e) {}
+}
+// Returns [[start, end), ...] ranges of the original text that hit the list.
+function filterHits(text) {
   text = String(text || "");
+  if (!text || (!filterWords.length && !filterDeep.length)) return [];
+  const hits = [];
+  for (const symbolsAreLetters of [true, false]) {
+    // Build the kept letters with a map back to the original text; anything else is a word break.
+    const items = [];
+    for (let i = 0; i < text.length; i++) {
+      let ch = text[i];
+      if (/[\u200b-\u200f\u2060\u00ad\ufeff\u0300-\u036f]/.test(ch)) continue;
+      ch = ch.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      const m = FILTER_HOMO[ch] || FILTER_LEET[ch] || (symbolsAreLetters ? FILTER_LEET_SYM[ch] : "") || ch;
+      items.push({ ch: /^[a-z]$/.test(m) ? m : null, i });
+    }
+    let run = [];
+    const flush = () => {
+      if (!run.length) return;
+      const s = run.map(x => x.ch).join("");
+      if (filterWords.some(re => re.test(s))) hits.push([run[0].i, run[run.length - 1].i + 1]);
+      run = [];
+    };
+    items.forEach(it => { if (it.ch) run.push(it); else flush(); });
+    flush();
+    if (filterDeep.length) {
+      const sq = items.filter(x => x.ch);
+      const str = sq.map(x => x.ch).join("");
+      filterDeep.forEach(re => {
+        re.lastIndex = 0; let m;
+        while ((m = re.exec(str)) && m[0].length) hits.push([sq[m.index].i, sq[m.index + m[0].length - 1].i + 1]);
+      });
+    }
+  }
+  return hits;
+}
+function maskFiltered(text) {
+  text = String(text || "");
+  const hits = filterHits(text);
+  if (!hits.length) return text;
+  const chars = text.split("");
+  hits.forEach(([a, b]) => { for (let k = a; k < b && k < chars.length; k++) if (!/\s/.test(chars[k])) chars[k] = "\u2022"; });
+  return chars.join("");
+}
+function hasFilteredWord(text) { return filterHits(text).length > 0; }
+const FILTER_NOTICE = "That message has a word that isn't allowed here, so it wasn't sent.";
+
+function fillBubbleText(bubble, text, legacy) {
+  text = maskFiltered(String(text || ""));
   const toks = parseMentionTokens(text);
   if (!toks.length) {
     if (legacy) {
@@ -1762,13 +1870,13 @@ function recLooksValid(r, requireOnline) {
   switch (r.k) {
     case "mute": return byRank >= ROLES.mod.rank && tRank < byRank && !isProtected(t) && d > 0 && d <= timeoutLimitsForRank(byRank).max + 1000;
     case "ban":
-      if (byRank < ROLES.admin.rank || tRank >= byRank || tRank >= ROLES.coowner.rank || isProtected(t)) return false;
+      if (byRank < ROLES.mod.rank || tRank >= byRank || tRank >= ROLES.coowner.rank || isProtected(t)) return false;
       return d === 0 ? byRank >= ROLES.crown.rank : d <= banLimitsForRank(byRank).max + 1000;
     case "kick": return (byRank >= ROLES.admin.rank && tRank < byRank) || kickByRoomOwner(by);
     case "image": return byRank >= ROLES.admin.rank && tRank < byRank;
     case "role": case "unrole": {
       const rr = ROLES[r.v];
-      return !!rr && (r.v === "mod" || r.v === "normie") && byRank >= ROLES.admin.rank && rr.rank < byRank && tRank < byRank;
+      return !!rr && (r.v === "mod" || r.v === "normie") && canGrantRole(byRank, r.v) && tRank < byRank;
     }
   }
   return false;
@@ -1816,7 +1924,12 @@ function banLocalValid(targetId, ban) {
   if (!ban || !ban.byLoginId) return false;
   if (!rolesReady) return true;
   const byRank = rankOfLoginId(ban.byLoginId), tRank = rankOfLoginId(targetId);
-  return byRank >= ROLES.admin.rank && byRank > tRank && tRank < ROLES.coowner.rank && !isProtected(targetId);
+  if (byRank < ROLES.mod.rank || byRank <= tRank || tRank >= ROLES.coowner.rank || isProtected(targetId)) return false;
+  if (byRank < ROLES.admin.rank) {
+    const len = Number(ban.expiresAt) - Number(ban.bannedAt);
+    return Number.isFinite(len) && len > 0 && len <= TIME_LIMITS.modTempban.max + 20000;
+  }
+  return true;
 }
 function banStatus(targetId, ban) {
   if (!verifyActive() || Number(ban.bannedAt) < VERIFY_EPOCH) return "ok";
@@ -2182,6 +2295,7 @@ async function commitEdit(text) {
   const id = editingMsgId, m = msgEls.get(id);
   if (!m || !text) { cancelEdit(); return; }
   if (text === m.text) { cancelEdit(); return; }
+  if (hasFilteredWord(text)) { showComposerNotice(FILTER_NOTICE); return; }
   if (Date.now() - lastEditAt < 1500) { showComposerNotice("Slow down a little."); return; }
   if (m.ts && ChatBackend.serverNowSync() - m.ts > EDIT_WINDOW_MS) { showComposerNotice("You can only edit a message for 15 minutes."); cancelEdit(); return; }
   lastEditAt = Date.now();
@@ -2474,7 +2588,7 @@ function renderMessage(msg) {
     q.className = "msg-reply";
     const qn = document.createElement("b");
     qn.textContent = String(msg.replyTo.name || "Someone").slice(0, 40);
-    q.append("\u21A9 ", qn, document.createTextNode("  " + String(msg.replyTo.text || "").slice(0, 100)));
+    q.append("\u21A9 ", qn, document.createTextNode("  " + maskFiltered(String(msg.replyTo.text || "").slice(0, 100))));
     if (msg.replyTo.id) q.addEventListener("click", () => jumpToMessage(String(msg.replyTo.id)));
     el.appendChild(q);
   }
@@ -3191,12 +3305,12 @@ const SLASH_COMMANDS = [
     desc: "Remove a user from the current private room.", insert: "/kick " },
   { name: "/ban",     args: "username or ID",         minRank: ROLES.admin.rank,
     desc: "Ban the account ID, so a new name won't get around it. A 6-digit ID works even if they're offline.", insert: "/ban " },
-  { name: "/tempban", args: "time username or ID",    minRank: ROLES.admin.rank,
+  { name: "/tempban", args: "time username or ID",    minRank: ROLES.mod.rank,
     desc: () => "Ban the account ID for a while (" + limitsText(banLimitsForRank(myRank())) + ").", insert: "/tempban " },
-  { name: "/grant",   args: "rank perm|time username", minRank: ROLES.admin.rank,
-    desc: () => "Give a rank below yours. perm = permanent, or a time (" + limitsText(TIME_LIMITS.tempGrant) + "). Ranks: normie, mod, admin, coowner.", insert: "/grant " },
-  { name: "/remove",  args: "rank username",          minRank: ROLES.admin.rank,
-    desc: "Take away a rank below yours.", insert: "/remove " },
+  { name: "/grant",   args: "rank perm|time username", minRank: ROLES.mod.rank,
+    desc: rank => "Give a rank below yours. perm = permanent, or a time (" + limitsText(TIME_LIMITS.tempGrant) + "). " + (rank >= ROLES.admin.rank ? "Ranks: normie, mod, admin, coowner." : "Mods can give Normie."), insert: "/grant " },
+  { name: "/remove",  args: "rank username",          minRank: ROLES.mod.rank,
+    desc: rank => rank >= ROLES.admin.rank ? "Take away a rank below yours." : "Take away Normie from someone.", insert: "/remove " },
   { name: "/image",   args: "on|off username",        minRank: ROLES.admin.rank,
     desc: "Give or take away image access for someone below your rank.", insert: "/image " },
   { name: "/verify", args: "[on]",              minRank: ROLES.crown.rank,
@@ -3314,8 +3428,8 @@ function staffActionsFor(loginId, name) {
   if (!id || !myLoginId || id === String(myLoginId) || rank < ROLES.mod.rank || !rolesReady) return out;
   if (rankOfLoginId(id) >= rank || isProtected(id)) return out;
   out.push({ id: "mute", label: "Mute…" });
+  out.push({ id: "tempban", label: "Temp ban…" });
   if (rank >= ROLES.admin.rank) {
-    out.push({ id: "tempban", label: "Temp ban…" });
     if (rank >= ROLES.crown.rank) out.push({ id: "ban", label: "Ban" });
     if (currentRoomCode) out.push({ id: "kick", label: "Kick from room" });
   }
@@ -3503,7 +3617,11 @@ async function handleModerationCommand(text) {
       showComposerNotice("You can only remove ranks below your own.");
       return true;
     }
-    const target = await resolveModerationTarget(parts.slice(2).join(" "));
+    if (!canGrantRole(rank, roleToRemove.id)) {
+      showComposerNotice("Mods can only remove Normie.");
+      return true;
+    }
+    const target = await resolveModerationTarget(parts.slice(2).join(" "), { allowOfflineId: true });
     if (!guardModerationTarget(target, "remove a rank from")) return true;
     try {
       await ChatBackend.removeRoleFromId(roleToRemove.id, target.loginId);
@@ -3532,6 +3650,10 @@ async function handleModerationCommand(text) {
       showComposerNotice("You can only grant ranks below your own.");
       return true;
     }
+    if (!canGrantRole(rank, roleToGrant.id)) {
+      showComposerNotice("Mods can only give Normie.");
+      return true;
+    }
     // Third word is "perm" or a time only when a name follows it, so someone
     // literally named "Perm" (or "10m") can still be granted a rank.
     const word = (parts[2] || "").toLowerCase();
@@ -3551,7 +3673,7 @@ async function handleModerationCommand(text) {
       showComposerNotice(checkDurationLimits(0, TIME_LIMITS.tempGrant));
       return true;
     }
-    const target = await resolveModerationTarget(nameParts.join(" "));
+    const target = await resolveModerationTarget(nameParts.join(" "), { allowOfflineId: true });
     if (!guardModerationTarget(target, "grant a rank to")) return true;
 
     const alreadyPermanent = roleIdRaw[roleToGrant.id] && roleIdRaw[roleToGrant.id][target.loginId] === true;
@@ -3593,6 +3715,7 @@ async function sendMessage() {
   // Chatting but missing from the online list? Put them back.
   if (myLoginId && !latestPresenceList.some(e => String(e.loginId || "") === String(myLoginId))) ChatBackend.ensurePresence();
   if (!channelAllowedFor(activeChannel(), myLoginId)) { showComposerNotice("You can't post in this channel."); return; }
+  if (hasFilteredWord(text)) { showComposerNotice(FILTER_NOTICE); return; }
   if (myTimeoutRemainingMs > 0) {
     showComposerNotice("You're muted for " + formatCountdown(myTimeoutRemainingMs) + " more.");
     return;
@@ -4730,7 +4853,7 @@ function openModMenuStaff() {
   staffMenuMode = "mod";
   closeClearPanel();
   $ownerMenuTitle.textContent = "🧩 Mod Menu";
-  $ownerMenuSubtitle.textContent = "Online now. Press Refresh to update the list. Mutes only (" + limitsText(TIME_LIMITS.modTimeout) + ").";
+  $ownerMenuSubtitle.textContent = "Online now. Press Refresh to update the list. Mutes (" + limitsText(TIME_LIMITS.modTimeout) + ") and temp bans (" + limitsText(TIME_LIMITS.modTempban) + ").";
   renderOwnerMenuList();
   $ownerMenuOverlay.style.display = "flex";
 }
@@ -4980,8 +5103,8 @@ function rankGuideLines(role) {
   const gated = role.rank <= IMAGE_GATED_MAX_RANK;
   const byHand = role.id === "crown" || role.id === "coowner";
   const newCommands = SLASH_COMMANDS.filter(c => c.minRank === role.rank);
-  const grantable = Object.values(ROLES).filter(r => !r.implicit && r.id !== "crown" && r.id !== "coowner" && r.rank < role.rank);
-  const canGrant = role.rank >= ROLES.admin.rank && grantable.length > 0;
+  const grantable = Object.values(ROLES).filter(r => !r.implicit && r.id !== "crown" && r.id !== "coowner" && r.rank < role.rank && canGrantRole(role.rank, r.id));
+  const canGrant = grantable.length > 0;
   const menu = role.rank >= ROLES.crown.rank ? "Owner Menu" : role.rank >= ROLES.admin.rank ? "Admin Menu" : role.rank >= ROLES.mod.rank ? "Mod Menu" : null;
 
   const lines = [];
@@ -4993,7 +5116,7 @@ function rankGuideLines(role) {
     ? "One every " + imgEvery + ", but only after a higher rank turns image access on for you."
     : "You can post images, one every " + imgEvery + "."]);
   lines.push(["Bubble color", role.rank >= COLOR_MIN_RANK ? "You can pick your own colors in Settings." : "Unlocks at " + ROLES.normie.icon + " " + ROLES.normie.label + "."]);
-  if (menu) lines.push(["Menu", menu + (role.id === "mod" ? " (mutes only)" : "") + " in Settings."]);
+  if (menu) lines.push(["Menu", menu + (role.id === "mod" ? " (mutes, temp bans up to " + formatDurationShort(TIME_LIMITS.modTempban.max) + ", give Normie)" : "") + " in Settings."]);
   if (canGrant) lines.push(["Can give out", grantable.map(r => r.icon + " " + r.label).join(", ") + ", permanently or for a set time."]);
   if (role.id === "coowner") lines.push(["Commands", "The same as " + ROLES.admin.icon + " " + ROLES.admin.label + "."]);
   return { lines, newCommands, notes: [
@@ -5234,6 +5357,13 @@ async function renderOwnerMenuList() {
 
     // Admins can ban too (they have /ban and /tempban); Owners got theirs above.
     if (staffMenuMode === "admin") addBanButtons(actions, entry);
+    else if (staffMenuMode === "mod" && loginId) {
+      const mb = document.createElement("button");
+      mb.className = "kick"; mb.textContent = "Temp ban";
+      mb.title = "Ban login ID #" + loginId + " for a set time (" + limitsText(TIME_LIMITS.modTempban) + ")";
+      mb.addEventListener("click", () => { if (guardModerationTarget({ name, loginId }, "ban")) openTempBanSetModal(entry); });
+      actions.appendChild(mb);
+    }
 
     const timeoutBtn = document.createElement("button");
     timeoutBtn.className = "kick";
