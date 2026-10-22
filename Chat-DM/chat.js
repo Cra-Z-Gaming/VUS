@@ -4115,6 +4115,24 @@ function renderChatSettings(container) {
   title.textContent = "Chat settings";
   wrap.appendChild(title);
 
+  // Each group is its own rounded card; the helpers below add to whichever card is current.
+  let host = wrap;
+  const card = (icon, name, hint, id) => {
+    const el = document.createElement("section");
+    el.className = "cs-card";
+    if (id) el.id = id;
+    const head = document.createElement("div");
+    head.className = "cs-card-head";
+    const ic = document.createElement("span"); ic.className = "cs-card-icon"; ic.textContent = icon;
+    const tx = document.createElement("span"); tx.className = "cs-card-text";
+    const nm = document.createElement("b"); nm.textContent = name; tx.appendChild(nm);
+    if (hint) { const h = document.createElement("small"); h.textContent = hint; tx.appendChild(h); }
+    head.append(ic, tx); el.appendChild(head);
+    wrap.appendChild(el);
+    host = el;
+    return el;
+  };
+
   const toggle = (label, hint, isOn, onChange) => {
     const row = document.createElement("button");
     row.type = "button";
@@ -4131,9 +4149,10 @@ function renderChatSettings(container) {
       onChange(!isOn());
       sw.classList.toggle("on", isOn());
     });
-    wrap.appendChild(row);
+    host.appendChild(row);
   };
 
+  card("\uD83D\uDCAC", "Chat", "How the conversation behaves");
   toggle("Auto scroll", "Keeps the newest message in view", () => autoScroll, v => setAutoScroll(v));
   toggle("Verified tag", "Show the green \u201cVerified\u201d tag next to verified people", () => chatPrefs.showVerified !== false, v => {
     chatPrefs.showVerified = v; saveChatPrefs(); applyAppearance();
@@ -4166,18 +4185,19 @@ function renderChatSettings(container) {
       seg.appendChild(bt);
     });
     row.append(lab, seg);
-    wrap.appendChild(row);
+    host.appendChild(row);
   };
-  { const t = document.createElement("div"); t.className = "cs-subtitle"; t.id = "csNotifSection"; t.textContent = "Notifications"; wrap.appendChild(t); }
+  card("\uD83D\uDD14", "Notifications", "What gets your attention", "csNotifSection");
   NOTIF_TYPES.forEach(([type, key, label, hint]) => toggle(label, hint, () => chatPrefs[key] !== false, v => { chatPrefs[key] = v; saveChatPrefs(); }));
-  { const t = document.createElement("div"); t.className = "cs-subtitle"; t.textContent = "Safety"; wrap.appendChild(t); }
+  card("\uD83D\uDEE1\uFE0F", "Safety", "Filters and staff-action checks");
   toggle("Peer verification", verifyFlagOn ? "Checks that bans, mutes and grants come from someone allowed to do them" : "Off in this room until the Owner runs /verify on", () => chatPrefs.peerVerify !== false, v => {
     chatPrefs.peerVerify = v; saveChatPrefs(); scheduleVerifyRefresh();
   });
   toggle("Chat filter", "Stars out banned words (w**d). On for everyone by default; turn off to see them. Remembered on this device.", () => chatPrefs.wordFilter !== false, v => {
     chatPrefs.wordFilter = v; saveChatPrefs(); refreshFilteredText();
   });
-  { const r = document.createElement("button"); r.type = "button"; r.className = "cs-row"; r.innerHTML = '<span class="cs-label">Open Verification panel<small>See who is verified and what was approved or rejected</small></span>'; r.addEventListener("click", e => { e.stopPropagation(); openFromSettings(openVerifyPanel); }); wrap.appendChild(r); }
+  { const r = document.createElement("button"); r.type = "button"; r.className = "cs-row"; r.innerHTML = '<span class="cs-label">Open Verification panel<small>See who is verified and what was approved or rejected</small></span>'; r.addEventListener("click", e => { e.stopPropagation(); openFromSettings(openVerifyPanel); }); host.appendChild(r); }
+  card("\uD83C\uDFA8", "Personalization", "Looks and background, saved on this device only");
   choice("Text size", [["s", "Small"], ["m", "Medium"], ["l", "Large"], ["xl", "Huge"]], () => chatPrefs.textSize, v => { chatPrefs.textSize = v; saveChatPrefs(); applyAppearance(); keepPinned(); });
   choice("Bubble size", [["compact", "Compact"], ["normal", "Normal"], ["roomy", "Roomy"]], () => chatPrefs.bubbleSize, v => { chatPrefs.bubbleSize = v; saveChatPrefs(); applyAppearance(); keepPinned(); });
   toggle("Bold text", "Easier to read", () => !!chatPrefs.bold, v => { chatPrefs.bold = v; saveChatPrefs(); applyAppearance(); keepPinned(); });
@@ -4192,9 +4212,10 @@ function renderChatSettings(container) {
     val.textContent = rng.value + "px";
     rng.addEventListener("input", () => { chatPrefs.radius = Number(rng.value); val.textContent = rng.value + "px"; saveChatPrefs(); applyAppearance(); });
     row.append(lab, rng, val);
-    wrap.appendChild(row);
+    host.appendChild(row);
   }
-  renderBackgroundControls(wrap, choice);
+  renderBackgroundControls(host, choice);
+  card("\uD83E\uDDF0", "Tools", "Quick actions");
 
   const action = (label, onClick, danger) => {
     const b = document.createElement("button");
@@ -4202,7 +4223,7 @@ function renderChatSettings(container) {
     b.className = "cs-action" + (danger ? " danger" : "");
     b.textContent = label;
     b.addEventListener("click", (e) => { e.stopPropagation(); onClick(b); });
-    wrap.appendChild(b);
+    host.appendChild(b);
     return b;
   };
   const rem = getPingYouRemainingMs();
@@ -4214,9 +4235,6 @@ function renderChatSettings(container) {
   if (rem > 0) pingBtn.disabled = true;
   action("Clear chat on my screen", () => { $clearChatBtn.click(); closeClearPanel(); }, true);
 
-  const divider = document.createElement("div");
-  divider.style.cssText = "height:1px;background:#334155;margin:10px 0";
-  wrap.appendChild(divider);
   container.appendChild(wrap);
 }
 

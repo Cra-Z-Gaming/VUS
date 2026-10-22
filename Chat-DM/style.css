@@ -2254,3 +2254,16 @@ body.hide-verified .verified-tag { display: none !important; }
 .vid-el { display: block; max-width: 100%; max-height: 340px; border-radius: 10px; background: #000; }
 .vid-count { font-size: 11.5px; opacity: .65; margin-top: 6px; }
 .vid-gone { font-size: 13.5px; opacity: .75; padding: 4px 2px; }
+
+/* ── Settings groups: one rounded card each ── */
+.chat-settings .cs-card { background: #0f1828; border: 1px solid #263248; border-radius: 14px; padding: 6px 14px 10px; margin: 12px 0 0; box-shadow: 0 1px 0 rgba(255,255,255,.03) inset; }
+.cs-card-head { display: flex; align-items: center; gap: 10px; padding: 8px 0 8px; }
+.cs-card-icon { flex: 0 0 30px; height: 30px; border-radius: 9px; background: #1b2740; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+.cs-card-text { display: flex; flex-direction: column; min-width: 0; }
+.cs-card-text b { color: #f1f5f9; font-size: 14.5px; font-weight: 650; }
+.cs-card-text small { color: #64748b; font-size: 11.5px; margin-top: 1px; }
+.cs-card > .cs-row, .cs-card > .cs-choice, .cs-card > .cs-bg { border-top: 1px solid #1c2a40; }
+.cs-card > .cs-row { padding: 10px 2px; }
+.cs-card > .cs-choice { padding: 10px 2px; }
+.cs-card > .cs-bg { padding-top: 6px; }
+.cs-card > .cs-action:first-of-type { margin-top: 2px; }
