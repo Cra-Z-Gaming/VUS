@@ -131,8 +131,8 @@ const TIME_LIMITS = {
   adminMute:  { min: 1000,  max: ADMIN_MUTE_MAX_MS },   // Admin: 1 week
   modTimeout: { min: 60000, max: MOD_TIMEOUT_MAX_MS },  // Mod: 1 minute to 1 day
   tempban:    { min: 60000, max: TIMEOUT_MAX_MS },      // Co-owner and Owner: 30 days
-  adminTempban: { min: 60000, max: ADMIN_MUTE_MAX_MS }, // Admin: 1 week
-  modTempban:   { min: 60000, max: 12 * 60 * 60 * 1000 }, // Mod: up to 12 hours
+  adminTempban: { min: 60000, max: 3 * 24 * 60 * 60 * 1000 }, // Admin: up to 3 days
+  modTempban:   { min: 60000, max: 6 * 60 * 60 * 1000 }, // Mod: up to 6 hours
   tempGrant:  { min: 60000, max: TIMEOUT_MAX_MS }       // temporary ranks (/grant rank <time> name)
 };
 const TIME_INPUT_HINT = "Try 30s, 10m, 2h, 3d or 1w (a bare number means minutes).";
@@ -467,7 +467,32 @@ const ChatBackend = {
     this._mediaDataRef = this._db.ref("rooms/" + roomId + "/mediaData");
     this._editsRef = this._db.ref("rooms/" + roomId + "/edits");
     this._reactionsRef = this._db.ref("rooms/" + roomId + "/reactions");
+    this._pollsRef = this._db.ref("rooms/" + roomId + "/polls");
+    this._pollVotesRef = this._db.ref("rooms/" + roomId + "/pollVotes");
   },
+
+  // ── Polls: polls/<id> = end time (write-once; the vote rules read it), pollVotes/<id>/<loginId> = option (write-once) ──
+  async createPoll(q, opts, ownId, color) {
+    const id = Math.random().toString(36).slice(2, 10).padEnd(8, "x");
+    const exp = this.serverNowSync() + POLL_MS;
+    const sig = id + ":" + annHash(q + "|" + opts.join("|"));
+    const key = await this.issue("actions", { k: "poll", t: "000000", v: sig });
+    if (!key && verifyActive()) throw new Error("approval");
+    await this._pollsRef.child(id).set(exp);
+    const data = {
+      name: myName, loginId: String(ownId), text: "📊 Poll: " + q,
+      poll: { id, q, o: opts, exp }, ts: firebase.database.ServerValue.TIMESTAMP,
+      ...(color ? { bubble: color.bubble, textColor: color.text } : {})
+    };
+    return this._ref.push(data);
+  },
+  vote(pid, loginId, idx) { return this._pollVotesRef.child(pid).child(String(loginId)).set(idx); },
+  watchPollVotes(pid, cb) {
+    const ref = this._pollVotesRef.child(pid);
+    const h = ref.on("value", s => cb(s.val() || {}));
+    return () => { try { ref.off("value", h); } catch (e) {} };
+  },
+  getPollVotes(pid) { return this._pollVotesRef.child(pid).get().then(s => s.val() || {}); },
 
   detachAllListeners() {
     if (this._ref) this._ref.off();
@@ -490,7 +515,7 @@ const ChatBackend = {
     try { await this._mediaDataRef.child(id).remove(); } catch (e) {}
     try { await this._mediaMetaRef.child(id).remove(); } catch (e) {}
   },
-  async sendVideo(name, file, dur, loginId, onProgress) {
+  async sendVideo(name, file, dur, loginId, onProgress, caption, replyTo) {
     const id = this._mediaDataRef.push().key;
     const n = Math.ceil(file.size / VIDEO_CHUNK_BYTES);
     // The expiry goes up FIRST (generous upload window) so a dead upload is still swept away.
@@ -513,8 +538,11 @@ const ChatBackend = {
     await this._ref.push({
       name: name,
       ...(loginId ? { loginId: String(loginId) } : {}),
+      ...(caption ? { text: caption } : {}),
       ts: firebase.database.ServerValue.TIMESTAMP,
-      video: { id, n, size: file.size, mime: file.type, dur: Math.round(dur * 10) / 10, exp }
+      video: { id, n, size: file.size, mime: file.type, dur: Math.round(dur * 10) / 10, exp },
+      ...(color && color.ring ? { ring: color.ring } : {}),
+      ...(replyTo ? { replyTo } : {})
     });
     return id;
   },
@@ -564,15 +592,22 @@ const ChatBackend = {
     });
   },
 
-  async sendImage(name, dataUrl, loginId) {
+  async sendImage(name, dataUrl, loginId, caption, replyTo) {
     const color = await this.getNameColor(loginId);
-    return this._ref.push({
+    const data = {
       name: name,
       ...(loginId ? { loginId: String(loginId) } : {}),
       imageData: dataUrl,
+      ...(caption ? { text: caption } : {}),
       ts: firebase.database.ServerValue.TIMESTAMP,
-      ...(color ? { bubble: color.bubble, textColor: color.text } : {})
-    });
+      ...(color ? { bubble: color.bubble, textColor: color.text, ...(color.ring ? { ring: color.ring } : {}) } : {}),
+      ...(replyTo ? { replyTo } : {})
+    };
+    try { return await this._ref.push(data); }
+    catch (e) {
+      if ((replyTo || data.ring) && isPermissionDenied(e)) { delete data.replyTo; delete data.ring; return this._ref.push(data); }
+      throw e;
+    }
   },
 
   async send(name, text, mention, loginId, replyTo) {
@@ -583,13 +618,18 @@ const ChatBackend = {
       text: text,
       ts: firebase.database.ServerValue.TIMESTAMP,
       ...(mention ? { mention: mention.name + (mention.silent ? SILENT_MENTION_MARK : "") } : {}),
-      ...(color ? { bubble: color.bubble, textColor: color.text } : {}),
+      ...(color ? { bubble: color.bubble, textColor: color.text, ...(color.ring ? { ring: color.ring } : {}) } : {}),
       ...(replyTo ? { replyTo } : {})
     };
     try { return await this._ref.push(data); }
     catch (e) {
       // The database rules may not know about replies yet: still deliver the message.
-      if (replyTo && isPermissionDenied(e)) {
+      if ((replyTo || data.ring) && isPermissionDenied(e)) {
+        // Old rules don't know about the ring: drop just that and try again.
+        if (data.ring) {
+          delete data.ring;
+          try { return await this._ref.push(data); } catch (e2) { if (!(replyTo && isPermissionDenied(e2))) throw e2; }
+        }
         delete data.replyTo;
         const r = await this._ref.push(data);
         showComposerNotice("Sent without the reply link: the database rules need the update that allows replies.");
@@ -610,7 +650,7 @@ const ChatBackend = {
     return profile && profile.color ? profile.color : null;
   },
 
-  async claimColor(loginId, bubble, text) {
+  async claimColor(loginId, bubble, text, ring) {
     const existing = await this.getNameColor(loginId);
     if (existing) {
       const serverNow = await this._serverNow();
@@ -621,7 +661,7 @@ const ChatBackend = {
       }
     }
     await this.updateProfile(loginId, {
-      color: { bubble, text, changedAt: firebase.database.ServerValue.TIMESTAMP }
+      color: { bubble, text, ...(ring ? { ring } : {}), changedAt: firebase.database.ServerValue.TIMESTAMP }
     });
     return { ok: true };
   },
@@ -673,10 +713,11 @@ const ChatBackend = {
   // caller to wait.
   async claimPresence(name, silent, loginId) {
     if (!loginId) return { ok: false, reason: "missing-id" };
+    const presRef = this._presenceRef;   // the room this claim is for (the person may switch away while we wait)
     const ban = await this.getBan(loginId);
     if (ban) return { ok: false, reason: "banned", ban };
 
-    const presenceSnapshot = await this._presenceRef.get();
+    const presenceSnapshot = await presRef.get();
     const presence = presenceSnapshot.val() || {};
     const accountAlreadyOnline = Object.values(presence).some(entry =>
       entry && String(entry.loginId || "") === String(loginId)
@@ -691,6 +732,7 @@ const ChatBackend = {
       entry && String(entry.loginId || "") !== String(loginId) && nameSkeleton(key) === wantedSkeleton);
     if (nameClash) return { ok: false, reason: "name-taken" };
 
+    if (this._presenceRef !== presRef) return { ok: false, reason: "switched" };   // moved on to another room meanwhile: don't write into the old one
     this.releasePresence();
     this._myPresenceRef = this._presenceRef.child(this._safeKey(name));
     this._silentSession = !!silent;
@@ -816,7 +858,8 @@ const ChatBackend = {
   releasePresence() {
     this._stopPresenceHeal();
     if (this._myPresenceRef) {
-      this._myPresenceRef.remove();
+      const gone = this._myPresenceRef;
+      gone.remove().catch(() => setTimeout(() => gone.remove().catch(() => {}), 2500));   // a failed removal would leave a ghost, so try once more
       this._myPresenceRef = null;
     }
     if (this._myLeaveEventRef) {
@@ -948,7 +991,8 @@ const ChatBackend = {
       const list = Object.entries(val).map(([key, v]) => ({
         name: key,
         loginId: (v && typeof v === "object" && v.loginId) ? String(v.loginId) : null,
-        joinedAt: (v && typeof v === "object") ? (v.joinedAt || null) : null
+        joinedAt: (v && typeof v === "object") ? (v.joinedAt || null) : null,
+        afk: !!(v && typeof v === "object" && v.afk === true)
       }));
       onList(list);
     });
@@ -1039,18 +1083,21 @@ const ChatBackend = {
     }
   },
 
-  async banUser(loginId, username, byLoginId, durationMs) {
+  async banUser(loginId, username, byLoginId, durationMs, reason) {
     if (!loginId) throw new Error("Missing login ID");
     // Server time, not this device's clock (see _serverOffset above).
     await this.issue("actions", { k: "ban", t: loginId, d: durationMs || 0 });
     const expiresAt = durationMs ? (await this._serverNow()) + durationMs : 0;
-    await this._bansRef.child(this._safeKey(String(loginId))).set({
+    const banRec = {
       loginId: String(loginId),
       username: username || "Unknown",
       byLoginId: byLoginId ? String(byLoginId) : null,
       bannedAt: firebase.database.ServerValue.TIMESTAMP,
-      ...(expiresAt ? { expiresAt } : {})
-    });
+      ...(expiresAt ? { expiresAt } : {}),
+      ...(reason ? { reason: String(reason).slice(0, 100) } : {})
+    };
+    try { await this._bansRef.child(this._safeKey(String(loginId))).set(banRec); }
+    catch (e) { if (banRec.reason && isPermissionDenied(e)) { delete banRec.reason; await this._bansRef.child(this._safeKey(String(loginId))).set(banRec); } else throw e; }
     const snapshot = await this._presenceRef.get();
     const entries = snapshot.val() || {};
     await Promise.all(Object.entries(entries)
@@ -1163,13 +1210,16 @@ const ChatBackend = {
   // set it (safe-keyed), so clearTimeout_ can enforce "only the mod who
   // set it can clear it early" for mod-issued timeouts — see
   // canClearTimeout below.
-  async setTimeout_(targetLoginId, durationMs, byLoginId) {
+  async setTimeout_(targetLoginId, durationMs, byLoginId, reason) {
     await this.issue("actions", { k: "mute", t: targetLoginId, d: durationMs });
     const serverNow = await this._serverNow();
-    await this._timeoutsRef.child(this._safeKey(String(targetLoginId))).set({
+    const rec = {
       expiresAt: serverNow + durationMs,
-      by: byLoginId ? String(byLoginId) : null
-    });
+      by: byLoginId ? String(byLoginId) : null,
+      ...(reason ? { reason: String(reason).slice(0, 100) } : {})
+    };
+    try { await this._timeoutsRef.child(this._safeKey(String(targetLoginId))).set(rec); }
+    catch (e) { if (rec.reason && isPermissionDenied(e)) { delete rec.reason; await this._timeoutsRef.child(this._safeKey(String(targetLoginId))).set(rec); } else throw e; }
   },
 
   // Unconditional clear — used by the Owner Menu (crown can always clear
@@ -1524,6 +1574,8 @@ function restorePrefsState(str) {
 }
 applyAppearance();
 let myTimeoutRemainingMs = 0; // live, kept in sync by watchMyTimeout()
+let myTimeoutReason = "";
+const mutedNotice = () => "You're muted for " + formatCountdown(myTimeoutRemainingMs) + " more." + (myTimeoutReason ? " Reason: " + myTimeoutReason : "");
 let unwatchMyTimeout = null;
 let myTimeoutCountdownTimer = null;
 let unwatchMyBan = null;
@@ -1544,7 +1596,10 @@ const CHAT_LAST_NAME_KEY = "vusChatLastName";
    image each respect their own delay. */
 let lastSentAt = 0;
 let lastImageSentAt = 0;
-function currentMessageCooldownMs() { return ROLE_MESSAGE_COOLDOWNS_MS[myRoleId()] ?? ROLE_MESSAGE_COOLDOWNS_MS.unranked; }
+function currentMessageCooldownMs() {
+  const base = ROLE_MESSAGE_COOLDOWNS_MS[myRoleId()] ?? ROLE_MESSAGE_COOLDOWNS_MS.unranked;
+  return activeChannelId === "announce" ? Math.max(base, 15000) : base;
+}
 function currentImageCooldownMs()   { return ROLE_IMAGE_COOLDOWNS_MS[myRoleId()]   ?? ROLE_IMAGE_COOLDOWNS_MS.unranked; }
 let cooldownTimer = null;
 
@@ -1771,15 +1826,27 @@ function maskFiltered(text) {
   return chars.join("");
 }
 
+// Clicking an @mention opens that person's profile.
+function mentionChip(name, extraClass) {
+  const chip = document.createElement("span");
+  chip.className = "mention-chip-inline mention-click" + (extraClass ? " " + extraClass : "");
+  chip.textContent = "@" + name;
+  chip.title = "View " + name + "'s profile";
+  chip.addEventListener("click", async e => {
+    e.stopPropagation();
+    let t = null;
+    try { t = await resolveModerationTarget(name, { allowOfflineId: true }); } catch (x) {}
+    const id = (t && t.loginId) || (() => { const n2i = nameToLoginId(); return n2i[name] || null; })();
+    if (id) openProfileFor(String(id), (t && t.name) || name); else showComposerNotice("Couldn't find " + name + "'s account.");
+  });
+  return chip;
+}
 function fillBubbleText(bubble, text, legacy) {
   text = maskFiltered(String(text || ""));
   const toks = parseMentionTokens(text);
   if (!toks.length) {
     if (legacy) {
-      const chip = document.createElement("span");
-      chip.className = "mention-chip-inline";
-      chip.textContent = "@" + mentionTargetOf(legacy);
-      bubble.appendChild(chip);
+      bubble.appendChild(mentionChip(mentionTargetOf(legacy)));
       if (text) bubble.appendChild(document.createTextNode(" " + text));
     } else bubble.appendChild(document.createTextNode(text));
     return;
@@ -1787,16 +1854,13 @@ function fillBubbleText(bubble, text, legacy) {
   let pos = 0;
   toks.forEach(t => {
     if (t.start > pos) bubble.appendChild(document.createTextNode(text.slice(pos, t.start)));
-    const chip = document.createElement("span");
-    chip.className = "mention-chip-inline" + (t.name === myName ? " mention-me" : "");
-    chip.textContent = "@" + t.name;
-    bubble.appendChild(chip);
+    bubble.appendChild(mentionChip(t.name, t.name === myName ? "mention-me" : ""));
     pos = t.end;
   });
   if (pos < text.length) bubble.appendChild(document.createTextNode(text.slice(pos)));
 }
 function mentionInfoFor(msg) {
-  if (!myName || msg.imageData || msg.video) return { me: false, ping: false };
+  if (!myName || ((msg.imageData || msg.video) && !msg.text)) return { me: false, ping: false };
   const toks = parseMentionTokens(msg.text);
   let me = false, ping = false;
   toks.forEach(t => { if (t.name === myName) { me = true; if (t.ping) ping = true; } });
@@ -1898,6 +1962,10 @@ function kickByRoomOwner(by) { return !!(currentRoomMeta && currentRoomMeta.owne
 // Would an honest client accept this record, judged only on ranks, limits and presence?
 function recLooksValid(r, requireOnline) {
   const by = String(r.b || ""), t = String(r.t || "");
+  if (r.k === "announce" || r.k === "poll") {      // no target: just an admin+ speaking in their own name
+    if (!/^\d{6}$/.test(by) || rankOfLoginId(by) < ROLES.admin.rank) return false;
+    return true;      // not tied to being listed online: announcements are posted from their own room
+  }
   if (!/^\d{6}$/.test(by) || !/^\d{6}$/.test(t) || by === t) return false;
   if (requireOnline && !presenceIds().includes(by)) return false;
   const byRank = rankOfLoginId(by), tRank = rankOfLoginId(t), d = Number(r.d) || 0;
@@ -2280,7 +2348,12 @@ let editingMsgId = null;
 let lastReactAt = 0, lastEditAt = 0;
 const EMOJI_KEY_OK = /^[^.$#\[\]\/\u0000-\u001f]{1,32}$/;
 function validEmojiKey(k) { return typeof k === "string" && EMOJI_KEY_OK.test(k) && /\p{Extended_Pictographic}/u.test(k); }
-function snippetOf(m) { return m.isImage ? "\uD83D\uDCF7 Image" : stripMentionMarks(m.text).slice(0, 80); }
+function snippetOf(m) {
+  if (!m.isImage) return stripMentionMarks(m.text).slice(0, 80);
+  const label = m.kind === "video" ? "\uD83C\uDFAC Video" : "\uD83D\uDCF7 Image";   // says which kind of media it is
+  const cap = stripMentionMarks(m.text || "").trim();
+  return cap ? (label + " \u00b7 " + cap).slice(0, 80) : label;
+}
 
 function jumpToMessage(id) {
   const m = msgEls.get(id);
@@ -2384,7 +2457,7 @@ function onReactions(id, val) {
 }
 async function reactTo(id, emoji) {
   if (!myLoginId || !validEmojiKey(emoji)) return;
-  if (myTimeoutRemainingMs > 0) { showComposerNotice("You're muted for " + formatCountdown(myTimeoutRemainingMs) + " more."); return; }
+  if (myTimeoutRemainingMs > 0) { showComposerNotice(mutedNotice()); return; }
   if (Date.now() - lastReactAt < 400) return;
   lastReactAt = Date.now();
   const mine = String(myLoginId);
@@ -2427,6 +2500,7 @@ function whenRolesReady() { return rolesReady ? Promise.resolve() : new Promise(
 const RATE_TOLERANCE_MS = 1000;        // server-timestamp jitter between an honest sender's own clock and ours
 const lastAccepted = {};               // loginId -> { ts, image }
 function violatesRateLimit(msg) {
+  if (activeChannelId === "announce") return annRateBad(msg, annRenderLast);
   if (!msg.loginId || !msg.ts || msg.ts < liveSince || !rolesReady) return false;
   const id = String(msg.loginId);
   const role = effectiveRoleForLoginId(id);
@@ -2548,7 +2622,7 @@ function renderMessage(msg) {
     if (msg.loginId && msg.ts >= liveSince && isSilenced(msg.loginId)) { el.classList.add("silenced-hidden"); hiddenForMe = true; }   // muted/banned: a modified client's posts stay invisible here
     else if (isSpamDuplicate(msg) || violatesRateLimit(msg)) { el.classList.add("spam-hidden"); hiddenForMe = true; }
     else if (msg.loginId && isMuted(msg.loginId)) { el.classList.add("muted-hidden"); hiddenForMe = true; }
-    trackNewAccountBurst(msg);
+    if (activeChannelId !== "announce") trackNewAccountBurst(msg);
     if (!hiddenForMe && msg.loginId && isMuted(msg.loginId)) hiddenForMe = true;
     // No real login id or no name = not a real account (forged client): hidden for everyone else.
     if (!/^\d{6}$/.test(String(msg.loginId || "")) || !String(msg.name || "").trim()) { el.classList.add("anon-hidden"); hiddenForMe = true; }
@@ -2558,10 +2632,15 @@ function renderMessage(msg) {
     }
   }
 
+  if (activeChannelId === "announce") {
+    el.classList.add("ann-msg");
+    if (msg.id && !msg.poll) { annEls.set(String(msg.id), { el, msg, mine }); paintAnnGate(String(msg.id)); }
+  }
   const avEl = document.createElement("div");
   avEl.className = "msg-av";
   avEl.title = "View profile";
   paintAvatar(avEl, msg.loginId, msg.name);
+  if (/^#[0-9a-fA-F]{6}$/.test(String(msg.ring || ""))) { avEl.classList.add("has-ring"); avEl.style.setProperty("--ring", msg.ring); }
   if (msg.loginId) avEl.addEventListener("click", () => openProfileFor(msg.loginId, msg.name));
   el.appendChild(avEl);
 
@@ -2604,19 +2683,24 @@ function renderMessage(msg) {
     link.appendChild(img);
     bubble.appendChild(link);
     bubble.style.padding = "6px";
+    if (msg.text) { const cap = document.createElement("div"); cap.className = "media-caption"; fillBubbleText(cap, msg.text, msg.mention); bubble.appendChild(cap); }
   } else if (msg.video && typeof msg.video === "object") {
     buildVideoBubble(bubble, msg);
     bubble.style.padding = "8px";
+    if (msg.text) { const cap = document.createElement("div"); cap.className = "media-caption"; fillBubbleText(cap, msg.text, msg.mention); bubble.appendChild(cap); }
+  } else if (msg.poll && typeof msg.poll === "object") {
+    buildPollBubble(bubble, msg);
+    if (msg.id) { pollEls.set(String(msg.id), { el, msg, mine }); paintAnnGate(String(msg.id)); }
   } else {
     fillBubbleText(bubble, msg.text, msg.mention);
   }
 
-  if (!msg.imageData && !msg.video) {
+  if (!msg.imageData && !msg.video && !msg.poll) {
     if (msg.bubble) bubble.style.background = msg.bubble;
     if (msg.textColor) bubble.style.color = msg.textColor;
   }
 
-  if (msg.replyTo && typeof msg.replyTo === "object" && !msg.imageData) {
+  if (msg.replyTo && typeof msg.replyTo === "object") {
     const q = document.createElement("div");
     q.className = "msg-reply";
     const qn = document.createElement("b");
@@ -2630,7 +2714,7 @@ function renderMessage(msg) {
   reactRow.className = "msg-reactions";
   el.appendChild(reactRow);
   if (msg.id) {
-    msgEls.set(String(msg.id), { el, bubble, reactRow, loginId: String(msg.loginId || ""), ts: Number(msg.ts) || 0, isImage: !!(msg.imageData || msg.video), mention: msg.mention || "" , text: msg.text || "" });
+    msgEls.set(String(msg.id), { el, bubble, reactRow, loginId: String(msg.loginId || ""), ts: Number(msg.ts) || 0, isImage: !!(msg.imageData || msg.video), kind: msg.video ? "video" : msg.imageData ? "image" : "text", mention: msg.mention || "" , text: msg.text || "" });
     el.appendChild(buildMessageActions(msg, mine));
     el.addEventListener("click", (ev) => {
       if (!(window.matchMedia && window.matchMedia("(hover: none)").matches)) return;
@@ -3095,9 +3179,15 @@ ChatBackend.onDisplaced = function () {
 };
 
 // Renaming = log out of this name and pick another. The account is unchanged.
+function announceLocked() { return activeChannelId === "announce" && myRank() < ROLES.admin.rank; }
 function updateSendButtonState() {
   const elapsed = Date.now() - lastSentAt;
   const remaining = currentMessageCooldownMs() - elapsed;
+  if (announceLocked()) {
+    $sendBtn.disabled = true; $msgInput.disabled = true;
+    $msgInput.placeholder = "Only admins and above can post announcements";
+    return;
+  }
   if (remaining > 0) {
     $sendBtn.disabled = true;
     $sendBtn.classList.add("cooldown");
@@ -3118,6 +3208,7 @@ function isPhoneWidth() {
   return !!(window.matchMedia && window.matchMedia("(max-width: 600px)").matches);
 }
 function defaultComposerPlaceholder() {
+  if (activeChannelId === "announce") return announceLocked() ? "Only admins and above can post announcements" : "Write an announcement\u2026 (one every 15 seconds)";
   if (isPhoneWidth()) return "Message\u2026";
   return availableSlashCommands().length
     ? "Type a message\u2026 (@ mention, / commands)"
@@ -3169,7 +3260,8 @@ function applyMyMute() {
   }
   const wasMuted = myTimeoutRemainingMs > 0;
   myTimeoutRemainingMs = eff;
-  if (eff > 0 && !wasMuted && myMuteRaw.rec) pushNotif({ id: "s:mute:" + (myMuteRaw.rec.expiresAt || Date.now()), type: "staff", from: "Moderation", text: "You were muted for " + formatCountdown(eff) + ".", ts: Date.now() });
+  myTimeoutReason = eff > 0 && myMuteRaw.rec && typeof myMuteRaw.rec.reason === "string" ? myMuteRaw.rec.reason.slice(0, 100) : "";
+  if (eff > 0 && !wasMuted && myMuteRaw.rec) pushNotif({ id: "s:mute:" + (myMuteRaw.rec.expiresAt || Date.now()), type: "staff", from: "Moderation", text: "You were muted for " + formatCountdown(eff) + "." + (myTimeoutReason ? " Reason: " + myTimeoutReason : ""), ts: Date.now() });
   updateComposerLockState();
   clearInterval(myTimeoutCountdownTimer);
   if (eff > 0) {
@@ -3217,7 +3309,7 @@ function showBanScreen(ban) {
 
   const isTemporary = !!ban.expiresAt;
   $banTitle.textContent = isTemporary ? "You're temporarily banned" : "You are banned";
-  $banReason.textContent = "Your account was removed from VUS Chat by staff.";
+  $banReason.textContent = "Your account was removed from VUS Chat by staff." + (ban.reason ? " Reason: " + String(ban.reason).slice(0, 100) : "");
   $banCountdownWrap.style.display = isTemporary ? "block" : "none";
   $banPermanentNote.style.display = isTemporary ? "none" : "block";
 
@@ -3332,13 +3424,13 @@ function parseModerationDuration(value) {
    so the min/max shown always matches what YOUR rank is allowed.
    ══════════════════════════════════════════════════════════ */
 const SLASH_COMMANDS = [
-  { name: "/mute", args: "time username",             minRank: ROLES.mod.rank,
+  { name: "/mute", args: "time username [reason]",    minRank: ROLES.mod.rank,
     desc: rank => "Mute someone for a while (" + limitsText(timeoutLimitsForRank(rank)) + ").", insert: "/mute " },
   { name: "/kick",    args: "username",               minRank: ROLES.admin.rank,
     desc: "Remove a user from the current private room.", insert: "/kick " },
-  { name: "/ban",     args: "username or ID",         minRank: ROLES.admin.rank,
-    desc: "Ban the account ID, so a new name won't get around it. A 6-digit ID works even if they're offline.", insert: "/ban " },
-  { name: "/tempban", args: "time username or ID",    minRank: ROLES.mod.rank,
+  { name: "/ban",     args: "username or ID [reason]", minRank: ROLES.mod.rank,
+    desc: rank => "Ban the account ID, so a new name won't get around it. " + (rank >= ROLES.crown.rank ? "Permanent." : "Lasts " + formatDurationShort(banLimitsForRank(rank).max) + " (the longest your rank can do).") + " A 6-digit ID works even if they're offline.", insert: "/ban " },
+  { name: "/tempban", args: "time username or ID [reason]", minRank: ROLES.mod.rank,
     desc: () => "Ban the account ID for a while (" + limitsText(banLimitsForRank(myRank())) + ").", insert: "/tempban " },
   { name: "/grant",   args: "rank perm|time username", minRank: ROLES.mod.rank,
     desc: rank => "Give a rank below yours. perm = permanent, or a time (" + limitsText(TIME_LIMITS.tempGrant) + "). " + (rank >= ROLES.admin.rank ? "Ranks: normie, mod, admin, coowner." : "Mods can give Normie."), insert: "/grant " },
@@ -3346,6 +3438,8 @@ const SLASH_COMMANDS = [
     desc: rank => rank >= ROLES.admin.rank ? "Take away a rank below yours." : "Take away Normie from someone.", insert: "/remove " },
   { name: "/image",   args: "on|off username",        minRank: ROLES.admin.rank,
     desc: "Give or take away image access for someone below your rank.", insert: "/image " },
+  { name: "/poll", args: "", minRank: ROLES.admin.rank,
+    desc: "Open the poll menu: a question with Yes / No (add up to 4 options). Lasts 1 minute.", insert: "/poll" },
   { name: "/verify", args: "[on]",              minRank: ROLES.crown.rank,
     desc: "Open the Verification panel (who is verified, recent actions). Use /verify on to turn it on for the room.", insert: "/verify " },
   { name: "/unban",   args: "username or ID",         minRank: ROLES.crown.rank,
@@ -3462,11 +3556,56 @@ function staffActionsFor(loginId, name) {
   if (rankOfLoginId(id) >= rank || isProtected(id)) return out;
   out.push({ id: "mute", label: "Mute…" });
   out.push({ id: "tempban", label: "Temp ban…" });
+  out.push({ id: "ban", label: rank >= ROLES.crown.rank ? "Ban" : "Ban (" + formatDurationShort(banLimitsForRank(rank).max) + ")" });
   if (rank >= ROLES.admin.rank) {
-    if (rank >= ROLES.crown.rank) out.push({ id: "ban", label: "Ban" });
     if (currentRoomCode) out.push({ id: "kick", label: "Kick from room" });
   }
   return out;
+}
+/* Rank changes from a profile card. Only Mod and Normie can be handed out from the app (the others are set by hand
+   in the database). You can only touch ranks below your own: Mods Normie only, Admins and up Mod and Normie.
+   The list starts on the next rank up from where the person is; ranks they hold can be taken away. */
+function roleActionsFor(loginId) {
+  const id = String(loginId || "");
+  const rank = myRank();
+  if (!id || !myLoginId || id === String(myLoginId) || rank < ROLES.mod.rank || !rolesReady) return [];
+  const tRank = rankOfLoginId(id);
+  if (tRank >= rank || isProtected(id)) return [];
+  const held = rid => !!(roleIdRaw[rid] && roleIdRaw[rid][id]);
+  const out = [];
+  ["normie", "mod"].forEach(rid => {
+    if (!canGrantRole(rank, rid)) return;
+    if (ROLES[rid].rank > tRank && !(roleIdRaw[rid] && roleIdRaw[rid][id] === true)) out.push({ kind: "grant", roleId: rid, label: "Give " + ROLES[rid].icon + " " + ROLES[rid].label });
+  });
+  ["mod", "normie"].forEach(rid => {
+    if (canGrantRole(rank, rid) && held(rid)) out.push({ kind: "remove", roleId: rid, label: "Remove " + ROLES[rid].icon + " " + ROLES[rid].label });
+  });
+  return out;   // the first entry is the default (next rank up); with nothing to give, the first removal
+}
+async function runRoleAction(kind, roleId, loginId, name, durationMs) {
+  const rank = myRank();
+  const target = { name: name || "Someone", loginId: String(loginId || "") };
+  const ok = roleActionsFor(loginId).some(a => a.kind === kind && a.roleId === roleId);
+  if (!ok) { showComposerNotice("You can't do that for " + target.name + "."); return false; }
+  const role = ROLES[roleId];
+  try {
+    if (kind === "remove") {
+      await ChatBackend.removeRoleFromId(roleId, target.loginId);
+      showComposerNotice("Removed " + role.label + " from " + target.name + ".");
+    } else if (durationMs) {
+      const problem = checkDurationLimits(durationMs, TIME_LIMITS.tempGrant);
+      if (problem) { showComposerNotice(problem); return false; }
+      await ChatBackend.grantTemporaryRoleToId(roleId, target.loginId, durationMs, myLoginId);
+      showComposerNotice("Gave " + role.label + " to " + target.name + " for " + formatDurationShort(durationMs) + ".");
+    } else {
+      await ChatBackend.grantRoleToId(roleId, target.loginId);
+      showComposerNotice("Gave " + role.label + " to " + target.name + " permanently.");
+    }
+    return true;
+  } catch (e) {
+    showComposerNotice(isPermissionDenied(e) ? rankByHandNotice(role) : "Couldn't change the rank: " + (e && e.message ? e.message : "check your connection") + ".");
+    return false;
+  }
 }
 async function runStaffAction(kind, loginId, name) {
   const target = { name: name || "Someone", loginId: String(loginId || "") };
@@ -3536,6 +3675,8 @@ async function handleModerationCommand(text) {
     return true;
   }
 
+  if (command === "/poll") { openPollMenu(); return true; }
+
   // ── /verify (Owner) ──
   if (command === "/verify") {
     const mode = (parts[1] || "").toLowerCase();
@@ -3587,7 +3728,8 @@ async function handleModerationCommand(text) {
     const durationMs = parseModerationDuration(parts[1]);
     const problem = checkDurationLimits(durationMs, limits);
     if (problem) { showComposerNotice(problem); return true; }
-    const target = await resolveModerationTarget(parts.slice(2).join(" "));
+    const reason = parts.slice(3).join(" ").slice(0, 100);   // anything after the name is the reason
+    const target = await resolveModerationTarget(parts[2]);
     if (!guardModerationTarget(target, "mute")) return true;
 
     const isJustMod = rank < ROLES.admin.rank;
@@ -3605,9 +3747,9 @@ async function handleModerationCommand(text) {
         return true;
       }
     }
-    await ChatBackend.setTimeout_(target.loginId, durationMs, myLoginId);
+    await ChatBackend.setTimeout_(target.loginId, durationMs, myLoginId, reason);
     if (isJustMod) watchModIssuedTimeoutExpiry(myLoginId, target.loginId);
-    showComposerNotice("Muted " + target.name + " for " + formatCountdown(durationMs) + ".");
+    showComposerNotice("Muted " + target.name + " for " + formatCountdown(durationMs) + "." + (reason ? " Reason: " + reason : ""));
     return true;
   }
 
@@ -3615,6 +3757,7 @@ async function handleModerationCommand(text) {
   if (command === "/ban" || command === "/tempban") {
     let durationMs = 0;
     let nameParts;
+    let banReason = "";
     if (command === "/tempban") {
       if (parts.length < 3) {
         showComposerNotice("Use /tempban time username, such as /tempban 2h alex (" + limitsText(banLimitsForRank(myRank())) + ").");
@@ -3623,10 +3766,13 @@ async function handleModerationCommand(text) {
       durationMs = parseModerationDuration(parts[1]);
       const problem = checkDurationLimits(durationMs, banLimitsForRank(myRank()));
       if (problem) { showComposerNotice(problem); return true; }
-      nameParts = parts.slice(2);
+      nameParts = parts.slice(2, 3);
+      banReason = parts.slice(3).join(" ").slice(0, 100);
     } else {
       if (parts.length < 2) { showComposerNotice("Use /ban username, or /ban 123456 (account ID)."); return true; }
-      nameParts = parts.slice(1);
+      nameParts = parts.slice(1, 2);
+      banReason = parts.slice(2).join(" ").slice(0, 100);
+      if (myRank() < ROLES.crown.rank) durationMs = banLimitsForRank(myRank()).max;   // no permanent bans for this rank: use the longest allowed
     }
     const target = await resolveModerationTarget(nameParts.join(" "), { allowOfflineId: true });
     if (!target) {
@@ -3634,7 +3780,7 @@ async function handleModerationCommand(text) {
       return true;
     }
     if (!guardModerationTarget(target, "ban")) return true;
-    openBanConfirm(target, durationMs);
+    openBanConfirm(target, durationMs, banReason);
     return true;
   }
 
@@ -3749,7 +3895,12 @@ async function sendMessage() {
   if (myLoginId && !latestPresenceList.some(e => String(e.loginId || "") === String(myLoginId))) ChatBackend.ensurePresence();
   if (!channelAllowedFor(activeChannel(), myLoginId)) { showComposerNotice("You can't post in this channel."); return; }
   if (myTimeoutRemainingMs > 0) {
-    showComposerNotice("You're muted for " + formatCountdown(myTimeoutRemainingMs) + " more.");
+    showComposerNotice(mutedNotice());
+    return;
+  }
+  if (activeChannelId === "announce") {
+    if (editingMsgId) { cancelEdit(); showComposerNotice("Announcements can't be edited."); return; }
+    await sendAnnouncement(text);
     return;
   }
   const segs = composerSegments(text);
@@ -3773,8 +3924,8 @@ async function sendMessage() {
     $sendBtn.disabled = true; $uploadImageBtn.disabled = true;
     lastSentAt = Date.now(); lastImageSentAt = Date.now();
     stopTyping();
-    ChatBackend.sendVideo(myName, pv.file, pv.dur, myLoginId, p => { lbl.textContent = "Uploading video… " + Math.round(p * 100) + "%"; })
-      .then(() => { clearPendingImage(); if (text) return ChatBackend.send(myName, silentText, segs.length ? { name: segs[0].name, silent: true } : null, myLoginId, currentReplyPayload()); })
+    ChatBackend.sendVideo(myName, pv.file, pv.dur, myLoginId, p => { lbl.textContent = "Uploading video… " + Math.round(p * 100) + "%"; }, text ? silentText : "", currentReplyPayload())
+      .then(() => { clearPendingImage(); })
       .then(() => { cancelReply(); $msgInput.value = ""; autosizeInput(); updateCharCounter(); autoScroll = true; setAutoScrollUI(); })
       .catch(() => { clearPendingImage(); $connError.textContent = "Video failed to send — check your connection (or the clip may be too large)."; $connError.style.display = "block"; })
       .finally(() => { $sendBtn.disabled = false; $uploadImageBtn.disabled = false; updateSendButtonState(); $msgInput.focus(); });
@@ -3802,12 +3953,7 @@ async function sendMessage() {
     updateSendButtonState();
     stopTyping();
 
-    ChatBackend.sendImage(myName, imageToSend, myLoginId)
-      .then(() => {
-        if (text) {
-          return ChatBackend.send(myName, silentText, segs.length ? { name: segs[0].name, silent: true } : null, myLoginId, currentReplyPayload());
-        }
-      })
+    ChatBackend.sendImage(myName, imageToSend, myLoginId, text ? silentText : "", currentReplyPayload())
       .then(() => {
         cancelReply();
         $msgInput.value = "";
@@ -4072,8 +4218,9 @@ function canPostImages() {
 }
 
 function updateUploadButtonVisibility() {
-  $uploadImageBtn.style.display = canPostImages() ? "inline-block" : "none";
-  if (!canPostImages()) clearPendingImage();
+  const may = canPostImages() && activeChannelId !== "announce";
+  $uploadImageBtn.style.display = may ? "inline-block" : "none";
+  if (!may) clearPendingImage();
 }
 
 function leaveSilently() {
@@ -4157,6 +4304,9 @@ function renderChatSettings(container) {
   toggle("Verified tag", "Show the green \u201cVerified\u201d tag next to verified people", () => chatPrefs.showVerified !== false, v => {
     chatPrefs.showVerified = v; saveChatPrefs(); applyAppearance();
   });
+  toggle("Auto-download videos", "Videos over " + VIDEO_AUTO_SECONDS + " seconds wait for a click unless this is on. Short ones always load by themselves.", () => chatPrefs.autoVideo === true, v => { chatPrefs.autoVideo = v; saveChatPrefs(); });
+  toggle("Announcements", "Pop-ups for new announcements, wherever you are. The \ud83d\udce2 server still shows them when off.", () => chatPrefs.announcements !== false, v => { chatPrefs.announcements = v; saveChatPrefs(); });
+  toggle("Auto AFK", "Shows a yellow dot after 2 minutes without clicking or messaging", () => chatPrefs.autoAfk !== false, v => { chatPrefs.autoAfk = v; saveChatPrefs(); afkCheck(true); });
   toggle("Show join / leave", "\u201cX joined\u201d and \u201cX left\u201d lines", () => chatPrefs.showJoinLeave !== false, v => {
     chatPrefs.showJoinLeave = v;
     saveChatPrefs();
@@ -4197,7 +4347,7 @@ function renderChatSettings(container) {
     chatPrefs.wordFilter = v; saveChatPrefs(); refreshFilteredText();
   });
   { const r = document.createElement("button"); r.type = "button"; r.className = "cs-row"; r.innerHTML = '<span class="cs-label">Open Verification panel<small>See who is verified and what was approved or rejected</small></span>'; r.addEventListener("click", e => { e.stopPropagation(); openFromSettings(openVerifyPanel); }); host.appendChild(r); }
-  card("\uD83C\uDFA8", "Personalization", "Looks and background, saved on this device only");
+  const persCard = card("\uD83C\uDFA8", "Personalization", "Looks and background, saved on this device only");
   choice("Text size", [["s", "Small"], ["m", "Medium"], ["l", "Large"], ["xl", "Huge"]], () => chatPrefs.textSize, v => { chatPrefs.textSize = v; saveChatPrefs(); applyAppearance(); keepPinned(); });
   choice("Bubble size", [["compact", "Compact"], ["normal", "Normal"], ["roomy", "Roomy"]], () => chatPrefs.bubbleSize, v => { chatPrefs.bubbleSize = v; saveChatPrefs(); applyAppearance(); keepPinned(); });
   toggle("Bold text", "Easier to read", () => !!chatPrefs.bold, v => { chatPrefs.bold = v; saveChatPrefs(); applyAppearance(); keepPinned(); });
@@ -4233,7 +4383,9 @@ function renderChatSettings(container) {
     $pingYouBtn.click();
   });
   if (rem > 0) pingBtn.disabled = true;
+  action("\uD83D\uDD04 Check for updates", b => manualUpdateCheck(b));
   action("Clear chat on my screen", () => { $clearChatBtn.click(); closeClearPanel(); }, true);
+  wrap.insertBefore(persCard, title.nextSibling);   // looks first
 
   container.appendChild(wrap);
 }
@@ -4325,22 +4477,24 @@ async function renderModMenu() {
   renderPreCodeActions($globalClearPanel);
 
   const showColor = myRank() >= COLOR_MIN_RANK;
+  // Your colors live in their own card at the very top of Settings.
+  const colorHost = document.createElement("section");
+  colorHost.className = "cs-card cs-colors";
+  { const head = document.createElement("div"); head.className = "cs-card-head";
+    head.innerHTML = '<span class="cs-card-icon">\uD83C\uDF08</span><span class="cs-card-text"><b>Your colors</b><small>Bubble, text and profile ring \u2014 everyone sees these</small></span>';
+    colorHost.appendChild(head); }
+  { const csWrap = $globalClearPanel.querySelector(".chat-settings"); if (csWrap) csWrap.insertBefore(colorHost, csWrap.querySelector(".cs-title").nextSibling); else $globalClearPanel.appendChild(colorHost); }
   if (!showColor) {
     const lockedColor = document.createElement("div");
     lockedColor.textContent = "Bubble colors unlock at " + ROLES.normie.icon + " " + ROLES.normie.label + ".";
     lockedColor.style.cssText = "color:#64748b;font-size:12.5px;line-height:1.4;margin-bottom:6px";
-    $globalClearPanel.appendChild(lockedColor);
+    colorHost.appendChild(lockedColor);
   }
   if (showColor) {
-  const title = document.createElement("div");
-  title.textContent = "Customize your bubble";
-  title.style.cssText = "color:#f1f5f9;font-weight:600;margin-bottom:10px";
-  $globalClearPanel.appendChild(title);
-
   const loading = document.createElement("div");
   loading.textContent = "Loading…";
   loading.style.cssText = "color:#64748b;font-size:14px";
-  $globalClearPanel.appendChild(loading);
+  colorHost.appendChild(loading);
 
   let existing = null;
   try {
@@ -4363,7 +4517,7 @@ async function renderModMenu() {
   previewBubble.style.cssText = `background:${pendingBubble};color:${pendingText};font-size:16px;padding:10px 14px;display:inline-block;max-width:100%;`;
   previewWrap.appendChild(previewLabel);
   previewWrap.appendChild(previewBubble);
-  $globalClearPanel.appendChild(previewWrap);
+  colorHost.appendChild(previewWrap);
 
   const makeColorRow = (labelText, currentValue, onChange) => {
     const wrap = document.createElement("div");
@@ -4381,27 +4535,42 @@ async function renderModMenu() {
     return wrap;
   };
 
-  $globalClearPanel.appendChild(
+  colorHost.appendChild(
     makeColorRow("Bubble color", pendingBubble, (val) => {
       pendingBubble = val;
       previewBubble.style.background = val;
     })
   );
-  $globalClearPanel.appendChild(
+  colorHost.appendChild(
     makeColorRow("Text color", pendingText, (val) => {
       pendingText = val;
       previewBubble.style.color = val;
     })
   );
 
+  let pendingRing = (existing && existing.ring) || "";
+  const ringRow = document.createElement("div");
+  ringRow.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px";
+  const ringLbl = document.createElement("label"); ringLbl.textContent = "Profile ring"; ringLbl.style.color = "#94a3b8";
+  const ringBox = document.createElement("span"); ringBox.style.cssText = "display:flex;align-items:center;gap:8px";
+  const ringOn = document.createElement("input"); ringOn.type = "checkbox"; ringOn.checked = !!pendingRing; ringOn.title = "Show a ring around your picture";
+  const ringInput = document.createElement("input"); ringInput.type = "color"; ringInput.value = pendingRing || "#22c55e";
+  ringInput.style.cssText = "width:36px;height:28px;border:none;background:none;cursor:pointer;padding:0";
+  const ringPrev = document.createElement("span"); ringPrev.className = "ring-preview";
+  const paintRing = () => { pendingRing = ringOn.checked ? ringInput.value : ""; ringPrev.style.boxShadow = pendingRing ? "0 0 0 3px " + pendingRing : "none"; };
+  ringOn.addEventListener("change", paintRing); ringInput.addEventListener("input", () => { ringOn.checked = true; paintRing(); });
+  paintRing();
+  ringBox.append(ringPrev, ringOn, ringInput); ringRow.append(ringLbl, ringBox);
+  colorHost.appendChild(ringRow);
+
   const note = document.createElement("div");
   note.textContent = "Note: color can be changed again every " + Math.round(COLOR_CHANGE_COOLDOWN_MS / 1000) + " seconds.";
   note.style.cssText = "color:#64748b;font-size:12.5px;margin-bottom:10px;line-height:1.4";
-  $globalClearPanel.appendChild(note);
+  colorHost.appendChild(note);
 
   const confirmErr = document.createElement("div");
   confirmErr.style.cssText = "color:#ef4444;font-size:13px;min-height:16px;margin-bottom:4px";
-  $globalClearPanel.appendChild(confirmErr);
+  colorHost.appendChild(confirmErr);
 
   const confirmBtn = document.createElement("button");
   confirmBtn.textContent = "Confirm";
@@ -4411,7 +4580,7 @@ async function renderModMenu() {
     confirmBtn.disabled = true;
     confirmBtn.textContent = "Saving…";
     try {
-      const result = await ChatBackend.claimColor(myLoginId, pendingBubble, pendingText);
+      const result = await ChatBackend.claimColor(myLoginId, pendingBubble, pendingText, pendingRing);
       if (result.ok) {
         renderModMenu();
       } else if (result.reason === "cooldown") {
@@ -4430,7 +4599,7 @@ async function renderModMenu() {
       confirmBtn.textContent = "Confirm";
     }
   });
-  $globalClearPanel.appendChild(confirmBtn);
+  colorHost.appendChild(confirmBtn);
   } // end showColor
 
   const divider = document.createElement("div");
@@ -4610,6 +4779,7 @@ const $timeoutMinutesInput = document.getElementById("timeoutMinutesInput");
 const $timeoutSecondsInput = document.getElementById("timeoutSecondsInput");
 const $timeoutSetErr = document.getElementById("timeoutSetErr");
 const $timeoutSetCancelBtn = document.getElementById("timeoutSetCancelBtn");
+const $timeoutReasonInput = document.getElementById("timeoutReasonInput");
 const $timeoutSetConfirmBtn = document.getElementById("timeoutSetConfirmBtn");
 
 const $grantModConfirmOverlay = document.getElementById("grantModConfirmOverlay");
@@ -4690,17 +4860,15 @@ function isCoownerHolder(name) { return holdsRoleName("coowner", name); }
 function isAdminHolder(name) { return holdsRoleName("admin", name); }
 function isModHolder(name) { return holdsRoleName("mod", name); }
 
-function openBanConfirm(target, durationMs) {
-  if (!durationMs && myRank() < ROLES.crown.rank) {
-    showComposerNotice("Permanent bans are Owner-only. Use a temporary ban (" + limitsText(banLimitsForRank(myRank())) + ").");
-    return;
-  }
+function openBanConfirm(target, durationMs, reason) {
+  if (!durationMs && myRank() < ROLES.crown.rank) durationMs = banLimitsForRank(myRank()).max;   // permanent is Owner-only: ban for the longest time this rank can
   if (durationMs) {
     const problem = checkDurationLimits(durationMs, banLimitsForRank(myRank()));
     if (problem) { showComposerNotice(problem); return; }
   }
   pendingBanTarget = target;
   pendingBanDurationMs = durationMs;
+  document.getElementById("banReasonInput").value = String(reason || "").slice(0, 100);
   $banConfirmTitle.textContent = durationMs ? "Temporary ban?" : "Ban user?";
   $banConfirmText.textContent = (durationMs
     ? "Ban " + target.name + " (#" + target.loginId + ") for " + formatDurationShort(durationMs) + "?"
@@ -4731,7 +4899,7 @@ $banConfirmBtn.addEventListener("click", async () => {
   $banConfirmBtn.textContent = "Applying…";
   $banConfirmErr.textContent = "";
   try {
-    await ChatBackend.banUser(target.loginId, target.name, myLoginId, durationMs);
+    await ChatBackend.banUser(target.loginId, target.name, myLoginId, durationMs, document.getElementById("banReasonInput").value.trim());
     closeBanConfirm();
     if ($ownerMenuOverlay.style.display === "flex") renderOwnerMenuList();
     if ($modListOverlay.style.display === "flex") renderModList();
@@ -4995,6 +5163,16 @@ function renderStaffCommands() {
       histBody.appendChild(row);
     });
   };
+  const fullBtn = document.createElement("button");
+  fullBtn.type = "button"; fullBtn.className = "cs-action"; fullBtn.textContent = "View full history";
+  fullBtn.addEventListener("click", () => openFullCommandHistory());
+  hist.appendChild(fullBtn);
+  if (myRank() >= ROLES.admin.rank) {
+    const logsBtn = document.createElement("button");
+    logsBtn.type = "button"; logsBtn.className = "cs-action"; logsBtn.textContent = "\uD83D\uDCDC Full chat logs";
+    logsBtn.addEventListener("click", () => openFullChatLogs());
+    $ownerMenuCommands.appendChild(logsBtn);
+  }
   hist.addEventListener("toggle", () => { staffHistoryOpen = hist.open; if (hist.open) loadHistory(); });
   hist.open = staffHistoryOpen;
   if (staffHistoryOpen) loadHistory();
@@ -5003,6 +5181,172 @@ function renderStaffCommands() {
 
 function closeOwnerMenu() {
   $ownerMenuOverlay.style.display = "none";
+}
+
+/* Full chat logs (Admin and up): every message of this room in a new about:blank tab, loaded gradually in pages.
+   Filter by name/ID, by words in the message, and by rank (Verified, Owner ... Unranked, several at once).
+   Edited messages show the edit and can flip back to the original. Images and videos show as a label only. */
+async function openFullChatLogs() {
+  if (myRank() < ROLES.admin.rank) { showComposerNotice("Chat logs are for Admins and above."); return; }
+  const w = window.open("about:blank", "_blank");
+  if (!w) { showComposerNotice("Your browser blocked the new tab. Allow pop-ups for this site and try again."); return; }
+  const roomId = ChatBackend.currentRoomId;
+  const roomRef = ChatBackend._ref, editsRef = ChatBackend._editsRef;
+  const label = activeChannelId && activeChannelId !== "main" && activeChannel() ? "#" + activeChannel().label : (currentRoomCode ? "room " + currentRoomCode : "#main");
+  const html = `<!doctype html><meta charset="utf-8"><title>Chat logs</title><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{background:#0f172a;color:#e2e8f0;font:14px system-ui,sans-serif;margin:0}
+header{position:sticky;top:0;background:#0f172a;border-bottom:1px solid #1e293b;padding:12px 16px;z-index:2}
+h1{font-size:17px;margin:0 0 8px} small,.mut{color:#94a3b8}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+input[type=text]{background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:8px;padding:8px 10px;font-size:14px;min-width:200px;flex:1}
+label.cb{display:inline-flex;gap:5px;align-items:center;background:#1e293b;border:1px solid #334155;border-radius:999px;padding:4px 10px;cursor:pointer;user-select:none}
+button{background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:13px}
+main{padding:8px 16px 40px}
+.m{border-bottom:1px solid #1e293b;padding:9px 0}.m .h{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline}
+.n{font-weight:600}.id{color:#64748b;font-size:12px}.t{color:#64748b;font-size:12px}
+.tag{font-size:11px;border:1px solid #334155;border-radius:999px;padding:1px 7px;color:#cbd5e1}.tag.v{color:#4ade80;border-color:#1b6a3b}
+.x{margin-top:4px;white-space:pre-wrap;word-break:break-word}.media{color:#a5b4fc;font-style:italic}
+.ed{margin-top:4px;font-size:12px;color:#fbbf24}.ed button{padding:1px 8px;font-size:12px;margin-left:6px}
+mark{background:#854d0e;color:#fff;border-radius:3px}
+</style>
+<header><h1>Chat logs <small id="where"></small></h1>
+<div class="row"><input type="text" id="fwho" placeholder="Name or ID (e.g. alex or 123456)"><input type="text" id="ftext" placeholder="Message contains (e.g. hel finds hello)"></div>
+<div class="row" id="roles"></div>
+<div class="row"><button id="all">Select all</button><button id="none">Clear all</button><span class="mut" id="status"></span></div></header>
+<main id="list"></main>
+<script>
+const ROLES=[["verified","Verified"],["crown","Owner"],["coowner","Co-owner"],["admin","Admin"],["mod","Mod"],["normie","Normie"],["unranked","Unranked"]];
+const rows=[];let timer=null,loading=true,total=0;
+const $=id=>document.getElementById(id);
+const rbox=$("roles");
+ROLES.forEach(([k,t])=>{const l=document.createElement("label");l.className="cb";const i=document.createElement("input");i.type="checkbox";i.checked=true;i.dataset.k=k;i.addEventListener("change",draw);l.append(i,document.createTextNode(t));rbox.appendChild(l);});
+$("all").onclick=()=>{rbox.querySelectorAll("input").forEach(i=>i.checked=true);draw();};
+$("none").onclick=()=>{rbox.querySelectorAll("input").forEach(i=>i.checked=false);draw();};
+$("fwho").addEventListener("input",draw);$("ftext").addEventListener("input",draw);
+function checked(){const s=new Set();rbox.querySelectorAll("input").forEach(i=>{if(i.checked)s.add(i.dataset.k)});return s}
+function hl(el,text,q){if(!q){el.textContent=text;return}const lo=text.toLowerCase();let p=0,i;while((i=lo.indexOf(q,p))>=0){el.append(document.createTextNode(text.slice(p,i)));const m=document.createElement("mark");m.textContent=text.slice(i,i+q.length);el.append(m);p=i+q.length}el.append(document.createTextNode(text.slice(p)))}
+function draw(){clearTimeout(timer);timer=setTimeout(render,120)}
+function render(){
+  const who=$("fwho").value.trim().toLowerCase(),q=$("ftext").value.trim().toLowerCase(),on=checked();
+  const list=$("list");list.textContent="";let shown=0,match=0;
+  for(const r of rows){
+    if(!r.tags.some(t=>on.has(t)))continue;
+    if(who&&!((r.name||"").toLowerCase().includes(who)||String(r.loginId||"").includes(who)))continue;
+    const body=(r.text||"")+(r.edited?" "+r.edited.text:"");
+    if(q&&!body.toLowerCase().includes(q))continue;
+    match++;if(shown>=2000)continue;shown++;
+    const d=document.createElement("div");d.className="m";
+    const h=document.createElement("div");h.className="h";
+    const n=document.createElement("span");n.className="n";n.textContent=r.name||"?";
+    const id=document.createElement("span");id.className="id";id.textContent=r.loginId?"#"+r.loginId:"";
+    const rt=document.createElement("span");rt.className="tag";rt.textContent=r.role;
+    h.append(n,id,rt);
+    if(r.verified){const v=document.createElement("span");v.className="tag v";v.textContent="Verified";h.append(v)}
+    const t=document.createElement("span");t.className="t";t.textContent=r.ts?new Date(r.ts).toLocaleString():"";h.append(t);
+    d.append(h);
+    const x=document.createElement("div");x.className="x";
+    if(r.kind!=="text"){x.className="x media";x.textContent=r.kind==="video"?"[video]":"[image]";if(r.text){const c=document.createElement("div");c.className="x";c.textContent=r.edited?r.edited.text:r.text;d.append(x,c)}else d.append(x)}
+    else{
+      let showEdited=!!r.edited;
+      const paint=()=>{hl(x,showEdited?r.edited.text:r.text,q)};paint();d.append(x);
+      if(r.edited){const e=document.createElement("div");e.className="ed";const lab=document.createElement("span");
+        const b=document.createElement("button");
+        const set=()=>{lab.textContent=showEdited?"Edited version shown":"Original version shown";b.textContent=showEdited?"View original":"View edited"};set();
+        b.onclick=()=>{showEdited=!showEdited;paint();set()};
+        e.append(lab,b);if(r.edited.ts){const s=document.createElement("span");s.className="mut";s.textContent="  edited "+new Date(r.edited.ts).toLocaleString();e.append(s)}d.append(e)}
+    }
+    list.append(d);
+  }
+  $("status").textContent=(loading?"Loading\u2026 ":"")+total+" loaded \u00b7 "+match+" match"+(match===1?"":"es")+(match>shown?" (showing "+shown+")":"");
+}
+window.__logs={add(batch){for(const r of batch)rows.push(r);rows.sort((a,b)=>(b.ts||0)-(a.ts||0));total=rows.length;draw()},done(){loading=false;draw()},fail(m){loading=false;$("status").textContent=m},where(t){$("where").textContent=t}};
+</script>`;
+  try { w.document.open(); w.document.write(html); w.document.close(); } catch (e) { return; }
+  const api = () => w.__logs;
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  try {
+    api().where("\u2014 " + label);
+    let edits = {};
+    try { edits = (await editsRef.get()).val() || {}; } catch (e) {}
+    const vcache = new Map();
+    const verifiedFor = async id => {
+      if (!id) return false;
+      if (!vcache.has(id)) vcache.set(id, window.VUS_DM ? window.VUS_DM.isVerified(id).catch(() => false) : Promise.resolve(false));
+      return vcache.get(id);
+    };
+    let before = null, guard = 0;
+    while (!w.closed && guard++ < 400) {
+      let q = roomRef.orderByKey();
+      if (before) q = q.endAt(before);
+      const snap = await q.limitToLast(before ? 201 : 200).get();
+      const val = snap.val() || {};
+      let keys = Object.keys(val).sort();
+      if (before) keys = keys.filter(k => k !== before);
+      if (!keys.length) break;
+      const batch = [];
+      for (const k of keys) {
+        const m = val[k];
+        if (!m || m.system) continue;
+        const id = m.loginId ? String(m.loginId) : "";
+        const roleId = id ? effectiveRoleForLoginId(id) : "unranked";
+        const verified = id ? await verifiedFor(id) : false;
+        const ed = edits[k];
+        const valid = ed && typeof ed.text === "string" && String(ed.by) === id && (!ed.ts || !m.ts || Number(ed.ts) - Number(m.ts) <= EDIT_WINDOW_MS + 5000);
+        batch.push({
+          id: k, ts: Number(m.ts) || 0, name: String(m.name || ""), loginId: id,
+          text: stripMentionMarks(String(m.text || "")), kind: m.video ? "video" : m.imageData ? "image" : "text",
+          edited: valid ? { text: stripMentionMarks(ed.text), ts: Number(ed.ts) || 0 } : null,
+          role: (ROLES[roleId] || ROLES.unranked).label, tags: [roleId].concat(verified ? ["verified"] : []), verified
+        });
+      }
+      if (!w.closed) api().add(batch);
+      before = keys[0];
+      if (keys.length < 200) break;
+      await wait(450);   // gradual on purpose: a big room fills in over time instead of freezing the tab
+    }
+    if (!w.closed) api().done();
+  } catch (e) { try { api().fail("Couldn't load everything: " + (e && e.message ? e.message : "check your connection")); } catch (x) {} }
+}
+
+// Every logged command in a new about:blank tab: who ran it (name first, ID beside it) and who it was aimed at.
+const CMD_SKIP = { "/mute": 1, "/timeout": 1, "/tempban": 1, "/image": 1, "/remove": 1, "/ban": 0, "/kick": 0, "/unban": 0 };
+function commandTargetText(cmd) {
+  const parts = String(cmd || "").trim().split(/\s+/);
+  const name = (parts[0] || "").toLowerCase();
+  let skip;
+  if (name === "/grant") skip = 1 + ((parts.length >= 4 && (PERMANENT_WORDS.has((parts[2] || "").toLowerCase()) || parseModerationDuration(parts[2]) > 0 || /^[0-9]+(\.[0-9]+)?[smhdw]?$/i.test(parts[2]))) ? 1 : 0);
+  else if (name in CMD_SKIP) skip = CMD_SKIP[name];
+  else return null;
+  return parts.slice(1 + skip).join(" ") || null;
+}
+async function openFullCommandHistory() {
+  const w = window.open("about:blank", "_blank");     // opened right away so the browser allows it
+  if (!w) { showComposerNotice("Your browser blocked the new tab. Allow pop-ups for this site and try again."); return; }
+  const say = html => { try { w.document.open(); w.document.write(html); w.document.close(); } catch (e) {} };
+  const page = body => '<!doctype html><meta charset="utf-8"><title>Command history</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{background:#0f172a;color:#e2e8f0;font:14px system-ui,sans-serif;margin:0;padding:18px}h1{font-size:18px;margin:0 0 4px}small{color:#94a3b8}table{border-collapse:collapse;width:100%;margin-top:14px}th,td{text-align:left;padding:7px 10px;border-bottom:1px solid #1e293b;vertical-align:top}th{color:#94a3b8;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.05em;position:sticky;top:0;background:#0f172a}code{color:#4ade80;font-family:ui-monospace,monospace;word-break:break-word}.id{color:#64748b;font-size:12px}.t{white-space:nowrap;color:#94a3b8}</style>' + body;
+  say(page("<h1>Command history</h1><small>Loading\u2026</small>"));
+  let entries = [];
+  try {
+    const snap = await ChatBackend._commandHistoryRef.limitToLast(3000).get();
+    entries = Object.values(snap.val() || {}).sort((a, b) => (Number(b.ts) || 0) - (Number(a.ts) || 0));
+  } catch (e) { say(page("<h1>Command history</h1><small>Couldn't load it. Check your connection.</small>")); return; }
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
+  const cache = new Map();
+  const resolve = text => {
+    if (!cache.has(text)) cache.set(text, resolveModerationTarget(text, { allowOfflineId: true }).catch(() => null));
+    return cache.get(text);
+  };
+  const rows = [];
+  for (const e of entries) {
+    const tt = commandTargetText(e.command);
+    const target = tt ? await resolve(tt) : null;
+    const when = e.ts ? new Date(Number(e.ts)).toLocaleString([], { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+    const actor = esc(e.actorName || "?") + (e.actorLoginId ? ' <span class="id">#' + esc(e.actorLoginId) + "</span>" : "");
+    const tgt = target ? esc(target.name) + ' <span class="id">#' + esc(target.loginId) + "</span>" : (tt ? esc(tt) + ' <span class="id">(not found)</span>' : '<span class="id">\u2014</span>');
+    rows.push("<tr><td class=t>" + esc(when) + "</td><td>" + actor + "</td><td><code>" + esc(e.command) + "</code></td><td>" + tgt + "</td></tr>");
+  }
+  say(page("<h1>Command history</h1><small>" + entries.length + " command" + (entries.length === 1 ? "" : "s") + ", newest first. Names are shown first; the account ID is beside them.</small><table><thead><tr><th>When</th><th>Who</th><th>Command</th><th>Aimed at</th></tr></thead><tbody>" + (rows.join("") || "<tr><td colspan=4>No commands logged yet.</td></tr>") + "</tbody></table>"));
 }
 
 $ownerMenuCloseBtn.addEventListener("click", closeOwnerMenu);
@@ -5263,7 +5607,7 @@ function addBanButtons(actions, entry) {
   banBtn.className = "kick";
   banBtn.textContent = "Ban";
   banBtn.disabled = !loginId;
-  banBtn.title = loginId ? "Ban login ID #" + loginId + " permanently" : "This user has not supplied a login ID";
+  banBtn.title = loginId ? "Ban login ID #" + loginId + (myRank() >= ROLES.crown.rank ? " permanently" : " for " + formatDurationShort(banLimitsForRank(myRank()).max) + " (the longest your rank can do)") : "This user has not supplied a login ID";
   banBtn.addEventListener("click", () => { if (loginId) openBanConfirm({ name, loginId }, 0); });
   actions.appendChild(banBtn);
 
@@ -5484,6 +5828,7 @@ function openTimeoutSetModal(target) {
   pendingTimeoutTarget = target;
   pendingTemporaryModTarget = null;
   pendingTempBanTarget = null;
+  $timeoutReasonInput.value = ""; $timeoutReasonInput.style.display = "";
   $timeoutSetConfirmBtn.textContent = "Timeout";
   $timeoutSetTitle.textContent = "Mute " + target.name + " (#" + target.loginId + ")";
 
@@ -5507,6 +5852,7 @@ function openTemporaryModSetModal(target) {
   pendingTemporaryModTarget = target;
   pendingTimeoutTarget = null;
   pendingTempBanTarget = null;
+  $timeoutReasonInput.value = ""; $timeoutReasonInput.style.display = "none";
   $timeoutSetTitle.textContent = "Temporary Mod for " + target.name + " (#" + target.loginId + ")";
   $timeoutMinutesInput.value = "";
   $timeoutSecondsInput.value = "";
@@ -5524,6 +5870,7 @@ function openTempBanSetModal(target) {
   pendingTempBanTarget = target;
   pendingTimeoutTarget = null;
   pendingTemporaryModTarget = null;
+  $timeoutReasonInput.value = ""; $timeoutReasonInput.style.display = "";
   $timeoutSetTitle.textContent = "Temporary ban for " + target.name + " (#" + target.loginId + ")";
   $timeoutMinutesInput.value = "";
   $timeoutSecondsInput.value = "";
@@ -5584,7 +5931,7 @@ $timeoutSetConfirmBtn.addEventListener("click", async () => {
       pendingTempBanTarget = null;
       $timeoutSetOverlay.style.display = "none";
       $timeoutSetConfirmBtn.textContent = "Timeout";
-      openBanConfirm({ name: banTarget.name, loginId: banTarget.loginId }, totalMs);
+      openBanConfirm({ name: banTarget.name, loginId: banTarget.loginId }, totalMs, $timeoutReasonInput.value.trim());
       return;
     }
     if (pendingTemporaryModTarget) {
@@ -5602,7 +5949,7 @@ $timeoutSetConfirmBtn.addEventListener("click", async () => {
       $timeoutSetConfirmBtn.disabled = false;
       return;
     }
-    await ChatBackend.setTimeout_(pendingTimeoutTarget.loginId, totalMs, myLoginId);
+    await ChatBackend.setTimeout_(pendingTimeoutTarget.loginId, totalMs, myLoginId, $timeoutReasonInput.value.trim());
     // NOTE: the re-timeout cooldown is deliberately NOT started here. It
     // should apply AFTER the timeout ends (naturally or via early clear),
     // not from the moment it's set — starting it here would let most of
@@ -6715,6 +7062,7 @@ $navChatBtn.addEventListener("click", () => {
   if (shell) shell.classList.remove("rooms-open");
   $navRooms.classList.remove("active");
   if (wasChat && myName && currentRoomCode !== null) switchToMainRoom();
+  else if (wasChat && myName && activeChannelId === "announce") openChannel("main");
   setTimeout(renderRailRooms, 0);
 }, true);
 
@@ -6969,6 +7317,17 @@ async function joinRoomByCode(code) {
   unsubscribeRoomMeta = RoomManager.watchRoomMeta(code, onRoomMetaUpdate);
 }
 
+// Claims my spot in the room I just switched to. A leftover entry of my own (a ghost from an earlier visit) is
+// cleared and the claim retried, instead of silently leaving me "in" a room without actually being listed.
+async function claimSpotInCurrentRoom(silent) {
+  let r = await ChatBackend.claimPresence(myName, !!silent, myLoginId);
+  if (r && r.reason === "already-online") {
+    try { await ChatBackend.removeAccountPresence(myLoginId); } catch (e) {}
+    r = await ChatBackend.claimPresence(myName, !!silent, myLoginId);
+  }
+  if (r && r.ok && myAfk) { try { ChatBackend.setAfk(true); } catch (e) {} }
+  return r;
+}
 async function switchToMainRoom() {
   if (currentRoomCode === null && activeChannelId === "main") return;
   activeChannelId = "main";
@@ -6977,7 +7336,7 @@ async function switchToMainRoom() {
   currentRoomCode = null;
   currentRoomMeta = null;
   ChatBackend.bindToRoom(MAIN_ROOM_ID);
-  if (myName) await ChatBackend.claimPresence(myName, false, myLoginId);
+  if (myName) await claimSpotInCurrentRoom();
   watchMyTimeout();
   attachRoomListeners();
 
@@ -7322,7 +7681,7 @@ function renderMembersPane() {
   const byId = {};
   list.forEach(entry => {
     const id = String(entry.loginId || "");
-    byId[id || ("name:" + entry.name)] = { id, name: entry.name, online: true, joinedAt: entry.joinedAt || 0 };
+    byId[id || ("name:" + entry.name)] = { id, name: entry.name, online: true, joinedAt: entry.joinedAt || 0, afk: !!entry.afk };
   });
   Object.values(ROLES).forEach(role => {
     if (role.implicit) return;
@@ -7390,7 +7749,8 @@ function renderMembersPane() {
     wrap.appendChild(av);
     if (p.online) {
       const dot = document.createElement("div");
-      dot.className = "member-dot";
+      dot.className = "member-dot" + (p.afk ? " afk" : "");
+      if (p.afk) dot.title = "AFK";
       wrap.appendChild(dot);
     }
     const nameEl = document.createElement("div");
@@ -7469,6 +7829,9 @@ function attachRoomListeners() {
   Object.keys(burstTimes).forEach(k => delete burstTimes[k]);
   Object.keys(lastAccepted).forEach(k => delete lastAccepted[k]);
   msgEls.clear();
+  annEls.clear(); pollEls.clear(); pollRecs.forEach(r => { if (r.modal) r.modal.remove(); }); pollRecs.clear();
+  pollUnsubs.forEach(f => { try { f(); } catch (e) {} }); pollUnsubs = [];
+  Object.keys(annRenderLast).forEach(k => delete annRenderLast[k]);
   Object.keys(pendingEdits).forEach(k => delete pendingEdits[k]);
   Object.keys(reactionsByMsg).forEach(k => delete reactionsByMsg[k]);
   replyingTo = null; editingMsgId = null; updateReplyBar();
@@ -7544,8 +7907,10 @@ function bootChat() {
     scheduleVerifyRefresh();
     if (on && !was) setTimeout(reportUnverifiedHolders, 2500);
   });
+  recsWatchAt = Date.now();
   ChatBackend.watchRecs("actions", onRec);
   ChatBackend.watchRecs("grants", onRec);
+  setTimeout(startAnnouncementWatch, 2500);
   ChatBackend.watchAllBans((id, val) => { if (val) bansAll[id] = val; else delete bansAll[id]; refreshSilencedMessages(); });
   ChatBackend.watchInventory(data => { inventoryData = data; if ($inventoryOverlay.style.display === "flex") renderInventory(); });
   watchPublicRoomsList();
@@ -7582,6 +7947,7 @@ function init() {
 
 /* Lets dm.js (profile cards) ask which ranks an account holds. */
 /* ══════════ Video clips: click to load, gone 5 minutes after posting ══════════ */
+const VIDEO_AUTO_SECONDS = 5;   // clips this short load by themselves; longer ones wait for a click (unless auto-download is on)
 const mediaExp = {};            // clip id -> expiry (ms), from rooms/<room>/mediaMeta
 const mediaJitter = {};         // so every browser doesn't try the cleanup in the same instant
 const videoRecs = new Set();
@@ -7593,7 +7959,9 @@ function onMediaMeta(id, exp) {
 function fmtCountdown(ms) { const s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
 function buildVideoBubble(bubble, msg) {
   const v = msg.video;
-  const rec = { id: String(v.id || ""), v, bubble, exp: Number(v.exp) || 0, state: "", countEl: null, vidEl: null };
+  const holder = document.createElement("div");     // the clip lives in its own box so a caption can sit under it
+  bubble.appendChild(holder);
+  const rec = { id: String(v.id || ""), v, bubble: holder, exp: Number(v.exp) || 0, state: "", countEl: null, vidEl: null, load: null, autoTried: false };
   videoRecs.add(rec);
   bubble.classList.add("video-bubble");
   paintVideo(rec);
@@ -7622,9 +7990,9 @@ function paintVideo(rec) {
   const play = document.createElement("span"); play.className = "vid-play"; play.textContent = "\u25B6";
   const info = document.createElement("span"); info.className = "vid-info";
   const l1 = document.createElement("b"); l1.textContent = "Video \u00b7 " + Math.round(Number(v.dur) || 0) + "s \u00b7 " + fmtBytes(Number(v.size) || 0);
-  const l2 = document.createElement("span"); l2.className = "vid-sub"; l2.textContent = "Click to load";
+  const l2 = document.createElement("span"); l2.className = "vid-sub"; l2.textContent = "Click to download";
   info.append(l1, l2); card.append(play, info);
-  card.addEventListener("click", async () => {
+  const load = async () => {
     if (card.dataset.busy) return; card.dataset.busy = "1"; l2.textContent = "Loading\u2026 0%";
     try {
       const blob = await ChatBackend.fetchVideo(rec.id, Number(v.n) || 0, String(v.mime || "video/mp4"), p => { l2.textContent = "Loading\u2026 " + Math.round(p * 100) + "%"; });
@@ -7632,7 +8000,9 @@ function paintVideo(rec) {
       rec.state = ""; paintVideo(rec);
       if (rec.vidEl) rec.vidEl.play().catch(() => {});
     } catch (e) { delete card.dataset.busy; l2.textContent = "Couldn't load \u2014 it may have expired. Click to retry."; }
-  });
+  };
+  rec.load = load;
+  card.addEventListener("click", load);
   bubble.append(card, count);
 }
 function videoTick() {
@@ -7640,6 +8010,8 @@ function videoTick() {
   videoRecs.forEach(rec => {
     if (!rec.bubble.isConnected) { videoRecs.delete(rec); return; }
     paintVideo(rec);
+    if (rec.state === "card" && rec.load && !rec.autoTried && (Number(rec.v.dur) <= VIDEO_AUTO_SECONDS || chatPrefs.autoVideo === true)
+        && !rec.bubble.closest(".anon-hidden, .spam-hidden, .silenced-hidden, .muted-hidden")) { rec.autoTried = true; rec.load(); }
     if (rec.countEl) rec.countEl.textContent = "disappears in " + fmtCountdown(rec.exp - now);
   });
   Object.keys(mediaExp).forEach(id => {
@@ -7647,6 +8019,367 @@ function videoTick() {
   });
 }
 setInterval(() => { try { if (ChatBackend._db) videoTick(); } catch (e) {} }, 1000);
+
+/* ══════════ Pop-ups that show over everything (updates, announcements) ══════════
+   Click anywhere on one to close it. They sit above settings, DMs and every other window. */
+function showGlobalPopup(opts) {
+  let host = document.getElementById("vusPopups");
+  if (!host) { host = document.createElement("div"); host.id = "vusPopups"; document.body.appendChild(host); }
+  const el = document.createElement("div");
+  el.className = "vus-popup" + (opts.small ? " small" : "") + (opts.kind ? " " + opts.kind : "");
+  const t = document.createElement("div"); t.className = "vp-title"; t.textContent = opts.title || "";
+  el.appendChild(t);
+  if (opts.body) { const b = document.createElement("div"); b.className = "vp-body"; b.textContent = opts.body; el.appendChild(b); }
+  if (opts.buttonLabel) {
+    const btn = document.createElement("button"); btn.type = "button"; btn.className = "vp-btn"; btn.textContent = opts.buttonLabel;
+    btn.addEventListener("click", e => { e.stopPropagation(); try { opts.onButton && opts.onButton(); } catch (x) {} el.remove(); });
+    el.appendChild(btn);
+  }
+  const hint = document.createElement("div"); hint.className = "vp-hint"; hint.textContent = "Click anywhere on this to close"; if (!opts.small) el.appendChild(hint);
+  el.addEventListener("click", () => el.remove());
+  host.appendChild(el);
+  if (opts.autoCloseMs) setTimeout(() => el.remove(), opts.autoCloseMs);
+  return el;
+}
+
+/* ══════════ Announcements ══════════
+   A server of its own (rail button, room "ch-announce"). Everyone can read it; only admins and above can post, one
+   every 15 seconds. With peer verification on, every announcement needs an approval record written in the sender's
+   name (see PEER VERIFICATION), so a forged post from a modified client is simply not shown. Each new announcement
+   also pops up wherever you are (settings, DMs, ...) unless you turn that off in Settings. */
+const ANNOUNCE_ROOM = "ch-announce";
+const ANNOUNCE_GAP_MS = 15000;
+const ANNOUNCE_POPUP_CHARS = 220;
+const POLL_MS = 60000;
+const annSleep = ms => new Promise(r => setTimeout(r, ms));
+function annHash(text) {
+  let h = 0x811c9dc5; const s = String(text);
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(36) + "." + s.length.toString(36);
+}
+const annEls = new Map();                 // message id -> { el, msg, mine }
+const pollEls = new Map();                // message id -> { el, msg, mine }
+const annRenderLast = {}, annPopupLast = {};
+let recsWatchAt = 0, lastAnnounceAt = 0, annUnread = false;
+function annRateBad(msg, store) {
+  const id = String(msg.loginId || ""), ts = Number(msg.ts) || 0;
+  const prev = store[id];
+  if (prev && ts - prev < ANNOUNCE_GAP_MS - RATE_TOLERANCE_MS) return true;
+  store[id] = ts;
+  return false;
+}
+// "ok" | "pending" | "no": did an admin+ really say this, in their own name (when verification is on)?
+function attestStatus(kind, id, v, ts) {
+  if (!verifyActive() || ts < VERIFY_EPOCH) return "ok";
+  const st = matchStatus("actions", r => r.k === kind && String(r.b) === id && r.v === v && Math.abs((Number(r.ts) || 0) - ts) <= 30000);
+  if (st !== "no") return st;
+  const all = Object.values(recs.actions);
+  if (all.length >= 150 && ts < Math.min(...all.map(r => Number(r.ts) || 0))) return "ok";   // older than the records we still hold
+  if (Date.now() - recsWatchAt < 5000) return "pending";                                    // records are still loading
+  return "no";
+}
+function annStatus(msg) {
+  const id = String(msg.loginId || "");
+  if (!/^\d{6}$/.test(id) || typeof msg.text !== "string" || !msg.text || msg.imageData || msg.video || msg.poll) return "no";
+  if (!rolesReady) return "pending";
+  if (rankOfLoginId(id) < ROLES.admin.rank) return "no";
+  return attestStatus("announce", id, annHash(msg.text), Number(msg.ts) || 0);
+}
+function pollShapeOk(msg) {
+  const p = msg.poll;
+  return !!p && typeof p === "object" && /^[a-z0-9]{8}$/.test(String(p.id)) && typeof p.q === "string" && p.q.length >= 1 && p.q.length <= 120 &&
+    Array.isArray(p.o) && p.o.length >= 2 && p.o.length <= 4 && p.o.every(o => typeof o === "string" && o.length >= 1 && o.length <= 40) &&
+    Number(p.exp) - Number(msg.ts) > 0 && Number(p.exp) - Number(msg.ts) <= POLL_MS + 5000;
+}
+function pollSig(p) { return p.id + ":" + annHash(p.q + "|" + p.o.join("|")); }
+function pollStatus(msg) {
+  const id = String(msg.loginId || "");
+  if (!/^\d{6}$/.test(id) || !pollShapeOk(msg)) return "no";
+  if (!rolesReady) return "pending";
+  if (rankOfLoginId(id) < ROLES.admin.rank) return "no";
+  return attestStatus("poll", id, pollSig(msg.poll), Number(msg.ts) || 0);
+}
+function paintAnnGate(id) {
+  const rec = annEls.get(id) || pollEls.get(id);
+  if (!rec) return;
+  const { el, msg, mine } = rec;
+  if (mine) { el.classList.remove("ann-hidden"); return; }
+  const st = msg.poll ? pollStatus(msg) : annStatus(msg);
+  el.classList.toggle("ann-hidden", st !== "ok" || isSilenced(msg.loginId));
+}
+setInterval(() => {
+  [annEls, pollEls].forEach(m => m.forEach((r, id) => { if (!r.el.isConnected) m.delete(id); else paintAnnGate(id); }));
+}, 1500);
+
+let lastAnnouncePostAt = 0;
+async function sendAnnouncement(text) {
+  if (myRank() < ROLES.admin.rank) { showComposerNotice("Only admins and above can post announcements."); return; }
+  if (!text) return;
+  const wait = ANNOUNCE_GAP_MS - (Date.now() - lastAnnouncePostAt);
+  if (wait > 0) { showComposerNotice("Announcements can go out once every 15 seconds — wait " + Math.ceil(wait / 1000) + "s."); return; }
+  lastAnnouncePostAt = lastSentAt = Date.now();
+  updateSendButtonState(); stopTyping(); cancelReply();
+  const key = await ChatBackend.issue("actions", { k: "announce", t: "000000", v: annHash(text) });
+  if (!key && verifyActive()) {
+    lastAnnouncePostAt = 0; lastSentAt = 0; updateSendButtonState();
+    showComposerNotice("Couldn't record the approval, so nobody would see it. Publish the updated chat rules, then try again.");
+    return;
+  }
+  try {
+    await ChatBackend.send(myName, text, null, myLoginId, null);
+    $msgInput.value = ""; autosizeInput(); updateCharCounter(); scrollToBottom();
+  } catch (e) { $connError.textContent = "Announcement failed to send — check your connection."; $connError.style.display = "block"; }
+  $msgInput.focus();
+}
+
+let annWatchRef = null, annWatchStart = 0;
+const annPopupSeen = new Set();
+function startAnnouncementWatch() {
+  if (annWatchRef || !ChatBackend._db) return;
+  annWatchStart = srvNow();
+  annWatchRef = ChatBackend._db.ref("rooms/" + ANNOUNCE_ROOM + "/messages").limitToLast(1);
+  annWatchRef.on("child_added", snap => { onAnnouncementLive({ id: snap.key, ...snap.val() }); });
+}
+async function onAnnouncementLive(msg) {
+  if (!msg || msg.system || !msg.text || annPopupSeen.has(msg.id)) return;
+  annPopupSeen.add(msg.id);
+  if (Number(msg.ts) < annWatchStart - 1000) return;                 // history, not news
+  if (!myLoginId || String(msg.loginId) === String(myLoginId)) return;
+  await whenRolesReady();
+  let ok = false;
+  for (let i = 0; i < 10; i++) { const st = annStatus(msg); if (st === "ok") { ok = true; break; } if (st === "no") break; await annSleep(800); }
+  if (!ok || isSilenced(msg.loginId) || isMuted(msg.loginId)) return;
+  if (annRateBad(msg, annPopupLast)) return;
+  if (activeChannelId !== "announce") { annUnread = true; paintAnnounceUi(); }
+  if (chatPrefs.announcements === false) return;
+  const plain = maskFiltered(stripMentionMarks(msg.text));
+  const cut = plain.length > ANNOUNCE_POPUP_CHARS;
+  showGlobalPopup({
+    kind: "announce", title: "📢 " + msg.name,
+    body: cut ? plain.slice(0, ANNOUNCE_POPUP_CHARS).trimEnd() + "…" : plain,
+    buttonLabel: cut ? "Read the full announcement" : "Open announcements",
+    onButton: () => goToAnnouncement(msg.id)
+  });
+}
+async function goToAnnouncement(id) {
+  try { if (window.VUS_UI) { window.VUS_UI.showChat(); if (window.VUS_UI.closeSettings) window.VUS_UI.closeSettings(); } } catch (e) {}
+  await openChannel("announce");
+  for (let i = 0; i < 25; i++) {
+    const m = msgEls.get(String(id));
+    if (m && m.el.isConnected && !m.el.classList.contains("ann-hidden")) {
+      m.el.scrollIntoView({ block: "center", behavior: "smooth" });
+      m.el.classList.add("ann-highlight");
+      setTimeout(() => m.el.classList.remove("ann-highlight"), 5000);
+      return;
+    }
+    await annSleep(300);
+  }
+}
+function paintAnnounceUi() {
+  const b = document.getElementById("navAnnounce");
+  if (!b) return;
+  const on = activeChannelId === "announce";
+  if (on) annUnread = false;
+  b.classList.toggle("active", on);
+  const shell = document.getElementById("appShell");
+  if (shell) shell.classList.toggle("announce-on", on);
+  const dot = document.getElementById("announceRailDot");
+  if (dot) dot.classList.toggle("show", annUnread && !on);
+  if (typeof updateComposerLockState === "function" && myLoginId) { updateComposerLockState(); updateUploadButtonVisibility(); }
+}
+(function wireAnnounceRail() {
+  const b = document.getElementById("navAnnounce");
+  if (!b) return;
+  b.addEventListener("click", () => {
+    if (window.VUS_UI) { window.VUS_UI.showChat(); }
+    if (!myName) return;
+    if (activeChannelId === "announce") openChannel("main"); else openChannel("announce");
+  });
+})();
+
+/* ══════════ Polls (/poll, admin and above) ══════════
+   A poll is a chat message with a `poll` field. It lasts one minute: the end time lives at polls/<id> and the
+   database only accepts a vote while that time hasn't passed. Votes are one per account, written once.
+   Posting a poll writes an approval record in the poster's name, so with peer verification on a forged poll isn't shown. */
+const pollRecs = new Set();
+let pollUnsubs = [];
+let lastPollAt = 0;
+function pollTally(rec) {
+  const n = rec.p.o.length, counts = new Array(n).fill(0);
+  Object.entries(rec.votes || {}).forEach(([id, v]) => { if (/^[0-9]{4,12}$/.test(id) && Number.isInteger(v) && v >= 0 && v < n) counts[v]++; });
+  return counts;
+}
+function pollEnded(rec) { return srvNow() >= Number(rec.p.exp); }
+function buildPollBubble(bubble, msg) {
+  const p = msg.poll;
+  bubble.classList.add("poll-bubble");
+  bubble.style.background = ""; bubble.style.color = "";
+  const rec = { msg, p, bubble, votes: {}, modal: null };
+  const q = document.createElement("div"); q.className = "pb-q"; q.textContent = "📊 " + maskFiltered(p.q);
+  const o = document.createElement("div"); o.className = "pb-opts"; o.textContent = p.o.map(x => maskFiltered(x)).join("  ·  ");
+  const foot = document.createElement("div"); foot.className = "pb-foot";
+  bubble.append(q, o, foot);
+  rec.foot = foot;
+  bubble.addEventListener("click", () => openPollModal(rec));
+  bubble.title = "Click to open the poll";
+  pollRecs.add(rec);
+  if (ChatBackend._pollVotesRef) pollUnsubs.push(ChatBackend.watchPollVotes(p.id, v => { rec.votes = v; paintPoll(rec); }));
+  paintPoll(rec);
+}
+function paintPoll(rec) {
+  const total = pollTally(rec).reduce((a, b) => a + b, 0);
+  rec.foot.textContent = pollEnded(rec) ? "Poll ended · " + total + " vote" + (total === 1 ? "" : "s") : fmtCountdown(Number(rec.p.exp) - srvNow()) + " left · " + total + " vote" + (total === 1 ? "" : "s") + " · click to vote";
+  rec.bubble.classList.toggle("poll-done", pollEnded(rec));
+  if (rec.modal && rec.modal.isConnected) paintPollModal(rec);
+}
+setInterval(() => { pollRecs.forEach(rec => { if (!rec.bubble.isConnected) { if (rec.modal) rec.modal.remove(); pollRecs.delete(rec); } else paintPoll(rec); }); }, 1000);
+function openPollModal(rec) {
+  if (rec.modal && rec.modal.isConnected) return;
+  const ov = document.createElement("div");
+  ov.className = "poll-overlay";
+  ov.innerHTML = '<div class="poll-modal"><button type="button" class="poll-x" aria-label="Close">×</button><div class="pm-q"></div><div class="pm-by"></div><div class="pm-opts"></div><div class="pm-foot"></div></div>';
+  ov.addEventListener("click", e => { if (e.target === ov) { ov.remove(); rec.modal = null; } });
+  ov.querySelector(".poll-x").addEventListener("click", () => { ov.remove(); rec.modal = null; });
+  document.body.appendChild(ov);
+  rec.modal = ov;
+  paintPollModal(rec);
+}
+function paintPollModal(rec) {
+  const ov = rec.modal, p = rec.p, counts = pollTally(rec), total = counts.reduce((a, b) => a + b, 0);
+  const ended = pollEnded(rec), mine = rec.votes ? rec.votes[String(myLoginId)] : undefined;
+  const top = Math.max(...counts);
+  ov.querySelector(".pm-q").textContent = maskFiltered(p.q);
+  ov.querySelector(".pm-by").textContent = "Poll by " + rec.msg.name;
+  const box = ov.querySelector(".pm-opts");
+  box.replaceChildren();
+  p.o.forEach((label, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "pm-opt" + (mine === i ? " mine" : "") + (ended && total && counts[i] === top ? " win" : "");
+    const bar = document.createElement("span"); bar.className = "pm-bar"; bar.style.width = (total ? Math.round(counts[i] * 100 / total) : 0) + "%";
+    const t = document.createElement("span"); t.className = "pm-label"; t.textContent = maskFiltered(label);
+    const c = document.createElement("span"); c.className = "pm-count"; c.textContent = counts[i] + (total ? " · " + Math.round(counts[i] * 100 / total) + "%" : "");
+    b.append(bar, t, c);
+    b.disabled = ended || mine !== undefined || !myLoginId;
+    b.addEventListener("click", async () => {
+      if (pollEnded(rec) || (rec.votes && rec.votes[String(myLoginId)] !== undefined)) return;
+      rec.votes = Object.assign({}, rec.votes, { [String(myLoginId)]: i });   // show it at once; the database confirms
+      paintPoll(rec);
+      try { await ChatBackend.vote(p.id, myLoginId, i); }
+      catch (e) { delete rec.votes[String(myLoginId)]; paintPoll(rec); showComposerNotice(isPermissionDenied(e) ? "The vote wasn't accepted (the poll may have just ended)." : "Couldn't send your vote."); }
+    });
+    box.appendChild(b);
+  });
+  ov.querySelector(".pm-foot").textContent = (ended ? "Poll ended" : fmtCountdown(Number(p.exp) - srvNow()) + " left") + " · " + total + " vote" + (total === 1 ? "" : "s") + (mine !== undefined ? " · you voted" : "");
+}
+function openPollMenu() {
+  if (myRank() < ROLES.admin.rank) { showComposerNotice("Only admins and above can start polls."); return; }
+  if (activeChannelId === "announce") { showComposerNotice("Start polls in a normal chat, not in announcements."); return; }
+  const old = document.getElementById("pollMenuOverlay"); if (old) old.remove();
+  const ov = document.createElement("div");
+  ov.className = "poll-overlay"; ov.id = "pollMenuOverlay";
+  ov.innerHTML = '<div class="poll-modal pm-menu"><button type="button" class="poll-x" aria-label="Close">×</button><h3>Start a poll</h3>' +
+    '<input id="pollQ" type="text" maxlength="120" placeholder="Question" autocomplete="off">' +
+    '<div id="pollOpts"></div><button type="button" id="pollAdd" class="pm-add">+ Add option</button>' +
+    '<div class="pm-note">Lasts 1 minute. One vote per account.</div><div class="pm-err" id="pollErr"></div>' +
+    '<div class="pm-row"><button type="button" id="pollCancel" class="chat-modal-btn-secondary">Cancel</button><button type="button" id="pollGo" class="pm-go">Start poll</button></div></div>';
+  document.body.appendChild(ov);
+  const close = () => ov.remove();
+  ov.addEventListener("click", e => { if (e.target === ov) close(); });
+  ov.querySelector(".poll-x").addEventListener("click", close);
+  ov.querySelector("#pollCancel").addEventListener("click", close);
+  const list = ov.querySelector("#pollOpts"), add = ov.querySelector("#pollAdd");
+  const addOpt = (val, removable) => {
+    const row = document.createElement("div"); row.className = "pm-optrow";
+    const inp = document.createElement("input"); inp.type = "text"; inp.maxLength = 40; inp.value = val; inp.placeholder = "Option"; inp.className = "pollOpt";
+    row.appendChild(inp);
+    if (removable) { const x = document.createElement("button"); x.type = "button"; x.textContent = "×"; x.className = "pm-rm"; x.addEventListener("click", () => { row.remove(); add.style.display = ""; }); row.appendChild(x); }
+    list.appendChild(row);
+    if (list.children.length >= 4) add.style.display = "none";
+  };
+  addOpt("Yes", false); addOpt("No", false);
+  add.addEventListener("click", () => { if (list.children.length < 4) { addOpt("", true); list.lastChild.querySelector("input").focus(); } });
+  const err = ov.querySelector("#pollErr");
+  ov.querySelector("#pollGo").addEventListener("click", async () => {
+    const q = ov.querySelector("#pollQ").value.trim();
+    const opts = [...ov.querySelectorAll(".pollOpt")].map(i => i.value.trim()).filter(Boolean);
+    if (!q) { err.textContent = "Write a question."; return; }
+    if (opts.length < 2 || new Set(opts.map(o => o.toLowerCase())).size !== opts.length) { err.textContent = "Give at least 2 different options."; return; }
+    if (Date.now() - lastPollAt < 15000) { err.textContent = "Wait a few seconds before starting another poll."; return; }
+    lastPollAt = Date.now();
+    try {
+      const color = await ChatBackend.getNameColor(myLoginId);
+      await ChatBackend.createPoll(q, opts, myLoginId, color);
+      close();
+    } catch (e) {
+      lastPollAt = 0;
+      err.textContent = e && e.message === "approval" ? "Couldn't record the approval. Publish the updated chat rules first." : (isPermissionDenied(e) ? "The database rules don't allow polls yet. Publish the updated chat rules." : "Couldn't start the poll — check your connection.");
+    }
+  });
+  ov.querySelector("#pollQ").focus();
+}
+
+/* ══════════ Auto AFK: a yellow dot after 2 minutes without clicking or messaging (typing counts as active) ══════════ */
+const AFK_AFTER_MS = 120000;
+let lastActivityAt = Date.now(), myAfk = false;
+function setMyAfk(v) {
+  if (myAfk === v) return;
+  myAfk = v;
+  try { ChatBackend.setAfk(v); } catch (e) {}
+  try { if (window.VUS_DM && window.VUS_DM.setAfk) window.VUS_DM.setAfk(v); } catch (e) {}
+  if ($onlineDot) $onlineDot.classList.toggle("afk", v);
+}
+function afkCheck(force) {
+  if (!myLoginId || chatPrefs.autoAfk === false) { if (myAfk) setMyAfk(false); return; }
+  if (Date.now() - lastActivityAt >= AFK_AFTER_MS) setMyAfk(true);
+  else if (force && myAfk) setMyAfk(false);
+}
+function noteActivity() { lastActivityAt = Date.now(); if (myAfk) setMyAfk(false); }
+["pointerdown", "mousedown", "keydown", "touchstart", "wheel"].forEach(ev => window.addEventListener(ev, noteActivity, true));
+setInterval(() => afkCheck(false), 5000);
+ChatBackend.setAfk = function (v) {
+  if (!this._myPresenceRef) return;
+  const r = this._myPresenceRef.child("afk");
+  return v ? r.set(true) : r.remove();
+};
+
+/* ══════════ Update check: Chat-DM/version on GitHub ══════════
+   Fetched when the chat opens and every 5 minutes. The first answer is "the version I'm running"; if it later
+   changes, a pop-up says to reopen the page. The Check button in Settings does the same on demand (5 s wait). */
+const VERSION_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Chat-DM/version";
+const VERSION_CHECK_EVERY_MS = 5 * 60 * 1000;
+const VERSION_MANUAL_COOLDOWN_MS = 5000;
+let runningVersion = null, notifiedVersion = null, lastManualCheckAt = 0;
+async function fetchSiteVersion() {
+  try {
+    const res = await fetch(VERSION_URL + "?t=" + Date.now(), { cache: "no-store" });
+    if (!res.ok) return null;
+    const v = (await res.text()).trim();
+    return v && v.length <= 80 && !/[<>]/.test(v) ? v : null;
+  } catch (e) { return null; }
+}
+async function checkForUpdate(manual) {
+  const v = await fetchSiteVersion();
+  if (v === null) { if (manual) showGlobalPopup({ title: "Couldn't check for updates right now.", small: true, autoCloseMs: 3000 }); return; }
+  if (runningVersion === null) runningVersion = v;
+  if (v !== runningVersion) {
+    if (manual || notifiedVersion !== v) {
+      notifiedVersion = v;
+      showGlobalPopup({ kind: "update", title: "\uD83D\uDD04 A new update is out", body: "Close this tab and reopen the site (or refresh the page) to get the latest version." });
+    }
+    return;
+  }
+  if (manual) showGlobalPopup({ title: "No update found", small: true, autoCloseMs: 2500 });
+}
+function manualUpdateCheck(btn) {
+  const wait = VERSION_MANUAL_COOLDOWN_MS - (Date.now() - lastManualCheckAt);
+  if (wait > 0) return;
+  lastManualCheckAt = Date.now();
+  if (btn) { btn.disabled = true; setTimeout(() => { btn.disabled = false; }, VERSION_MANUAL_COOLDOWN_MS); }
+  checkForUpdate(true);
+}
+setTimeout(() => checkForUpdate(false), 3000);
+setInterval(() => checkForUpdate(false), VERSION_CHECK_EVERY_MS);
 
 /* ══════════ Channels (Discord-style list) ══════════
    Main is everyone. Mods / Admins / Owners are rank channels: anyone at that rank OR HIGHER can enter.
@@ -7658,7 +8391,8 @@ const CHANNELS = [
   { id: "verified", room: "ch-verified",  label: "verified", icon: "\u2713", hint: "Verified accounts only", verified: true },
   { id: "mods",     room: "ch-mods",      label: "mods",     icon: "\uD83D\uDEE1\uFE0F", hint: "Mods and above", minRank: ROLES.mod.rank },
   { id: "admins",   room: "ch-admins",    label: "admins",   icon: "\u2694\uFE0F", hint: "Admins and above", minRank: ROLES.admin.rank },
-  { id: "owners",   room: "ch-owners",    label: "owners",   icon: "\uD83D\uDC51", hint: "Owner and Co-Owner", minRank: ROLES.coowner.rank }
+  { id: "owners",   room: "ch-owners",    label: "owners",   icon: "\uD83D\uDC51", hint: "Owner and Co-Owner", minRank: ROLES.coowner.rank },
+  { id: "announce", room: "ch-announce",  label: "announcements", icon: "\uD83D\uDCE2", hint: "Announcements from admins", hidden: true, announce: true }
 ];
 let activeChannelId = "main";
 const CHANNELS_OPEN_KEY = "vusChannelsOpen";
@@ -7667,6 +8401,7 @@ function verifiedOf(id) { return window.VUS_DM && window.VUS_DM.verifiedCached ?
 function channelStateFor(ch, loginId) {
   if (!ch || ch.id === "main") return true;
   if (!loginId) return false;
+  if (ch.announce) return true;
   if (ch.verified) return verifiedOf(loginId);
   if (ch.minRank) return rankOfLoginId(loginId) >= ch.minRank;
   return true;
@@ -7699,6 +8434,7 @@ let channelCountRefs = [];
 function watchChannelCounts() {
   if (channelCountRefs.length || !ChatBackend._db) return;
   CHANNELS.forEach(ch => {
+    if (ch.hidden) return;
     const ref = ChatBackend._db.ref("rooms/" + ch.room + "/presence");
     ref.on("value", snap => { const n = snap.numChildren(); if (channelCounts[ch.id] !== n) { channelCounts[ch.id] = n; renderChannelList(); } });
     channelCountRefs.push(ref);
@@ -7712,6 +8448,7 @@ function renderChannelList() {
   if (myLoginId && window.VUS_DM && verifiedOf(myLoginId) === undefined) window.VUS_DM.isVerified(myLoginId).then(() => renderChannelList());
   list.replaceChildren();
   CHANNELS.forEach(ch => {
+    if (ch.hidden) return;
     const ok = channelStateFor(ch, myLoginId) === true;
     const b = document.createElement("button");
     b.type = "button";
@@ -7729,8 +8466,9 @@ function renderChannelList() {
 }
 function paintChannelsUi() {
   renderChannelList();
+  paintAnnounceUi();
   const t = document.getElementById("hdrTitleText");
-  if (t) t.textContent = activeChannelId ? (activeChannelId === "main" ? "VUS Chat" : activeChannel().label) : (currentRoomMeta && currentRoomMeta.name ? currentRoomMeta.name : "Room");
+  if (t) t.textContent = activeChannelId ? (activeChannelId === "main" ? "VUS Chat" : (activeChannel().announce ? "📢 Announcements" : activeChannel().label)) : (currentRoomMeta && currentRoomMeta.name ? currentRoomMeta.name : "Room");
   regateChannelMessages();
 }
 async function openChannel(id) {
@@ -7751,7 +8489,12 @@ async function openChannel(id) {
   currentRoomMeta = null;
   activeChannelId = id;
   ChatBackend.bindToRoom(ch.room);
-  await ChatBackend.claimPresence(myName, false, myLoginId);
+  const joined = await claimSpotInCurrentRoom(!!ch.announce);
+  if (joined && joined.ok === false && joined.reason !== "switched") {
+    showComposerNotice("Couldn't join #" + ch.label + (joined.reason === "banned" ? " (you're banned)." : "."));
+    await switchToMainRoom();
+    return;
+  }
   watchMyTimeout();
   attachRoomListeners();
   $messages.innerHTML = "";
@@ -7786,7 +8529,10 @@ function setChannelsOpen(open) {
 window.VUS_CHAT = {
   channels: { list: CHANNELS, open: openChannel, active: () => activeChannelId },
   getPrefsState, restorePrefsState,
-  staffActionsFor, runStaffAction, timeoutLimitsForRank, banLimitsForRank,
+  _idleFor(ms) { lastActivityAt = Date.now() - ms; afkCheck(false); },
+  _annHash: annHash,
+  staffActionsFor, runStaffAction, roleActionsFor, runRoleAction,
+  ringFor: async id => { try { const col = await ChatBackend.getNameColor(id); return (col && col.ring) || ""; } catch (e) { return ""; } }, timeoutLimitsForRank, banLimitsForRank,
   isMuted, toggleMute,
   getRolesFor(loginId) {
     const id = String(loginId || "");

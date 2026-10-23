@@ -233,6 +233,10 @@ function claimPresence(accountKey, username) {
   myPresenceRef.onDisconnect().remove();
   myPresenceRef.set({ username: username, joinedAt: firebase.database.ServerValue.TIMESTAMP });
 }
+function setDmAfk(v) {
+  if (!myPresenceRef) return;
+  try { (v ? myPresenceRef.child("afk").set(true) : myPresenceRef.child("afk").remove()).catch(() => {}); } catch (e) {}
+}
 function releasePresence() {
   if (myPresenceRef) {
     myPresenceRef.onDisconnect().cancel();
@@ -248,7 +252,7 @@ function watchPresenceList(onList) {
   presenceRef.on("value", snap => {
     const val = snap.val() || {};
     const list = Object.entries(val).map(([key, v]) => ({
-      accountKey: key, username: (v && v.username) || "Unknown", joinedAt: (v && v.joinedAt) || null
+      accountKey: key, username: (v && v.username) || "Unknown", joinedAt: (v && v.joinedAt) || null, afk: !!(v && v.afk === true)
     }));
     onList(list);
   });
@@ -1635,9 +1639,28 @@ $mzkSubView.id = "mzkSubView";
     h("span", { className: "cs-label" }, "\uD83C\uDFB5 MZK music link", h("small", { id: "mzkOpenStatus" }, "Show what you're playing on your profile")),
     h("span", { className: "sv-chev" }, "\u203A"));
   if (field && field.parentNode) field.parentNode.insertBefore(row, field);
+  const openMzk = h("button", { type: "button", className: "cs-action", id: "mzkOpenSiteBtn" }, "\uD83C\uDFB5 Open MZK in a new tab");
+  openMzk.addEventListener("click", () => openMzkInNewTab());
+  body.appendChild(h("div", { className: "profile-popover-fieldhint", style: "margin-bottom:6px" }, "Don't have a code yet? Open MZK, sign in, and get your link code under its Settings."));
+  body.appendChild(openMzk);
   if (field) body.appendChild(field);
   $mzkSubView.append(head, body);
   document.getElementById("paneAccount").appendChild($mzkSubView);
+}
+// Opens MZK in a blank tab (about:blank), the same way the rest of the site opens apps.
+const MZK_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/MZK";
+async function openMzkInNewTab() {
+  const w = window.open("about:blank", "_blank");      // opened straight away so the browser allows it
+  if (!w) { alert("Your browser blocked the new tab. Allow pop-ups for this site and try again."); return; }
+  try { w.document.title = "MZK"; w.document.body.style.cssText = "background:#0f172a;color:#cbd5e1;font:16px system-ui;padding:24px"; w.document.body.textContent = "Loading MZK\u2026"; } catch (e) {}
+  try {
+    const res = await fetch(MZK_URL, { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const html = await res.text();
+    w.document.open(); w.document.write(html); w.document.close();
+  } catch (e) {
+    try { w.location.href = MZK_URL; } catch (x) {}
+  }
 }
 function showMzkSub(on) {
   $settingsModalEl.classList.toggle("sub-open", !!on);
@@ -1800,6 +1823,8 @@ async function doLogout() {
 
 function renderOnlineList(list) {
   latestPresenceAccountKeys = new Set(list.map(e => e.accountKey));
+  latestAfkKeys = new Set(list.filter(e => e.afk).map(e => e.accountKey));
+  document.querySelectorAll(".list-row-presence-dot[data-ak]").forEach(d => d.classList.toggle("afk", latestAfkKeys.has(d.dataset.ak)));
   if (currentSession && currentUserData) { renderFriendsList(currentUserData); renderGroupsList(myGroupChats); }
   $onlineCountText.textContent = list.length + " online";
   $onlineList.innerHTML = "";
@@ -1921,6 +1946,7 @@ function renderOutgoingRequests(userData) {
 }
 
 let latestPresenceAccountKeys = new Set();
+let latestAfkKeys = new Set();
 
 function buildAvatarWithPresence(username, accountKey, isGroup) {
   const wrap = h("div", { className: "list-row-presence-wrap" });
@@ -1933,7 +1959,8 @@ function buildAvatarWithPresence(username, accountKey, isGroup) {
   }
   wrap.appendChild(avatar);
   if (!isGroup) {
-    const dot = h("div", { className: "list-row-presence-dot" + (latestPresenceAccountKeys.has(accountKey) ? " online" : "") });
+    const dot = h("div", { className: "list-row-presence-dot" + (latestPresenceAccountKeys.has(accountKey) ? " online" : "") + (latestAfkKeys.has(accountKey) ? " afk" : "") });
+    dot.dataset.ak = accountKey;
     wrap.appendChild(dot);
   }
   return wrap;
@@ -2545,6 +2572,7 @@ function updateChatThreadHeaderStatus() {
     $chatThreadHeaderStatus.classList.remove("online");
   }
   $chatThreadPresenceBadge.classList.toggle("online", isOnline);
+  $chatThreadPresenceBadge.classList.toggle("afk", isOnline && latestAfkKeys.has(openChatAccountKey));
 }
 
 let otherUserLastSeenCache = {};
@@ -3425,7 +3453,24 @@ const $chatUserProfileSong = document.getElementById("chatUserProfileSong");
 let profileSongUnsub = null;
 function stopProfileSong() { if (profileSongUnsub) { profileSongUnsub(); profileSongUnsub = null; } }
 
-function closeChatUserProfile() { stopProfileSong(); $chatUserProfileOverlay.style.display = "none"; }
+function closeChatUserProfile() { stopProfileSong(); profileGoneToken++; $chatUserProfileOverlay.style.display = "none"; }
+// "View full profile": the same card, bigger and centred.
+const $chatUserProfileFullBtn = document.getElementById("chatUserProfileFullBtn");
+function setProfileFull(on) {
+  const card = $chatUserProfileOverlay.querySelector(".profile-card");
+  if (card) card.classList.toggle("pc-full", !!on);
+  $chatUserProfileFullBtn.textContent = on ? "Back to card" : "View full profile";
+}
+$chatUserProfileFullBtn.addEventListener("click", () => setProfileFull(!$chatUserProfileOverlay.querySelector(".profile-card").classList.contains("pc-full")));
+// An account that doesn't exist (any more): say so, then the card removes itself.
+let profileGoneToken = 0;
+function profileGone(name) {
+  $chatUserProfileName.textContent = name || "Unknown";
+  $chatUserProfileStatus.textContent = "This account no longer exists.";
+  $chatUserProfileFullBtn.style.display = "none";
+  const t = ++profileGoneToken;
+  setTimeout(() => { if (t === profileGoneToken && $chatUserProfileOverlay.style.display === "flex") closeChatUserProfile(); }, 2500);
+}
 $chatUserProfileCloseBtn.addEventListener("click", closeChatUserProfile);
 $chatUserProfileOverlay.addEventListener("click", (e) => { if (e.target === $chatUserProfileOverlay) closeChatUserProfile(); });
 
@@ -3439,6 +3484,8 @@ function fillRoles(container, loginId) {
 
 function resetProfileCard() {
   $chatUserProfileName.textContent = "Loading…";
+  $chatUserProfileAvatar.classList.remove("has-ring"); $chatUserProfileAvatar.style.removeProperty("--ring");
+  profileGoneToken++; $chatUserProfileFullBtn.style.display = ""; setProfileFull(false);
   $chatUserProfileId.textContent = "";
   $chatUserProfileStatus.textContent = "";
   $chatUserProfileStatus.style.color = "";
@@ -3448,6 +3495,7 @@ function resetProfileCard() {
   { const sb = document.getElementById("chatUserProfileStaff"); if (sb) { sb.replaceChildren(); sb.style.display = "none"; } }
   $chatUserProfileRoles.replaceChildren();
   $chatUserProfileBioWrap.style.display = "none";
+  { const j = document.getElementById("chatUserProfileJoined"); if (j) { j.textContent = ""; j.style.display = "none"; } }
   stopProfileSong();
   $chatUserProfileSong.replaceChildren(); $chatUserProfileSong.style.display = "none";
   $chatUserProfileAvatar.replaceChildren();
@@ -3478,17 +3526,46 @@ function renderStaffActions(prof) {
   acts.forEach(a => row.appendChild(h("button", { type: "button", className: "pc-staff-btn" + (a.id === "mute" ? "" : " danger"),
     onclick: () => { $chatUserProfileCloseBtn.click(); chat.runStaffAction(a.id, prof.id, prof.username); } }, a.label)));
   box.appendChild(row);
+  // Rank changes: a drop-down that starts on the next rank up, plus how long it lasts.
+  const ra = chat.roleActionsFor ? chat.roleActionsFor(prof.id) : [];
+  if (ra.length) {
+    box.appendChild(h("div", { className: "pc-h", style: "margin-top:10px" }, "Ranks"));
+    const sel = h("select", { className: "pc-role-select" });
+    ra.forEach((a, i) => sel.appendChild(h("option", { value: String(i) }, a.label)));
+    const dur = h("select", { className: "pc-role-select pc-role-dur" });
+    [["0", "Permanent"], ["3600000", "1 hour"], ["86400000", "1 day"], ["604800000", "1 week"], ["2592000000", "30 days"]].forEach(([v, t]) => dur.appendChild(h("option", { value: v }, t)));
+    const go = h("button", { type: "button", className: "pc-staff-btn", onclick: async () => {
+      const act = ra[Number(sel.value)];
+      go.disabled = true;
+      const done = await chat.runRoleAction(act.kind, act.roleId, prof.id, prof.username, act.kind === "grant" ? Number(dur.value) : 0);
+      go.disabled = false;
+      if (done) $chatUserProfileCloseBtn.click();
+    } }, "Apply");
+    const syncDur = () => { dur.style.display = ra[Number(sel.value)].kind === "grant" ? "" : "none"; };
+    sel.addEventListener("change", syncDur); syncDur();
+    box.appendChild(h("div", { className: "pc-staff-row" }, sel, dur, go));
+  }
 }
 
 function fillProfileCard(prof, accountKey) {
   $chatUserProfileName.textContent = prof.username;
   $chatUserProfileId.textContent = "#" + prof.id;
   renderAvatarInto($chatUserProfileAvatar, prof.username, prof.avatar);
+  if (window.VUS_CHAT && window.VUS_CHAT.ringFor) window.VUS_CHAT.ringFor(prof.id).then(r => {
+    if (/^#[0-9a-fA-F]{6}$/.test(r) && $chatUserProfileName.textContent === prof.username) { $chatUserProfileAvatar.classList.add("has-ring"); $chatUserProfileAvatar.style.setProperty("--ring", r); }
+  });
   fillRoles($chatUserProfileRoles, prof.id);
   isVerifiedLoginId(prof.id).then(v => {
     if (!v || $chatUserProfileName.textContent !== prof.username) return;
     $chatUserProfileRoles.appendChild(h("span", { className: "verified-tag in-card" }, "\u2713 Verified"));
   });
+  { // Joined date: stamped by the database when the account was made, and the rules never let it change.
+    const j = document.getElementById("chatUserProfileJoined");
+    if (j && Number(prof.createdAt) > 86400000) {
+      j.textContent = "Joined: " + new Date(Number(prof.createdAt)).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+      j.style.display = "block";
+    }
+  }
   if (prof.bio) { $chatUserProfileBio.textContent = prof.bio; $chatUserProfileBioWrap.style.display = "block"; }
   if (mzkSourceOf(prof) && $chatUserProfileOverlay.style.display === "flex") profileSongUnsub = mountSong($chatUserProfileSong, mzkSourceOf(prof));
 
@@ -3548,8 +3625,7 @@ async function openChatUserProfile(loginId, nameAtSendTime) {
   const accountKey = await accountKeyForLoginId(loginId);
   const prof = accountKey ? await fetchAccountProfile(accountKey) : null;
   if (!prof) {
-    $chatUserProfileName.textContent = nameAtSendTime || "Unknown";
-    $chatUserProfileStatus.textContent = "This account no longer exists.";
+    profileGone(nameAtSendTime);
     return;
   }
   fillProfileCard(prof, accountKey);
@@ -3560,11 +3636,12 @@ async function openAccountProfile(accountKey, nameFallback) {
   resetProfileCard();
   if (!currentSession) return;
   const prof = await fetchAccountProfile(accountKey);
-  if (!prof) { $chatUserProfileName.textContent = nameFallback || "Unknown"; $chatUserProfileStatus.textContent = "This account no longer exists."; return; }
+  if (!prof) { profileGone(nameFallback); return; }
   fillProfileCard(prof, accountKey);
 }
 
 window.VUS_DM = {
+  setAfk: setDmAfk,
   openChatUserProfile,
   getAvatarByLoginId,
   verifySender,

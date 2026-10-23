@@ -12,6 +12,7 @@
   <div id="navCol">
   <div id="rail">
     <button class="rail-nav-btn active" id="navChat" title="Chat" aria-label="Chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-8l-4.5 4v-4H6a2 2 0 0 1-2-2V5z"/></svg></button>
+    <button class="rail-nav-btn" id="navAnnounce" title="Announcements" aria-label="Announcements"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h3l8 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M18.5 9a4 4 0 0 1 0 6"/></svg><span class="rail-dot" id="announceRailDot"></span></button>
     <div id="railRooms"></div>
     <button class="rail-nav-btn rail-browse" id="navRooms" title="Browse rooms" aria-label="Browse rooms"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 21V4.5A1.5 1.5 0 0 1 7.5 3h9A1.5 1.5 0 0 1 18 4.5V21"/><path d="M3.5 21h17"/><circle cx="14.5" cy="12.5" r="0.9" fill="currentColor" stroke="none"/></svg><span class="rail-dot" id="roomsRailDot"></span></button>
     <div class="rail-sep"></div>
@@ -268,6 +269,7 @@
       <input type="text" id="timeoutSecondsInput" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="Sec" style="width:100%;padding:8px 11px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none;text-align:center">
     </div>
     <div id="timeoutSetNote" style="color:#64748b;font-size:12.5px;margin-bottom:8px">Max 30 days.</div>
+    <input type="text" id="timeoutReasonInput" maxlength="100" placeholder="Reason (optional, shown to them)" style="width:100%;box-sizing:border-box;padding:8px 11px;margin-bottom:8px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none">
     <div class="chat-modal-err" id="timeoutSetErr"></div>
     <div class="chat-modal-row">
       <button class="chat-modal-btn-secondary" id="timeoutSetCancelBtn">Cancel</button>
@@ -293,6 +295,7 @@
   <div class="chat-modal">
     <h3 id="banConfirmTitle">Ban user?</h3>
     <p id="banConfirmText"></p>
+    <input type="text" id="banReasonInput" maxlength="100" placeholder="Reason (optional, shown to them)" style="width:100%;box-sizing:border-box;padding:8px 11px;margin-bottom:8px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none">
     <div class="chat-modal-err" id="banConfirmErr"></div>
     <div class="chat-modal-row">
       <button class="chat-modal-btn-secondary" id="banCancelBtn">Cancel</button>
@@ -578,6 +581,7 @@
       <h3 id="chatUserProfileName">—</h3>
       <div id="chatUserProfileId"></div>
       <div id="chatUserProfileRoles" class="pc-roles"></div>
+      <div id="chatUserProfileJoined" class="pc-joined" style="display:none"></div>
       <div id="chatUserProfileBioWrap" style="display:none">
         <div class="pc-h">About me</div>
         <div id="chatUserProfileBio"></div>
@@ -586,6 +590,7 @@
       <div id="chatUserProfileStatus"></div>
       <div id="chatUserProfileStaff" style="display:none"></div>
       <div class="chat-modal-row">
+        <button class="chat-modal-btn-secondary" id="chatUserProfileFullBtn">View full profile</button>
         <button class="chat-modal-btn-secondary" id="chatUserProfileCloseBtn">Close</button>
         <button class="chat-modal-btn-secondary" id="chatUserProfileMuteBtn" style="display:none">Mute</button>
         <button class="chat-modal-btn-secondary" id="chatUserProfileMsgBtn" style="display:none">Message</button>
