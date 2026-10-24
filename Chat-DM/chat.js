@@ -533,7 +533,9 @@ const ChatBackend = {
     catch (e) { await this.deleteMedia(id); throw e; }
     const exp = (await this._serverNow()) + VIDEO_TTL_MS;
     await this._mediaMetaRef.child(id).set(exp);
-    const color = await this.getNameColor(loginId);
+    const prof = await this.getProfile(loginId);
+    const color = prof && prof.color ? prof.color : null, cos = cosmFields(prof && prof.cosm);
+    delete cos.fx;
     localVideoUrls.set(id, URL.createObjectURL(file));
     await this._ref.push({
       name: name,
@@ -542,6 +544,7 @@ const ChatBackend = {
       ts: firebase.database.ServerValue.TIMESTAMP,
       video: { id, n, size: file.size, mime: file.type, dur: Math.round(dur * 10) / 10, exp },
       ...(color && color.ring ? { ring: color.ring } : {}),
+      ...cos,
       ...(replyTo ? { replyTo } : {})
     });
     return id;
@@ -593,7 +596,9 @@ const ChatBackend = {
   },
 
   async sendImage(name, dataUrl, loginId, caption, replyTo) {
-    const color = await this.getNameColor(loginId);
+    const prof = await this.getProfile(loginId);
+    const color = prof && prof.color ? prof.color : null, cos = cosmFields(prof && prof.cosm);
+    delete cos.fx;
     const data = {
       name: name,
       ...(loginId ? { loginId: String(loginId) } : {}),
@@ -601,17 +606,19 @@ const ChatBackend = {
       ...(caption ? { text: caption } : {}),
       ts: firebase.database.ServerValue.TIMESTAMP,
       ...(color ? { bubble: color.bubble, textColor: color.text, ...(color.ring ? { ring: color.ring } : {}) } : {}),
+      ...cos,
       ...(replyTo ? { replyTo } : {})
     };
     try { return await this._ref.push(data); }
     catch (e) {
-      if ((replyTo || data.ring) && isPermissionDenied(e)) { delete data.replyTo; delete data.ring; return this._ref.push(data); }
+      if ((replyTo || data.ring || data.rfx || data.tag) && isPermissionDenied(e)) { delete data.replyTo; delete data.ring; delete data.rfx; delete data.tag; return this._ref.push(data); }
       throw e;
     }
   },
 
   async send(name, text, mention, loginId, replyTo) {
-    const color = await this.getNameColor(loginId);
+    const prof = await this.getProfile(loginId);
+    const color = prof && prof.color ? prof.color : null, cos = cosmFields(prof && prof.cosm);
     const data = {
       name: name,
       ...(loginId ? { loginId: String(loginId) } : {}),
@@ -619,15 +626,16 @@ const ChatBackend = {
       ts: firebase.database.ServerValue.TIMESTAMP,
       ...(mention ? { mention: mention.name + (mention.silent ? SILENT_MENTION_MARK : "") } : {}),
       ...(color ? { bubble: color.bubble, textColor: color.text, ...(color.ring ? { ring: color.ring } : {}) } : {}),
+      ...cos,
       ...(replyTo ? { replyTo } : {})
     };
     try { return await this._ref.push(data); }
     catch (e) {
       // The database rules may not know about replies yet: still deliver the message.
-      if ((replyTo || data.ring) && isPermissionDenied(e)) {
-        // Old rules don't know about the ring: drop just that and try again.
-        if (data.ring) {
-          delete data.ring;
+      if ((replyTo || data.ring || data.rfx || data.tag || data.fx) && isPermissionDenied(e)) {
+        // Old rules don't know about the ring/tag/effect: drop just those and try again.
+        if (data.ring || data.rfx || data.tag || data.fx) {
+          delete data.ring; delete data.rfx; delete data.tag; delete data.fx;
           try { return await this._ref.push(data); } catch (e2) { if (!(replyTo && isPermissionDenied(e2))) throw e2; }
         }
         delete data.replyTo;
@@ -1842,6 +1850,10 @@ function mentionChip(name, extraClass) {
   return chip;
 }
 function fillBubbleText(bubble, text, legacy) {
+  fillBubbleTextRaw(bubble, text, legacy);
+  if (bubble.dataset && bubble.dataset.fx) wrapFx(bubble);
+}
+function fillBubbleTextRaw(bubble, text, legacy) {
   text = maskFiltered(String(text || ""));
   const toks = parseMentionTokens(text);
   if (!toks.length) {
@@ -2665,7 +2677,7 @@ function renderMessage(msg) {
   avEl.className = "msg-av";
   avEl.title = "View profile";
   paintAvatar(avEl, msg.loginId, msg.name);
-  if (/^#[0-9a-fA-F]{6}$/.test(String(msg.ring || ""))) { avEl.classList.add("has-ring"); avEl.style.setProperty("--ring", msg.ring); }
+  applyRingTo(avEl, msg.ring, msg.rfx);
   if (msg.loginId) avEl.addEventListener("click", () => openProfileFor(msg.loginId, msg.name));
   el.appendChild(avEl);
 
@@ -2679,6 +2691,7 @@ function renderMessage(msg) {
     nameLink.addEventListener("click", () => openProfileFor(msg.loginId, msg.name));
   }
   meta.appendChild(nameLink);
+  if (msg.tag) { const te = tagEl(msg.tag); if (te) meta.appendChild(te); }
   if (msg.loginId) { const vt = document.createElement("span"); vt.className = "verified-tag"; vt.dataset.vid = String(msg.loginId); vt.textContent = "\u2713 Verified"; meta.appendChild(vt); paintVerifiedTag(vt); }
   if (msg.ts) meta.appendChild(document.createTextNode(" · " + formatTime(msg.ts)));
   el.appendChild(meta);
@@ -2717,6 +2730,7 @@ function renderMessage(msg) {
     buildPollBubble(bubble, msg);
     if (msg.id) { pollEls.set(String(msg.id), { el, msg, mine }); paintAnnGate(String(msg.id)); }
   } else {
+    if (msg.fx && itemOf(msg.fx, "fx")) bubble.dataset.fx = msg.fx;
     fillBubbleText(bubble, msg.text, msg.mention);
   }
 
@@ -4029,6 +4043,7 @@ function finalizeSend(text, mention) {
 
   ChatBackend.send(myName, text, mention, myLoginId, currentReplyPayload())
     .then(() => {
+      if (activeChannelId !== "announce") crateCountMessage();
       cancelReply();
       $msgInput.value = "";
       clearMention();
@@ -4586,7 +4601,7 @@ async function renderModMenu() {
   ringOn.addEventListener("change", paintRing); ringInput.addEventListener("input", () => { ringOn.checked = true; paintRing(); });
   paintRing();
   ringBox.append(ringPrev, ringOn, ringInput); ringRow.append(ringLbl, ringBox);
-  colorHost.appendChild(ringRow);
+  { const rn = document.createElement('div'); rn.style.cssText = 'color:#94a3b8;font-size:12.5px;line-height:1.4;margin-bottom:8px'; rn.textContent = '\uD83D\uDCE6 Profile rings, tags and text effects now come from crates (the crate button on the left).'; colorHost.appendChild(rn); }
 
   const note = document.createElement("div");
   note.textContent = "Note: color can be changed again every " + Math.round(COLOR_CHANGE_COOLDOWN_MS / 1000) + " seconds.";
@@ -8368,6 +8383,318 @@ ChatBackend.setAfk = function (v) {
   return v ? r.set(true) : r.remove();
 };
 
+/* ══════════ Crates ══════════
+   One crate per 12-hour window (04:00 and 16:00 UTC = noon and midnight US Eastern during daylight time).
+   To claim: 15 messages and 5 minutes online inside the window. The database keeps one claim record per account and
+   only accepts the window that is current on ITS clock, so changing your device clock does nothing.
+   Rings, tags and text effects come from here; what you equip is stored on your profile (`cosm`). */
+const CRATE_WINDOW_MS = 12 * 3600 * 1000, CRATE_OFFSET_MS = 4 * 3600 * 1000;
+const CRATE_NEED_MSGS = 15, CRATE_NEED_MS = 5 * 60 * 1000;
+const RARITY = {
+  common:    { label: "Common",    color: "#94a3b8", weight: 70 },
+  rare:      { label: "Rare",      color: "#38bdf8", weight: 22 },
+  epic:      { label: "Epic",      color: "#a855f7", weight: 6 },
+  legendary: { label: "Legendary", color: "#f59e0b", weight: 2 }
+};
+const CRATE_ITEMS = [
+  // rings: solid ones carry a color, the rest are animated (CSS class rfx-<id>)
+  { id: "ring-sun",   type: "ring", rar: "common", name: "Sunny", color: "#f5c542" },
+  { id: "ring-leaf",  type: "ring", rar: "common", name: "Leaf", color: "#22c55e" },
+  { id: "ring-rose",  type: "ring", rar: "common", name: "Rose", color: "#f43f5e" },
+  { id: "ring-sky",   type: "ring", rar: "common", name: "Sky", color: "#38bdf8" },
+  { id: "ring-pulse-cyan", type: "ring", rar: "rare", name: "Cyan Pulse" },
+  { id: "ring-pulse-pink", type: "ring", rar: "rare", name: "Pink Pulse" },
+  { id: "ring-rainbow",    type: "ring", rar: "epic", name: "Rainbow" },
+  { id: "ring-fire",       type: "ring", rar: "epic", name: "Fire" },
+  { id: "ring-galaxy",     type: "ring", rar: "legendary", name: "Galaxy" },
+  { id: "ring-goldshine",  type: "ring", rar: "legendary", name: "Gold Shine" },
+  // tags (CSS class tg-<id>)
+  { id: "tag-rookie", type: "tag", rar: "common", name: "Rookie" },
+  { id: "tag-chill",  type: "tag", rar: "common", name: "Chill" },
+  { id: "tag-sleepy", type: "tag", rar: "common", name: "Sleepy" },
+  { id: "tag-snacker", type: "tag", rar: "common", name: "Snacker" },
+  { id: "tag-nightowl",  type: "tag", rar: "rare", name: "Night Owl" },
+  { id: "tag-earlybird", type: "tag", rar: "rare", name: "Early Bird" },
+  { id: "tag-lucky",     type: "tag", rar: "rare", name: "Lucky" },
+  { id: "tag-gremlin", type: "tag", rar: "epic", name: "Gremlin" },
+  { id: "tag-menace",  type: "tag", rar: "epic", name: "Menace" },
+  { id: "tag-legend",  type: "tag", rar: "legendary", name: "Legend" },
+  { id: "tag-goat",    type: "tag", rar: "legendary", name: "G.O.A.T." },
+  // text effects (CSS class fxt-<id>)
+  { id: "fx-sunset", type: "fx", rar: "common", name: "Sunset Fade" },
+  { id: "fx-ocean",  type: "fx", rar: "common", name: "Ocean Fade" },
+  { id: "fx-mint",   type: "fx", rar: "rare", name: "Mint Fade" },
+  { id: "fx-berry",  type: "fx", rar: "rare", name: "Berry Fade" },
+  { id: "fx-candy",  type: "fx", rar: "rare", name: "Candy Fade" },
+  { id: "fx-aurora", type: "fx", rar: "epic", name: "Aurora (animated)" },
+  { id: "fx-lava",   type: "fx", rar: "epic", name: "Lava (animated)" },
+  { id: "fx-rainbow", type: "fx", rar: "legendary", name: "Rainbow Flow (animated)" },
+  { id: "fx-void",    type: "fx", rar: "legendary", name: "Void Shimmer (animated)" }
+];
+const ITEM_BY_ID = {};
+CRATE_ITEMS.forEach(i => { ITEM_BY_ID[i.id] = i; });
+const CRATE_TYPES = [
+  { id: "ring",  label: "Ring crate",        icon: "⭕", blurb: "A profile ring" },
+  { id: "tag",   label: "Tag crate",         icon: "🏷️", blurb: "A tag by your name" },
+  { id: "fx",    label: "Text effect crate", icon: "✨", blurb: "Fades and animated text" },
+  { id: "mixed", label: "Mixed crate",       icon: "🎁", blurb: "Any of the above" }
+];
+function itemOf(id, type) { const i = ITEM_BY_ID[String(id || "")]; return i && (!type || i.type === type) ? i : null; }
+// What goes on a message / profile for an equipped set: solid rings keep using the plain `ring` colour.
+function cosmFields(c) {
+  const out = {};
+  if (!c || typeof c !== "object") return out;
+  const r = itemOf(c.ring, "ring"); if (r) { if (r.color) out.ring = r.color; else out.rfx = r.id; }
+  const t = itemOf(c.tag, "tag"); if (t) out.tag = t.id;
+  const f = itemOf(c.fx, "fx"); if (f) out.fx = f.id;
+  return out;
+}
+function crateWindow(now) { return Math.floor((now - CRATE_OFFSET_MS) / CRATE_WINDOW_MS); }
+function crateWindowEnd(w) { return (w + 1) * CRATE_WINDOW_MS + CRATE_OFFSET_MS; }
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function seedOf(str) { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h; }
+// The same account, window and crate type always give the same rolls, so reloading the page can't re-roll.
+function rollCrate(type, w, owned) {
+  const rng = mulberry32(seedOf(myLoginId + ":" + w + ":" + type));
+  const pool = CRATE_ITEMS.filter(i => type === "mixed" || i.type === type);
+  const pick = () => {
+    let r = rng() * 100, rar = "legendary", acc = 0;
+    for (const k of ["common", "rare", "epic", "legendary"]) { acc += RARITY[k].weight; if (r < acc) { rar = k; break; } }
+    const list = pool.filter(i => i.rar === rar);
+    const from = list.length ? list : pool;
+    return from[Math.floor(rng() * from.length)];
+  };
+  const steps = [];
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const item = pick();
+    if (!owned.has(item.id)) { steps.push({ item, dup: false }); return { steps, final: item }; }
+    const retry = rng() < 0.5;
+    steps.push({ item, dup: true, retry });
+    if (!retry) return { steps, final: null };
+  }
+  return { steps, final: null };
+}
+
+// ── progress (messages sent + time online in this window), kept on this device ──
+const CRATE_KEY = "vus_crate_progress_v1";
+let crateProgAll = {};
+try { crateProgAll = JSON.parse(localStorage.getItem(CRATE_KEY) || "{}") || {}; } catch (e) { crateProgAll = {}; }
+let crateClaimedW = null, crateOwned = new Set(), crateWatchId = "", crateWatchRefs = [], crateNotifiedW = null, lastCrateMsgAt = 0, myCosm = {};
+function progFor() {
+  const w = crateWindow(srvNow());
+  let p = crateProgAll[myLoginId];
+  if (!p || p.w !== w) p = crateProgAll[myLoginId] = { w, ms: 0, msgs: 0 };
+  return p;
+}
+function saveProg() { try { localStorage.setItem(CRATE_KEY, JSON.stringify(crateProgAll)); } catch (e) {} }
+function crateCountMessage() {
+  if (!myLoginId) return;
+  const now = Date.now();
+  if (now - lastCrateMsgAt < 3000) return;          // a burst isn't several messages
+  lastCrateMsgAt = now;
+  progFor().msgs++; saveProg(); crateTick(true);
+}
+function crateReady() {
+  if (!myLoginId || crateClaimedW === undefined) return false;
+  const p = progFor();
+  return crateClaimedW !== crateWindow(srvNow()) && p.msgs >= CRATE_NEED_MSGS && p.ms >= CRATE_NEED_MS;
+}
+function ensureCrateWatch() {
+  if (!myLoginId || !ChatBackend._db || crateWatchId === myLoginId) return;
+  crateWatchRefs.forEach(r => { try { r.off(); } catch (e) {} });
+  crateWatchId = myLoginId; crateClaimedW = undefined; crateOwned = new Set(); myCosm = {};
+  const claim = ChatBackend._db.ref("crateClaims/" + myLoginId), inv = ChatBackend._db.ref("crateInv/" + myLoginId + "/items");
+  claim.on("value", s => { const v = s.val(); crateClaimedW = v && typeof v.w === "number" ? v.w : null; crateTick(true); }, () => { crateClaimedW = null; });
+  inv.on("value", s => { crateOwned = new Set(Object.keys(s.val() || {}).filter(k => itemOf(k))); if (crateModal) paintCrateModal(); });
+  crateWatchRefs = [claim, inv];
+  ChatBackend.getProfile(myLoginId).then(p => { myCosm = (p && p.cosm) || {}; });
+}
+function crateTick(noTime) {
+  if (!myLoginId) return;
+  ensureCrateWatch();
+  if (!noTime && myName && $chatScreen.style.display !== "none") { progFor().ms += 5000; saveProg(); }
+  const ready = crateReady();
+  const dot = document.getElementById("crateRailDot"); if (dot) dot.classList.toggle("show", ready);
+  const w = crateWindow(srvNow());
+  if (ready && crateNotifiedW !== w) {
+    crateNotifiedW = w;
+    showGlobalPopup({ kind: "crate", title: "📦 Your crate is ready!", body: "Open it from the crate button on the left.", buttonLabel: "Open crates", onButton: () => openCrateModal(), autoCloseMs: 12000 });
+  }
+  if (crateModal) paintCrateModal();
+}
+setInterval(() => crateTick(false), 5000);
+
+// ── look of items ──
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+function tagEl(id) { const it = itemOf(id, "tag"); if (!it) return null; return el("span", "msg-tag tg-" + it.id + " r-" + it.rar, it.name); }
+function applyRingTo(node, ringHex, rfx) {
+  const it = itemOf(rfx, "ring");
+  if (/^#[0-9a-fA-F]{6}$/.test(String(ringHex || ""))) { node.classList.add("has-ring"); node.style.setProperty("--ring", ringHex); }
+  if (it && !it.color) { node.classList.add("has-ring", "rfx", "rfx-" + it.id); }
+}
+function itemPreview(item) {
+  if (item.type === "ring") { const a = el("div", "cr-av", (myName || "?").slice(0, 1).toUpperCase()); applyRingTo(a, item.color, item.color ? "" : item.id); return a; }
+  if (item.type === "tag") return tagEl(item.id);
+  const s = el("span", "fxtext fxt-" + item.id, "Hello there!"); return s;
+}
+// A text effect wraps the message text in its own span, so the bubble keeps its colour behind it.
+function wrapFx(bubble) {
+  const id = bubble.dataset.fx; if (!itemOf(id, "fx")) return;
+  const span = el("span", "fxtext fxt-" + id);
+  while (bubble.firstChild) span.appendChild(bubble.firstChild);
+  bubble.appendChild(span);
+}
+
+// ── the crate window ──
+let crateModal = null, crateView = "open", crateBusy = false, crateReveal = null, collectionType = "ring";
+function openCrateModal() {
+  if (!myLoginId) return;
+  if (crateModal) return;
+  ensureCrateWatch();
+  const ov = el("div", "crate-overlay");
+  const box = el("div", "crate-modal");
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+  crateModal = ov; crateView = "open"; crateReveal = null;
+  ov.addEventListener("click", e => { if (e.target === ov && !crateBusy) closeCrateModal(); });
+  paintCrateModal();
+}
+function closeCrateModal() { if (crateModal) { crateModal.remove(); crateModal = null; } }
+function fmtLeft(ms) { const s = Math.max(0, Math.ceil(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h ? h + "h " + m + "m" : m + "m " + (s % 60) + "s"; }
+function paintCrateModal() {
+  if (!crateModal) return;
+  const box = crateModal.querySelector(".crate-modal");
+  box.replaceChildren();
+  const x = el("button", "poll-x", "×"); x.type = "button"; x.addEventListener("click", () => { if (!crateBusy) closeCrateModal(); });
+  box.appendChild(x);
+  const tabs = el("div", "cr-tabs");
+  [["open", "📦 Crates"], ["collection", "🎨 Collection"]].forEach(([k, t]) => {
+    const b = el("button", "cr-tab" + (crateView === k ? " on" : ""), t); b.type = "button";
+    b.addEventListener("click", () => { if (crateBusy) return; crateView = k; crateReveal = null; paintCrateModal(); });
+    tabs.appendChild(b);
+  });
+  box.appendChild(tabs);
+  if (crateView === "collection") paintCollection(box); else paintOpen(box);
+}
+function paintOpen(box) {
+  if (crateReveal) { box.appendChild(crateReveal); return; }
+  const p = progFor(), w = crateWindow(srvNow()), claimed = crateClaimedW === w, ready = crateReady();
+  box.appendChild(el("h3", "cr-h", claimed ? "You've opened this window's crate" : ready ? "Your crate is ready!" : "Earn your crate"));
+  const bar = (label, val, need, fmt) => {
+    const r = el("div", "cr-prog"); const t = el("div", "cr-prog-t", label + "  " + fmt(Math.min(val, need)) + " / " + fmt(need));
+    const b = el("div", "cr-bar"); const f = el("span"); f.style.width = Math.min(100, Math.round(val * 100 / need)) + "%"; b.appendChild(f); r.append(t, b); return r;
+  };
+  if (!claimed) {
+    box.appendChild(bar("Messages", p.msgs, CRATE_NEED_MSGS, v => String(v)));
+    box.appendChild(bar("Time online", p.ms, CRATE_NEED_MS, v => Math.floor(v / 60000) + ":" + String(Math.floor(v % 60000 / 1000)).padStart(2, "0")));
+  }
+  box.appendChild(el("div", "cr-note", "A new crate window starts in " + fmtLeft(crateWindowEnd(w) - srvNow()) + " (every 12 hours, at noon and midnight US Eastern — an hour earlier in winter)."));
+  const grid = el("div", "cr-types");
+  CRATE_TYPES.forEach(t => {
+    const b = el("button", "cr-type"); b.type = "button"; b.disabled = !ready || crateBusy;
+    b.append(el("span", "cr-type-ic", t.icon), el("b", "", t.label), el("small", "", t.blurb));
+    b.addEventListener("click", () => openCrate(t.id));
+    grid.appendChild(b);
+  });
+  box.appendChild(grid);
+  box.appendChild(el("div", "cr-odds", "Odds: Common " + RARITY.common.weight + "% · Rare " + RARITY.rare.weight + "% · Epic " + RARITY.epic.weight + "% · Legendary " + RARITY.legendary.weight + "%. Landing on something you own: 50% another try, 50% nothing."));
+}
+function revealCard(item, heading, sub) {
+  const c = el("div", "cr-reveal-card r-" + item.rar);
+  c.append(el("div", "cr-reveal-h", heading), itemPreview(item), el("b", "", item.name), el("div", "cr-rar", RARITY[item.rar].label + " " + ({ ring: "ring", tag: "tag", fx: "text effect" })[item.type]));
+  if (sub) c.appendChild(el("div", "cr-note", sub));
+  return c;
+}
+async function openCrate(type) {
+  if (crateBusy || !crateReady()) return;
+  crateBusy = true;
+  const w = crateWindow(srvNow());
+  try {
+    await ChatBackend._db.ref("crateClaims/" + myLoginId).set({ w, ts: firebase.database.ServerValue.TIMESTAMP });
+  } catch (e) {
+    crateBusy = false;
+    showComposerNotice(isPermissionDenied(e) ? "Crates need the updated database rules (crateClaims). Publish the new chat rules." : "Couldn't open the crate — check your connection.");
+    return;
+  }
+  crateClaimedW = w;
+  const res = rollCrate(type, w, crateOwned);
+  const shake = el("div", "cr-shake"); shake.append(el("div", "cr-box", "📦"), el("div", "cr-note", "Opening…"));
+  crateReveal = shake; paintCrateModal();
+  await annSleep(1500);
+  for (const st of res.steps) {
+    if (st.dup) {
+      const holder = el("div", "cr-shake"); holder.appendChild(revealCard(st.item, "Duplicate!", st.retry ? "You already own this — trying again…" : "You already own this — nothing this time."));
+      crateReveal = holder; paintCrateModal(); await annSleep(1700);
+    }
+  }
+  let wrote = true;
+  if (res.final) {
+    wrote = false;
+    for (let i = 0; i < 3 && !wrote; i++) {
+      try { await ChatBackend._db.ref("crateInv/" + myLoginId + "/items/" + res.final.id).set(firebase.database.ServerValue.TIMESTAMP); wrote = true; } catch (e) { await annSleep(600); }
+    }
+  }
+  const done = el("div", "cr-shake");
+  if (res.final && wrote) {
+    done.appendChild(revealCard(res.final, "You got", "Open the Collection tab to equip it."));
+  } else if (res.final) {
+    done.appendChild(el("div", "cr-note", "You got " + res.final.name + " but it couldn't be saved. Check your connection; the crate is used up for this window."));
+  } else done.appendChild(el("div", "cr-note", "No new item this time. Come back next window!"));
+  const again = el("button", "pm-go", "Nice"); again.type = "button"; again.addEventListener("click", () => { crateReveal = null; paintCrateModal(); });
+  done.appendChild(again);
+  crateReveal = done; crateBusy = false;
+  crateTick(true);
+}
+function paintCollection(box) {
+  const tabs = el("div", "cr-subtabs");
+  [["ring", "Rings"], ["tag", "Tags"], ["fx", "Text effects"]].forEach(([k, t]) => {
+    const own = CRATE_ITEMS.filter(i => i.type === k && crateOwned.has(i.id)).length, all = CRATE_ITEMS.filter(i => i.type === k).length;
+    const b = el("button", "cr-subtab" + (collectionType === k ? " on" : ""), t + " " + own + "/" + all); b.type = "button";
+    b.addEventListener("click", () => { collectionType = k; paintCrateModal(); });
+    tabs.appendChild(b);
+  });
+  box.appendChild(tabs);
+  const grid = el("div", "cr-grid");
+  const order = { legendary: 0, epic: 1, rare: 2, common: 3 };
+  CRATE_ITEMS.filter(i => i.type === collectionType).sort((a, b) => order[a.rar] - order[b.rar]).forEach(it => {
+    const own = crateOwned.has(it.id), on = myCosm && myCosm[it.type] === it.id;
+    const c = el("button", "cr-item r-" + it.rar + (own ? "" : " locked") + (on ? " equipped" : "")); c.type = "button";
+    c.append(own ? itemPreview(it) : el("div", "cr-q", "?"), el("b", "", own ? it.name : "???"), el("small", "", RARITY[it.rar].label + (on ? " · equipped" : "")));
+    if (own) c.addEventListener("click", () => equipItem(it, !on));
+    grid.appendChild(c);
+  });
+  box.appendChild(grid);
+  box.appendChild(el("div", "cr-note", "Click an item you own to equip it (click again to take it off). Everyone sees what you equip."));
+}
+async function equipItem(it, on) {
+  const next = Object.assign({}, myCosm);
+  if (on) next[it.type] = it.id; else delete next[it.type];
+  try {
+    await ChatBackend.updateProfile(myLoginId, { cosm: Object.keys(next).length ? next : null });
+    myCosm = next; paintCrateModal();
+  } catch (e) { showComposerNotice(isPermissionDenied(e) ? "Equipping needs the updated database rules." : "Couldn't equip that."); }
+}
+(function wireCrateRail() {
+  const b = document.getElementById("navCrate");
+  if (b) b.addEventListener("click", () => { if (crateModal) closeCrateModal(); else openCrateModal(); });
+})();
+
+/* ══════════ Menus close with a double click outside (one stray click on the edge doesn't close them) ══════════ */
+(function doubleClickOutside() {
+  const SEL = ".chat-modal-overlay, .poll-overlay, .crate-overlay, #settingsOverlay, #modalOverlay";
+  let last = { el: null, t: 0 }, hint = null, hintTimer = null;
+  document.addEventListener("click", e => {
+    const t = e.target;
+    if (!(t instanceof Element) || !t.matches(SEL)) return;
+    const now = Date.now();
+    if (last.el === t && now - last.t < 800) { last = { el: null, t: 0 }; return; }   // second click: let it close
+    last = { el: t, t: now };
+    e.stopImmediatePropagation(); e.preventDefault();
+    if (!hint) { hint = el("div", "dbl-hint", "Click outside again to close"); document.body.appendChild(hint); }
+    hint.classList.add("show"); clearTimeout(hintTimer); hintTimer = setTimeout(() => hint.classList.remove("show"), 1100);
+  }, true);
+})();
+
 /* ══════════ Update check: Chat-DM/version on GitHub ══════════
    Fetched when the chat opens and every 5 minutes. The first answer is "the version I'm running"; if it later
    changes, a pop-up says to reopen the page. The Check button in Settings does the same on demand (5 s wait). */
@@ -8556,6 +8883,9 @@ window.VUS_CHAT = {
   getPrefsState, restorePrefsState,
   _idleFor(ms) { lastActivityAt = Date.now() - ms; afkCheck(false); },
   _annHash: annHash,
+  _crateProg(m, ms) { const p = progFor(); p.msgs = m; p.ms = ms; saveProg(); crateTick(true); },
+  cosmFor: async id => { try { const p = await ChatBackend.getProfile(id); const c = cosmFields(p && p.cosm); if (!c.ring && p && p.color && p.color.ring) c.ring = p.color.ring; return c; } catch (e) { return {}; } },
+  tagEl, applyRingTo,
   staffActionsFor, runStaffAction, roleActionsFor, runRoleAction,
   ringFor: async id => { try { const col = await ChatBackend.getNameColor(id); return (col && col.ring) || ""; } catch (e) { return ""; } }, timeoutLimitsForRank, banLimitsForRank,
   isMuted, toggleMute,

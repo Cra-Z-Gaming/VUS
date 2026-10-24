@@ -3496,7 +3496,7 @@ function fillRoles(container, loginId) {
 
 function resetProfileCard() {
   $chatUserProfileName.textContent = "Loading…";
-  $chatUserProfileAvatar.classList.remove("has-ring"); $chatUserProfileAvatar.style.removeProperty("--ring");
+  $chatUserProfileAvatar.classList.remove("has-ring"); $chatUserProfileAvatar.style.removeProperty("--ring"); [...$chatUserProfileAvatar.classList].filter(c => c.startsWith("rfx")).forEach(c => $chatUserProfileAvatar.classList.remove(c));
   profileGoneToken++; $chatUserProfileFullBtn.style.display = ""; setProfileFull(false);
   $chatUserProfileId.textContent = "";
   $chatUserProfileStatus.textContent = "";
@@ -3563,8 +3563,10 @@ function fillProfileCard(prof, accountKey) {
   $chatUserProfileName.textContent = prof.username;
   $chatUserProfileId.textContent = "#" + prof.id;
   renderAvatarInto($chatUserProfileAvatar, prof.username, prof.avatar);
-  if (window.VUS_CHAT && window.VUS_CHAT.ringFor) window.VUS_CHAT.ringFor(prof.id).then(r => {
-    if (/^#[0-9a-fA-F]{6}$/.test(r) && $chatUserProfileName.textContent === prof.username) { $chatUserProfileAvatar.classList.add("has-ring"); $chatUserProfileAvatar.style.setProperty("--ring", r); }
+  if (window.VUS_CHAT && window.VUS_CHAT.cosmFor) window.VUS_CHAT.cosmFor(prof.id).then(c => {
+    if ($chatUserProfileName.textContent !== prof.username) return;
+    window.VUS_CHAT.applyRingTo($chatUserProfileAvatar, c.ring, c.rfx);
+    if (c.tag) { const te = window.VUS_CHAT.tagEl(c.tag); if (te) $chatUserProfileRoles.appendChild(te); }
   });
   fillRoles($chatUserProfileRoles, prof.id);
   isVerifiedLoginId(prof.id).then(v => {
