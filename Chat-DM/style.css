@@ -2338,3 +2338,5 @@ body.hide-verified .verified-tag { display: none !important; }
 .pm-row { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
 .pm-go { background: #2563eb; color: #fff; border: 0; border-radius: 10px; padding: 9px 18px; font-weight: 600; cursor: pointer; }
 .pm-err { color: #f87171; font-size: .85rem; min-height: 1em; margin-top: 8px; }
+
+.pc-seen.on { color: #4ade80; }

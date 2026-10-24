@@ -238,6 +238,7 @@ function setDmAfk(v) {
   try { (v ? myPresenceRef.child("afk").set(true) : myPresenceRef.child("afk").remove()).catch(() => {}); } catch (e) {}
 }
 function releasePresence() {
+  if (myPresenceRef && currentSession) recordLastSeen(currentSession.accountKey);
   if (myPresenceRef) {
     myPresenceRef.onDisconnect().cancel();
     myPresenceRef.remove();
@@ -1143,6 +1144,16 @@ function formatDateSeparator(ts) {
   if (isToday) return "Today";
   if (isYesterday) return "Yesterday";
   return d.toLocaleDateString([], { month: "short", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
+}
+function ago(ts) {
+  const mins = Math.floor((Date.now() - ts) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return mins + (mins === 1 ? " minute ago" : " minutes ago");
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + (hrs === 1 ? " hour ago" : " hours ago");
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return days + (days === 1 ? " day ago" : " days ago");
+  return new Date(ts).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
 function formatLastSeen(ts) {
   if (!ts) return "Offline";
@@ -3418,6 +3429,7 @@ function init() {
   }
 
   watchPresenceList(renderOnlineList);
+  setInterval(() => { if (currentSession && myPresenceRef) recordLastSeen(currentSession.accountKey); }, 4 * 60 * 1000);
 
   window.addEventListener("beforeunload", () => {
     releasePresence();
@@ -3495,7 +3507,7 @@ function resetProfileCard() {
   { const sb = document.getElementById("chatUserProfileStaff"); if (sb) { sb.replaceChildren(); sb.style.display = "none"; } }
   $chatUserProfileRoles.replaceChildren();
   $chatUserProfileBioWrap.style.display = "none";
-  { const j = document.getElementById("chatUserProfileJoined"); if (j) { j.textContent = ""; j.style.display = "none"; } }
+  { const j = document.getElementById("chatUserProfileJoined"); if (j) { j.textContent = ""; j.style.display = "none"; } const sn = document.getElementById("chatUserProfileSeen"); if (sn) { sn.textContent = ""; sn.style.display = "none"; } }
   stopProfileSong();
   $chatUserProfileSong.replaceChildren(); $chatUserProfileSong.style.display = "none";
   $chatUserProfileAvatar.replaceChildren();
@@ -3564,6 +3576,26 @@ function fillProfileCard(prof, accountKey) {
     if (j && Number(prof.createdAt) > 86400000) {
       j.textContent = "Joined: " + new Date(Number(prof.createdAt)).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
       j.style.display = "block";
+    }
+  }
+  { // Last seen: "Online now" while their account is on the online list, otherwise when they were last around.
+    const sn = document.getElementById("chatUserProfileSeen");
+    if (sn) {
+      const key = accountKey;
+      const paint = () => {
+        const on = latestPresenceAccountKeys.has(key);
+        const ts = Number(prof.lastSeen) || 0;
+        let txt = "";
+        if (on) txt = latestAfkKeys.has(key) ? "Last seen: online now (away)" : "Last seen: online now";
+        else if (ts > 86400000) txt = "Last seen: " + ago(ts);
+        else txt = "Last seen: a long time ago";
+        sn.textContent = txt;
+        sn.title = ts > 86400000 ? new Date(ts).toLocaleString() : "";
+        sn.classList.toggle("on", on);
+        sn.style.display = "block";
+      };
+      paint();
+      usersRef.child(key).child("lastSeen").get().then(snap => { if (snap.exists()) { prof.lastSeen = snap.val(); if ($chatUserProfileName.textContent === prof.username) paint(); } }).catch(() => {});
     }
   }
   if (prof.bio) { $chatUserProfileBio.textContent = prof.bio; $chatUserProfileBioWrap.style.display = "block"; }

@@ -2582,31 +2582,56 @@ function trackNewAccountBurst(msg) {
   });
 }
 
+let sysShownAt = [];
 function renderMessage(msg) {
   $emptyState.style.display = "none";
 
   if (msg.system) {
+    const text = String(msg.text || "");
+    const isJoinLeave = text.length <= 400 && (Array.isArray(msg.leftNames) || /^.{1,60} joined$/.test(text) || / left$/.test(text));
+    // Anything that isn't a plain "X joined" / "X left" line is not a real system notice: a hacked client can write
+    // any text it likes there, so it isn't shown.
+    if (!isJoinLeave) return;
+    const live = Number(msg.ts) >= liveSince;
+    // "X left" about ME only counts when my entry in the online list really is gone (a forged line can't kick me out).
+    const leftIsMe = Array.isArray(msg.leftNames)
+      ? msg.leftNames.some(n => ChatBackend._safeKey(n) === ChatBackend._safeKey(myName))
+      : text === myName + " left";
+    if (myName && leftIsMe && live && $chatScreen.style.display !== "none") {
+      const roomAtSend = ChatBackend.currentRoomId;
+      try {
+        ChatBackend._presenceRef.child(ChatBackend._safeKey(myName)).get().then(snap => {
+          if (!snap.exists() && ChatBackend.currentRoomId === roomAtSend && myName && $chatScreen.style.display !== "none") forceReturnToJoinScreen("You were disconnected from the chat.");
+        }).catch(() => {});
+      } catch (e) {}
+    }
+    // Same line again within the last 5 messages: count it ("X joined x2" ... "x9+") instead of adding another one.
+    const lastFive = [...$messages.children].filter(c => c.classList && c.classList.contains("msg")).slice(-5);
+    const dup = lastFive.reverse().find(c => c.dataset.sysKey === text);
+    if (dup) {
+      const n = (Number(dup.dataset.sysN) || 1) + 1;
+      dup.dataset.sysN = String(n);
+      const b = dup.querySelector(".msg-bubble");
+      if (b) b.textContent = text + " x" + (n >= 9 ? "9+" : n);
+      return;
+    }
+    // Flood cap: at most 8 join/leave lines per 10 seconds, however many different names a script invents.
+    if (live) {
+      const nowT = Date.now();
+      sysShownAt = sysShownAt.filter(t => nowT - t < 10000);
+      if (sysShownAt.length >= 8) return;
+      sysShownAt.push(nowT);
+    }
     const sysEl = document.createElement("div");
-    sysEl.className = "msg system" + ((Array.isArray(msg.leftNames) || /^.{1,60} joined$/.test(String(msg.text || "")) || / left$/.test(String(msg.text || ""))) ? " sys-joinleave" : "");
+    sysEl.className = "msg system sys-joinleave";
+    sysEl.dataset.sysKey = text;
     const sysBubble = document.createElement("div");
     sysBubble.className = "msg-bubble";
-    sysBubble.textContent = msg.text;
+    sysBubble.textContent = text;
     sysEl.appendChild(sysBubble);
     $messages.appendChild(sysEl);
     messageCount++;
     if (autoScroll && stickToBottom) scrollToBottom();
-
-    // If the chat just posted a "left" message for the name THIS tab is
-    // currently using, our presence is already gone server-side (someone/
-    // something else triggered it — a stray duplicate session, a kick,
-    // etc). Don't let this tab keep acting like it's still joined — drop
-    // it back to "Continue as X?" so rejoining is deliberate.
-    const leftIsMe = Array.isArray(msg.leftNames)
-      ? msg.leftNames.some(n => ChatBackend._safeKey(n) === ChatBackend._safeKey(myName))
-      : msg.text === myName + " left";
-    if (myName && leftIsMe && $chatScreen.style.display !== "none") {
-      forceReturnToJoinScreen("You were disconnected from the chat.");
-    }
     return;
   }
 
