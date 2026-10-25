@@ -1,6 +1,6 @@
 {
-"updated":"October 25, 2026 - 12:00 PM",
-"message":"added seasonal case to chat, i fxxcked the database, i will check for backups tommorow, sorry",
+"updated":"October 25, 2026 - 7:20 PM",
+"message":"added ai to main chat, ill consider making a seperate section for it",
 "apps":[
 {"name":"VUS-OS","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS-OS/refs/heads/main/index.html","desc":"Desktop version of VUS Hub","icon":"OS","color":"white"},
 {"name":"VUS Launcher","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL","desc":"Main game hub — V17.4","icon":"🎮","color":"green"},
