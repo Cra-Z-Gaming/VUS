@@ -8512,9 +8512,9 @@ function crateWindow(now) { return Math.floor((now - CRATE_OFFSET_MS) / CRATE_WI
 function crateWindowEnd(w) { return (w + 1) * CRATE_WINDOW_MS + CRATE_OFFSET_MS; }
 function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 function seedOf(str) { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h; }
-// The same account, window and crate type always give the same rolls, so reloading the page can't re-roll.
 function rollCrate(type, w, owned) {
-  const rng = mulberry32(seedOf(myLoginId + ":" + w + ":" + type));
+  // genuinely random (the browser's secure generator), not a seeded sequence
+  const rng = () => { const u = new Uint32Array(1); crypto.getRandomValues(u); return u[0] / 4294967296; };
   const pool = cratePool(type);
   const pick = () => {
     let r = rng() * 100, rar = "legendary", acc = 0;
@@ -8748,7 +8748,8 @@ function buildWheel(type) {
   }
   const pointer = el("div", "cr-pointer"), hub = el("div", "cr-hub", "🎁");
   wrap.append(cv, pointer, hub);
-  let rot = 0;
+  let rot = Math.random() * 360;   // the wheel starts at a random angle
+  cv.style.transform = "rotate(" + rot + "deg)";
   const spinTo = (item, ms) => {
     const sl = slices.find(x => x.it.id === item.id) || slices[0];
     const target = sl.a0 + sl.w * (0.15 + Math.random() * 0.7);   // anywhere inside its slice
