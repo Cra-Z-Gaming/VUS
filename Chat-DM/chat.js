@@ -8418,7 +8418,7 @@ const CRATE_ITEMS = [
   { id: "tag-lucky",     type: "tag", rar: "rare", name: "Lucky" },
   { id: "tag-gremlin", type: "tag", rar: "epic", name: "Gremlin" },
   { id: "tag-menace",  type: "tag", rar: "epic", name: "Menace" },
-  { id: "tag-typhoon", type: "tag", rar: "epic", name: "Typhoon" },
+  { id: "tag-typhoon", type: "tag", rar: "legendary", name: "Typhoon" },
   { id: "tag-legend",  type: "tag", rar: "legendary", name: "Legend" },
   { id: "tag-goat",    type: "tag", rar: "legendary", name: "G.O.A.T." },
   // text effects (CSS class fxt-<id>)
