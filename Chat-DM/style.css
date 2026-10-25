@@ -2479,3 +2479,10 @@ body.hide-verified .verified-tag { display: none !important; }
   .crate-modal { max-height: 60vh; }
   .cr-side { position: static; transform: none; width: min(560px, 100%); max-height: 26vh; }
 }
+
+/* ── patch 33: wheel stays round, Typhoon tag ── */
+.cr-wheel-wrap { flex: none; width: min(250px, 70vw); height: min(250px, 70vw); aspect-ratio: auto; }
+.cr-wheel { display: block; width: 100%; height: 100%; flex: none; }
+.msg-tag.tg-tag-typhoon { text-transform: uppercase; letter-spacing: 1px; font-weight: 900; background: linear-gradient(90deg,#8b0000,#ff2020,#b8860b,#ffd700,#fff0a0,#ffd700,#b8860b,#ff2020,#8b0000); background-size: 300% 100%; color: transparent; -webkit-text-fill-color: transparent; -webkit-background-clip: text; background-clip: text; border-color: #b8860b; animation: typhoonFlow 5s linear infinite, typhoonGlow 2s ease-in-out infinite alternate; }
+@keyframes typhoonFlow { from { background-position: 0% 50%; } to { background-position: 300% 50%; } }
+@keyframes typhoonGlow { from { filter: drop-shadow(0 0 2px #ff2020) drop-shadow(0 0 4px #8b0000); } to { filter: drop-shadow(0 0 5px #ffd700) drop-shadow(0 0 10px #b8860b); } }
