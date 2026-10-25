@@ -1,0 +1,7 @@
+Add games below as [Title](raw github link). Any number per line, any spacing. Lines that are not in that format are ignored, and so are links that don't start with https://
+
+[Blackjack](https://raw.githubusercontent.com/Cra-Z-Gaming/VUSL/refs/heads/main/HTML_Games/Blackjack.html) [OVO](https://raw.githubusercontent.com/Cra-Z-Gaming/VUSL/refs/heads/main/HTML_Games/ovo.html)
+
+[Title](Link) [Title](Link) [Title](Link) [Title](Link) [Title](Link) [Title](Link)
+[Title](Link) [Title](Link) [Title](Link) [Title](Link) [Title](Link) [Title](Link)
+[Title](Link) [Title](Link) [Title](Link) [Title](Link) [Title](Link) [Title](Link)

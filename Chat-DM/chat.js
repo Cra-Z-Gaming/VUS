@@ -22,9 +22,9 @@ const FIREBASE_APP_NAME = "vusChat";
 let dmAuthDb = null; // accounts database (vus-dm), shared with dm.js
 
 const MAIN_ROOM_ID = "vus-hub-main";
-const VIDEO_MAX_SECONDS = 60;
-const VIDEO_MAX_BYTES = 24 * 1024 * 1024;        // the chat database caps what one clip can be
-const VIDEO_TTL_MS = 5 * 60 * 1000;               // a clip disappears 5 minutes after it is posted
+const VIDEO_MAX_SECONDS = 180;
+const VIDEO_MAX_BYTES = 48 * 1024 * 1024;        // the chat database caps what one clip can be
+const VIDEO_TTL_MS = 4 * 60 * 1000;               // a clip disappears 4 minutes after it is posted
 const VIDEO_UPLOAD_WINDOW_MS = 15 * 60 * 1000;
 const VIDEO_CHUNK_BYTES = 786432;                 // 768 KB -> 1 MB of base64 per database value
 const localVideoUrls = new Map();                 // clip id -> blob URL (the sender's own copy, or one already loaded)
@@ -4142,7 +4142,7 @@ function probeVideo(file) {
 }
 async function stageVideoFile(file) {
   const note = (m) => { $connError.textContent = m; $connError.style.display = "block"; };
-  if (file.size > VIDEO_MAX_BYTES) { note("That video is " + fmtBytes(file.size) + ". The chat can hold clips up to " + fmtBytes(VIDEO_MAX_BYTES) + " (about 1 minute of normal-quality video)."); return; }
+  if (file.size > VIDEO_MAX_BYTES) { note("That video is " + fmtBytes(file.size) + ". The chat can hold clips up to " + fmtBytes(VIDEO_MAX_BYTES) + " (about 3 minutes of lower-quality video)."); return; }
   $uploadImageBtn.disabled = true; $uploadImageBtn.textContent = "Checking…";
   try {
     const info = await probeVideo(file);
@@ -4150,7 +4150,7 @@ async function stageVideoFile(file) {
     pendingImageDataUrl = null;
     pendingVideo = { file, dur: info.dur };
     $pendingImagePreview.src = info.poster || "";
-    document.getElementById("chatPendingLabel").textContent = "Video ready (" + Math.round(info.dur) + "s, " + fmtBytes(file.size) + ") — click Send. It disappears 5 minutes after posting.";
+    document.getElementById("chatPendingLabel").textContent = "Video ready (" + Math.round(info.dur) + "s, " + fmtBytes(file.size) + ") — click Send. It disappears 4 minutes after posting.";
     $pendingImageBar.style.display = "flex";
   } catch (e) { note("Couldn't read that video — try an MP4 or WebM."); }
   finally { $uploadImageBtn.disabled = false; $uploadImageBtn.textContent = "\uD83D\uDCCE Image / video"; $imageFileInput.value = ""; }
@@ -7986,7 +7986,7 @@ function init() {
 }
 
 /* Lets dm.js (profile cards) ask which ranks an account holds. */
-/* ══════════ Video clips: click to load, gone 5 minutes after posting ══════════ */
+/* ══════════ Video clips: click to load, gone 4 minutes after posting ══════════ */
 const VIDEO_AUTO_SECONDS = 5;   // clips this short load by themselves; longer ones wait for a click (unless auto-download is on)
 const mediaExp = {};            // clip id -> expiry (ms), from rooms/<room>/mediaMeta
 const mediaJitter = {};         // so every browser doesn't try the cleanup in the same instant
@@ -8505,7 +8505,7 @@ function ensureCrateWatch() {
   crateWatchId = myLoginId; crateClaimedW = undefined; crateOwned = new Set(); myCosm = {};
   const claim = ChatBackend._db.ref("crateClaims/" + myLoginId), inv = ChatBackend._db.ref("crateInv/" + myLoginId + "/items");
   claim.on("value", s => { const v = s.val(); crateClaimedW = v && typeof v.w === "number" ? v.w : null; crateTick(true); }, () => { crateClaimedW = null; });
-  inv.on("value", s => { crateOwned = new Set(Object.keys(s.val() || {}).filter(k => itemOf(k))); if (crateModal) paintCrateModal(); });
+  inv.on("value", s => { crateOwned = new Set(Object.keys(s.val() || {}).filter(k => itemOf(k))); if (crateModal && !crateBusy) paintCrateModal(); });
   crateWatchRefs = [claim, inv];
   ChatBackend.getProfile(myLoginId).then(p => { myCosm = (p && p.cosm) || {}; });
 }
@@ -8520,7 +8520,7 @@ function crateTick(noTime) {
     crateNotifiedW = w;
     showGlobalPopup({ kind: "crate", title: "📦 Your crate is ready!", body: "Open it from the crate button on the left.", buttonLabel: "Open crates", onButton: () => openCrateModal(), autoCloseMs: 12000 });
   }
-  if (crateModal) paintCrateModal();
+  if (crateModal && !crateBusy) paintCrateModal();
 }
 setInterval(() => crateTick(false), 5000);
 
@@ -8540,9 +8540,21 @@ function itemPreview(item) {
 // A text effect wraps the message text in its own span, so the bubble keeps its colour behind it.
 function wrapFx(bubble) {
   const id = bubble.dataset.fx; if (!itemOf(id, "fx")) return;
-  const span = el("span", "fxtext fxt-" + id);
-  while (bubble.firstChild) span.appendChild(bubble.firstChild);
-  bubble.appendChild(span);
+  // Colour emoji can't be drawn through a clipped gradient (they turn into a flat blob), so emoji are
+  // left outside the effect and only the words around them get it.
+  const EMO = /((?:\p{Extended_Pictographic}|\p{Regional_Indicator}|[‍️⃣])+)/u;
+  const nodes = [...bubble.childNodes];
+  bubble.replaceChildren();
+  let cur = null;
+  const addFx = n => { if (!cur) { cur = el("span", "fxtext fxt-" + id); bubble.appendChild(cur); } cur.appendChild(n); };
+  nodes.forEach(n => {
+    if (n.nodeType !== 3) { addFx(n); return; }
+    String(n.nodeValue).split(EMO).forEach((part, i) => {
+      if (!part) return;
+      if (i % 2 === 1) { cur = null; bubble.appendChild(el("span", "fxemoji", part)); }
+      else addFx(document.createTextNode(part));
+    });
+  });
 }
 
 // ── the crate window ──
@@ -8575,6 +8587,8 @@ function paintCrateModal() {
   });
   box.appendChild(tabs);
   if (crateView === "collection") paintCollection(box); else paintOpen(box);
+  crateModal.querySelectorAll(".cr-side").forEach(n => n.remove());
+  if (crateView === "open") crateModal.appendChild(buildOddsBar(crateBarType));
 }
 function paintOpen(box) {
   if (crateReveal) { box.appendChild(crateReveal); return; }
@@ -8594,10 +8608,89 @@ function paintOpen(box) {
     const b = el("button", "cr-type"); b.type = "button"; b.disabled = !ready || crateBusy;
     b.append(el("span", "cr-type-ic", t.icon), el("b", "", t.label), el("small", "", t.blurb));
     b.addEventListener("click", () => openCrate(t.id));
+    b.addEventListener("mouseenter", () => { if (crateBusy || crateBarType === t.id) return; crateBarType = t.id; const old = crateModal && crateModal.querySelector(".cr-side"); if (old) old.replaceWith(buildOddsBar(t.id)); });
     grid.appendChild(b);
   });
   box.appendChild(grid);
-  box.appendChild(el("div", "cr-odds", "Odds: Common " + RARITY.common.weight + "% · Rare " + RARITY.rare.weight + "% · Epic " + RARITY.epic.weight + "% · Legendary " + RARITY.legendary.weight + "%. Landing on something you own: 50% another try, 50% nothing."));
+  box.appendChild(el("div", "cr-odds", "Rarity odds: Common " + RARITY.common.weight + "% · Rare " + RARITY.rare.weight + "% · Epic " + RARITY.epic.weight + "% · Legendary " + RARITY.legendary.weight + "%, split evenly between the items of that rarity. The wheel's slices are the real chances. Landing on something you own: 50% another spin, 50% nothing."));
+}
+
+// ── true odds: the weight of a rarity is split evenly between the items of that rarity in the crate ──
+function cratePool(type) { return CRATE_ITEMS.filter(i => type === "mixed" || i.type === type); }
+function crateChance(it, pool) { return RARITY[it.rar].weight / pool.filter(i => i.rar === it.rar).length; }
+// chance that opening this crate ends with something you don't own yet (up to 4 rolls, 50% retry on a duplicate)
+function crateNewChance(type) {
+  const pool = cratePool(type);
+  const p = pool.filter(i => !crateOwned.has(i.id)).reduce((a, i) => a + crateChance(i, pool), 0) / 100;
+  const r = 0.5 * (1 - p);
+  return p * (1 + r + r * r + r * r * r) * 100;
+}
+let crateBarType = "mixed", lastWheel = null;
+function fmtPct(v) { return (v >= 10 ? v.toFixed(1) : v.toFixed(2)).replace(/\.?0+$/, "") + "%"; }
+function buildOddsBar(type) {
+  const bar = el("div", "cr-side");
+  const pills = el("div", "cr-side-tabs");
+  CRATE_TYPES.forEach(t => {
+    const b = el("button", "cr-side-tab" + (t.id === type ? " on" : ""), t.id === "fx" ? "Text" : t.label.replace(" crate", "")); b.type = "button";
+    b.addEventListener("click", () => { if (crateBusy) return; crateBarType = t.id; const nb = buildOddsBar(t.id); bar.replaceWith(nb); });
+    pills.appendChild(b);
+  });
+  bar.append(el("div", "cr-side-h", "Chances"), pills);
+  const pool = cratePool(type), order = { legendary: 0, epic: 1, rare: 2, common: 3 };
+  const list = el("div", "cr-side-list");
+  pool.slice().sort((a, b) => order[a.rar] - order[b.rar]).forEach(it => {
+    const row = el("div", "cr-side-row r-" + it.rar + (crateOwned.has(it.id) ? " own" : ""));
+    row.append(el("i", "cr-dot"), el("span", "cr-side-n", it.name.replace(/ \(animated\)/, "")), el("b", "", fmtPct(crateChance(it, pool))));
+    row.title = RARITY[it.rar].label + (crateOwned.has(it.id) ? " · you own this" : "");
+    list.appendChild(row);
+  });
+  bar.appendChild(list);
+  bar.appendChild(el("div", "cr-side-foot", "Chance of a NEW item: " + fmtPct(crateNewChance(type)) + ". Landing on one you own is a 50% retry (up to 4 spins), else nothing."));
+  return bar;
+}
+// ── the wheel: every item gets a slice as wide as its real chance ──
+function buildWheel(type) {
+  const pool = cratePool(type), order = { common: 0, rare: 1, epic: 2, legendary: 3 };
+  // spread rarities around the circle so thin slices don't all sit together
+  const slices = []; let a0 = 0;
+  const byR = k => pool.filter(i => i.rar === k);
+  const seq = [];
+  const lists = ["common", "rare", "epic", "legendary"].map(byR);
+  const total = pool.length;
+  for (let k = 0; k < total; k++) {
+    // take from the list that is furthest behind its share
+    let best = -1, bestScore = -1;
+    lists.forEach((l, li) => { if (!l.length) return; const done = byR(["common", "rare", "epic", "legendary"][li]).length - l.length; const score = 1 - done / byR(["common", "rare", "epic", "legendary"][li]).length; if (score > bestScore) { bestScore = score; best = li; } });
+    seq.push(lists[best].shift());
+  }
+  seq.forEach(it => { const w = crateChance(it, pool) * 3.6; slices.push({ it, a0, w }); a0 += w; });
+  const SIZE = 300, dpr = Math.min(2, window.devicePixelRatio || 1);
+  const wrap = el("div", "cr-wheel-wrap");
+  const cv = document.createElement("canvas"); cv.className = "cr-wheel"; cv.width = SIZE * dpr; cv.height = SIZE * dpr;
+  const ctx = cv.getContext("2d");
+  if (ctx) {
+    ctx.scale(dpr, dpr);
+    const cx = SIZE / 2, cy = SIZE / 2, R = SIZE / 2 - 4;
+    slices.forEach((sl, i) => {
+      const s = (sl.a0 - 90) * Math.PI / 180, e = (sl.a0 + sl.w - 90) * Math.PI / 180;
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, s, e); ctx.closePath();
+      ctx.fillStyle = RARITY[sl.it.rar].color; ctx.globalAlpha = i % 2 ? 0.78 : 1; ctx.fill(); ctx.globalAlpha = 1;
+      ctx.lineWidth = 1.5; ctx.strokeStyle = "#0b1220"; ctx.stroke();
+    });
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.lineWidth = 4; ctx.strokeStyle = "#0b1220"; ctx.stroke();
+  }
+  const pointer = el("div", "cr-pointer"), hub = el("div", "cr-hub", "🎁");
+  wrap.append(cv, pointer, hub);
+  let rot = 0;
+  const spinTo = (item, ms) => {
+    const sl = slices.find(x => x.it.id === item.id) || slices[0];
+    const target = sl.a0 + sl.w * (0.15 + Math.random() * 0.7);   // anywhere inside its slice
+    const need = (((-target - rot) % 360) + 360) % 360;
+    rot += 360 * 5 + need;
+    cv.style.transition = "transform " + ms + "ms cubic-bezier(.12,.62,.08,1)";
+    cv.style.transform = "rotate(" + rot + "deg)";
+  };
+  return { wrap, spinTo, slices };
 }
 function revealCard(item, heading, sub) {
   const c = el("div", "cr-reveal-card r-" + item.rar);
@@ -8618,13 +8711,20 @@ async function openCrate(type) {
   }
   crateClaimedW = w;
   const res = rollCrate(type, w, crateOwned);
-  const shake = el("div", "cr-shake"); shake.append(el("div", "cr-box", "📦"), el("div", "cr-note", "Opening…"));
-  crateReveal = shake; paintCrateModal();
-  await annSleep(1500);
+  crateBarType = type;
+  const wheel = buildWheel(type); lastWheel = wheel;
+  const status = el("div", "cr-note", "Spinning…");
+  const spinBox = el("div", "cr-shake"); spinBox.append(wheel.wrap, status);
+  crateReveal = spinBox; paintCrateModal();
+  await annSleep(400);
+  const SPIN_MS = 4600;
   for (const st of res.steps) {
+    wheel.spinTo(st.item, SPIN_MS);
+    status.textContent = "Spinning…";
+    await annSleep(SPIN_MS + 250);
     if (st.dup) {
-      const holder = el("div", "cr-shake"); holder.appendChild(revealCard(st.item, "Duplicate!", st.retry ? "You already own this — trying again…" : "You already own this — nothing this time."));
-      crateReveal = holder; paintCrateModal(); await annSleep(1700);
+      status.replaceChildren(); status.append(el("b", "", "Duplicate: " + st.item.name + ". "), document.createTextNode(st.retry ? "You already own it — spinning again…" : "You already own it — nothing this time."));
+      await annSleep(1700);
     }
   }
   let wrote = true;
@@ -8635,6 +8735,7 @@ async function openCrate(type) {
     }
   }
   const done = el("div", "cr-shake");
+  done.appendChild(wheel.wrap);
   if (res.final && wrote) {
     done.appendChild(revealCard(res.final, "You got", "Open the Collection tab to equip it."));
   } else if (res.final) {
@@ -8693,6 +8794,165 @@ async function equipItem(it, on) {
     if (!hint) { hint = el("div", "dbl-hint", "Click outside again to close"); document.body.appendChild(hint); }
     hint.classList.add("show"); clearTimeout(hintTimer); hintTimer = setTimeout(() => hint.classList.remove("show"), 1100);
   }, true);
+})();
+
+/* ══════════ Games: a list on the rail, each game opens in its own pop-out window ══════════
+   The list comes from Chat-DM/games.txt on GitHub: any number of [Title](https://raw.githubusercontent.com/...) entries,
+   on one line or many. Entries whose link isn't http(s) (the placeholders) are ignored. If the file can't be
+   loaded the built-in list below is used. Games run inside a sandboxed frame with no access to this page. */
+const GAMES_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Chat-DM/games.txt";
+const DEFAULT_GAMES = [
+  { title: "Blackjack", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUSL/refs/heads/main/HTML_Games/Blackjack.html" },
+  { title: "OVO", url: "https://raw.githubusercontent.com/Cra-Z-Gaming/VUSL/refs/heads/main/HTML_Games/ovo.html" },
+];
+function parseGamesText(text) {
+  const out = [], seen = new Set();
+  const re = /\[([^\]\n]{1,60})\]\((https?:\/\/[^)\s]+)\)/g;
+  let m;
+  while ((m = re.exec(String(text || "")))) {
+    const title = m[1].trim(), url = m[2];
+    if (!title || seen.has(url)) continue;
+    seen.add(url); out.push({ title, url });
+  }
+  return out;
+}
+let gamesList = null, gamesLoading = null;
+function loadGames() {
+  if (gamesList) return Promise.resolve(gamesList);
+  if (gamesLoading) return gamesLoading;
+  gamesLoading = fetch(GAMES_URL + "?t=" + Math.floor(Date.now() / 60000), { cache: "no-store" })
+    .then(r => { if (!r.ok) throw new Error("http " + r.status); return r.text(); })
+    .then(t => { const g = parseGamesText(t); gamesList = g.length ? g : DEFAULT_GAMES; return gamesList; })
+    .catch(() => { gamesList = DEFAULT_GAMES; return gamesList; })
+    .finally(() => { gamesLoading = null; });
+  return gamesLoading;
+}
+const GAME_SHIM = '<script>(function(){function mk(){var d={};return{getItem:function(k){return k in d?d[k]:null},setItem:function(k,v){d[k]=String(v)},removeItem:function(k){delete d[k]},clear:function(){d={}},key:function(i){return Object.keys(d)[i]||null},get length(){return Object.keys(d).length}}}'
+  + 'try{window.localStorage.getItem("a")}catch(e){try{Object.defineProperty(window,"localStorage",{value:mk(),configurable:true})}catch(_){}try{Object.defineProperty(window,"sessionStorage",{value:mk(),configurable:true})}catch(_){}}})();<\/script>';
+function gameDoc(text) {
+  const t = String(text || "");
+  return /^\s*<!doctype[^>]*>/i.test(t) ? t.replace(/^(\s*<!doctype[^>]*>)/i, "$1" + GAME_SHIM) : GAME_SHIM + t;
+}
+const GAME_SANDBOX = "allow-scripts allow-pointer-lock allow-forms allow-modals allow-popups";
+const GAME_BAR_H = 36;
+const gameWins = new Map();   // url -> { win, ... }
+let gameZ = 9000;
+function openGameWindow(game) {
+  const have = gameWins.get(game.url);
+  if (have) { if (have.min) have.toggleMin(); have.front(); return have; }
+  const vw = () => window.innerWidth, vh = () => window.innerHeight;
+  const win = el("div", "game-win");
+  const bar = el("div", "game-bar");
+  const title = el("span", "game-title", game.title);
+  const mkBtn = (cls, label, txt) => { const b = el("button", "game-btn " + cls, txt); b.type = "button"; b.title = label; b.setAttribute("aria-label", label); return b; };
+  const bMin = mkBtn("g-min", "Minimize", "–"), bFull = mkBtn("g-full", "Fullscreen in this tab", "⤢"), bTab = mkBtn("g-tab", "Open in a new tab", "↗"), bClose = mkBtn("g-close", "Close", "✕");
+  bar.append(title, bMin, bFull, bTab, bClose);
+  const body = el("div", "game-body");
+  const status = el("div", "game-status", "Loading…");
+  const frame = document.createElement("iframe");
+  frame.className = "game-frame"; frame.setAttribute("sandbox", GAME_SANDBOX); frame.setAttribute("allow", "autoplay; fullscreen; gamepad");
+  frame.title = game.title;
+  body.append(frame, status);
+  const edges = ["e", "s", "se"].map(d => { const r = el("div", "game-rs game-rs-" + d); r.dataset.d = d; return r; });
+  win.append(bar, body, ...edges);
+  document.body.appendChild(win);
+  const w0 = Math.min(720, vw() - 20), h0 = Math.min(520, vh() - 20);
+  const n = gameWins.size;
+  const st = { win, game, min: false, full: false, x: Math.max(0, Math.min(vw() - w0, 90 + n * 28)), y: Math.max(0, Math.min(vh() - GAME_BAR_H - 2, 60 + n * 28)), w: w0, h: h0, html: "" };
+  const apply = () => {
+    win.classList.toggle("min", st.min); win.classList.toggle("full", st.full);
+    if (st.full) { win.style.cssText = "z-index:" + win.style.zIndex; return; }
+    // the top bar is never allowed off screen
+    st.w = Math.max(240, Math.min(st.w, vw())); st.h = Math.max(GAME_BAR_H + 120, Math.min(st.h, vh()));
+    st.x = Math.max(0, Math.min(st.x, vw() - st.w)); st.y = Math.max(0, Math.min(st.y, vh() - GAME_BAR_H - 2));
+    win.style.left = st.x + "px"; win.style.top = st.y + "px"; win.style.width = st.w + "px";
+    win.style.height = (st.min ? GAME_BAR_H : st.h) + "px";
+  };
+  st.front = () => { win.style.zIndex = String(++gameZ); };
+  st.toggleMin = () => { st.min = !st.min; apply(); };
+  st.close = () => { win.remove(); gameWins.delete(game.url); window.removeEventListener("resize", apply); };
+  st.front(); apply();
+  gameWins.set(game.url, st);
+  win.addEventListener("pointerdown", () => st.front(), true);
+  window.addEventListener("resize", apply);
+  bMin.addEventListener("click", st.toggleMin);
+  bFull.addEventListener("click", () => { st.full = !st.full; if (st.full) st.min = false; apply(); if (!st.full) apply(); });
+  bClose.addEventListener("click", st.close);
+  bTab.addEventListener("click", () => {
+    const t = window.open("about:blank", "_blank");
+    if (!t) { status.textContent = "Your browser blocked the new tab. Allow pop-ups for this site and try again."; status.style.display = ""; return; }
+    t.document.open();
+    t.document.write('<!doctype html><title>' + game.title.replace(/[<&]/g, "") + '</title><style>html,body{margin:0;height:100%;background:#000}iframe{border:0;width:100%;height:100%}</style><iframe id="g" sandbox="' + GAME_SANDBOX + '" allow="autoplay; fullscreen; gamepad"></iframe>');
+    t.document.close();
+    const f = t.document.getElementById("g");
+    if (f) f.srcdoc = st.html || "<p style=\"color:#fff;font:14px sans-serif\">Still loading — close this tab and try again in a moment.</p>";
+  });
+  // drag by the top bar
+  const shield = on => win.classList.toggle("dragging", on);
+  bar.addEventListener("pointerdown", e => {
+    if (e.target.closest(".game-btn") || st.full) return;
+    const sx = e.clientX, sy = e.clientY, ox = st.x, oy = st.y;
+    shield(true); try { bar.setPointerCapture(e.pointerId); } catch (_) {}
+    const mv = ev => { st.x = ox + ev.clientX - sx; st.y = oy + ev.clientY - sy; apply(); };
+    const up = () => { shield(false); bar.removeEventListener("pointermove", mv); bar.removeEventListener("pointerup", up); bar.removeEventListener("pointercancel", up); };
+    bar.addEventListener("pointermove", mv); bar.addEventListener("pointerup", up); bar.addEventListener("pointercancel", up);
+    e.preventDefault();
+  });
+  bar.addEventListener("dblclick", e => { if (!e.target.closest(".game-btn")) st.toggleMin(); });
+  // resize from the right edge, bottom edge or corner
+  edges.forEach(r => r.addEventListener("pointerdown", e => {
+    if (st.full || st.min) return;
+    const d = r.dataset.d, sx = e.clientX, sy = e.clientY, ow = st.w, oh = st.h;
+    shield(true); try { r.setPointerCapture(e.pointerId); } catch (_) {}
+    const mv = ev => { if (d.includes("e")) st.w = ow + ev.clientX - sx; if (d.includes("s")) st.h = oh + ev.clientY - sy; apply(); };
+    const up = () => { shield(false); r.removeEventListener("pointermove", mv); r.removeEventListener("pointerup", up); r.removeEventListener("pointercancel", up); };
+    r.addEventListener("pointermove", mv); r.addEventListener("pointerup", up); r.addEventListener("pointercancel", up);
+    e.preventDefault(); e.stopPropagation();
+  }));
+  fetch(game.url, { cache: "no-store" })
+    .then(r => { if (!r.ok) throw new Error("http " + r.status); return r.text(); })
+    .then(t => { st.html = gameDoc(t); frame.srcdoc = st.html; status.style.display = "none"; })
+    .catch(() => { status.textContent = "Couldn't load this game. Check the link in games.txt."; });
+  return st;
+}
+let gamesPop = null;
+function closeGamesPop() { if (gamesPop) { gamesPop.remove(); gamesPop = null; } const b = document.getElementById("navGames"); if (b) b.classList.remove("active"); }
+function openGamesPop() {
+  if (gamesPop) { closeGamesPop(); return; }
+  const btn = document.getElementById("navGames"); if (!btn) return;
+  btn.classList.add("active");
+  const pop = el("div", "games-pop");
+  const search = document.createElement("input");
+  search.type = "search"; search.className = "games-search"; search.placeholder = "Search games…"; search.autocomplete = "off"; search.spellcheck = false;
+  const list = el("div", "games-list");
+  pop.append(search, list);
+  document.body.appendChild(pop); gamesPop = pop;
+  const r = btn.getBoundingClientRect();
+  pop.style.left = Math.min(r.right + 8, window.innerWidth - 250) + "px";
+  pop.style.bottom = Math.max(8, window.innerHeight - r.bottom) + "px";
+  let games = [];
+  const paint = () => {
+    const q = search.value.trim().toLowerCase();
+    const shown = games.filter(g => !q || g.title.toLowerCase().includes(q));
+    list.replaceChildren();
+    if (!shown.length) { list.appendChild(el("div", "games-empty", games.length ? "No games match." : "Loading…")); return; }
+    shown.forEach(g => {
+      const b = el("button", "games-item" + (gameWins.has(g.url) ? " open" : ""), g.title); b.type = "button";
+      b.addEventListener("click", () => { closeGamesPop(); openGameWindow(g); });
+      list.appendChild(b);
+    });
+  };
+  paint();
+  search.addEventListener("input", paint);
+  loadGames().then(g => { if (gamesPop !== pop) return; games = g; paint(); });
+  setTimeout(() => search.focus(), 30);
+}
+(function wireGames() {
+  const btn = document.getElementById("navGames");
+  if (!btn) return;
+  btn.addEventListener("click", e => { e.stopPropagation(); openGamesPop(); });
+  document.addEventListener("pointerdown", e => { if (gamesPop && !gamesPop.contains(e.target) && !btn.contains(e.target)) closeGamesPop(); }, true);
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && gamesPop) closeGamesPop(); });
 })();
 
 /* ══════════ Update check: Chat-DM/version on GitHub ══════════
@@ -8883,6 +9143,7 @@ window.VUS_CHAT = {
   getPrefsState, restorePrefsState,
   _idleFor(ms) { lastActivityAt = Date.now() - ms; afkCheck(false); },
   _annHash: annHash,
+  _wheelSlices() { return lastWheel ? lastWheel.slices.map(x => ({ id: x.it.id, a0: x.a0, w: x.w })) : null; },
   _crateProg(m, ms) { const p = progFor(); p.msgs = m; p.ms = ms; saveProg(); crateTick(true); },
   cosmFor: async id => { try { const p = await ChatBackend.getProfile(id); const c = cosmFields(p && p.cosm); if (!c.ring && p && p.color && p.color.ring) c.ring = p.color.ring; return c; } catch (e) { return {}; } },
   tagEl, applyRingTo,

@@ -1331,6 +1331,21 @@ async function fetchAndCacheAvatar(accountKey, onLoaded) {
 
 /* ── Public profile lookups (username, ID, picture, bio), cached ── */
 const PROFILE_CACHE_MS = 60000;   // short, so a new picture / bio / MZK link shows up for others without a reload
+/* Banners: a colour (#rrggbb) or a JPEG picture. Anything else in the database is ignored. */
+function safeColor(c) { return typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c) ? c : ""; }
+function safeBanner(b) { return typeof b === "string" && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(b) && b.length <= 300000 ? b : ""; }
+function shade(hex, f) {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = s => Math.max(0, Math.min(255, Math.round(((n >> s) & 255) * f)));
+  return "rgb(" + ch(16) + "," + ch(8) + "," + ch(0) + ")";
+}
+function paintBanner(elm, prof) {
+  if (!elm) return;
+  const img = prof && safeBanner(prof.banner), col = prof && safeColor(prof.bannerColor);
+  if (img) { elm.style.background = "#0f172a url(" + img + ") center/cover no-repeat"; }
+  else if (col) { elm.style.background = "linear-gradient(135deg," + col + "," + shade(col, 0.45) + ")"; }
+  else elm.style.removeProperty("background");
+}
 const profileCache = {};     // accountKey -> { accountKey, username, id, avatar, bio, mzk }
 const profileInflight = {};
 const idToAccountKey = {};
@@ -1340,10 +1355,10 @@ function fetchAccountProfile(accountKey) {
   if (hit && Date.now() - (hit._at || 0) < PROFILE_CACHE_MS) return Promise.resolve(hit);
   if (profileInflight[accountKey]) return profileInflight[accountKey];
   const base = usersRef.child(accountKey);
-  const p = Promise.all(["username", "id", "avatar", "bio", "mzk", "createdAt", "mzkUid"].map(k => base.child(k).get())).then(snaps => {
+  const p = Promise.all(["username", "id", "avatar", "bio", "mzk", "createdAt", "mzkUid", "banner", "bannerColor"].map(k => base.child(k).get())).then(snaps => {
     delete profileInflight[accountKey];
     if (!snaps[0].exists()) return null;
-    const prof = { accountKey, username: snaps[0].val(), id: snaps[1].val(), avatar: snaps[2].val() || null, bio: snaps[3].val() || "", mzk: snaps[4].val() || "", createdAt: Number(snaps[5].val()) || 0, mzkUid: snaps[6].val() || "", _at: Date.now() };
+    const prof = { accountKey, username: snaps[0].val(), id: snaps[1].val(), avatar: snaps[2].val() || null, bio: snaps[3].val() || "", mzk: snaps[4].val() || "", createdAt: Number(snaps[5].val()) || 0, mzkUid: snaps[6].val() || "", banner: safeBanner(snaps[7].val()), bannerColor: safeColor(snaps[8].val()), _at: Date.now() };
     profileCache[accountKey] = prof;
     if (prof.id) idToAccountKey[String(prof.id)] = accountKey;
     return prof;
@@ -1611,6 +1626,7 @@ function prepareAccountPane() {
   profileLoaded = true;
   showMzkSub(false);
   pendingAvatarDataUrl = null;
+  pendingBanner = undefined; paintBannerEditor();
   $profilePopoverError.textContent = "";
   $profilePwError.textContent = "";
   $profilePwFields.style.display = "none";
@@ -1697,6 +1713,7 @@ function profileDirty() {
   return $profileNameInput.value.trim() !== currentSession.username
     || ($profileBioInput.value || "") !== ((currentUserData && currentUserData.bio) || "")
     || pendingAvatarDataUrl !== null
+    || pendingBanner !== undefined
     || $profileMzkInput.value.trim() !== "";
 }
 function settingsDirty() { return profileDirty() || prefsState() !== settingsBaseline; }
@@ -1791,8 +1808,107 @@ $profileAvatarFileInput.addEventListener("change", async () => {
     renderProfileAvatarButton(pendingAvatarDataUrl);
   } catch (e) { $profilePopoverError.textContent = e.message || "Couldn't process that image."; }
 });
+/* ── Banner editor: colour picker, or a picture you move and zoom before it's saved ── */
+let pendingBanner;   // undefined = unchanged, otherwise { banner: dataUrl|null, color: "#rrggbb"|null }
+const BANNER_W = 900, BANNER_H = 300;
+function currentBannerState() {
+  if (pendingBanner !== undefined) return { banner: pendingBanner.banner || "", bannerColor: pendingBanner.color || "" };
+  return { banner: safeBanner(currentUserData && currentUserData.banner), bannerColor: safeColor(currentUserData && currentUserData.bannerColor) };
+}
+function paintBannerEditor() {
+  const st = currentBannerState();
+  paintBanner(document.getElementById("bannerPreview"), st);
+  const ci = document.getElementById("bannerColorInput");
+  if (ci) ci.value = st.bannerColor || "#16a34a";
+}
+function openBannerCropper(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Couldn't read that file."));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("That file doesn't look like a valid image."));
+      img.onload = () => {
+        const ov = h("div", { className: "bn-overlay" });
+        const box = h("div", { className: "bn-box" });
+        const view = h("div", { className: "bn-view" });
+        const pic = h("img", { className: "bn-img", draggable: "false" }); pic.src = reader.result;
+        view.appendChild(pic);
+        const zoom = h("input", { type: "range", min: "1", max: "4", step: "0.01", value: "1", className: "bn-zoom" });
+        const cancel = h("button", { type: "button", className: "bn-cancel" }, "Cancel");
+        const apply = h("button", { type: "button", className: "bn-apply" }, "Use this banner");
+        box.append(h("div", { className: "bn-title" }, "Position your banner"), h("div", { className: "bn-hint" }, "Drag to move · slider or scroll to zoom"), view, h("div", { className: "bn-row" }, h("span", {}, "Zoom"), zoom), h("div", { className: "bn-row bn-btns" }, cancel, apply));
+        ov.appendChild(box); document.body.appendChild(ov);
+        let vw = 0, vh = 0, base = 1, z = 1, x = 0, y = 0;
+        const clamp = () => {
+          const s = base * z, w = img.naturalWidth * s, hh = img.naturalHeight * s;
+          x = Math.min(0, Math.max(vw - w, x)); y = Math.min(0, Math.max(vh - hh, y));
+        };
+        const place = () => {
+          clamp(); const s = base * z;
+          pic.style.width = img.naturalWidth * s + "px"; pic.style.height = img.naturalHeight * s + "px";
+          pic.style.left = x + "px"; pic.style.top = y + "px";
+        };
+        const setZoom = (nz, cx, cy) => {
+          nz = Math.min(4, Math.max(1, nz));
+          const k = nz / z; x = cx - (cx - x) * k; y = cy - (cy - y) * k; z = nz; zoom.value = String(z); place();
+        };
+        const measure = () => {
+          vw = view.clientWidth; vh = view.clientHeight;
+          base = Math.max(vw / img.naturalWidth, vh / img.naturalHeight);
+          x = (vw - img.naturalWidth * base) / 2; y = (vh - img.naturalHeight * base) / 2; z = 1; place();
+        };
+        measure();
+        zoom.addEventListener("input", () => setZoom(Number(zoom.value), vw / 2, vh / 2));
+        view.addEventListener("wheel", e => { e.preventDefault(); const r = view.getBoundingClientRect(); setZoom(z * (e.deltaY < 0 ? 1.1 : 1 / 1.1), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+        let drag = null;
+        view.addEventListener("pointerdown", e => { drag = { px: e.clientX, py: e.clientY, x, y }; try { view.setPointerCapture(e.pointerId); } catch (_) {} });
+        view.addEventListener("pointermove", e => { if (!drag) return; x = drag.x + e.clientX - drag.px; y = drag.y + e.clientY - drag.py; place(); });
+        const end = () => { drag = null; };
+        view.addEventListener("pointerup", end); view.addEventListener("pointercancel", end);
+        const close = () => { ov.remove(); };
+        cancel.addEventListener("click", () => { close(); resolve(null); });
+        apply.addEventListener("click", () => {
+          try {
+            const s = base * z;
+            const c = document.createElement("canvas"); c.width = BANNER_W; c.height = BANNER_H;
+            const ctx = c.getContext("2d");
+            ctx.fillStyle = "#0f172a"; ctx.fillRect(0, 0, BANNER_W, BANNER_H);
+            ctx.drawImage(img, -x / s, -y / s, vw / s, vh / s, 0, 0, BANNER_W, BANNER_H);
+            let q = 0.85, out = c.toDataURL("image/jpeg", q);
+            while (out.length > 280000 && q > 0.3) { q -= 0.1; out = c.toDataURL("image/jpeg", q); }
+            if (out.length > 280000) throw new Error("big");
+            close(); resolve(out);
+          } catch (e) { close(); reject(new Error("Couldn't process that image.")); }
+        });
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+document.getElementById("bannerColorInput").addEventListener("input", e => { pendingBanner = { banner: null, color: e.target.value }; paintBannerEditor(); });
+document.getElementById("bannerUploadBtn").addEventListener("click", () => document.getElementById("bannerFileInput").click());
+document.getElementById("bannerResetBtn").addEventListener("click", () => { pendingBanner = { banner: null, color: null }; paintBannerEditor(); });
+document.getElementById("bannerFileInput").addEventListener("change", async e => {
+  const file = e.target.files[0]; e.target.value = "";
+  if (!file) return;
+  if (!file.type.startsWith("image/")) { $profilePopoverError.textContent = "That file isn't an image."; return; }
+  try {
+    const url = await openBannerCropper(file);
+    if (url) { pendingBanner = { banner: url, color: null }; paintBannerEditor(); }
+  } catch (err) { $profilePopoverError.textContent = err.message || "Couldn't process that image."; }
+});
 async function saveProfileFields() {
   $profilePopoverError.textContent = "";
+  if (pendingBanner !== undefined) {
+    try {
+      await usersRef.child(currentSession.accountKey).update({ banner: pendingBanner.banner || null, bannerColor: pendingBanner.color || null });
+      if (currentUserData) { currentUserData.banner = pendingBanner.banner || undefined; currentUserData.bannerColor = pendingBanner.color || undefined; }
+      delete profileCache[currentSession.accountKey];
+      pendingBanner = undefined;
+    } catch (e) { $profilePopoverError.textContent = friendlyDbError(e, "Couldn't save your banner"); return false; }
+  }
   const result = await updateProfile($profileNameInput.value, pendingAvatarDataUrl !== null ? pendingAvatarDataUrl : undefined, $profileBioInput.value, ($currentMzk() ? undefined : $profileMzkInput.value));
   if (!result.ok) { showMzkSub(false); $profilePopoverError.textContent = result.error; return false; }
   pendingAvatarDataUrl = null;
@@ -2601,7 +2717,8 @@ function renderDmProfile() {
   $appShell.classList.toggle("has-profile", open);
   if (!open) { $dmProfileBody.replaceChildren(); return; }
   const card = h("div", { className: "dmp" });
-  card.appendChild(h("div", { className: "dmp-banner" }));
+  const dmpBanner = h("div", { className: "dmp-banner" });
+  card.appendChild(dmpBanner);
   const avWrap = h("div", { className: "dmp-av" });
   const av = h("div", { className: "list-row-avatar dmp-avatar" });
   avWrap.appendChild(av);
@@ -2654,6 +2771,7 @@ function renderDmProfile() {
     fetchAccountProfile(key).then(prof => {
       if (!prof || openChatAccountKey !== key || myRender !== dmpRenderId) return;
       fillRoles(rolesBox, prof.id);
+      paintBanner(dmpBanner, prof);
       if (prof.bio) {
         bioBox.appendChild(h("div", { className: "dmp-h" }, "About me"));
         bioBox.appendChild(h("div", { className: "dmp-t dmp-bio" }, prof.bio));
@@ -3495,6 +3613,7 @@ function fillRoles(container, loginId) {
 }
 
 function resetProfileCard() {
+  paintBanner(document.querySelector(".pc-banner"), null);
   $chatUserProfileName.textContent = "Loading…";
   $chatUserProfileAvatar.classList.remove("has-ring"); $chatUserProfileAvatar.style.removeProperty("--ring"); [...$chatUserProfileAvatar.classList].filter(c => c.startsWith("rfx")).forEach(c => $chatUserProfileAvatar.classList.remove(c));
   profileGoneToken++; $chatUserProfileFullBtn.style.display = ""; setProfileFull(false);
@@ -3563,6 +3682,7 @@ function fillProfileCard(prof, accountKey) {
   $chatUserProfileName.textContent = prof.username;
   $chatUserProfileId.textContent = "#" + prof.id;
   renderAvatarInto($chatUserProfileAvatar, prof.username, prof.avatar);
+  paintBanner(document.querySelector("#chatUserProfileOverlay .pc-banner") || document.querySelector(".pc-banner"), prof);
   if (window.VUS_CHAT && window.VUS_CHAT.cosmFor) window.VUS_CHAT.cosmFor(prof.id).then(c => {
     if ($chatUserProfileName.textContent !== prof.username) return;
     window.VUS_CHAT.applyRingTo($chatUserProfileAvatar, c.ring, c.rfx);

@@ -18,6 +18,7 @@
     <button class="rail-nav-btn rail-browse" id="navRooms" title="Browse rooms" aria-label="Browse rooms"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 21V4.5A1.5 1.5 0 0 1 7.5 3h9A1.5 1.5 0 0 1 18 4.5V21"/><path d="M3.5 21h17"/><circle cx="14.5" cy="12.5" r="0.9" fill="currentColor" stroke="none"/></svg><span class="rail-dot" id="roomsRailDot"></span></button>
     <div class="rail-sep"></div>
     <button class="rail-nav-btn" id="navChats" title="Direct messages" aria-label="Direct messages"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7.5 8 5.5 8-5.5"/></svg><span class="rail-dot" id="dmRailDot"></span></button>
+    <button class="rail-nav-btn rail-games" id="navGames" title="Games" aria-label="Games"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="7" width="19" height="11" rx="5"/><path d="M7.5 10.5v4M5.5 12.5h4"/><circle cx="15.5" cy="11.5" r="0.9" fill="currentColor" stroke="none"/><circle cx="18" cy="14" r="0.9" fill="currentColor" stroke="none"/></svg></button>
   </div>
   <div id="listPane">
     <div id="listPaneHeader">
@@ -533,6 +534,16 @@
       </button>
       <input id="profileAvatarFileInput" type="file" accept="image/*">
       <div class="profile-popover-hint">Click to change photo</div>
+      <div class="profile-popover-field" id="bannerField">
+        <label>Profile banner</label>
+        <div id="bannerPreview"></div>
+        <div class="banner-btns">
+          <label class="banner-color" title="Pick a colour"><input type="color" id="bannerColorInput" value="#16a34a"><span>Colour</span></label>
+          <button type="button" id="bannerUploadBtn">Upload image</button>
+          <button type="button" id="bannerResetBtn">Reset</button>
+        </div>
+        <input id="bannerFileInput" type="file" accept="image/*" style="display:none">
+      </div>
       <div class="profile-popover-field">
         <label for="profileNameInput">Display name</label>
         <input type="text" id="profileNameInput" maxlength="24">
