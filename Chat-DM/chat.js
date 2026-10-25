@@ -8402,35 +8402,77 @@ const CRATE_ITEMS = [
   { id: "ring-leaf",  type: "ring", rar: "common", name: "Leaf", color: "#22c55e" },
   { id: "ring-rose",  type: "ring", rar: "common", name: "Rose", color: "#f43f5e" },
   { id: "ring-sky",   type: "ring", rar: "common", name: "Sky", color: "#38bdf8" },
+  { id: "ring-peach", type: "ring", rar: "common", name: "Peach", color: "#fb923c" },
+  { id: "ring-lilac", type: "ring", rar: "common", name: "Lilac", color: "#c4b5fd" },
+  { id: "ring-mint",  type: "ring", rar: "common", name: "Mint", color: "#34d399" },
   { id: "ring-pulse-cyan", type: "ring", rar: "rare", name: "Cyan Pulse" },
   { id: "ring-pulse-pink", type: "ring", rar: "rare", name: "Pink Pulse" },
+  { id: "ring-pulse-lime", type: "ring", rar: "rare", name: "Lime Pulse" },
+  { id: "ring-pulse-amber", type: "ring", rar: "rare", name: "Amber Pulse" },
   { id: "ring-rainbow",    type: "ring", rar: "epic", name: "Rainbow" },
   { id: "ring-fire",       type: "ring", rar: "epic", name: "Fire" },
+  { id: "ring-frostbite",  type: "ring", rar: "epic", name: "Frostbite" },
+  { id: "ring-toxic",      type: "ring", rar: "epic", name: "Toxic" },
   { id: "ring-galaxy",     type: "ring", rar: "legendary", name: "Galaxy" },
   { id: "ring-goldshine",  type: "ring", rar: "legendary", name: "Gold Shine" },
+  { id: "ring-aurora",     type: "ring", rar: "legendary", name: "Aurora" },
+  { id: "ring-eclipse",    type: "ring", rar: "legendary", name: "Eclipse" },
   // tags (CSS class tg-<id>)
   { id: "tag-rookie", type: "tag", rar: "common", name: "Rookie" },
   { id: "tag-chill",  type: "tag", rar: "common", name: "Chill" },
   { id: "tag-sleepy", type: "tag", rar: "common", name: "Sleepy" },
   { id: "tag-snacker", type: "tag", rar: "common", name: "Snacker" },
+  { id: "tag-lurker",  type: "tag", rar: "common", name: "Lurker" },
+  { id: "tag-coffee",  type: "tag", rar: "common", name: "Caffeinated" },
+  { id: "tag-potato",  type: "tag", rar: "common", name: "Couch Potato" },
+  { id: "tag-vibes",   type: "tag", rar: "common", name: "Good Vibes" },
   { id: "tag-nightowl",  type: "tag", rar: "rare", name: "Night Owl" },
   { id: "tag-earlybird", type: "tag", rar: "rare", name: "Early Bird" },
   { id: "tag-lucky",     type: "tag", rar: "rare", name: "Lucky" },
+  { id: "tag-wizard",    type: "tag", rar: "rare", name: "Wizard" },
+  { id: "tag-sweaty",    type: "tag", rar: "rare", name: "Sweaty" },
+  { id: "tag-bookworm",  type: "tag", rar: "rare", name: "Bookworm" },
+  { id: "tag-speedy",    type: "tag", rar: "rare", name: "Speedy" },
   { id: "tag-gremlin", type: "tag", rar: "epic", name: "Gremlin" },
   { id: "tag-menace",  type: "tag", rar: "epic", name: "Menace" },
+  { id: "tag-chaos",   type: "tag", rar: "epic", name: "Chaos" },
+  { id: "tag-villain", type: "tag", rar: "epic", name: "Villain" },
+  { id: "tag-prodigy", type: "tag", rar: "epic", name: "Prodigy" },
   { id: "tag-typhoon", type: "tag", rar: "legendary", name: "Typhoon" },
+  { id: "tag-mythic",  type: "tag", rar: "legendary", name: "Mythic" },
+  { id: "tag-ascended", type: "tag", rar: "legendary", name: "Ascended" },
   { id: "tag-legend",  type: "tag", rar: "legendary", name: "Legend" },
   { id: "tag-goat",    type: "tag", rar: "legendary", name: "G.O.A.T." },
   // text effects (CSS class fxt-<id>)
   { id: "fx-sunset", type: "fx", rar: "common", name: "Sunset Fade" },
   { id: "fx-ocean",  type: "fx", rar: "common", name: "Ocean Fade" },
+  { id: "fx-peach",  type: "fx", rar: "common", name: "Peach Fade" },
+  { id: "fx-lilac",  type: "fx", rar: "common", name: "Lilac Fade" },
   { id: "fx-mint",   type: "fx", rar: "rare", name: "Mint Fade" },
   { id: "fx-berry",  type: "fx", rar: "rare", name: "Berry Fade" },
   { id: "fx-candy",  type: "fx", rar: "rare", name: "Candy Fade" },
+  { id: "fx-forest", type: "fx", rar: "rare", name: "Forest Fade" },
+  { id: "fx-ember",  type: "fx", rar: "rare", name: "Ember Fade" },
   { id: "fx-aurora", type: "fx", rar: "epic", name: "Aurora (animated)" },
   { id: "fx-lava",   type: "fx", rar: "epic", name: "Lava (animated)" },
+  { id: "fx-glitch", type: "fx", rar: "epic", name: "Glitch (animated)" },
+  { id: "fx-neon",   type: "fx", rar: "epic", name: "Neon (animated)" },
   { id: "fx-rainbow", type: "fx", rar: "legendary", name: "Rainbow Flow (animated)" },
-  { id: "fx-void",    type: "fx", rar: "legendary", name: "Void Shimmer (animated)" }
+  { id: "fx-void",    type: "fx", rar: "legendary", name: "Void Shimmer (animated)" },
+  { id: "fx-prism",   type: "fx", rar: "legendary", name: "Prism (animated)" },
+  // ── seasonal: only from the Seasonal crate while its season is running (dates live in the database: crateSeasons/<id>) ──
+  { id: "sea-w26-snow",      season: "w26", type: "ring", rar: "common",    name: "Snowfall", color: "#e0f2fe" },
+  { id: "sea-w26-frost",     season: "w26", type: "ring", rar: "rare",      name: "Frozen Pulse" },
+  { id: "sea-w26-north",     season: "w26", type: "ring", rar: "epic",      name: "Northern Glow" },
+  { id: "sea-w26-blizz",     season: "w26", type: "ring", rar: "legendary", name: "Blizzard" },
+  { id: "sea-w26-snowball",  season: "w26", type: "tag",  rar: "common",    name: "Snowball" },
+  { id: "sea-w26-frosty",    season: "w26", type: "tag",  rar: "rare",      name: "Frosty" },
+  { id: "sea-w26-yeti",      season: "w26", type: "tag",  rar: "epic",      name: "Yeti" },
+  { id: "sea-w26-frostfall", season: "w26", type: "tag",  rar: "legendary", name: "Frostfall" },
+  { id: "sea-w26-icicle",    season: "w26", type: "fx",   rar: "common",    name: "Icicle Fade" },
+  { id: "sea-w26-cocoa",     season: "w26", type: "fx",   rar: "rare",      name: "Cocoa Fade" },
+  { id: "sea-w26-drift",     season: "w26", type: "fx",   rar: "epic",      name: "Snowdrift (animated)" },
+  { id: "sea-w26-glacier",   season: "w26", type: "fx",   rar: "legendary", name: "Glacier Shine (animated)" }
 ];
 const ITEM_BY_ID = {};
 CRATE_ITEMS.forEach(i => { ITEM_BY_ID[i.id] = i; });
@@ -8438,8 +8480,24 @@ const CRATE_TYPES = [
   { id: "ring",  label: "Ring crate",        icon: "⭕", blurb: "A profile ring" },
   { id: "tag",   label: "Tag crate",         icon: "🏷️", blurb: "A tag by your name" },
   { id: "fx",    label: "Text effect crate", icon: "✨", blurb: "Fades and animated text" },
-  { id: "mixed", label: "Mixed crate",       icon: "🎁", blurb: "Any of the above" }
+  { id: "mixed", label: "Mixed crate",       icon: "🎁", blurb: "Any of the above" },
+  { id: "season", label: "Seasonal crate",    icon: "❄️", blurb: "Limited-time items" }
 ];
+// seasons come from the database: crateSeasons/<id> = { name, start, end } (ms). Only seasons the code has items for count.
+let crateSeasons = {};
+function activeSeason() {
+  const now = srvNow();
+  let best = null;
+  Object.keys(crateSeasons).forEach(id => {
+    const v = crateSeasons[id];
+    if (!v || typeof v !== "object" || !(Number(v.start) <= now && now < Number(v.end))) return;
+    if (!CRATE_ITEMS.some(i => i.season === id)) return;
+    if (!best || Number(v.start) > best.start) best = { id, name: String(v.name || id).slice(0, 30), start: Number(v.start), end: Number(v.end) };
+  });
+  return best;
+}
+function seasonName(id) { const v = crateSeasons[id]; return (v && v.name) || id; }
+function visibleTypes() { return CRATE_TYPES.filter(t => t.id !== "season" || activeSeason()); }
 function itemOf(id, type) { const i = ITEM_BY_ID[String(id || "")]; return i && (!type || i.type === type) ? i : null; }
 // What goes on a message / profile for an equipped set: solid rings keep using the plain `ring` colour.
 function cosmFields(c) {
@@ -8457,7 +8515,7 @@ function seedOf(str) { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) 
 // The same account, window and crate type always give the same rolls, so reloading the page can't re-roll.
 function rollCrate(type, w, owned) {
   const rng = mulberry32(seedOf(myLoginId + ":" + w + ":" + type));
-  const pool = CRATE_ITEMS.filter(i => type === "mixed" || i.type === type);
+  const pool = cratePool(type);
   const pick = () => {
     let r = rng() * 100, rar = "legendary", acc = 0;
     for (const k of ["common", "rare", "epic", "legendary"]) { acc += RARITY[k].weight; if (r < acc) { rar = k; break; } }
@@ -8507,7 +8565,9 @@ function ensureCrateWatch() {
   const claim = ChatBackend._db.ref("crateClaims/" + myLoginId), inv = ChatBackend._db.ref("crateInv/" + myLoginId + "/items");
   claim.on("value", s => { const v = s.val(); crateClaimedW = v && typeof v.w === "number" ? v.w : null; crateTick(true); }, () => { crateClaimedW = null; });
   inv.on("value", s => { crateOwned = new Set(Object.keys(s.val() || {}).filter(k => itemOf(k))); if (crateModal && !crateBusy) paintCrateModal(); });
-  crateWatchRefs = [claim, inv];
+  const seasons = ChatBackend._db.ref("crateSeasons");
+  seasons.on("value", s => { crateSeasons = s.val() || {}; crateTick(true); }, () => { crateSeasons = {}; });
+  crateWatchRefs = [claim, inv, seasons];
   ChatBackend.getProfile(myLoginId).then(p => { myCosm = (p && p.cosm) || {}; });
 }
 function crateTick(noTime) {
@@ -8605,9 +8665,11 @@ function paintOpen(box) {
   }
   box.appendChild(el("div", "cr-note", "A new crate window starts in " + fmtLeft(crateWindowEnd(w) - srvNow()) + " (every 12 hours, at noon and midnight US Eastern — an hour earlier in winter)."));
   const grid = el("div", "cr-types");
-  CRATE_TYPES.forEach(t => {
-    const b = el("button", "cr-type"); b.type = "button"; b.disabled = !ready || crateBusy;
-    b.append(el("span", "cr-type-ic", t.icon), el("b", "", t.label), el("small", "", t.blurb));
+  visibleTypes().forEach(t => {
+    const b = el("button", "cr-type" + (t.id === "season" ? " cr-season" : "")); b.type = "button"; b.disabled = !ready || crateBusy;
+    let label = t.label, blurb = t.blurb;
+    if (t.id === "season") { const a = activeSeason(); label = a.name + " crate"; blurb = "Only this season · ends in " + Math.max(1, Math.ceil((a.end - srvNow()) / 86400000)) + "d"; }
+    b.append(el("span", "cr-type-ic", t.icon), el("b", "", label), el("small", "", blurb));
     b.addEventListener("click", () => openCrate(t.id));
     b.addEventListener("mouseenter", () => { if (crateBusy || crateBarType === t.id) return; crateBarType = t.id; const old = crateModal && crateModal.querySelector(".cr-side"); if (old) old.replaceWith(buildOddsBar(t.id)); });
     grid.appendChild(b);
@@ -8617,7 +8679,10 @@ function paintOpen(box) {
 }
 
 // ── true odds: the weight of a rarity is split evenly between the items of that rarity in the crate ──
-function cratePool(type) { return CRATE_ITEMS.filter(i => type === "mixed" || i.type === type); }
+function cratePool(type) {
+  if (type === "season") { const a = activeSeason(); return a ? CRATE_ITEMS.filter(i => i.season === a.id) : []; }
+  return CRATE_ITEMS.filter(i => !i.season && (type === "mixed" || i.type === type));
+}
 function crateChance(it, pool) { return RARITY[it.rar].weight / pool.filter(i => i.rar === it.rar).length; }
 // chance that opening this crate ends with something you don't own yet (up to 4 rolls, 50% retry on a duplicate)
 function crateNewChance(type) {
@@ -8629,10 +8694,11 @@ function crateNewChance(type) {
 let crateBarType = "mixed", lastWheel = null;
 function fmtPct(v) { return (v >= 10 ? v.toFixed(1) : v.toFixed(2)).replace(/\.?0+$/, "") + "%"; }
 function buildOddsBar(type) {
+  if (type === "season" && !activeSeason()) type = "mixed";
   const bar = el("div", "cr-side");
   const pills = el("div", "cr-side-tabs");
-  CRATE_TYPES.forEach(t => {
-    const b = el("button", "cr-side-tab" + (t.id === type ? " on" : ""), t.id === "fx" ? "Text" : t.label.replace(" crate", "")); b.type = "button";
+  visibleTypes().forEach(t => {
+    const b = el("button", "cr-side-tab" + (t.id === type ? " on" : ""), t.id === "fx" ? "Text" : t.id === "season" ? "Season" : t.label.replace(" crate", "")); b.type = "button";
     b.addEventListener("click", () => { if (crateBusy) return; crateBarType = t.id; const nb = buildOddsBar(t.id); bar.replaceWith(nb); });
     pills.appendChild(b);
   });
@@ -8704,10 +8770,12 @@ async function openCrate(type) {
   crateBusy = true;
   const w = crateWindow(srvNow());
   try {
-    await ChatBackend._db.ref("crateClaims/" + myLoginId).set({ w, ts: firebase.database.ServerValue.TIMESTAMP });
+    const sea = type === "season" ? activeSeason() : null;
+    if (type === "season" && !sea) throw new Error("no-season");
+    await ChatBackend._db.ref("crateClaims/" + myLoginId).set(Object.assign({ w, ts: firebase.database.ServerValue.TIMESTAMP }, sea ? { s: sea.id } : {}));
   } catch (e) {
     crateBusy = false;
-    showComposerNotice(isPermissionDenied(e) ? "Crates need the updated database rules (crateClaims). Publish the new chat rules." : "Couldn't open the crate — check your connection.");
+    showComposerNotice(isPermissionDenied(e) ? "Crates need the updated database rules (crateClaims). Publish the new chat rules." : String(e && e.message) === "no-season" ? "That season has just ended." : "Couldn't open the crate — check your connection.");
     return;
   }
   crateClaimedW = w;
@@ -8749,8 +8817,11 @@ async function openCrate(type) {
 }
 function paintCollection(box) {
   const tabs = el("div", "cr-subtabs");
+  const act = activeSeason();
+  // a seasonal item shows up while its season runs, or once you own it (past seasons you missed stay hidden)
+  const shown = i => !i.season || crateOwned.has(i.id) || (act && act.id === i.season);
   [["ring", "Rings"], ["tag", "Tags"], ["fx", "Text effects"]].forEach(([k, t]) => {
-    const own = CRATE_ITEMS.filter(i => i.type === k && crateOwned.has(i.id)).length, all = CRATE_ITEMS.filter(i => i.type === k).length;
+    const own = CRATE_ITEMS.filter(i => i.type === k && shown(i) && crateOwned.has(i.id)).length, all = CRATE_ITEMS.filter(i => i.type === k && shown(i)).length;
     const b = el("button", "cr-subtab" + (collectionType === k ? " on" : ""), t + " " + own + "/" + all); b.type = "button";
     b.addEventListener("click", () => { collectionType = k; paintCrateModal(); });
     tabs.appendChild(b);
@@ -8758,10 +8829,10 @@ function paintCollection(box) {
   box.appendChild(tabs);
   const grid = el("div", "cr-grid");
   const order = { legendary: 0, epic: 1, rare: 2, common: 3 };
-  CRATE_ITEMS.filter(i => i.type === collectionType).sort((a, b) => order[a.rar] - order[b.rar]).forEach(it => {
+  CRATE_ITEMS.filter(i => i.type === collectionType && shown(i)).sort((a, b) => (a.season ? 1 : 0) - (b.season ? 1 : 0) || order[a.rar] - order[b.rar]).forEach(it => {
     const own = crateOwned.has(it.id), on = myCosm && myCosm[it.type] === it.id;
     const c = el("button", "cr-item r-" + it.rar + (own ? "" : " locked") + (on ? " equipped" : "")); c.type = "button";
-    c.append(own ? itemPreview(it) : el("div", "cr-q", "?"), el("b", "", own ? it.name : "???"), el("small", "", RARITY[it.rar].label + (on ? " · equipped" : "")));
+    c.append(own ? itemPreview(it) : el("div", "cr-q", "?"), el("b", "", own ? it.name : "???"), el("small", "", RARITY[it.rar].label + (it.season ? " · " + seasonName(it.season) : "") + (on ? " · equipped" : "")));
     if (own) c.addEventListener("click", () => equipItem(it, !on));
     grid.appendChild(c);
   });
