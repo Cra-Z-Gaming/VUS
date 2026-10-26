@@ -187,6 +187,33 @@
   .mem:hover { background: var(--panel2); }
   .mem .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mem .on-dot { width: 8px; height: 8px; border-radius: 50%; background: #5fe3b0; flex-shrink: 0; }
+  .mem .off-dot { width: 8px; height: 8px; border-radius: 50%; background: #5b6390; flex-shrink: 0; }
+  .mem.off { opacity: .62; }
+  .mem.off:hover { opacity: 1; }
+  .sec { padding: 14px 8px 2px; color: var(--text); font-size: 12px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+  .sec.first { padding-top: 4px; }
+  button.sec { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; background: transparent; border: none; border-radius: 8px; cursor: pointer; }
+  button.sec:hover { background: var(--panel2); }
+  button.sec .chev { display: inline-block; font-size: 10px; transition: transform .15s ease; }
+  button.sec.shut .chev { transform: rotate(-90deg); }
+  .more { padding: 8px 10px; color: var(--mute); font-size: 12.5px; }
+  .bubble.custom a, .msg.mine .bubble.custom a { color: inherit; text-decoration: underline; }
+  .bubble.custom .mention, .msg.mine .bubble.custom .mention { background: rgba(128,128,128,.28); color: inherit; }
+  .bubble.cbg { border-color: transparent; }
+  .msg.mine .bubble.cbg { box-shadow: 0 8px 26px rgba(5,8,25,.35); }
+  .bubble.cbg.pinged { border-color: var(--blue); }
+  .field input.clr { width: 56px; height: 40px; padding: 3px; cursor: pointer; flex-shrink: 0; }
+  .clr-row { display: flex; align-items: center; gap: 10px; }
+  .clr-row .btn { width: auto; margin: 0; padding: 8px 14px; }
+  .note.presence { font-style: normal; font-size: 12.5px; padding: 0 10px; }
+  .note.presence.joined { color: #5fe3b0; }
+  .note.presence.left { color: var(--mute); }
+  #notifBar { display: flex; align-items: center; gap: 10px; padding: 8px 18px; background: rgba(79,140,255,.12); border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  #notifBar span { flex: 1; min-width: 0; }
+  #notifBar button { border: 1px solid var(--line); background: var(--panel2); border-radius: 9px; padding: 5px 12px; }
+  #notifBar button.primary { background: var(--grad); border-color: transparent; color: #fff; font-weight: 600; }
+  #filterBtn:not(.on) { opacity: .6; }
+  #filterBtn.on { background: rgba(79,140,255,.18); border-color: var(--blue); color: var(--text); }
 
   #userMenu { position: fixed; z-index: 60; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 6px; min-width: 190px; box-shadow: 0 18px 50px rgba(5,8,25,.65); }
   #userMenu .hd { padding: 6px 10px 8px; color: var(--mute); font-size: 12.5px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
@@ -308,6 +335,7 @@
     <div class="me-card">
       <div class="avatar" id="meAv"></div>
       <div class="who"><b id="meName"></b><span id="meRank"></span></div>
+      <button class="icon-btn" id="colorBtn" title="Chat colors">🎨</button>
       <button class="icon-btn" id="logoutBtn" title="Log out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button>
     </div>
   </aside>
@@ -319,9 +347,11 @@
       <span class="pill" id="roomTimer" hidden></span>
       <button class="icon-btn" id="rankBtn" title="Ranks &amp; commands">📋</button>
       <button class="icon-btn" id="logBtn" title="Chat logs" hidden>📜</button>
+      <button class="icon-btn" id="filterBtn" title="Chat filter" aria-pressed="false">🧼</button>
       <button class="icon-btn" id="fxBtn" title="Toggle starfield">✨</button>
       <button class="pill" id="membersBtn" title="Who’s online"><span class="dot off" id="connDot"></span><span id="onlineCount">0 online</span></button>
     </div>
+    <div id="notifBar" hidden><span>🔔 Get a notification when someone @mentions you.</span><button type="button" class="primary" id="notifOn">Turn on</button><button type="button" id="notifNo" aria-label="Dismiss" title="Not now">✕</button></div>
     <div id="messages"></div>
     <div id="typing"></div>
     <div class="composer-wrap">
@@ -339,7 +369,7 @@
   </main>
 
   <aside id="members">
-    <h3>Who’s online</h3>
+    <h3>Members</h3>
     <div id="memberList"></div>
   </aside>
 </div>
@@ -395,11 +425,11 @@ function ensureAvatar(uid) {
   if (avWatched[uid] || !db || !me) return; avWatched[uid] = 1;
   watch(db.ref("avatars/" + uid), "value", s => { avatars[uid] = s.val() || null; document.querySelectorAll('.avatar[data-uid="' + uid + '"]').forEach(paintAvatar); });
 }
-function makeAvatar(name, key, small) {
+function makeAvatar(name, key, small, noWatch) {
   const d = document.createElement("div");
   d.className = "avatar" + (small ? " sm" : "");
   d.dataset.uid = key; d.dataset.letter = (name || "?").charAt(0).toUpperCase();
-  paintAvatar(d); ensureAvatar(key);
+  paintAvatar(d); if (!noWatch) ensureAvatar(key);
   return d;
 }
 let toastTimer;
@@ -427,10 +457,24 @@ function mentionsMe(m) {
   if (new RegExp("(^|\\s)@" + me.name + "\\b", "i").test(m.text)) return true;
   return /(^|\s)@everyone\b/i.test(m.text) && lvl(m.uid) >= 1;
 }
-function desktopNotify(m, where) {
-  if (!document.hidden || !("Notification" in window) || Notification.permission !== "granted") return;
-  try { new Notification(m.name + " mentioned you" + (where ? " in " + where : ""), { body: String(m.text).slice(0, 120), tag: "nebula-ping" }); } catch (e) {}
+function desktopNotify(m, where, open) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  if (!document.hidden && document.hasFocus()) return;   // you're looking at the chat; the in-app ping is enough
+  try {
+    const n = new Notification(m.name + " mentioned you" + (where ? " in " + where : ""), { body: String(maskBad(m.text)).slice(0, 120), tag: "nebula-ping", renotify: true });
+    n.onclick = () => { window.focus(); if (open) open(); n.close(); };
+  } catch (e) {}
 }
+function updateNotifBar() {
+  let asked = false; try { asked = localStorage.getItem("nebulaNotifAsk") === "no"; } catch (e) {}
+  $("#notifBar").hidden = !("Notification" in window && Notification.permission === "default" && !asked);
+}
+$("#notifOn").onclick = async () => {
+  try { await Promise.resolve(Notification.requestPermission()); } catch (e) {}
+  updateNotifBar();
+  toast(Notification.permission === "granted" ? "Notifications are on. You’ll be alerted when someone @mentions you." : "Notifications are blocked. Allow them in your browser’s site settings to turn them on.");
+};
+$("#notifNo").onclick = () => { try { localStorage.setItem("nebulaNotifAsk", "no"); } catch (e) {} $("#notifBar").hidden = true; };
 let chanPings = {}, chanWatch = {};
 function watchPings() {
   if (!db || !me) return;
@@ -441,14 +485,29 @@ function watchPings() {
       if (!m || m.type === "system" || (m.ts || 0) <= sessionStart || !mentionsMe(m)) return;
       if (!currentDM && !currentRoom && currentChan === id) return;   // already handled in the open channel
       chanPings[id] = (chanPings[id] || 0) + 1; renderChannels();
-      ping(); toast(m.name + " mentioned you in #" + id); desktopNotify(m, "#" + id);
+      ping(); toast(m.name + " mentioned you in #" + id); desktopNotify(m, "#" + id, () => selectChannel(id));
     });
+  });
+}
+let roomWatch = {};
+function watchRoomPings() {
+  if (!db || !me) return;
+  Object.keys(myRooms).forEach(code => {
+    if (roomWatch[code] || roomLeft(code) <= 0) return; roomWatch[code] = 1;
+    const r = db.ref("roomMsgs/" + code).limitToLast(1);
+    const cb = snap => {
+      const m = snap.val();
+      if (!m || (m.ts || 0) <= sessionStart || !mentionsMe(m) || currentRoom === code) return;   // the open room handles its own
+      const nm = (myRooms[code] || {}).name || "a room";
+      ping(); toast(m.name + " mentioned you in " + nm); desktopNotify(m, nm, () => selectRoom(code));
+    };
+    r.on("child_added", cb, () => {}); listeners.push([r, "child_added", cb]);
   });
 }
 function fmt(text) {
   return String(text).split(/(https?:\/\/[^\s<]+)/g).map((p, i) => i % 2
     ? `<a href="${esc(p)}" target="_blank" rel="noopener noreferrer">${esc(p)}</a>`
-    : esc(p).replace(/(^|\s)@([A-Za-z0-9_]{3,16})\b/g, (m, s, n) =>
+    : esc(maskBad(p)).replace(/(^|\s)@([A-Za-z0-9_]{3,16})\b/g, (m, s, n) =>
         `${s}<span class="mention${me && (n.toLowerCase() === me.name.toLowerCase() || n.toLowerCase() === "everyone") ? " me" : ""}">@${n}</span>`)
   ).join("");
 }
@@ -460,6 +519,7 @@ let ownerUid = null;
 let roles = {}, owners = {}, usersMap = {}, currentDM = null, dmIdx = {}, dmRead = {}, chansLoaded = false, currentRoom = null, myRooms = {}, imgAccess = {};
 let channels = {};
 let presence = {};
+let presenceReady = false;
 let currentChan = null;
 let chanRef = null;
 let typingRef = null;
@@ -472,6 +532,7 @@ let stagedImg = null;
 let lastSend = 0;
 let unread = 0;
 const msgEls = new Map();
+const msgData = new Map();     // id -> raw message, so the chat filter can re-render without reloading
 let lastDay = "";
 
 const LV = { regular: 0, mod: 1, admin: 2, owner: 3 };
@@ -596,6 +657,8 @@ async function startSession(user) {
   if (ban) { showBanned(ban); return; }
 
   show("#auth", false); show("#banned", false); show("#app", true);
+  try { chatFilter = localStorage.getItem("nebulaFilter:" + me.uid) === "on"; } catch (e) { chatFilter = false; }
+  paintFilterBtn(); updateNotifBar();
   $("#meName").textContent = me.name;
   const av = $("#meAv"); av.dataset.uid = me.uid; av.dataset.letter = me.name.charAt(0).toUpperCase(); paintAvatar(av);
   updateRankUI();
@@ -604,10 +667,10 @@ async function startSession(user) {
   watch(db.ref("meta/owner"), "value", s => { ownerUid = s.val(); updateRankUI(); renderMembers(); });
   watch(db.ref("owners"), "value", s => { owners = s.val() || {}; updateRankUI(); renderMembers(); });
   watch(db.ref("roles"), "value", s => { roles = s.val() || {}; updateRankUI(); renderMembers(); });
-  watch(db.ref("users"), "value", s => { usersMap = s.val() || {}; renderMembers(); renderDMs(); });
+  watch(db.ref("users"), "value", s => { usersMap = s.val() || {}; renderMembers(); renderDMs(); refreshColors(); });
   watch(db.ref("dmIndex/" + me.uid), "value", s => { dmIdx = s.val() || {}; renderDMs(); });
   watch(db.ref("dmRead/" + me.uid), "value", s => { dmRead = s.val() || {}; renderDMs(); });
-  watch(db.ref("userRooms/" + me.uid), "value", s => { myRooms = s.val() || {}; renderRooms(); });
+  watch(db.ref("userRooms/" + me.uid), "value", s => { myRooms = s.val() || {}; renderRooms(); watchRoomPings(); });
   watch(db.ref("imageAccess"), "value", s => { imgAccess = s.val() || {}; updateImgUI(); });
   watch(db.ref("bans/" + me.uid), "value", s => { if (s.exists()) showBanned(s.val()); });
   watch(db.ref("mutes/" + me.uid), "value", s => { myMute = s.val() || 0; });
@@ -616,7 +679,11 @@ async function startSession(user) {
     if (t && t > sessionStart) { signOutNow().then(() => { $("#authErr").textContent = "An admin removed you from the chat. You can log back in."; }); }
   });
   watch(db.ref("channels"), "value", onChannels);
-  watch(db.ref("presence"), "value", s => { presence = s.val() || {}; renderMembers(); });
+  watch(db.ref("presence"), "value", s => {
+    const next = s.val() || {};
+    if (presenceReady) announcePresence(presence, next);   // the first snapshot is just the starting point
+    presenceReady = true; presence = next; renderMembers();
+  });
   watch(db.ref(".info/connected"), "value", s => {
     const on = !!s.val();
     $("#connDot").classList.toggle("off", !on);
@@ -639,8 +706,8 @@ function endSession(keepUser) {
   detachChannel();
   clearInterval(typingTick);
   if (me && db) { db.ref("presence/" + me.uid).remove().catch(() => {}); }
-  presence = {}; channels = {}; roles = {}; owners = {}; usersMap = {}; dmIdx = {}; dmRead = {}; ownerUid = null; currentChan = null; currentDM = null; currentRoom = null; myRooms = {}; imgAccess = {}; chansLoaded = false; chanPings = {}; chanWatch = {}; myMute = 0; Object.keys(avWatched).forEach(k => delete avWatched[k]);
-  msgEls.clear(); lastDay = "";
+  presence = {}; presenceReady = false; channels = {}; roles = {}; owners = {}; usersMap = {}; dmIdx = {}; dmRead = {}; ownerUid = null; currentChan = null; currentDM = null; currentRoom = null; myRooms = {}; imgAccess = {}; chansLoaded = false; chanPings = {}; chanWatch = {}; roomWatch = {}; myMute = 0; Object.keys(avWatched).forEach(k => delete avWatched[k]);
+  msgEls.clear(); msgData.clear(); lastDay = "";
   if (!keepUser) me = null;
   document.body.classList.remove("nav-open", "members-open");
 }
@@ -655,7 +722,7 @@ window.addEventListener("beforeunload", () => { if (me && db) db.ref("presence/"
 function updateRankUI() {
   if (!me) return;
   $("#meRank").textContent = LABEL[myRank()];
-  $("#addChan").hidden = lvl(me.uid) < 2; $("#logBtn").hidden = myRank() !== "owner"; updateImgUI();
+  $("#addChan").hidden = lvl(me.uid) < 3; $("#logBtn").hidden = myRank() !== "owner"; updateImgUI();
   ensureDefaults(); renderChannels(); checkCurrent();
 }
 const canSee = id => { const c = channels[id]; return !!c && me && lvl(me.uid) >= (LV[c.min] || 0); };
@@ -716,7 +783,7 @@ function selectDM(uid) {
   startConv("@", nameOf(uid), `Message @${nameOf(uid)}`); markRead();
 }
 function startConv(h, title, ph) {
-  msgEls.clear(); lastDay = ""; $("#messages").innerHTML = "";
+  msgEls.clear(); msgData.clear(); lastDay = ""; $("#messages").innerHTML = "";
   $("#chanHash").textContent = h; $("#chanTitle").textContent = title; $("#input").placeholder = ph;
   typingNames = {}; renderTyping(); renderChannels(); renderDMs(); renderRooms(); $("#roomTimer").hidden = !currentRoom;
   attachTs = now();
@@ -757,7 +824,7 @@ function onAdded(snap) {
   const el = buildMessage(id, m);
   el.dataset.day = day;
   box.appendChild(el);
-  msgEls.set(id, el);
+  msgEls.set(id, el); msgData.set(id, m);
   if (near || m.uid === me.uid) scrollBottom();
   markRead();
   if ((m.ts || 0) > attachTs && m.uid !== me.uid && m.type !== "system") {
@@ -768,7 +835,7 @@ function onAdded(snap) {
 }
 function onRemoved(snap) {
   const el = msgEls.get(snap.key);
-  if (el) { el.remove(); msgEls.delete(snap.key); }
+  if (el) { el.remove(); msgEls.delete(snap.key); msgData.delete(snap.key); }
   // tidy day separators that no longer have messages under them
   const kids = [...msgBox().children];
   kids.forEach((k, i) => { if (k.classList.contains("daysep")) { const nx = kids[i + 1]; if (!nx || nx.classList.contains("daysep")) k.remove(); } });
@@ -779,10 +846,10 @@ function onRemoved(snap) {
 function buildMessage(id, m) {
   const type = m.type || "text";
   if (type === "system") {
-    const d = document.createElement("div"); d.className = "note"; d.textContent = m.text; return d;
+    const d = document.createElement("div"); d.className = "note"; d.textContent = maskBad(m.text); return d;
   }
   if (type === "me") {
-    const d = document.createElement("div"); d.className = "note"; d.textContent = `✦ ${m.name} ${m.text}`; return d;
+    const d = document.createElement("div"); d.className = "note"; d.textContent = `✦ ${m.name} ${maskBad(m.text)}`; return d;
   }
   if (type === "announce") {
     const d = document.createElement("div"); d.className = "announce";
@@ -793,6 +860,7 @@ function buildMessage(id, m) {
   const rank = rankOf(m.uid);
   const wrap = document.createElement("div");
   wrap.className = "msg" + (mine ? " mine" : "");
+  wrap.dataset.author = m.uid;
   const av = makeAvatar(m.name, m.uid, true);
   av.onclick = ev => openUserMenu(ev, { uid: m.uid, name: m.name });
   wrap.appendChild(av);
@@ -808,6 +876,7 @@ function buildMessage(id, m) {
   col.appendChild(meta);
   const bub = document.createElement("div"); bub.className = "bubble";
   if (mentionsMe(m)) bub.classList.add("pinged");
+  paintBubble(bub, userTc(m.uid), userBc(m.uid));
   if (m.img && /^data:image\//.test(m.img)) {
     const img = document.createElement("img"); img.className = "msg-img"; img.src = m.img; img.alt = "Image sent by " + m.name;
     img.onclick = () => { $("#lightbox img").src = m.img; show("#lightbox", true); };
@@ -861,25 +930,97 @@ function renderTyping() {
   el.innerHTML = esc(who) + ' <span class="dots"><span></span><span></span><span></span></span>';
 }
 
-/* ───────── members ───────── */
-function renderMembers() {
-  const entries = Object.entries(presence).map(([uid, p]) => ({ uid, name: p.name || "?", rank: rankOf(uid) }));
-  $("#onlineCount").textContent = entries.length + " online";
-  const box = $("#memberList"); box.innerHTML = "";
-  [["owner", "Owners"], ["admin", "Admins"], ["mod", "Moderators"], ["regular", "Members"]].forEach(([r, label]) => {
-    const list = entries.filter(e => e.rank === r).sort((a, b) => a.name.localeCompare(b.name));
-    if (!list.length) return;
-    const h = document.createElement("div"); h.className = "grp"; h.textContent = `${label} · ${list.length}`; box.appendChild(h);
-    list.forEach(u => {
-      const b = document.createElement("button"); b.className = "mem";
-      b.appendChild(makeAvatar(u.name, u.uid, true));
-      const n = document.createElement("span"); n.className = "nm"; n.textContent = ICON[u.rank] + " " + u.name + (u.uid === me.uid ? " (you)" : ""); n.style.color = nameColor(u.uid);
-      b.appendChild(n);
-      const dot = document.createElement("span"); dot.className = "on-dot"; b.appendChild(dot);
-      b.onclick = ev => openUserMenu(ev, u);
-      box.appendChild(b);
-    });
+/* ───────── chat filter (each person's own setting, stored in their browser) ───────── */
+// Edit these two lists to change what gets hidden. Matching ignores case, repeated letters,
+// common look-alike characters (@ for a, 3 for e, 1 or ! for i, 0 for o, $ for s) and separators like f.u.c.k.
+// Whole words only, so "class", "assassin" or "Scunthorpe" are left alone.
+const FILTER_CURSES = [
+  "fuck", "fucker", "motherfucker", "shit", "bullshit", "horseshit", "bitch", "asshole", "dumbass", "jackass", "ass",
+  "bastard", "dick", "dickhead", "cunt", "piss", "cock", "pussy", "whore", "slut", "douche", "douchebag",
+  "wanker", "twat", "bollocks", "goddamn", "damn", "crap"
+];
+const FILTER_SLURS = [
+  "nigger", "nigga", "faggot", "fag", "dyke", "tranny", "retard", "kike", "spic", "chink", "gook",
+  "wetback", "coon", "beaner", "paki", "towelhead", "raghead"
+];
+const FILTER_LEET = { a: "a@4*", e: "e3*", i: "i1!|*", o: "o0*", u: "u*", l: "l1|", s: "s$5", t: "t7+" };
+const filterWord = w => [...w].map(c => "[" + (FILTER_LEET[c] || c) + "]{1,4}").join("[._*-]{0,2}");
+const FILTER_RE = new RegExp(
+  "(^|[^a-z0-9])(?:(?:" + FILTER_CURSES.map(filterWord).join("|") + ")(?:s|es|ed|ing|in|y|z)?|(?:" + FILTER_SLURS.map(filterWord).join("|") + ")s?)(?![a-z0-9])", "gi");
+let chatFilter = false;
+const maskBad = t => (chatFilter && t) ? String(t).replace(FILTER_RE, (m, pre) => pre + "*".repeat(m.length - pre.length)) : t;
+function paintFilterBtn() {
+  const b = $("#filterBtn"); b.classList.toggle("on", chatFilter); b.setAttribute("aria-pressed", String(chatFilter));
+  b.title = chatFilter ? "Chat filter is on. Click to turn it off." : "Chat filter is off. Click to hide slurs and curses.";
+}
+function rerenderMessages() {
+  const box = msgBox(), stick = nearBottom(), keep = box.scrollTop;
+  msgEls.forEach((el, id) => {
+    const m = msgData.get(id); if (!m) return;
+    const n = buildMessage(id, m); n.dataset.day = el.dataset.day;
+    el.replaceWith(n); msgEls.set(id, n);
   });
+  if (stick) scrollBottom(); else box.scrollTop = keep;
+}
+$("#filterBtn").onclick = () => {
+  if (!me) return;
+  chatFilter = !chatFilter;
+  try { localStorage.setItem("nebulaFilter:" + me.uid, chatFilter ? "on" : "off"); } catch (e) {}
+  paintFilterBtn(); rerenderMessages();
+  toast(chatFilter ? "Chat filter on. Slurs and curses are hidden for you." : "Chat filter off.");
+};
+
+/* ───────── members ───────── */
+const OFFLINE_MAX = 100;
+let offlineOpen = true;
+try { offlineOpen = localStorage.getItem("nebulaOfflineOpen") !== "no"; } catch (e) {}
+function renderMembers() {
+  if (!me) return;
+  const online = Object.entries(presence).map(([uid, p]) => ({ uid, name: p.name || "?", rank: rankOf(uid) }));
+  // Everyone with an account who isn't currently in presence is offline.
+  const offline = Object.entries(usersMap)
+    .filter(([uid, u]) => u && u.name && !presence[uid])
+    .map(([uid, u]) => ({ uid, name: u.name, rank: rankOf(uid) }))
+    .sort((a, b) => LV[b.rank] - LV[a.rank] || a.name.localeCompare(b.name));
+  $("#onlineCount").textContent = online.length + " online";
+  const box = $("#memberList"); box.innerHTML = "";
+  const sec = (text, first) => { const h = document.createElement("div"); h.className = "sec" + (first ? " first" : ""); h.textContent = text; box.appendChild(h); };
+  const row = (u, on) => {
+    const b = document.createElement("button"); b.className = "mem" + (on ? "" : " off");
+    b.appendChild(makeAvatar(u.name, u.uid, true, !on));
+    const n = document.createElement("span"); n.className = "nm"; n.textContent = ICON[u.rank] + " " + u.name + (u.uid === me.uid ? " (you)" : ""); n.style.color = nameColor(u.uid);
+    b.appendChild(n);
+    const dot = document.createElement("span"); dot.className = on ? "on-dot" : "off-dot"; dot.title = on ? "Online" : "Offline"; b.appendChild(dot);
+    b.onclick = ev => openUserMenu(ev, u);
+    return b;
+  };
+  const groups = (list, on) => [["owner", "Owners"], ["admin", "Admins"], ["mod", "Moderators"], ["regular", "Members"]].forEach(([r, label]) => {
+    const part = list.filter(e => e.rank === r);   // lists are already sorted by name
+    if (!part.length) return;
+    const h = document.createElement("div"); h.className = "grp"; h.textContent = `${label} · ${part.length}`; box.appendChild(h);
+    part.forEach(u => box.appendChild(row(u, on)));
+  });
+  online.sort((a, b) => a.name.localeCompare(b.name));
+  if (online.length) { sec(`Online — ${online.length}`, true); groups(online, true); }
+  if (offline.length) {
+    const h = document.createElement("button"); h.type = "button"; h.className = "sec" + (online.length ? "" : " first") + (offlineOpen ? "" : " shut");
+    h.setAttribute("aria-expanded", String(offlineOpen)); h.title = offlineOpen ? "Hide offline members" : "Show offline members";
+    h.innerHTML = `<span class="chev">▼</span><span>Offline — ${offline.length}</span>`;
+    h.onclick = () => { offlineOpen = !offlineOpen; try { localStorage.setItem("nebulaOfflineOpen", offlineOpen ? "yes" : "no"); } catch (e) {} renderMembers(); };
+    box.appendChild(h);
+    if (offlineOpen) groups(offline.slice(0, OFFLINE_MAX), false);
+    if (offlineOpen && offline.length > OFFLINE_MAX) { const d = document.createElement("div"); d.className = "more"; d.textContent = `+ ${offline.length - OFFLINE_MAX} more. Use the search next to Direct messages to find anyone.`; box.appendChild(d); }
+  }
+}
+function announcePresence(prev, next) {
+  Object.keys(next).forEach(uid => { if (!prev[uid] && uid !== me.uid) presenceNote((next[uid] || {}).name || nameOf(uid), "Joined"); });
+  Object.keys(prev).forEach(uid => { if (!next[uid] && uid !== me.uid) presenceNote((prev[uid] || {}).name || nameOf(uid), "Left"); });
+}
+function presenceNote(name, what) {
+  if (!currentChan || currentDM || currentRoom) return;   // channels only
+  const box = msgBox(), near = nearBottom(), e = $("#empty"); if (e) e.remove();
+  const d = document.createElement("div"); d.className = "note presence " + what.toLowerCase(); d.textContent = `${name} ${what}`;
+  box.appendChild(d); if (near) scrollBottom();
 }
 $("#membersBtn").onclick = () => {
   if (matchMedia("(max-width:1000px)").matches) document.body.classList.toggle("members-open");
@@ -931,6 +1072,13 @@ document.addEventListener("click", e => { if (!e.target.closest("#userMenu")) sh
 /* ───────── sending ───────── */
 const input = $("#input");
 function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 140) + "px"; }
+// Owners and admins can post every 1 second; moderators and members every 2 seconds.
+const cooldownMs = () => lvl(me.uid) >= 2 ? 1000 : 2000;
+function checkCooldown() {
+  const left = lastSend + cooldownMs() - now();
+  if (left > 0) { toast(`Slow down. You can send again in ${Math.ceil(left / 1000)}s.`); return false; }
+  lastSend = now(); return true;
+}
 async function sendMessage() {
   const raw = input.value.trim();
   if (!raw && !stagedImg) return;
@@ -940,8 +1088,7 @@ async function sendMessage() {
     await runCommand(raw); return;
   }
   if (myMute && myMute > now()) { toast("You’re muted for another " + Math.ceil((myMute - now()) / 60000) + " min."); return; }
-  if (now() - lastSend < 600) return;
-  lastSend = now();
+  if (!checkCooldown()) return;
   if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
   const msg = { uid: me.uid, name: me.name, type: "text", ts: TS() };
   if (raw) msg.text = raw;
@@ -1076,7 +1223,7 @@ const COMMANDS = {
   unban:       { level: 2, usage: "/unban <user>", desc: "Lift a ban" },
   banlist:     { level: 2, usage: "/banlist", desc: "List banned users" },
   clear:       { level: 2, usage: "/clear", desc: "Delete every message in this channel" },
-  newchannel:  { level: 2, usage: "/newchannel <name> [mod|admin|owner]", desc: "Create a channel (optionally locked to a rank)" },
+  newchannel:  { level: 3, usage: "/newchannel <name> [mod|admin|owner]", desc: "Create a permanent channel (optionally locked to a rank)" },
   delchannel:  { level: 2, usage: "/delchannel <name>", desc: "Delete a channel and its messages" },
   mod:         { level: 2, usage: "/mod <user>", desc: "Make someone a moderator" },
   unmod:       { level: 2, usage: "/unmod <user>", desc: "Remove someone’s moderator role" },
@@ -1107,6 +1254,7 @@ async function runCommand(raw) {
       case "me":
         if (!arg) throw new Error("Usage: /me <action>");
         if (myMute > now()) throw new Error("You’re muted.");
+        if (!checkCooldown()) break;
         await db.ref(msgPath()).push({ uid: me.uid, name: me.name, type: "me", text: arg, ts: TS() });
         break;
       case "whois": {
@@ -1148,6 +1296,7 @@ async function runCommand(raw) {
         break;
       case "announce":
         if (!arg) throw new Error("Usage: /announce <text>");
+        if (!checkCooldown()) break;
         await db.ref(msgPath()).push({ uid: me.uid, name: me.name, type: "announce", text: arg.slice(0, 1000), ts: TS() });
         break;
       case "newchannel": {
@@ -1266,6 +1415,54 @@ function openDirectory() {
 }
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
 
+/* ───────── text & bubble colors (saved on your profile so everyone sees them) ───────── */
+const HEX = /^#[0-9a-f]{6}$/i;
+const userTc = uid => { const c = (usersMap[uid] || {}).tc; return HEX.test(c || "") ? c : null; };
+const userBc = uid => { const c = (usersMap[uid] || {}).bc; return HEX.test(c || "") ? c : null; };
+const relLum = h => { const [r, g, b] = [1, 3, 5].map(i => { const v = parseInt(h.slice(i, i + 2), 16) / 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); }); return .2126 * r + .7152 * g + .0722 * b; };
+const contrast = (a, b) => { const x = relLum(a), y = relLum(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+const readableOn = bg => contrast(bg, "#ffffff") >= contrast(bg, "#111111") ? "#ffffff" : "#111111";
+// Returns a message if the text color would be hard to read, otherwise "".
+function colorProblem(tc, bc) {
+  if (!tc) return "";
+  if (bc) return contrast(tc, bc) < 3 ? "Those two colors are too close together to read." : "";
+  return ["#171e3d", "#6a74fa"].some(b => contrast(tc, b) < 3) ? "That text color is hard to read on the default bubble. Pick a bubble color too, or choose a lighter or brighter text." : "";
+}
+function paintBubble(bub, tc, bc) {
+  if (colorProblem(tc, bc)) tc = null;   // never show unreadable combinations
+  bub.classList.toggle("custom", !!(tc || bc)); bub.classList.toggle("cbg", !!bc);
+  bub.style.color = tc || (bc ? readableOn(bc) : ""); bub.style.background = bc || "";
+}
+function refreshColors() {
+  document.querySelectorAll(".msg[data-author]").forEach(w => { const b = w.querySelector(".bubble"); if (b) paintBubble(b, userTc(w.dataset.author), userBc(w.dataset.author)); });
+}
+function openColors() {
+  let tc = userTc(me.uid), bc = userBc(me.uid);
+  modal(`<h2>Chat colors</h2><p class="sub" style="margin:4px 0 14px">Choose how your messages look. Everyone sees these colors.</p>
+    <div class="field"><label for="clTc">Text color</label><div class="clr-row"><input type="color" class="clr" id="clTc"><button type="button" class="btn ghost" id="clTcR">Default</button></div></div>
+    <div class="field"><label for="clBc">Bubble color</label><div class="clr-row"><input type="color" class="clr" id="clBc"><button type="button" class="btn ghost" id="clBcR">Default</button></div></div>
+    <div class="field"><label>Preview</label><div class="msg mine" style="max-width:100%;align-self:stretch"><div class="col"><div class="bubble" id="clBub">Hey! This is how your messages will look.</div></div></div></div>
+    <div class="err" id="clErr"></div>
+    <button class="btn" id="clSave">Save</button><button class="btn ghost" id="clAll">Reset both</button><button class="btn ghost" id="clX">Cancel</button>`);
+  const paint = () => {
+    $("#clTc").value = tc || "#e8eaff"; $("#clBc").value = bc || "#171e3d";
+    paintBubble($("#clBub"), tc, bc);
+    const bad = colorProblem(tc, bc); $("#clErr").textContent = bad; $("#clSave").disabled = !!bad;
+  };
+  $("#clTc").oninput = e => { tc = e.target.value; paint(); };
+  $("#clBc").oninput = e => { bc = e.target.value; paint(); };
+  $("#clTcR").onclick = () => { tc = null; paint(); };
+  $("#clBcR").onclick = () => { bc = null; paint(); };
+  $("#clAll").onclick = () => { tc = bc = null; paint(); };
+  $("#clX").onclick = closeModal;
+  $("#clSave").onclick = async () => {
+    try { await db.ref("users/" + me.uid).update({ tc: tc || null, bc: bc || null }); closeModal(); toast("Colors saved."); }
+    catch (e) { $("#clErr").textContent = "Couldn’t save. Make sure you’ve published the updated database rules."; }
+  };
+  paint();
+}
+$("#colorBtn").onclick = () => openColors();
+
 /* ───────── starfield ───────── */
 (function () {
   const cv = $("#stars"), cx = cv.getContext("2d");
@@ -1377,10 +1574,10 @@ function updateImgUI() { if (!me) return; $("#attachBtn").hidden = !canImg(); if
 $("#rankBtn").onclick = () => openRanks();
 $("#logBtn").onclick = () => openLogs();
 const PERKS = {
-  owner: ["Reads every channel and the chat logs", "Adds and removes admins", "Always sends images"],
-  admin: ["Bans and unbans", "Manages channels and announcements", "Grants image permission", "Always sends images"],
-  mod: ["Deletes messages in channels", "Reads #mod", "Sends images only if granted"],
-  regular: ["Chats, sends DMs, makes temporary rooms", "Sends images only if granted"]
+  owner: ["Posts every 1 second", "Creates permanent channels", "Reads every channel and the chat logs", "Adds and removes admins", "Always sends images"],
+  admin: ["Posts every 1 second", "Bans and unbans", "Deletes channels and posts announcements", "Grants image permission", "Always sends images"],
+  mod: ["Posts every 2 seconds", "Deletes messages in channels", "Reads #mod", "Sends images only if granted"],
+  regular: ["Posts every 2 seconds", "Chats, sends DMs, makes temporary rooms", "Sends images only if granted"]
 };
 function openRanks() {
   const html = ["owner", "admin", "mod", "regular"].map(r => {
