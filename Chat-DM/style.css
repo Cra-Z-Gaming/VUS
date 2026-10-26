@@ -2544,3 +2544,6 @@ body.hide-verified .verified-tag { display: none !important; }
 @keyframes rfxNorth { 0%,100% { box-shadow: 0 0 0 3px #5eead4, 0 0 12px 3px #34d399; } 50% { box-shadow: 0 0 0 3px #c4b5fd, 0 0 16px 5px #38bdf8; } }
 .rfx-sea-w26-blizz { animation: rfxBlizz 1.2s ease-in-out infinite; }
 @keyframes rfxBlizz { 0%,100% { box-shadow: 0 0 0 3px #fff, 0 0 10px 3px #bae6fd; } 50% { box-shadow: 0 0 0 3px #bae6fd, 0 0 22px 7px #7dd3fc; } }
+
+/* ── patch 35: VUS AI channel — long replies keep their line breaks ── */
+.msg.ai-post .msg-bubble { white-space: pre-wrap; overflow-wrap: anywhere; max-width: min(100%, 760px); }

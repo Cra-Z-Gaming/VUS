@@ -48,6 +48,10 @@ const ROOM_CREATE_COOLDOWN_KEY = "vusChatLastRoomCreate";
 
 const MAX_MESSAGES = 200;
 const MAX_CHARS = 500;
+// The VUS AI account (#299816) may post up to 10,000 characters, only in the "VUS AI" channel, and is not hidden by the
+// speed / duplicate / new-account checks. Everyone else keeps the normal limits there too.
+const AI_LOGIN_ID = "299816", AI_ROOM = "ch-ai", AI_MAX_CHARS = 10000;
+function isAiSender(id) { return String(id || "") === AI_LOGIN_ID; }
 const PING_YOU_WEBHOOK_URL = "https://discord.com/api/webhooks/1536853718564216842/VZYgEyf5yEzMs03g-hbWIZRS90oNKrVh_LBN1eHv3ZVplCOUlKeRDTWKIAyolYjIshHa";
 const PING_YOU_COOLDOWN_MS = 30 * 1000;
 const PING_YOU_STORAGE_KEY = "vusChatLastPingYou";
@@ -2431,7 +2435,7 @@ function applyEdit(id, e) {
   if (String(e.by) !== m.loginId) return;                                              // only the author's own edit counts
   const ts = Number(e.ts) || 0;
   if (ts && m.ts && ts - m.ts > EDIT_WINDOW_MS + 5000) return;                         // and only inside the edit window
-  const text = e.text.slice(0, MAX_CHARS);
+  const text = e.text.slice(0, isAiSender(m.loginId) && activeChannelId === "ai" ? AI_MAX_CHARS : MAX_CHARS);
   m.text = text;
   m.bubble.textContent = "";
   fillBubbleText(m.bubble, text, m.mention);
@@ -2647,9 +2651,13 @@ function renderMessage(msg) {
     return;
   }
 
+  const aiPost = activeChannelId === "ai" && isAiSender(msg.loginId);
+  // anyone else (or the AI outside its channel) is held to the normal length
+  if (typeof msg.text === "string" && msg.text.length > MAX_CHARS && !aiPost) msg = Object.assign({}, msg, { text: msg.text.slice(0, MAX_CHARS) });
+  else if (aiPost && typeof msg.text === "string" && msg.text.length > AI_MAX_CHARS) msg = Object.assign({}, msg, { text: msg.text.slice(0, AI_MAX_CHARS) });
   const mine = msg.name === myName;
   const el = document.createElement("div");
-  el.className = "msg has-av" + (mine ? " mine" : "");
+  el.className = "msg has-av" + (mine ? " mine" : "") + (aiPost ? " ai-post" : "");
   if (msg.loginId) el.dataset.senderId = String(msg.loginId);
   if (msg.id) el.dataset.msgId = String(msg.id);
   if (msg.ts) el.dataset.ts = String(msg.ts);
@@ -2657,9 +2665,9 @@ function renderMessage(msg) {
   let hiddenForMe = false, needsVerify = false;
   if (!mine) {
     if (msg.loginId && msg.ts >= liveSince && isSilenced(msg.loginId)) { el.classList.add("silenced-hidden"); hiddenForMe = true; }   // muted/banned: a modified client's posts stay invisible here
-    else if (isSpamDuplicate(msg) || violatesRateLimit(msg)) { el.classList.add("spam-hidden"); hiddenForMe = true; }
+    else if (!isAiSender(msg.loginId) && (isSpamDuplicate(msg) || violatesRateLimit(msg))) { el.classList.add("spam-hidden"); hiddenForMe = true; }
     else if (msg.loginId && isMuted(msg.loginId)) { el.classList.add("muted-hidden"); hiddenForMe = true; }
-    if (activeChannelId !== "announce") trackNewAccountBurst(msg);
+    if (activeChannelId !== "announce" && !isAiSender(msg.loginId)) trackNewAccountBurst(msg);
     if (!hiddenForMe && msg.loginId && isMuted(msg.loginId)) hiddenForMe = true;
     // No real login id or no name = not a real account (forged client): hidden for everyone else.
     if (!/^\d{6}$/.test(String(msg.loginId || "")) || !String(msg.name || "").trim()) { el.classList.add("anon-hidden"); hiddenForMe = true; }
@@ -9073,6 +9081,7 @@ setInterval(() => checkForUpdate(false), VERSION_CHECK_EVERY_MS);
    (the chat database has no per-user auth), so it keeps honest users out and hides other senders' posts. */
 const CHANNELS = [
   { id: "main",     room: MAIN_ROOM_ID,   label: "main",     icon: "#", hint: "Everyone" },
+  { id: "ai",       room: AI_ROOM,       label: "VUS AI",   icon: "\uD83E\uDD16", hint: "Ask VUS (@VUS)" },
   { id: "verified", room: "ch-verified",  label: "verified", icon: "\u2713", hint: "Verified accounts only", verified: true },
   { id: "mods",     room: "ch-mods",      label: "mods",     icon: "\uD83D\uDEE1\uFE0F", hint: "Mods and above", minRank: ROLES.mod.rank },
   { id: "admins",   room: "ch-admins",    label: "admins",   icon: "\u2694\uFE0F", hint: "Admins and above", minRank: ROLES.admin.rank },

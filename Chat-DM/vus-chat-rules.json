@@ -1,0 +1,651 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "chatState": {
+      "closed": {
+        ".read": true,
+        ".write": false,
+        ".validate": "newData.isBoolean()"
+      },
+      "$other": {
+        ".validate": false
+      }
+    },
+    "roleIds": {
+      ".read": true,
+      "crown": {
+        "$id": {
+          ".write": "root.child('setup/CxWjka9OGcORhxsl39hgEq3F').val() === $id && !root.child('roleIds/crown').exists()",
+          ".validate": "$id.matches(/^[0-9]{4,12}$/) && newData.val() === true"
+        }
+      },
+      "coowner": {
+        "$id": {
+          ".write": "root.child('setup/CxWjka9OGcORhxsl39hgEq3F').val() === $id && !root.child('roleIds/crown').exists()",
+          ".validate": "$id.matches(/^[0-9]{4,12}$/) && newData.val() === true"
+        }
+      },
+      "admin": {
+        "$id": {
+          ".write": "!newData.exists() && data.child('expiresAt').isNumber() && data.child('expiresAt').val() <= now",
+          ".validate": "$id.matches(/^[0-9]{4,12}$/) && (newData.val() === true || newData.hasChildren(['temporary','expiresAt']))",
+          "temporary": {
+            ".validate": "newData.val() === true"
+          },
+          "expiresAt": {
+            ".validate": "newData.isNumber() && newData.val() > now && newData.val() <= now + 2764800000"
+          },
+          "grantedAt": {
+            ".validate": "newData.val() === now"
+          },
+          "byLoginId": {
+            ".validate": "newData.isString() && newData.val().length <= 12"
+          },
+          "$x": {
+            ".validate": false
+          }
+        }
+      },
+      "mod": {
+        "$id": {
+          ".write": true,
+          ".validate": "$id.matches(/^[0-9]{4,12}$/) && (newData.val() === true || newData.hasChildren(['temporary','expiresAt']))",
+          "temporary": {
+            ".validate": "newData.val() === true"
+          },
+          "expiresAt": {
+            ".validate": "newData.isNumber() && newData.val() > now && newData.val() <= now + 2764800000"
+          },
+          "grantedAt": {
+            ".validate": "newData.val() === now"
+          },
+          "byLoginId": {
+            ".validate": "newData.isString() && newData.val().length <= 12"
+          },
+          "$x": {
+            ".validate": false
+          }
+        }
+      },
+      "normie": {
+        "$id": {
+          ".write": true,
+          ".validate": "$id.matches(/^[0-9]{4,12}$/) && (newData.val() === true || newData.hasChildren(['temporary','expiresAt']))",
+          "temporary": {
+            ".validate": "newData.val() === true"
+          },
+          "expiresAt": {
+            ".validate": "newData.isNumber() && newData.val() > now && newData.val() <= now + 2764800000"
+          },
+          "grantedAt": {
+            ".validate": "newData.val() === now"
+          },
+          "byLoginId": {
+            ".validate": "newData.isString() && newData.val().length <= 12"
+          },
+          "$x": {
+            ".validate": false
+          }
+        }
+      },
+      "$other": {
+        ".validate": false
+      }
+    },
+    "userProfiles": {
+      "$id": {
+        ".read": true,
+        ".write": true,
+        ".validate": "$id.matches(/^[0-9]{4,12}$/)",
+        "imageAccess": {
+          ".validate": "newData.isBoolean()"
+        },
+        "lastName": {
+          ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40"
+        },
+        "updatedAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "color": {
+          ".validate": "newData.hasChildren(['bubble','text'])",
+          "bubble": {
+            ".validate": "newData.isString() && newData.val().matches(/^#[0-9a-fA-F]{6}$/)"
+          },
+          "text": {
+            ".validate": "newData.isString() && newData.val().matches(/^#[0-9a-fA-F]{6}$/)"
+          },
+          "changedAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "$x": {
+            ".validate": false
+          },
+          "ring": {
+            ".validate": "newData.isString() && newData.val().matches(/^#[0-9a-fA-F]{6}$/)"
+          }
+        },
+        "$x": {
+          ".validate": false
+        },
+        "cosm": {
+          ".validate": "newData.hasChildren()",
+          "ring": {
+            ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]{1,24}$/)"
+          },
+          "tag": {
+            ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]{1,24}$/)"
+          },
+          "fx": {
+            ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]{1,24}$/)"
+          },
+          "$x": {
+            ".validate": false
+          }
+        }
+      }
+    },
+    "roomsMeta": {
+      ".read": true,
+      "$code": {
+        ".write": true,
+        ".validate": "$code.length >= 1 && $code.length <= 60 && newData.hasChildren(['ownerName','expiresAt'])",
+        "name": {
+          ".validate": "newData.isString() && newData.val().length <= 30"
+        },
+        "ownerName": {
+          ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40"
+        },
+        "isPublic": {
+          ".validate": "newData.isBoolean()"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "expiresAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "kicked": {
+          "$id": {
+            ".validate": "newData.val() === true"
+          }
+        },
+        "transferOffer": {
+          ".validate": "newData.hasChildren(['fromName','toName'])",
+          "fromName": {
+            ".validate": "newData.isString() && newData.val().length <= 40"
+          },
+          "toName": {
+            ".validate": "newData.isString() && newData.val().length <= 40"
+          },
+          "$x": {
+            ".validate": false
+          }
+        },
+        "$x": {
+          ".validate": false
+        }
+      }
+    },
+    "rooms": {
+      "$room": {
+        ".write": "!newData.exists() && $room !== 'vus-hub-main' && !$room.matches(/^ch-/)",
+        ".validate": "$room.length >= 1 && $room.length <= 60",
+        "messages": {
+          ".read": true,
+          "$msg": {
+            ".write": "!data.exists() && ($room !== 'vus-hub-main' || root.child('chatState/closed').val() !== true)",
+            ".validate": "(newData.child('system').val() === true && newData.hasChildren(['text','ts']) && newData.child('text').isString() && newData.child('text').val().matches(/^.{1,300}( joined| left)$/)) || (newData.hasChildren(['name','ts']) && (newData.child('text').exists() || newData.child('imageData').exists() || newData.child('video').exists()))",
+            "name": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40 && newData.val().matches(/[^\\\\s​‌‍﻿]/) && !newData.val().matches(/[­​‌‎‏‪‫‬‭‮⁠⁦⁧⁨⁩﻿]/)"
+            },
+            "loginId": {
+              ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4,12}$/)"
+            },
+            "text": {
+              ".validate": "newData.isString() && newData.val().length <= ($room === 'ch-ai' ? 10000 : 500)"
+            },
+            "imageData": {
+              ".validate": "newData.isString() && newData.val().beginsWith('data:image/') && newData.val().length <= 700000"
+            },
+            "ts": {
+              ".validate": "newData.val() === now"
+            },
+            "mention": {
+              ".validate": "newData.isString() && newData.val().length <= 40"
+            },
+            "bubble": {
+              ".validate": "newData.isString() && newData.val().matches(/^#[0-9a-fA-F]{6}$/)"
+            },
+            "textColor": {
+              ".validate": "newData.isString() && newData.val().matches(/^#[0-9a-fA-F]{6}$/)"
+            },
+            "system": {
+              ".validate": "newData.val() === true"
+            },
+            "leftNames": {
+              "$i": {
+                ".validate": "newData.isString() && newData.val().length <= 40"
+              }
+            },
+            "replyTo": {
+              ".validate": "newData.hasChildren(['id','name','text'])",
+              "id": {
+                ".validate": "newData.isString() && newData.val().length <= 40"
+              },
+              "name": {
+                ".validate": "newData.isString() && newData.val().length <= 40"
+              },
+              "text": {
+                ".validate": "newData.isString() && newData.val().length <= 100"
+              },
+              "$x": {
+                ".validate": false
+              }
+            },
+            "$x": {
+              ".validate": false
+            },
+            "video": {
+              ".validate": "newData.hasChildren(['id','n','size','mime','dur','exp'])",
+              "id": {
+                ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{10,30}$/)"
+              },
+              "n": {
+                ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 64"
+              },
+              "size": {
+                ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 50000000"
+              },
+              "mime": {
+                ".validate": "newData.isString() && newData.val().matches(/^video\\/[A-Za-z0-9.+-]{1,30}$/)"
+              },
+              "dur": {
+                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 181"
+              },
+              "exp": {
+                ".validate": "newData.isNumber() && newData.val() > now && newData.val() <= now + 250000"
+              },
+              "$x": {
+                ".validate": false
+              }
+            },
+            "ring": {
+              ".validate": "newData.isString() && newData.val().matches(/^#[0-9a-fA-F]{6}$/)"
+            },
+            "poll": {
+              ".validate": "newData.hasChildren(['id','q','o','exp'])",
+              "id": {
+                ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9]{8}$/)"
+              },
+              "q": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 120"
+              },
+              "o": {
+                "$i": {
+                  ".validate": "$i.matches(/^[0-3]$/) && newData.isString() && newData.val().length >= 1 && newData.val().length <= 40"
+                }
+              },
+              "exp": {
+                ".validate": "newData.isNumber() && newData.val() > now && newData.val() <= now + 70000"
+              },
+              "$x": {
+                ".validate": false
+              }
+            },
+            "rfx": {
+              ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]{1,24}$/)"
+            },
+            "tag": {
+              ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]{1,24}$/)"
+            },
+            "fx": {
+              ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]{1,24}$/)"
+            }
+          }
+        },
+        "presence": {
+          ".read": true,
+          "$name": {
+            ".write": "(!newData.exists() || $room !== 'vus-hub-main' || root.child('chatState/closed').val() !== true) && (!newData.exists() || !data.exists() || data.child('loginId').val() === newData.child('loginId').val())",
+            ".validate": "$name.length >= 1 && $name.length <= 60 && $name.matches(/[^\\\\s​‌‍﻿]/) && !$name.matches(/[­​‌‎‏‪‫‬‭‮⁠⁦⁧⁨⁩﻿]/) && newData.hasChildren(['loginId','joinedAt'])",
+            "loginId": {
+              ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4,12}$/)"
+            },
+            "joinedAt": {
+              ".validate": "newData.val() === now"
+            },
+            "$x": {
+              ".validate": false
+            },
+            "afk": {
+              ".validate": "newData.isBoolean()"
+            }
+          }
+        },
+        "typing": {
+          ".read": true,
+          "$name": {
+            ".write": true,
+            ".validate": "newData.hasChildren(['name','ts'])",
+            "name": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40 && !newData.val().matches(/[­​‌‎‏‪‫‬‭‮⁠⁦⁧⁨⁩﻿]/)"
+            },
+            "ts": {
+              ".validate": "newData.isNumber()"
+            },
+            "$x": {
+              ".validate": false
+            }
+          }
+        },
+        "leaveEvents": {
+          ".read": true,
+          "$id": {
+            ".write": true,
+            ".validate": "newData.hasChildren(['name','ts'])",
+            "name": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40 && newData.val().matches(/[^\\\\s​‌‍﻿]/) && !newData.val().matches(/[­​‌‎‏‪‫‬‭‮⁠⁦⁧⁨⁩﻿]/)"
+            },
+            "ts": {
+              ".validate": "newData.isNumber()"
+            },
+            "$x": {
+              ".validate": false
+            }
+          }
+        },
+        "leaveFlushLock": {
+          ".read": true,
+          ".write": true,
+          ".validate": "newData.hasChildren(['by','at'])",
+          "by": {
+            ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 60"
+          },
+          "at": {
+            ".validate": "newData.isNumber()"
+          },
+          "$x": {
+            ".validate": false
+          }
+        },
+        "timeouts": {
+          ".read": true,
+          "$id": {
+            ".write": "!root.child('roleIds/crown/' + $id).exists() && !root.child('roleIds/coowner/' + $id).exists() && (!newData.exists() || !root.child('inventory/' + $id + '/protection').exists())",
+            ".validate": "$id.matches(/^[0-9]{4,12}$/) && newData.hasChildren(['expiresAt'])",
+            "expiresAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "by": {
+              ".validate": "newData.isString() && newData.val().length <= 12"
+            },
+            "$x": {
+              ".validate": false
+            },
+            "reason": {
+              ".validate": "newData.isString() && newData.val().length <= 100"
+            }
+          }
+        },
+        "modRetimeoutCooldowns": {
+          ".read": true,
+          "$key": {
+            ".write": true,
+            ".validate": "$key.length <= 40 && newData.isNumber()"
+          }
+        },
+        "atPingCooldowns": {
+          ".read": true,
+          "$key": {
+            ".write": true,
+            ".validate": "$key.length <= 60 && newData.isNumber()"
+          }
+        },
+        "commandHistory": {
+          ".read": true,
+          "$id": {
+            ".write": "!data.exists()",
+            ".validate": "newData.hasChildren(['command','actorName','ts'])",
+            "command": {
+              ".validate": "newData.isString() && newData.val().length <= 200"
+            },
+            "actorName": {
+              ".validate": "newData.isString() && newData.val().length <= 40"
+            },
+            "actorLoginId": {
+              ".validate": "newData.isString() && newData.val().length <= 12"
+            },
+            "ts": {
+              ".validate": "newData.val() === now"
+            },
+            "$x": {
+              ".validate": false
+            }
+          }
+        },
+        "bannedUsers": {
+          ".read": true,
+          "$id": {
+            ".write": "!root.child('roleIds/crown/' + $id).exists() && !root.child('roleIds/coowner/' + $id).exists() && (!newData.exists() || !root.child('inventory/' + $id + '/protection').exists())",
+            ".validate": "$id.matches(/^[0-9]{4,12}$/) && newData.hasChildren(['loginId','bannedAt'])",
+            "loginId": {
+              ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4,12}$/)"
+            },
+            "username": {
+              ".validate": "newData.isString() && newData.val().length <= 60"
+            },
+            "byLoginId": {
+              ".validate": "newData.isString() && newData.val().length <= 12"
+            },
+            "bannedAt": {
+              ".validate": "newData.val() === now"
+            },
+            "expiresAt": {
+              ".validate": "newData.isNumber() && newData.val() > now && newData.val() <= now + 2764800000"
+            },
+            "$x": {
+              ".validate": false
+            },
+            "reason": {
+              ".validate": "newData.isString() && newData.val().length <= 100"
+            }
+          }
+        },
+        "edits": {
+          ".read": true,
+          "$msg": {
+            ".write": "!data.exists() || data.child('by').val() === newData.child('by').val()",
+            ".validate": "$msg.length <= 40 && newData.hasChildren(['text','by','ts'])",
+            "text": {
+              ".validate": "newData.isString() && newData.val().length <= ($room === 'ch-ai' ? 10000 : 500)"
+            },
+            "by": {
+              ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4,12}$/)"
+            },
+            "ts": {
+              ".validate": "newData.val() === now"
+            },
+            "$x": {
+              ".validate": false
+            }
+          }
+        },
+        "reactions": {
+          ".read": true,
+          "$msg": {
+            "$emoji": {
+              "$uid": {
+                ".write": true,
+                ".validate": "$msg.length <= 40 && $emoji.length >= 1 && $emoji.length <= 32 && $uid.matches(/^[0-9]{4,12}$/) && newData.val() === true"
+              }
+            }
+          }
+        },
+        "actions": {
+          ".read": true,
+          "$id": {
+            ".write": "$room === 'vus-hub-main' && !data.exists() && !newData.child('votes').exists() && !newData.child('veto').exists()",
+            ".validate": "newData.hasChildren(['k','t','b','ts'])",
+            "k": {
+              ".validate": "newData.isString() && newData.val().length <= 12"
+            },
+            "t": {
+              ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4,12}$/)"
+            },
+            "b": {
+              ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4,12}$/)"
+            },
+            "d": {
+              ".validate": "newData.isNumber() && newData.val() >= 0"
+            },
+            "v": {
+              ".validate": "newData.isString() && newData.val().length <= 40"
+            },
+            "ts": {
+              ".validate": "newData.val() === now"
+            },
+            "veto": {
+              ".write": "$room === 'vus-hub-main' && !data.exists()",
+              ".validate": "newData.val() === true"
+            },
+            "$x": {
+              ".validate": false
+            }
+          }
+        },
+        "grants": {
+          ".read": true,
+          "$id": {
+            ".write": "$room === 'vus-hub-main' && !data.exists() && !newData.child('votes').exists() && !newData.child('veto').exists()",
+            ".validate": "newData.hasChildren(['k','t','b','ts'])",
+            "k": {
+              ".validate": "newData.isString() && newData.val().length <= 12"
+            },
+            "t": {
+              ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4,12}$/)"
+            },
+            "b": {
+              ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4,12}$/)"
+            },
+            "d": {
+              ".validate": "newData.isNumber() && newData.val() >= 0"
+            },
+            "v": {
+              ".validate": "newData.isString() && newData.val().length <= 40"
+            },
+            "ts": {
+              ".validate": "newData.val() === now"
+            },
+            "veto": {
+              ".write": "$room === 'vus-hub-main' && !data.exists()",
+              ".validate": "newData.val() === true"
+            },
+            "$x": {
+              ".validate": false
+            }
+          }
+        },
+        "verify": {
+          ".read": true,
+          "on": {
+            ".write": "$room === 'vus-hub-main' && !data.exists()",
+            ".validate": "newData.val() === true"
+          }
+        },
+        "mediaMeta": {
+          ".read": true,
+          "$id": {
+            ".write": "!data.exists() || !newData.exists() || newData.val() <= data.val()",
+            ".validate": "$id.matches(/^[A-Za-z0-9_-]{10,30}$/) && newData.isNumber() && newData.val() <= now + 1000000"
+          }
+        },
+        "mediaData": {
+          "$id": {
+            ".read": true,
+            ".write": "!newData.exists()",
+            "$i": {
+              ".write": "(!data.exists() && root.child('rooms/' + $room + '/mediaMeta/' + $id).exists()) || !newData.exists()",
+              ".validate": "$i.matches(/^([0-9]|[1-5][0-9]|6[0-3])$/) && newData.isString() && newData.val().length <= 1100000"
+            }
+          }
+        },
+        "polls": {
+          ".read": true,
+          "$pid": {
+            ".write": "!data.exists()",
+            ".validate": "$pid.matches(/^[a-z0-9]{8}$/) && newData.isNumber() && newData.val() > now && newData.val() <= now + 70000"
+          }
+        },
+        "pollVotes": {
+          ".read": true,
+          "$pid": {
+            "$uid": {
+              ".write": "!data.exists() && root.child('rooms/' + $room + '/polls/' + $pid).exists() && now <= root.child('rooms/' + $room + '/polls/' + $pid).val()",
+              ".validate": "$uid.matches(/^[0-9]{4,12}$/) && newData.isNumber() && newData.val() >= 0 && newData.val() <= 3"
+            }
+          }
+        }
+      }
+    },
+    "inventory": {
+      ".read": true,
+      "$id": {
+        "protection": {
+          ".write": "auth != null && auth.uid === 'cNt7lnZu6OQpkUrm860Wep635533'",
+          ".validate": "$id.matches(/^[0-9]{4,12}$/) && newData.isNumber() && newData.val() >= 1 && newData.val() <= 99"
+        }
+      }
+    },
+    "setup": {
+      ".read": false,
+      "CxWjka9OGcORhxsl39hgEq3F": {
+        ".write": "!root.child('roleIds/crown').exists()",
+        ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4,12}$/)"
+      }
+    },
+    "chatFilter": {
+      ".read": true,
+      ".write": false,
+      "$k": {
+        ".validate": "$k.length <= 40 && (newData.isNumber() || newData.isBoolean() || (newData.isString() && newData.val().length <= 40) || newData.hasChildren())",
+        "$w": {
+          ".validate": "$w.length <= 40 && (newData.isNumber() || newData.isBoolean() || (newData.isString() && newData.val().length <= 40))"
+        }
+      }
+    },
+    "crateClaims": {
+      ".read": true,
+      "$id": {
+        ".write": "$id.matches(/^[0-9]{4,12}$/) && newData.child('w').val() === (now - 14400000 - (now - 14400000) % 43200000) / 43200000 && (!data.exists() || data.child('w').val() < newData.child('w').val())",
+        ".validate": "newData.hasChildren(['w','ts'])",
+        "w": {
+          ".validate": "newData.isNumber()"
+        },
+        "ts": {
+          ".validate": "newData.val() === now"
+        },
+        "s": {
+          ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9]{2,8}$/) && root.child('crateSeasons/' + newData.val() + '/start').val() <= now && root.child('crateSeasons/' + newData.val() + '/end').val() > now"
+        },
+        "$x": {
+          ".validate": false
+        }
+      }
+    },
+    "crateSeasons": {
+      ".read": true
+    },
+    "crateInv": {
+      ".read": true,
+      "$id": {
+        "items": {
+          "$item": {
+            ".write": "$id.matches(/^[0-9]{4,12}$/) && !data.exists()",
+            ".validate": "$item.matches(/^[a-z0-9-]{1,24}$/) && newData.val() === now && (!$item.beginsWith('sea-') || $item.beginsWith('sea-' + root.child('crateClaims/' + $id + '/s').val() + '-'))"
+          }
+        }
+      }
+    }
+  }
+}
