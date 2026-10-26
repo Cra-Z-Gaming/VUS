@@ -1,6 +1,6 @@
 {
-"updated":"October 25, 2026 - 10:50 PM",
-"message":"SalTheHealer's Chat released today! go check it out even if you wont use it :)",
+"updated":"October 26, 2026 - 7:10 AM",
+"message":"New app: EDN Terminal",
 "apps":[
 {"name":"VUS-OS","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS-OS/refs/heads/main/index.html","desc":"Desktop version of VUS Hub","icon":"OS","color":"white"},
 {"name":"VUS Launcher","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL","desc":"Main game hub — V17.4","icon":"🎮","color":"green"},
@@ -21,7 +21,7 @@
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"STH","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/other/STH.html","desc":"Sal The Healer's Chat","icon":"STH","color":""},
-{"name":"","url":"","desc":"","icon":"","color":""},
+{"name":"EDN Terminal","url":"https://raw.githubusercontent.com/EdenVRCC/EdenVRCC.github.io/refs/heads/main/index.html","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
