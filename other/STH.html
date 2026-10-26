@@ -1,0 +1,1429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nebula Chat</title>
+<style>
+  :root {
+    --bg: #0a0e1f;
+    --panel: #10162d;
+    --panel2: #171e3d;
+    --line: #252d54;
+    --text: #e8eaff;
+    --mute: #8f96c7;
+    --blue: #4f8cff;
+    --violet: #8b5cf6;
+    --grad: linear-gradient(135deg, #4f8cff 0%, #8b5cf6 100%);
+    --danger: #ff6b8b;
+    --gold: #ffcf6b;
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.45;
+    overflow: hidden;
+  }
+  body::before {
+    content: "";
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(60% 50% at 8% 0%, rgba(79,140,255,.22), transparent 70%),
+      radial-gradient(55% 55% at 100% 100%, rgba(139,92,246,.24), transparent 70%);
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  input, textarea { font: inherit; color: var(--text); }
+  :focus-visible { outline: 2px solid #9db8ff; outline-offset: 2px; }
+
+  /* ---------- Full-screen cards (setup / auth / banned) ---------- */
+  .center-screen { position: fixed; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; padding: 24px; overflow-y: auto; }
+  .card {
+    width: 100%; max-width: 380px;
+    background: rgba(16,22,45,.82);
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    padding: 30px 26px;
+    backdrop-filter: blur(14px);
+    box-shadow: 0 30px 80px rgba(5,8,25,.6);
+  }
+  .card.wide { max-width: 560px; }
+  .logo { width: 44px; height: 44px; border-radius: 14px; background: var(--grad); display: grid; place-items: center; box-shadow: 0 8px 30px rgba(110,100,250,.45); margin-bottom: 14px; }
+  .logo svg { width: 24px; height: 24px; }
+  .card h1 { font-size: 26px; font-weight: 700; letter-spacing: -.01em; }
+  .card p.sub { color: var(--mute); margin: 6px 0 20px; }
+  .card h2 { font-size: 20px; margin-bottom: 8px; }
+  .card ol { margin: 10px 0 0 20px; color: var(--mute); }
+  .card ol li { margin-bottom: 6px; }
+  .card code { background: var(--panel2); border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px; font-size: 13px; color: #cdd6ff; }
+  .tabs { display: flex; background: var(--panel2); border-radius: 12px; padding: 4px; margin-bottom: 18px; }
+  .tabs button { flex: 1; border: none; background: transparent; padding: 8px; border-radius: 9px; color: var(--mute); font-weight: 600; }
+  .tabs button.on { background: var(--grad); color: #fff; }
+  .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+  .field label { font-size: 13px; color: var(--mute); font-weight: 600; }
+  .field input { background: var(--panel2); border: 1px solid var(--line); border-radius: 11px; padding: 11px 13px; outline: none; }
+  .field input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(79,140,255,.2); }
+  .err { color: var(--danger); font-size: 13px; min-height: 18px; margin-bottom: 8px; }
+  .btn { width: 100%; border: none; background: var(--grad); color: #fff; font-weight: 700; padding: 12px; border-radius: 12px; box-shadow: 0 8px 24px rgba(110,100,250,.35); }
+  .btn:hover { filter: brightness(1.08); }
+  .btn:disabled { opacity: .55; cursor: not-allowed; }
+  .btn.ghost { background: transparent; border: 1px solid var(--line); box-shadow: none; color: var(--mute); margin-top: 10px; }
+
+  /* ---------- App layout ---------- */
+  #app { position: relative; z-index: 1; height: 100dvh; display: grid; grid-template-columns: 260px minmax(0,1fr) 240px; }
+  body.hide-members #app { grid-template-columns: 260px minmax(0,1fr); }
+  body.hide-members #members { display: none; }
+  #sidebar, #members { background: rgba(14,19,40,.78); backdrop-filter: blur(10px); display: flex; flex-direction: column; min-height: 0; }
+  #sidebar { border-right: 1px solid var(--line); }
+  #members { border-left: 1px solid var(--line); }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 16px 16px 12px; font-weight: 700; font-size: 17px; }
+  .brand .logo { width: 34px; height: 34px; border-radius: 11px; margin: 0; box-shadow: none; }
+  .brand .logo svg { width: 18px; height: 18px; }
+  .side-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px 6px; color: var(--mute); font-size: 13px; font-weight: 600; }
+  .icon-btn { background: transparent; border: 1px solid transparent; border-radius: 9px; width: 30px; height: 30px; display: inline-grid; place-items: center; color: var(--mute); }
+  .icon-btn:hover { background: var(--panel2); color: var(--text); }
+  .icon-btn svg { width: 18px; height: 18px; }
+  #channelList { flex: 1; overflow-y: auto; padding: 0 8px; }
+  .chan { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: none; background: transparent; padding: 8px 10px; border-radius: 10px; color: var(--mute); }
+  .chan:hover { background: var(--panel2); color: var(--text); }
+  .chan.on { background: linear-gradient(90deg, rgba(79,140,255,.22), rgba(139,92,246,.22)); color: #fff; font-weight: 600; }
+  .chan .hash { opacity: .6; }
+  .me-card { display: flex; align-items: center; gap: 10px; padding: 12px; margin: 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel2); }
+  .me-card .who { flex: 1; min-width: 0; }
+  .me-card .who b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .me-card .who span { font-size: 12.5px; color: var(--mute); }
+
+  .avatar { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 14px; color: #fff; flex-shrink: 0; text-shadow: 0 1px 2px rgba(0,0,0,.3); }
+  .avatar.sm { width: 28px; height: 28px; font-size: 12px; }
+
+  main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .topbar { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--line); background: rgba(10,14,31,.55); backdrop-filter: blur(8px); }
+  .topbar h2 { font-size: 17px; font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar h2 .hash { color: var(--violet); margin-right: 4px; }
+  .pill { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--line); color: var(--mute); font-size: 13px; }
+  .pill:hover { color: var(--text); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #5fe3b0; box-shadow: 0 0 10px #5fe3b0; }
+  .dot.off { background: var(--danger); box-shadow: 0 0 10px var(--danger); }
+  #menuBtn { display: none; }
+
+  #messages { flex: 1; overflow-y: auto; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
+  #messages::-webkit-scrollbar, #channelList::-webkit-scrollbar, #memberList::-webkit-scrollbar { width: 8px; }
+  #messages::-webkit-scrollbar-thumb, #channelList::-webkit-scrollbar-thumb, #memberList::-webkit-scrollbar-thumb { background: var(--line); border-radius: 6px; }
+  #empty { margin: auto; text-align: center; color: var(--mute); max-width: 280px; }
+  #empty b { display: block; color: var(--text); font-size: 17px; margin-bottom: 4px; }
+
+  .msg { display: flex; gap: 10px; max-width: min(78%, 640px); align-items: flex-end; position: relative; }
+  .msg.mine { align-self: flex-end; flex-direction: row-reverse; }
+  .msg .col { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .msg.mine .col { align-items: flex-end; }
+  .meta { display: flex; align-items: center; gap: 7px; font-size: 13px; padding: 0 4px; flex-wrap: wrap; }
+  .msg.mine .meta { flex-direction: row-reverse; }
+  .meta .nm { font-weight: 700; }
+  .meta .tm { color: var(--mute); font-size: 12px; }
+  .badge { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; font-weight: 700; padding: 1px 8px; border-radius: 999px; }
+  .badge.owner { background: rgba(255,207,107,.14); color: var(--gold); border: 1px solid rgba(255,207,107,.4); }
+  .badge.admin { background: rgba(139,92,246,.18); color: #c4adff; border: 1px solid rgba(139,92,246,.5); }
+  .bubble { background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); border-bottom-left-radius: 5px; padding: 10px 14px; word-break: break-word; white-space: pre-wrap; max-width: 100%; }
+  .msg.mine .bubble { background: var(--grad); border-color: transparent; border-bottom-left-radius: var(--radius); border-bottom-right-radius: 5px; color: #fff; box-shadow: 0 8px 26px rgba(110,100,250,.28); }
+  .bubble a { color: #a9c4ff; }
+  .msg.mine .bubble a { color: #fff; text-decoration: underline; }
+  .bubble.pinged { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(79,140,255,.18); }
+  .mention { color: #b9a6ff; font-weight: 700; background: rgba(139,92,246,.16); border-radius: 6px; padding: 0 4px; }
+  .mention.me { color: #fff; background: rgba(79,140,255,.45); }
+  .msg.mine .mention { background: rgba(255,255,255,.22); color: #fff; }
+  .msg-img { display: block; max-width: min(100%, 360px); max-height: 320px; border-radius: 12px; cursor: zoom-in; margin-top: 2px; }
+  .bubble .msg-img:first-child { margin-top: 0; }
+  .bubble .cap { margin-top: 8px; display: block; }
+  .del { position: absolute; top: -8px; right: -4px; opacity: 0; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--mute); font-size: 13px; line-height: 1; transition: opacity .12s; }
+  .msg.mine .del { right: auto; left: -4px; }
+  .msg:hover .del, .del:focus-visible { opacity: 1; }
+  .del:hover { color: var(--danger); border-color: var(--danger); }
+
+  .note { align-self: center; max-width: 90%; text-align: center; color: var(--mute); font-size: 13.5px; font-style: italic; padding: 2px 10px; }
+  .note.local::after { content: " (only you can see this)"; opacity: .6; font-size: 12px; }
+  .note.err { color: var(--danger); }
+  .announce { align-self: stretch; border: 1px solid transparent; border-radius: 14px; padding: 12px 16px; background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--grad) border-box; }
+  .announce b { display: block; font-size: 13px; color: #b9a6ff; margin-bottom: 2px; }
+  .announce span { white-space: pre-wrap; word-break: break-word; }
+  .daysep { align-self: stretch; display: flex; align-items: center; gap: 12px; color: var(--mute); font-size: 12.5px; }
+  .daysep::before, .daysep::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  #typing { min-height: 22px; padding: 0 22px 4px; color: var(--mute); font-size: 13px; }
+  #typing .dots span { display: inline-block; width: 4px; height: 4px; border-radius: 50%; background: var(--mute); margin-left: 2px; animation: blink 1.2s infinite; }
+  #typing .dots span:nth-child(2) { animation-delay: .2s; }
+  #typing .dots span:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: .2; } 40% { opacity: 1; } }
+
+  .composer-wrap { padding: 0 18px calc(14px + env(safe-area-inset-bottom, 0px)); position: relative; }
+  #hints { position: absolute; bottom: 100%; left: 18px; right: 18px; margin-bottom: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 6px; max-height: 240px; overflow-y: auto; z-index: 10; box-shadow: 0 16px 40px rgba(5,8,25,.55); }
+  #hints button { display: flex; gap: 10px; width: 100%; text-align: left; background: transparent; border: none; padding: 7px 10px; border-radius: 9px; }
+  #hints button:hover, #hints button.on { background: var(--panel2); }
+  #hints b { color: #b9a6ff; min-width: 110px; }
+  #hints span { color: var(--mute); }
+  #stage { display: flex; margin-bottom: 8px; }
+  #stage .thumb { position: relative; }
+  #stage img { height: 84px; border-radius: 12px; border: 1px solid var(--line); display: block; }
+  #stage button { position: absolute; top: -8px; right: -8px; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--text); }
+  .composer { display: flex; align-items: flex-end; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 8px; }
+  .composer:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(79,140,255,.16); }
+  #input { flex: 1; resize: none; border: none; outline: none; background: transparent; padding: 8px 6px; max-height: 140px; min-height: 24px; line-height: 1.4; }
+  .send { width: 40px; height: 40px; border-radius: 13px; border: none; background: var(--grad); color: #fff; display: grid; place-items: center; flex-shrink: 0; box-shadow: 0 6px 18px rgba(110,100,250,.4); }
+  .send:hover { filter: brightness(1.1); }
+  .send svg { width: 19px; height: 19px; }
+  #emojiPop { position: absolute; bottom: 100%; right: 18px; margin-bottom: 6px; width: 264px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 8px; display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; z-index: 10; box-shadow: 0 16px 40px rgba(5,8,25,.55); }
+  #emojiPop button { background: transparent; border: none; font-size: 20px; border-radius: 8px; padding: 4px 0; }
+  #emojiPop button:hover { background: var(--panel2); }
+
+  /* ---------- Members ---------- */
+  #members h3 { padding: 16px 16px 8px; font-size: 15px; }
+  #memberList { flex: 1; overflow-y: auto; padding: 0 8px 12px; }
+  .grp { padding: 10px 8px 4px; color: var(--mute); font-size: 12.5px; font-weight: 600; }
+  .mem { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent; border: none; padding: 6px 8px; border-radius: 10px; }
+  .mem:hover { background: var(--panel2); }
+  .mem .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mem .on-dot { width: 8px; height: 8px; border-radius: 50%; background: #5fe3b0; flex-shrink: 0; }
+
+  #userMenu { position: fixed; z-index: 60; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 6px; min-width: 190px; box-shadow: 0 18px 50px rgba(5,8,25,.65); }
+  #userMenu .hd { padding: 6px 10px 8px; color: var(--mute); font-size: 12.5px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+  #userMenu button { display: block; width: 100%; text-align: left; background: transparent; border: none; padding: 8px 10px; border-radius: 9px; }
+  #userMenu button:hover { background: var(--panel2); }
+  #userMenu button.danger { color: var(--danger); }
+
+  #lightbox { position: fixed; inset: 0; z-index: 80; background: rgba(5,7,20,.9); display: flex; align-items: center; justify-content: center; padding: 20px; cursor: zoom-out; }
+  #lightbox img { max-width: 100%; max-height: 100%; border-radius: 12px; }
+  #toast { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--line); padding: 10px 16px; border-radius: 12px; z-index: 90; box-shadow: 0 12px 40px rgba(5,8,25,.6); max-width: 90vw; }
+  #scrim { display: none; }
+
+  @media (max-width: 1000px) {
+    #app, body.hide-members #app { grid-template-columns: 260px minmax(0,1fr); }
+    #members { display: none; position: fixed; right: 0; top: 0; bottom: 0; width: 270px; z-index: 40; }
+    body.members-open #members { display: flex; }
+    body.hide-members #members { display: none; }
+    body.members-open.hide-members #members { display: flex; }
+  }
+  @media (max-width: 720px) {
+    #app, body.hide-members #app { grid-template-columns: minmax(0,1fr); }
+    #sidebar { position: fixed; left: 0; top: 0; bottom: 0; width: 276px; z-index: 40; transform: translateX(-100%); transition: transform .2s ease; }
+    body.nav-open #sidebar { transform: none; }
+    body.nav-open #scrim, body.members-open #scrim { display: block; position: fixed; inset: 0; z-index: 35; background: rgba(5,7,20,.6); }
+    #menuBtn { display: inline-grid; }
+    .msg { max-width: 94%; }
+    #messages { padding: 14px 12px; }
+    .composer-wrap { padding-left: 10px; padding-right: 10px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  }
+
+  .badge.mod { background: rgba(95,227,176,.14); color: #5fe3b0; border: 1px solid rgba(95,227,176,.4); }
+  .avatar.big { width: 72px; height: 72px; font-size: 28px; }
+  .avatar[data-uid] { cursor: pointer; }
+  .pingbadge { margin-left: auto; min-width: 18px; padding: 0 6px; height: 18px; line-height: 18px; border-radius: 999px; background: #ff5d7a; color: #fff; font-size: 11px; font-weight: 700; text-align: center; box-shadow: 0 0 8px rgba(255,93,122,.6); }
+  #hints small { color: var(--mute); margin-left: auto; }
+  .unread { width: 9px; height: 9px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 8px var(--blue); }
+  #modal { z-index: 70; background: rgba(5,7,20,.72); }
+  #modalCard { max-height: 90dvh; overflow-y: auto; }
+  .pf-bio { margin: 14px 0 6px; white-space: pre-wrap; word-break: break-word; }
+  .field textarea { background: var(--panel2); border: 1px solid var(--line); border-radius: 11px; padding: 11px 13px; outline: none; resize: vertical; }
+  .field input[type=file] { padding: 8px; }
+  #pfBtns .btn, #modalCard .btn { margin-top: 8px; }
+  .dir { max-height: 50dvh; overflow-y: auto; margin-bottom: 4px; }
+  .dir .mem small { color: var(--mute); display: block; font-size: 12px; }
+
+  #stars { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+  .wordmark { background: linear-gradient(90deg, #7fb0ff, #b9a6ff, #ff9ad5, #7fb0ff); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 6s linear infinite; filter: drop-shadow(0 0 14px rgba(139,92,246,.45)); }
+  @keyframes shimmer { to { background-position: 300% 0; } }
+  .logo { animation: glow 3.5s ease-in-out infinite; }
+  @keyframes glow { 50% { box-shadow: 0 8px 42px rgba(139,92,246,.85); } }
+  #fxBtn { font-size: 15px; }
+  .field select { background: var(--panel2); border: 1px solid var(--line); border-radius: 11px; padding: 10px 12px; color: var(--text); }
+</style>
+</head>
+<body>
+<canvas id="stars" aria-hidden="true"></canvas>
+
+<!-- ============ Setup notice (shown until Firebase is configured) ============ -->
+<div class="center-screen" id="setup" hidden>
+  <div class="card wide">
+    <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></div>
+    <h2>Connect Firebase to start</h2>
+    <p class="sub">This chat needs a free Firebase project. It takes about five minutes.</p>
+    <ol>
+      <li>In the Firebase console, create a project and add a <b>Web app</b>.</li>
+      <li>Open <b>Build → Authentication</b>, click Get started, and turn on the <b>Email/Password</b> provider.</li>
+      <li>Open <b>Build → Realtime Database</b> and create a database.</li>
+      <li>On its <b>Rules</b> tab, paste the contents of <code>database.rules.json</code> and publish.</li>
+      <li>Copy your web app’s config into <code>FIREBASE_CONFIG</code> near the bottom of this file. Include the <code>databaseURL</code>.</li>
+      <li>Serve the page over http(s), for example Firebase Hosting or a local server. Authentication does not work when you open the file directly.</li>
+    </ol>
+    <p class="sub" style="margin-top:14px">The first account created becomes the owner.</p>
+  </div>
+</div>
+
+<!-- ============ Sign in / sign up ============ -->
+<div class="center-screen" id="auth" hidden>
+  <div class="card">
+    <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></div>
+    <h1 id="authTitle" class="wordmark">Nebula Chat</h1>
+    <p class="sub">Pick a username to jump in.</p>
+    <div class="tabs" role="tablist">
+      <button type="button" id="tabLogin" class="on">Log in</button>
+      <button type="button" id="tabSignup">Create account</button>
+    </div>
+    <div class="field"><label for="uName">Username</label><input id="uName" autocomplete="username" maxlength="16" spellcheck="false"></div>
+    <div class="field"><label for="uPass">Password</label><input id="uPass" type="password" autocomplete="current-password"></div>
+    <div class="field" id="confirmField" hidden><label for="uPass2">Confirm password</label><input id="uPass2" type="password" autocomplete="new-password"></div>
+    <div class="err" id="authErr"></div>
+    <button class="btn" id="authGo">Log in</button>
+  </div>
+</div>
+
+<!-- ============ Banned ============ -->
+<div class="center-screen" id="banned" hidden>
+  <div class="card">
+    <h2>You’re banned from this chat</h2>
+    <p class="sub" id="banReason"></p>
+    <button class="btn ghost" id="banOut">Log out</button>
+  </div>
+</div>
+
+<!-- ============ App ============ -->
+<div id="app" hidden>
+  <aside id="sidebar">
+    <div class="brand">
+      <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></div>
+      <span id="brandName" class="wordmark">Nebula Chat</span>
+    </div>
+    <div class="side-head"><span>Channels</span><button class="icon-btn" id="addChan" title="New channel" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button></div>
+    <nav id="channelList"></nav>
+    <div class="side-head"><span>Direct messages</span><button class="icon-btn" id="addDM" title="Find people"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button></div>
+    <nav id="dmList" style="max-height:30%;overflow-y:auto;padding:0 8px 6px"></nav>
+    <div class="side-head"><span>Temporary rooms</span><button class="icon-btn" id="addRoom" title="Create or join a room"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button></div>
+    <nav id="roomList" style="max-height:25%;overflow-y:auto;padding:0 8px 6px"></nav>
+    <div class="me-card">
+      <div class="avatar" id="meAv"></div>
+      <div class="who"><b id="meName"></b><span id="meRank"></span></div>
+      <button class="icon-btn" id="logoutBtn" title="Log out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button>
+    </div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <button class="icon-btn" id="menuBtn" title="Channels"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <h2><span class="hash" id="chanHash">#</span><span id="chanTitle">lounge</span></h2>
+      <span class="pill" id="roomTimer" hidden></span>
+      <button class="icon-btn" id="rankBtn" title="Ranks &amp; commands">📋</button>
+      <button class="icon-btn" id="logBtn" title="Chat logs" hidden>📜</button>
+      <button class="icon-btn" id="fxBtn" title="Toggle starfield">✨</button>
+      <button class="pill" id="membersBtn" title="Who’s online"><span class="dot off" id="connDot"></span><span id="onlineCount">0 online</span></button>
+    </div>
+    <div id="messages"></div>
+    <div id="typing"></div>
+    <div class="composer-wrap">
+      <div id="hints" hidden></div>
+      <div id="emojiPop" hidden></div>
+      <div id="stage" hidden></div>
+      <div class="composer">
+        <button class="icon-btn" id="attachBtn" title="Send an image"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg></button>
+        <button class="icon-btn" id="emojiBtn" title="Emoji"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9.5h.01M15 9.5h.01"/></svg></button>
+        <textarea id="input" rows="1" maxlength="1000" placeholder="Message #lounge, or type / for commands" aria-label="Message"></textarea>
+        <button class="send" id="sendBtn" title="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg></button>
+        <input type="file" id="file" accept="image/*" hidden>
+      </div>
+    </div>
+  </main>
+
+  <aside id="members">
+    <h3>Who’s online</h3>
+    <div id="memberList"></div>
+  </aside>
+</div>
+<div class="center-screen" id="modal" hidden><div class="card" id="modalCard"></div></div>
+<div id="scrim"></div>
+<div id="userMenu" hidden></div>
+<div id="lightbox" hidden><img alt=""></div>
+<div id="toast" hidden></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+/* ════════════════════════════════════════════════════════════
+   SETUP: paste your Firebase web app config here.
+   Firebase console → Project settings → Your apps → SDK setup.
+   Make sure databaseURL is included (Realtime Database).
+   ════════════════════════════════════════════════════════════ */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAtBs5TGtKaW2ABQ4FlPRIyw0FRp7BvAAo",
+  authDomain: "chatroom-3f3af.firebaseapp.com",
+  projectId: "chatroom-3f3af",
+  storageBucket: "chatroom-3f3af.firebasestorage.app",
+  messagingSenderId: "922068308559",
+  appId: "1:922068308559:web:5847eb697484f8fdae103a",
+  measurementId: "G-JY94WBMYLX",
+  databaseURL: "https://chatroom-3f3af-default-rtdb.firebaseio.com"
+};
+const APP_TITLE = "Nebula Chat";   // change the chat’s name here
+const DEFAULT_CHANNEL = "main";
+const DEFAULT_CHANNELS = [["main", 0], ["mod", "mod"], ["admin", "admin"], ["owner", "owner"]];
+
+/* ───────── helpers ───────── */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const TS = () => firebase.database.ServerValue.TIMESTAMP;
+let serverOffset = 0;
+const now = () => Date.now() + serverOffset;
+const fmtTime = ts => new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+const fmtDay = ts => new Date(ts).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+
+function hash(str) { let h = 0; for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0; return Math.abs(h); }
+function hueOf(key) { return 205 + (hash(key) % 95); }               // blue → violet → magenta range
+function avatarStyle(key) { const h = hueOf(key); return `background:linear-gradient(135deg,hsl(${h} 80% 62%),hsl(${h + 35} 75% 55%))`; }
+function nameColor(key) { return `hsl(${hueOf(key)} 85% 76%)`; }
+const avatars = {}, avWatched = {};
+function paintAvatar(el) {
+  const uid = el.dataset.uid, p = avatars[uid];
+  if (p && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(p)) { el.style.cssText = `background:url(${p}) center/cover`; el.textContent = ""; }
+  else { el.style.cssText = avatarStyle(uid); el.textContent = el.dataset.letter || "?"; }
+}
+function ensureAvatar(uid) {
+  if (avWatched[uid] || !db || !me) return; avWatched[uid] = 1;
+  watch(db.ref("avatars/" + uid), "value", s => { avatars[uid] = s.val() || null; document.querySelectorAll('.avatar[data-uid="' + uid + '"]').forEach(paintAvatar); });
+}
+function makeAvatar(name, key, small) {
+  const d = document.createElement("div");
+  d.className = "avatar" + (small ? " sm" : "");
+  d.dataset.uid = key; d.dataset.letter = (name || "?").charAt(0).toUpperCase();
+  paintAvatar(d); ensureAvatar(key);
+  return d;
+}
+let toastTimer;
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, 3200);
+}
+let audioCtx;
+function ping() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const c = audioCtx, o = c.createOscillator(), g = c.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(660, c.currentTime);
+    o.frequency.setValueAtTime(880, c.currentTime + .09);
+    g.gain.setValueAtTime(.05, c.currentTime);
+    g.gain.exponentialRampToValueAtTime(.0001, c.currentTime + .26);
+    o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + .26);
+  } catch (e) {}
+}
+/* ───────── pings ───────── */
+// A message pings you if it @mentions your name, or uses @everyone from a staff member (rank is checked from the database, not the message).
+function mentionsMe(m) {
+  if (!me || !m || !m.text || m.uid === me.uid) return false;
+  if (new RegExp("(^|\\s)@" + me.name + "\\b", "i").test(m.text)) return true;
+  return /(^|\s)@everyone\b/i.test(m.text) && lvl(m.uid) >= 1;
+}
+function desktopNotify(m, where) {
+  if (!document.hidden || !("Notification" in window) || Notification.permission !== "granted") return;
+  try { new Notification(m.name + " mentioned you" + (where ? " in " + where : ""), { body: String(m.text).slice(0, 120), tag: "nebula-ping" }); } catch (e) {}
+}
+let chanPings = {}, chanWatch = {};
+function watchPings() {
+  if (!db || !me) return;
+  Object.keys(channels).filter(canSee).forEach(id => {
+    if (chanWatch[id]) return; chanWatch[id] = 1;
+    watch(db.ref("messages/" + id).limitToLast(1), "child_added", snap => {
+      const m = snap.val();
+      if (!m || m.type === "system" || (m.ts || 0) <= sessionStart || !mentionsMe(m)) return;
+      if (!currentDM && !currentRoom && currentChan === id) return;   // already handled in the open channel
+      chanPings[id] = (chanPings[id] || 0) + 1; renderChannels();
+      ping(); toast(m.name + " mentioned you in #" + id); desktopNotify(m, "#" + id);
+    });
+  });
+}
+function fmt(text) {
+  return String(text).split(/(https?:\/\/[^\s<]+)/g).map((p, i) => i % 2
+    ? `<a href="${esc(p)}" target="_blank" rel="noopener noreferrer">${esc(p)}</a>`
+    : esc(p).replace(/(^|\s)@([A-Za-z0-9_]{3,16})\b/g, (m, s, n) =>
+        `${s}<span class="mention${me && (n.toLowerCase() === me.name.toLowerCase() || n.toLowerCase() === "everyone") ? " me" : ""}">@${n}</span>`)
+  ).join("");
+}
+
+/* ───────── state ───────── */
+let auth, db;
+let me = null;                 // { uid, name }
+let ownerUid = null;
+let roles = {}, owners = {}, usersMap = {}, currentDM = null, dmIdx = {}, dmRead = {}, chansLoaded = false, currentRoom = null, myRooms = {}, imgAccess = {};
+let channels = {};
+let presence = {};
+let currentChan = null;
+let chanRef = null;
+let typingRef = null;
+let myMute = 0;
+let sessionStart = 0;
+let listeners = [];
+let signingUp = false;
+let attachTs = 0;
+let stagedImg = null;
+let lastSend = 0;
+let unread = 0;
+const msgEls = new Map();
+let lastDay = "";
+
+const LV = { regular: 0, mod: 1, admin: 2, owner: 3 };
+const ICON = { owner: "👑", admin: "🛡️", mod: "🔨", regular: "🌙" };
+const LABEL = { owner: "👑 Owner", admin: "🛡 Admin", mod: "🔨 Moderator", regular: "Member" };
+const rankOf = uid => (uid === ownerUid || owners[uid]) ? "owner" : roles[uid] === "admin" ? "admin" : roles[uid] === "mod" ? "mod" : "regular";
+const lvl = uid => LV[rankOf(uid)];
+const myRank = () => me ? rankOf(me.uid) : "regular";
+const isStaff = () => me && lvl(me.uid) >= 1;
+function canModerate(uid) { return !!me && uid !== me.uid && lvl(me.uid) >= 1 && lvl(me.uid) > lvl(uid); }
+function badgeEl(rank) {
+  if (rank === "regular") return null;
+  const b = document.createElement("span");
+  b.className = "badge " + rank;
+  b.textContent = LABEL[rank];
+  return b;
+}
+function watch(ref, evt, cb) { ref.on(evt, cb); listeners.push([ref, evt, cb]); }
+function show(id, on) { $(id).hidden = !on; }
+
+/* ───────── boot ───────── */
+function init() {
+  if (FIREBASE_CONFIG.apiKey.startsWith("PASTE")) { show("#setup", true); return; }
+  document.title = APP_TITLE;
+  $("#authTitle").textContent = APP_TITLE;
+  $("#brandName").textContent = APP_TITLE;
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    auth = firebase.auth();
+    db = firebase.database();
+  } catch (e) {
+    $("#setup").querySelector("h2").textContent = "Couldn’t connect";
+    $("#setup").querySelector(".sub").textContent = e.message;
+    show("#setup", true); return;
+  }
+  db.ref(".info/serverTimeOffset").on("value", s => serverOffset = s.val() || 0);
+  auth.onAuthStateChanged(user => {
+    if (signingUp) return;
+    if (user) startSession(user); else showAuth();
+  });
+}
+
+/* ───────── auth UI ───────── */
+let authMode = "login";
+function showAuth() {
+  endSession();
+  show("#app", false); show("#banned", false); show("#auth", true);
+  setMode(authMode);
+}
+function setMode(mode) {
+  authMode = mode;
+  $("#tabLogin").classList.toggle("on", mode === "login");
+  $("#tabSignup").classList.toggle("on", mode === "signup");
+  $("#confirmField").hidden = mode !== "signup";
+  $("#authGo").textContent = mode === "login" ? "Log in" : "Create account";
+  $("#uPass").autocomplete = mode === "login" ? "current-password" : "new-password";
+  $("#authErr").textContent = "";
+}
+$("#tabLogin").onclick = () => setMode("login");
+$("#tabSignup").onclick = () => setMode("signup");
+["#uName", "#uPass", "#uPass2"].forEach(s => $(s).addEventListener("keydown", e => { if (e.key === "Enter") submitAuth(); }));
+$("#authGo").onclick = submitAuth;
+
+async function submitAuth() {
+  const err = $("#authErr"), btn = $("#authGo");
+  const name = $("#uName").value.trim(), pw = $("#uPass").value;
+  err.textContent = "";
+  if (!/^[A-Za-z0-9_]{3,16}$/.test(name)) { err.textContent = "Usernames are 3–16 letters, numbers or underscores."; return; }
+  if (pw.length < 6) { err.textContent = "Passwords need at least 6 characters."; return; }
+  if (authMode === "signup" && pw !== $("#uPass2").value) { err.textContent = "The passwords don’t match."; return; }
+  const lower = name.toLowerCase();
+  const email = lower + "@nebula-chat.app";
+  btn.disabled = true;
+  try {
+    if (authMode === "login") {
+      await auth.signInWithEmailAndPassword(email, pw);
+    } else {
+      signingUp = true;
+      const cred = await auth.createUserWithEmailAndPassword(email, pw);
+      const uid = cred.user.uid;
+      try {
+        await db.ref("usernames/" + lower).set(uid);
+        await db.ref("users/" + uid).set({ name, joined: TS() });
+      } catch (e) {
+        await cred.user.delete().catch(() => {});
+        throw { code: "auth/email-already-in-use" };
+      }
+      await db.ref("meta/owner").transaction(cur => cur === null ? uid : undefined).catch(() => {});
+      signingUp = false;
+      await startSession(cred.user);
+    }
+  } catch (e) {
+    signingUp = false;
+    const map = {
+      "auth/email-already-in-use": "That username is taken. Try another.",
+      "auth/user-not-found": "No account with that username.",
+      "auth/wrong-password": "Wrong password.",
+      "auth/invalid-credential": "Wrong username or password.",
+      "auth/invalid-login-credentials": "Wrong username or password.",
+      "auth/operation-not-allowed": "Email/Password sign-in isn’t enabled in your Firebase project.",
+      "auth/too-many-requests": "Too many attempts. Wait a minute and try again.",
+      "auth/network-request-failed": "Can’t reach Firebase. Check your connection."
+    };
+    err.textContent = map[e.code] || e.message || "Something went wrong.";
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* ───────── session ───────── */
+async function startSession(user) {
+  endSession();
+  let prof;
+  try { prof = (await db.ref("users/" + user.uid).once("value")).val(); } catch (e) {}
+  if (!prof) { await auth.signOut(); $("#authErr").textContent = "That account has no profile. Create a new account."; return; }
+  me = { uid: user.uid, name: prof.name };
+  sessionStart = now();
+
+  // Ban check first
+  let ban = null;
+  try { ban = (await db.ref("bans/" + me.uid).once("value")).val(); } catch (e) {}
+  if (ban) { showBanned(ban); return; }
+
+  show("#auth", false); show("#banned", false); show("#app", true);
+  $("#meName").textContent = me.name;
+  const av = $("#meAv"); av.dataset.uid = me.uid; av.dataset.letter = me.name.charAt(0).toUpperCase(); paintAvatar(av);
+  updateRankUI();
+
+  ensureAvatar(me.uid);
+  watch(db.ref("meta/owner"), "value", s => { ownerUid = s.val(); updateRankUI(); renderMembers(); });
+  watch(db.ref("owners"), "value", s => { owners = s.val() || {}; updateRankUI(); renderMembers(); });
+  watch(db.ref("roles"), "value", s => { roles = s.val() || {}; updateRankUI(); renderMembers(); });
+  watch(db.ref("users"), "value", s => { usersMap = s.val() || {}; renderMembers(); renderDMs(); });
+  watch(db.ref("dmIndex/" + me.uid), "value", s => { dmIdx = s.val() || {}; renderDMs(); });
+  watch(db.ref("dmRead/" + me.uid), "value", s => { dmRead = s.val() || {}; renderDMs(); });
+  watch(db.ref("userRooms/" + me.uid), "value", s => { myRooms = s.val() || {}; renderRooms(); });
+  watch(db.ref("imageAccess"), "value", s => { imgAccess = s.val() || {}; updateImgUI(); });
+  watch(db.ref("bans/" + me.uid), "value", s => { if (s.exists()) showBanned(s.val()); });
+  watch(db.ref("mutes/" + me.uid), "value", s => { myMute = s.val() || 0; });
+  watch(db.ref("kicks/" + me.uid), "value", s => {
+    const t = s.val();
+    if (t && t > sessionStart) { signOutNow().then(() => { $("#authErr").textContent = "An admin removed you from the chat. You can log back in."; }); }
+  });
+  watch(db.ref("channels"), "value", onChannels);
+  watch(db.ref("presence"), "value", s => { presence = s.val() || {}; renderMembers(); });
+  watch(db.ref(".info/connected"), "value", s => {
+    const on = !!s.val();
+    $("#connDot").classList.toggle("off", !on);
+    if (on && me) {
+      const p = db.ref("presence/" + me.uid);
+      p.onDisconnect().remove().then(() => p.set({ name: me.name, ts: TS() }));
+    }
+  });
+  typingTick = setInterval(renderTyping, 2000);
+  $("#input").focus();
+}
+let typingTick;
+function showBanned(ban) {
+  endSession(true);
+  show("#app", false); show("#auth", false); show("#banned", true);
+  $("#banReason").textContent = ban && ban.reason ? "Reason: " + ban.reason : "An admin removed your access.";
+}
+function endSession(keepUser) {
+  listeners.forEach(([r, e, c]) => r.off(e, c)); listeners = [];
+  detachChannel();
+  clearInterval(typingTick);
+  if (me && db) { db.ref("presence/" + me.uid).remove().catch(() => {}); }
+  presence = {}; channels = {}; roles = {}; owners = {}; usersMap = {}; dmIdx = {}; dmRead = {}; ownerUid = null; currentChan = null; currentDM = null; currentRoom = null; myRooms = {}; imgAccess = {}; chansLoaded = false; chanPings = {}; chanWatch = {}; myMute = 0; Object.keys(avWatched).forEach(k => delete avWatched[k]);
+  msgEls.clear(); lastDay = "";
+  if (!keepUser) me = null;
+  document.body.classList.remove("nav-open", "members-open");
+}
+async function signOutNow() {
+  if (me && db) { try { await db.ref("presence/" + me.uid).remove(); } catch (e) {} }
+  return auth.signOut();
+}
+$("#logoutBtn").onclick = () => signOutNow();
+$("#banOut").onclick = () => signOutNow();
+window.addEventListener("beforeunload", () => { if (me && db) db.ref("presence/" + me.uid).remove(); });
+
+function updateRankUI() {
+  if (!me) return;
+  $("#meRank").textContent = LABEL[myRank()];
+  $("#addChan").hidden = lvl(me.uid) < 2; $("#logBtn").hidden = myRank() !== "owner"; updateImgUI();
+  ensureDefaults(); renderChannels(); checkCurrent();
+}
+const canSee = id => { const c = channels[id]; return !!c && me && lvl(me.uid) >= (LV[c.min] || 0); };
+function ensureDefaults() {
+  if (!me || !chansLoaded || myRank() !== "owner") return;
+  DEFAULT_CHANNELS.forEach(([id, min]) => {
+    if (!channels[id]) db.ref("channels/" + id).set(min ? { name: id, min, by: me.uid, ts: TS() } : { name: id, by: me.uid, ts: TS() }).catch(() => {});
+  });
+}
+function onChannels(snap) { channels = snap.val() || {}; chansLoaded = true; ensureDefaults(); renderChannels(); checkCurrent(); }
+function checkCurrent() {
+  if (currentDM || currentRoom || (currentChan && canSee(currentChan))) return;
+  const v = Object.keys(channels).filter(canSee);
+  if (v.length) selectChannel(canSee(DEFAULT_CHANNEL) ? DEFAULT_CHANNEL : v.sort()[0]);
+}
+function renderChannels() {
+  const box = $("#channelList"); box.innerHTML = "";
+  const ord = id => { const i = DEFAULT_CHANNELS.findIndex(d => d[0] === id); return i < 0 ? 99 : i; };
+  Object.keys(channels).filter(canSee).sort((a, b) => ord(a) - ord(b) || a.localeCompare(b)).forEach(id => {
+    const b = document.createElement("button");
+    b.className = "chan" + (id === currentChan ? " on" : "");
+    b.innerHTML = `<span class="hash">#</span><span>${esc(id)}</span>` + (chanPings[id] ? `<span class="pingbadge" title="You were mentioned">${chanPings[id]}</span>` : "");
+    b.onclick = () => selectChannel(id);
+    box.appendChild(b);
+  });
+  watchPings();
+}
+const pairId = o => [me.uid, o].sort().join("_");
+const nameOf = uid => (usersMap[uid] || {}).name || (dmIdx[uid] || {}).name || "user";
+const msgPath = () => currentRoom ? "roomMsgs/" + currentRoom : currentDM ? "dms/" + pairId(currentDM) + "/messages" : "messages/" + currentChan;
+const typePath = () => currentRoom ? "roomTyping/" + currentRoom : currentDM ? "dmTyping/" + pairId(currentDM) : "typing/" + currentChan;
+function markRead() { if (currentDM) db.ref("dmRead/" + me.uid + "/" + currentDM).set(TS()).catch(() => {}); }
+function renderDMs() {
+  const box = $("#dmList"); if (!box) return; box.innerHTML = "";
+  Object.entries(dmIdx).sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0)).forEach(([uid, d]) => {
+    const b = document.createElement("button"); b.className = "chan" + (uid === currentDM ? " on" : "");
+    const un = uid !== currentDM && (d.ts || 0) > (dmRead[uid] || 0);
+    b.innerHTML = `<span class="hash">@</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis">${esc(nameOf(uid))}</span>` + (un ? '<span class="unread"></span>' : "");
+    b.onclick = () => selectDM(uid); box.appendChild(b);
+  });
+}
+$("#addChan").onclick = () => {
+  const n = prompt("New channel name (add mod, admin or owner after it to lock it), e.g. “staff admin”:");
+  if (n) runCommand("/newchannel " + n);
+};
+function detachChannel() {
+  stopTyping();
+  if (chanRef) { chanRef.off(); chanRef = null; }
+  if (typingRef) { typingRef.off(); typingRef = null; }
+}
+function selectChannel(id) {
+  if (!canSee(id)) return;
+  detachChannel(); currentChan = id; currentDM = null; currentRoom = null; delete chanPings[id];
+  startConv("#", id, `Message #${id}, or type / for commands`);
+}
+function selectDM(uid) {
+  detachChannel(); currentDM = uid; currentChan = null; currentRoom = null;
+  startConv("@", nameOf(uid), `Message @${nameOf(uid)}`); markRead();
+}
+function startConv(h, title, ph) {
+  msgEls.clear(); lastDay = ""; $("#messages").innerHTML = "";
+  $("#chanHash").textContent = h; $("#chanTitle").textContent = title; $("#input").placeholder = ph;
+  typingNames = {}; renderTyping(); renderChannels(); renderDMs(); renderRooms(); $("#roomTimer").hidden = !currentRoom;
+  attachTs = now();
+  chanRef = db.ref(msgPath()).limitToLast(80);
+  chanRef.on("child_added", onAdded, e => localNote("Couldn’t load messages: " + e.message, true));
+  chanRef.on("child_removed", onRemoved);
+  typingRef = db.ref(typePath());
+  typingRef.on("value", s => { typingNames = s.val() || {}; renderTyping(); });
+  updateEmpty();
+  document.body.classList.remove("nav-open");
+}
+/* ───────── rendering messages ───────── */
+const msgBox = () => $("#messages");
+const nearBottom = () => { const m = msgBox(); return m.scrollHeight - m.scrollTop - m.clientHeight < 140; };
+const scrollBottom = () => { const m = msgBox(); m.scrollTop = m.scrollHeight; };
+function updateEmpty() {
+  let e = $("#empty");
+  if (msgEls.size === 0 && !msgBox().querySelector(".note")) {
+    if (!e) {
+      e = document.createElement("div"); e.id = "empty";
+      e.innerHTML = "<b>It’s quiet in here</b>Say hello and start the conversation.";
+      msgBox().appendChild(e);
+    }
+  } else if (e) e.remove();
+}
+function onAdded(snap) {
+  const m = snap.val(), id = snap.key;
+  if (!m || msgEls.has(id)) return;
+  const near = nearBottom();
+  const box = msgBox();
+  const day = new Date(m.ts || now()).toDateString();
+  const e = $("#empty"); if (e) e.remove();
+  if (day !== lastDay) {
+    lastDay = day;
+    const s = document.createElement("div"); s.className = "daysep"; s.textContent = fmtDay(m.ts || now());
+    box.appendChild(s);
+  }
+  const el = buildMessage(id, m);
+  el.dataset.day = day;
+  box.appendChild(el);
+  msgEls.set(id, el);
+  if (near || m.uid === me.uid) scrollBottom();
+  markRead();
+  if ((m.ts || 0) > attachTs && m.uid !== me.uid && m.type !== "system") {
+    const pinged = currentDM || mentionsMe(m);
+    if (pinged) { ping(); if (mentionsMe(m)) desktopNotify(m, currentDM ? "a DM" : currentRoom ? "a room" : "#" + currentChan); }
+    if (document.hidden) { unread++; document.title = `(${unread}) ${APP_TITLE}`; }
+  }
+}
+function onRemoved(snap) {
+  const el = msgEls.get(snap.key);
+  if (el) { el.remove(); msgEls.delete(snap.key); }
+  // tidy day separators that no longer have messages under them
+  const kids = [...msgBox().children];
+  kids.forEach((k, i) => { if (k.classList.contains("daysep")) { const nx = kids[i + 1]; if (!nx || nx.classList.contains("daysep")) k.remove(); } });
+  const last = [...msgBox().children].reverse().find(k => k.dataset && k.dataset.day);
+  lastDay = last ? last.dataset.day : "";
+  updateEmpty();
+}
+function buildMessage(id, m) {
+  const type = m.type || "text";
+  if (type === "system") {
+    const d = document.createElement("div"); d.className = "note"; d.textContent = m.text; return d;
+  }
+  if (type === "me") {
+    const d = document.createElement("div"); d.className = "note"; d.textContent = `✦ ${m.name} ${m.text}`; return d;
+  }
+  if (type === "announce") {
+    const d = document.createElement("div"); d.className = "announce";
+    d.innerHTML = `<b>Announcement from ${esc(m.name)}</b><span>${fmt(m.text)}</span>`;
+    return d;
+  }
+  const mine = m.uid === me.uid;
+  const rank = rankOf(m.uid);
+  const wrap = document.createElement("div");
+  wrap.className = "msg" + (mine ? " mine" : "");
+  const av = makeAvatar(m.name, m.uid, true);
+  av.onclick = ev => openUserMenu(ev, { uid: m.uid, name: m.name });
+  wrap.appendChild(av);
+  const col = document.createElement("div"); col.className = "col";
+  const meta = document.createElement("div"); meta.className = "meta";
+  const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = m.name;
+  if (!mine) nm.style.color = nameColor(m.uid);
+  else nm.style.color = "#c9d4ff";
+  meta.appendChild(nm);
+  const bd = badgeEl(rank); if (bd) meta.appendChild(bd);
+  const tm = document.createElement("span"); tm.className = "tm"; tm.textContent = fmtTime(m.ts || now());
+  meta.appendChild(tm);
+  col.appendChild(meta);
+  const bub = document.createElement("div"); bub.className = "bubble";
+  if (mentionsMe(m)) bub.classList.add("pinged");
+  if (m.img && /^data:image\//.test(m.img)) {
+    const img = document.createElement("img"); img.className = "msg-img"; img.src = m.img; img.alt = "Image sent by " + m.name;
+    img.onclick = () => { $("#lightbox img").src = m.img; show("#lightbox", true); };
+    bub.appendChild(img);
+    if (m.text) { const c = document.createElement("span"); c.className = "cap"; c.innerHTML = fmt(m.text); bub.appendChild(c); }
+  } else {
+    bub.innerHTML = fmt(m.text || "");
+  }
+  col.appendChild(bub);
+  wrap.appendChild(col);
+  if (mine || (!currentDM && !currentRoom && canModerate(m.uid))) {
+    const del = document.createElement("button"); del.className = "del"; del.title = "Delete message"; del.textContent = "✕";
+    del.onclick = () => db.ref(`${msgPath()}/${id}`).remove().catch(() => toast("You can’t delete that message."));
+    wrap.appendChild(del);
+  }
+  return wrap;
+}
+function localNote(text, isErr) {
+  const d = document.createElement("div"); d.className = "note local" + (isErr ? " err" : ""); d.textContent = text;
+  const e = $("#empty"); if (e) e.remove();
+  msgBox().appendChild(d); scrollBottom();
+}
+$("#lightbox").onclick = () => show("#lightbox", false);
+document.addEventListener("keydown", e => { if (e.key === "Escape") { show("#lightbox", false); show("#userMenu", false); show("#emojiPop", false); closeHints(); } });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { unread = 0; document.title = APP_TITLE; } });
+
+/* ───────── typing ───────── */
+let typingNames = {}, typingOn = false, typingTimer, lastTypingWrite = 0;
+function noteTyping() {
+  if ((!currentChan && !currentDM && !currentRoom) || !me) return;
+  const t = now();
+  if (!typingOn || t - lastTypingWrite > 2500) {
+    typingOn = true; lastTypingWrite = t;
+    const r = db.ref(`${typePath()}/${me.uid}`);
+    r.onDisconnect().remove();
+    r.set({ name: me.name, ts: TS() }).catch(() => {});
+  }
+  clearTimeout(typingTimer); typingTimer = setTimeout(stopTyping, 3000);
+}
+function stopTyping() {
+  clearTimeout(typingTimer);
+  if (!typingOn || !me || (!currentChan && !currentDM && !currentRoom)) { typingOn = false; return; }
+  typingOn = false;
+  db.ref(`${typePath()}/${me.uid}`).remove().catch(() => {});
+}
+function renderTyping() {
+  const names = Object.entries(typingNames).filter(([uid, v]) => me && uid !== me.uid && v && now() - v.ts < 7000).map(([uid, v]) => ICON[rankOf(uid)] + " " + v.name);
+  const el = $("#typing");
+  if (!names.length) { el.textContent = ""; return; }
+  const who = names.length === 1 ? names[0] + " is typing" : names.length === 2 ? names.join(" and ") + " are typing" : "Several people are typing";
+  el.innerHTML = esc(who) + ' <span class="dots"><span></span><span></span><span></span></span>';
+}
+
+/* ───────── members ───────── */
+function renderMembers() {
+  const entries = Object.entries(presence).map(([uid, p]) => ({ uid, name: p.name || "?", rank: rankOf(uid) }));
+  $("#onlineCount").textContent = entries.length + " online";
+  const box = $("#memberList"); box.innerHTML = "";
+  [["owner", "Owners"], ["admin", "Admins"], ["mod", "Moderators"], ["regular", "Members"]].forEach(([r, label]) => {
+    const list = entries.filter(e => e.rank === r).sort((a, b) => a.name.localeCompare(b.name));
+    if (!list.length) return;
+    const h = document.createElement("div"); h.className = "grp"; h.textContent = `${label} · ${list.length}`; box.appendChild(h);
+    list.forEach(u => {
+      const b = document.createElement("button"); b.className = "mem";
+      b.appendChild(makeAvatar(u.name, u.uid, true));
+      const n = document.createElement("span"); n.className = "nm"; n.textContent = ICON[u.rank] + " " + u.name + (u.uid === me.uid ? " (you)" : ""); n.style.color = nameColor(u.uid);
+      b.appendChild(n);
+      const dot = document.createElement("span"); dot.className = "on-dot"; b.appendChild(dot);
+      b.onclick = ev => openUserMenu(ev, u);
+      box.appendChild(b);
+    });
+  });
+}
+$("#membersBtn").onclick = () => {
+  if (matchMedia("(max-width:1000px)").matches) document.body.classList.toggle("members-open");
+  else document.body.classList.toggle("hide-members");
+};
+$("#menuBtn").onclick = () => document.body.classList.add("nav-open");
+$("#scrim").onclick = () => document.body.classList.remove("nav-open", "members-open");
+
+function openUserMenu(ev, u) {
+  const menu = $("#userMenu"); menu.innerHTML = "";
+  const hd = document.createElement("div"); hd.className = "hd"; hd.textContent = u.name; menu.appendChild(hd);
+  const add = (label, fn, danger) => {
+    const b = document.createElement("button"); b.textContent = label; if (danger) b.className = "danger";
+    b.onclick = async () => { show("#userMenu", false); try { await fn(); } catch (e) { toast(e.message || "That didn’t work."); } };
+    menu.appendChild(b);
+  };
+  const t = { uid: u.uid, name: u.name };
+  add("View profile", () => openProfile(u.uid));
+  if (u.uid !== me.uid) {
+    add("Send message", () => selectDM(u.uid));
+    add("Mention", () => { const i = $("#input"); i.value += (i.value && !i.value.endsWith(" ") ? " " : "") + "@" + u.name + " "; i.focus(); });
+  }
+  if (canModerate(u.uid)) {
+    add("Mute for 10 minutes", () => mod.mute(t, 10));
+    add("Unmute", () => mod.unmute(t));
+    add("Kick", () => mod.kick(t));
+    if (levelOf() >= 2) {
+      add("Ban…", () => { const r = prompt("Reason for banning " + u.name + " (optional):"); if (r !== null) return mod.ban(t, r); }, true);
+      add(rankOf(u.uid) === "mod" ? "Remove moderator" : "Make moderator", () => rankOf(u.uid) === "mod" ? mod.unmod(t) : mod.mod(t));
+    }
+  }
+  if (levelOf() >= 2 && u.uid !== me.uid && lvl(u.uid) < 2) add(imgAccess[u.uid] ? "Remove image permission" : "Allow images", () => imgAccess[u.uid] ? mod.takeimg(t) : mod.giveimg(t));
+  if (myRank() === "owner" && u.uid !== me.uid) {
+    if (rankOf(u.uid) === "owner") { if (me.uid === ownerUid && u.uid !== ownerUid) add("Remove owner", () => mod.removeowner(t), true); }
+    else {
+      add(rankOf(u.uid) === "admin" ? "Remove admin" : "Make admin", () => rankOf(u.uid) === "admin" ? mod.demote(t) : mod.promote(t));
+      if (me.uid === ownerUid) add("Make owner", () => mod.addowner(t));
+    }
+  }
+  if (menu.children.length === 1) return;
+  menu.hidden = false;
+  const r = menu.getBoundingClientRect();
+  menu.style.left = Math.max(8, Math.min(ev.clientX, innerWidth - r.width - 8)) + "px";
+  menu.style.top = Math.max(8, Math.min(ev.clientY, innerHeight - r.height - 8)) + "px";
+  ev.stopPropagation();
+}
+document.addEventListener("click", e => { if (!e.target.closest("#userMenu")) show("#userMenu", false); if (!e.target.closest("#emojiPop,#emojiBtn")) show("#emojiPop", false); });
+
+/* ───────── sending ───────── */
+const input = $("#input");
+function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 140) + "px"; }
+async function sendMessage() {
+  const raw = input.value.trim();
+  if (!raw && !stagedImg) return;
+  if (!currentChan && !currentDM && !currentRoom) return;
+  if (raw.startsWith("/") && !stagedImg) {
+    input.value = ""; autosize(); closeHints();
+    await runCommand(raw); return;
+  }
+  if (myMute && myMute > now()) { toast("You’re muted for another " + Math.ceil((myMute - now()) / 60000) + " min."); return; }
+  if (now() - lastSend < 600) return;
+  lastSend = now();
+  if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
+  const msg = { uid: me.uid, name: me.name, type: "text", ts: TS() };
+  if (raw) msg.text = raw;
+  if (stagedImg) msg.img = stagedImg;
+  input.value = ""; autosize(); clearStage(); stopTyping(); closeHints();
+  try {
+    if (currentDM) {
+      const o = currentDM, k = db.ref(msgPath()).push().key, last = (raw || "📷 Image").slice(0, 60), u = {};
+      u[msgPath() + "/" + k] = msg;
+      u["dmIndex/" + me.uid + "/" + o] = { name: nameOf(o), last, ts: TS() };
+      u["dmIndex/" + o + "/" + me.uid] = { name: me.name, last, ts: TS() };
+      await db.ref().update(u); markRead();
+    } else await db.ref(msgPath()).push(msg);
+  }
+  catch (e) { toast(e.code === "PERMISSION_DENIED" ? "That message was blocked. You may be muted." : "Couldn’t send. Try again."); }
+}
+$("#sendBtn").onclick = sendMessage;
+input.addEventListener("keydown", e => {
+  const h = $("#hints");
+  if (!h.hidden) {
+    const items = [...h.children];
+    let idx = items.findIndex(b => b.classList.contains("on"));
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      items.forEach(b => b.classList.remove("on"));
+      idx = e.key === "ArrowDown" ? (idx + 1) % items.length : (idx - 1 + items.length) % items.length;
+      items[idx].classList.add("on"); return;
+    }
+    if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && h.dataset.mode === "mention")) { e.preventDefault(); (items[idx] || items[0]).click(); return; }
+  }
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+input.addEventListener("input", () => { autosize(); noteTyping(); updateHints(); });
+
+/* emoji */
+const EMOJIS = ["😀","😂","🥹","😍","😎","🤔","😭","😡","👍","👎","🙏","👏","🔥","✨","💜","💙","🎉","💯","👀","🚀","🌌","⭐","🌙","☕","🍕","🎮","🎵","💀","🫡","🤝","😴","🤯"];
+$("#emojiPop").innerHTML = "";
+EMOJIS.forEach(e => {
+  const b = document.createElement("button"); b.type = "button"; b.textContent = e;
+  b.onclick = () => { const p = input.selectionStart ?? input.value.length; input.value = input.value.slice(0, p) + e + input.value.slice(p); input.focus(); input.setSelectionRange(p + e.length, p + e.length); };
+  $("#emojiPop").appendChild(b);
+});
+$("#emojiBtn").onclick = ev => { ev.stopPropagation(); $("#emojiPop").hidden = !$("#emojiPop").hidden; };
+
+/* images */
+$("#attachBtn").onclick = () => $("#file").click();
+$("#file").onchange = e => { if (e.target.files[0]) stageImage(e.target.files[0]); e.target.value = ""; };
+input.addEventListener("paste", e => {
+  const it = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith("image/"));
+  if (it) { e.preventDefault(); stageImage(it.getAsFile()); }
+});
+["dragover", "drop"].forEach(ev => $("#messages").addEventListener(ev, e => {
+  e.preventDefault();
+  if (ev === "drop") { const f = [...(e.dataTransfer?.files || [])].find(f => f.type.startsWith("image/")); if (f) stageImage(f); }
+}));
+function stageImage(file) {
+  if (!canImg()) { toast("You need permission from an admin or owner to send images."); return; }
+  if (!file || !file.type.startsWith("image/")) { toast("Choose an image file."); return; }
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    let scale = Math.min(1, 900 / Math.max(img.width, img.height));
+    let out = null;
+    for (let attempt = 0; attempt < 5 && !out; attempt++) {
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(img.width * scale)); c.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0, c.width, c.height);
+      for (const q of [0.8, 0.65, 0.5]) { const d = c.toDataURL("image/jpeg", q); if (d.length < 380000) { out = d; break; } }
+      scale *= 0.75;
+    }
+    if (!out) { toast("That image is too large to send."); return; }
+    stagedImg = out;
+    const st = $("#stage"); st.innerHTML = "";
+    const w = document.createElement("div"); w.className = "thumb";
+    const im = document.createElement("img"); im.src = out; im.alt = "Image ready to send";
+    const x = document.createElement("button"); x.type = "button"; x.textContent = "✕"; x.title = "Remove image"; x.onclick = clearStage;
+    w.append(im, x); st.appendChild(w); st.hidden = false;
+    input.focus();
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); toast("Couldn’t read that image."); };
+  img.src = url;
+}
+function clearStage() { stagedImg = null; $("#stage").hidden = true; $("#stage").innerHTML = ""; }
+
+/* ───────── moderation ───────── */
+async function sys(text) {
+  db.ref("modLog").push({ uid: me.uid, name: me.name, text: text.slice(0, 300), ts: TS() }).catch(() => {});
+  try { await db.ref("messages/" + (currentChan || DEFAULT_CHANNEL)).push({ uid: me.uid, name: me.name, type: "system", text, ts: TS() }); } catch (e) {}
+}
+async function resolveUser(raw) {
+  const lower = String(raw || "").replace(/^@/, "").toLowerCase();
+  if (!lower) throw new Error("Tell me which user, for example /kick @name.");
+  const uid = (await db.ref("usernames/" + lower).once("value")).val();
+  if (!uid) throw new Error("No user named “" + raw.replace(/^@/, "") + "”.");
+  const prof = (await db.ref("users/" + uid).once("value")).val();
+  return { uid, name: prof ? prof.name : lower };
+}
+function need(t) { if (!canModerate(t.uid)) throw new Error("You can’t do that to " + t.name + "."); }
+const needAdmin = () => { if (levelOf() < 2) throw new Error("Only admins can do that."); };
+const needFounder = () => { if (me.uid !== ownerUid) throw new Error("Only the original owner can add or remove owners."); };
+const needOwner = () => { if (myRank() !== "owner") throw new Error("Only owners can do that."); };
+const mod = {
+  async kick(t) { need(t); await db.ref("kicks/" + t.uid).set(TS()); await sys(`${t.name} was kicked by ${me.name}.`); },
+  async mute(t, mins) { need(t); mins = Math.max(1, Math.min(10080, Math.round(mins) || 10)); await db.ref("mutes/" + t.uid).set(now() + mins * 60000); await sys(`${t.name} was muted for ${mins} min by ${me.name}.`); },
+  async unmute(t) { need(t); await db.ref("mutes/" + t.uid).remove(); await sys(`${t.name} was unmuted by ${me.name}.`); },
+  async ban(t, reason) { needAdmin(); need(t); await db.ref("bans/" + t.uid).set({ by: me.uid, byName: me.name, reason: reason || "", ts: TS() }); await sys(`${t.name} was banned by ${me.name}.`); },
+  async unban(t) { needAdmin(); need(t); await db.ref("bans/" + t.uid).remove(); await sys(`${t.name} was unbanned by ${me.name}.`); },
+  async giveimg(t) { needAdmin(); if (lvl(t.uid) >= 2) throw new Error("Admins and owners can always send images."); await db.ref("imageAccess/" + t.uid).set(true); await sys(`${t.name} can now send images (granted by ${me.name}).`); },
+  async takeimg(t) { needAdmin(); if (lvl(t.uid) >= 2) throw new Error("Admins and owners can always send images."); await db.ref("imageAccess/" + t.uid).remove(); await sys(`${t.name} can no longer send images.`); },
+  async mod(t) { needAdmin(); need(t); await db.ref("roles/" + t.uid).set("mod"); await sys(`${t.name} is now a moderator.`); },
+  async unmod(t) { needAdmin(); if (rankOf(t.uid) !== "mod") throw new Error(t.name + " isn’t a moderator."); await db.ref("roles/" + t.uid).remove(); await sys(`${t.name} is no longer a moderator.`); },
+  async promote(t) { needOwner(); if (rankOf(t.uid) === "owner") throw new Error(t.name + " is already an owner."); await db.ref("roles/" + t.uid).set("admin"); await sys(`${t.name} is now an admin.`); },
+  async demote(t) { needOwner(); if (rankOf(t.uid) !== "admin") throw new Error(t.name + " isn’t an admin."); await db.ref("roles/" + t.uid).remove(); await sys(`${t.name} is no longer an admin.`); },
+  async addowner(t) { needFounder(); if (rankOf(t.uid) === "owner") throw new Error(t.name + " is already an owner."); await db.ref("owners/" + t.uid).set(true); await db.ref("roles/" + t.uid).remove().catch(() => {}); await sys(`${t.name} is now an owner.`); },
+  async removeowner(t) { needFounder(); if (t.uid === ownerUid) throw new Error("The original owner can’t be removed."); if (rankOf(t.uid) !== "owner") throw new Error(t.name + " isn’t an owner."); await db.ref("owners/" + t.uid).remove(); await sys(`${t.name} is no longer an owner.`); }
+};
+
+/* ───────── commands ───────── */
+const COMMANDS = {
+  help:        { level: 0, usage: "/help", desc: "Show the commands you can use" },
+  me:          { level: 0, usage: "/me <action>", desc: "Say something as an action" },
+  whois:       { level: 0, usage: "/whois <user>", desc: "See someone’s rank and join date" },
+  profile:     { level: 0, usage: "/profile <user>", desc: "Open someone’s profile" },
+  dm:          { level: 0, usage: "/dm <user>", desc: "Open a direct message" },
+  ranks:       { level: 0, usage: "/ranks", desc: "See what every rank can do" },
+  kick:        { level: 1, usage: "/kick <user>", desc: "Remove someone; they can log back in" },
+  mute:        { level: 1, usage: "/mute <user> [minutes]", desc: "Stop someone from posting" },
+  unmute:      { level: 1, usage: "/unmute <user>", desc: "Let someone post again" },
+  announce:    { level: 2, usage: "/announce <text>", desc: "Post a highlighted announcement" },
+  ban:         { level: 2, usage: "/ban <user> [reason]", desc: "Block someone from the chat" },
+  unban:       { level: 2, usage: "/unban <user>", desc: "Lift a ban" },
+  banlist:     { level: 2, usage: "/banlist", desc: "List banned users" },
+  clear:       { level: 2, usage: "/clear", desc: "Delete every message in this channel" },
+  newchannel:  { level: 2, usage: "/newchannel <name> [mod|admin|owner]", desc: "Create a channel (optionally locked to a rank)" },
+  delchannel:  { level: 2, usage: "/delchannel <name>", desc: "Delete a channel and its messages" },
+  mod:         { level: 2, usage: "/mod <user>", desc: "Make someone a moderator" },
+  unmod:       { level: 2, usage: "/unmod <user>", desc: "Remove someone’s moderator role" },
+  giveimages:  { level: 2, usage: "/giveimages <user>", desc: "Let someone send images" },
+  takeimages:  { level: 2, usage: "/takeimages <user>", desc: "Remove someone’s image permission" },
+  promote:     { level: 3, usage: "/promote <user>", desc: "Make someone an admin" },
+  demote:      { level: 3, usage: "/demote <user>", desc: "Remove someone’s admin rank" },
+  addowner:    { level: 3, usage: "/addowner <user>", desc: "Make someone an owner (original owner only)" },
+  removeowner: { level: 3, usage: "/removeowner <user>", desc: "Remove an owner (original owner only)" },
+  logs:        { level: 3, usage: "/logs", desc: "View chat and moderation logs" }
+};
+const levelOf = () => lvl(me.uid);
+const available = () => Object.entries(COMMANDS).filter(([, c]) => c.level <= levelOf());
+
+async function runCommand(raw) {
+  const parts = raw.slice(1).trim().split(/\s+/);
+  const name = (parts.shift() || "").toLowerCase();
+  const arg = parts.join(" ");
+  const def = COMMANDS[name];
+  if (!def) { localNote(`Unknown command “/${name}”. Type /help to see what you can use.`, true); return; }
+  if ((currentDM || currentRoom) && !["help", "me", "whois", "profile", "dm", "ranks"].includes(name)) { localNote("That command only works in channels.", true); return; }
+  if (def.level > levelOf()) { localNote("You don’t have permission to use /" + name + ".", true); return; }
+  try {
+    switch (name) {
+      case "help":
+        localNote("Commands: " + available().map(([k, c]) => c.usage + " – " + c.desc).join("   |   "));
+        break;
+      case "me":
+        if (!arg) throw new Error("Usage: /me <action>");
+        if (myMute > now()) throw new Error("You’re muted.");
+        await db.ref(msgPath()).push({ uid: me.uid, name: me.name, type: "me", text: arg, ts: TS() });
+        break;
+      case "whois": {
+        const t = await resolveUser(parts[0]);
+        const prof = (await db.ref("users/" + t.uid).once("value")).val() || {};
+        const r = rankOf(t.uid);
+        localNote(`${t.name}: ${LABEL[r].replace(/^\S+ /, "")}, joined ${prof.joined ? new Date(prof.joined).toLocaleDateString() : "unknown"}, ${presence[t.uid] ? "online now" : "offline"}.`);
+        break;
+      }
+      case "ranks": openRanks(); break;
+      case "logs": openLogs(); break;
+      case "giveimages": await mod.giveimg(await resolveUser(parts[0])); break;
+      case "takeimages": await mod.takeimg(await resolveUser(parts[0])); break;
+      case "profile": { const t = await resolveUser(parts[0]); openProfile(t.uid); break; }
+      case "dm": { const t = await resolveUser(parts[0]); if (t.uid === me.uid) throw new Error("You can’t DM yourself."); selectDM(t.uid); break; }
+      case "mod":         await mod.mod(await resolveUser(parts[0])); break;
+      case "unmod":       await mod.unmod(await resolveUser(parts[0])); break;
+      case "addowner":    await mod.addowner(await resolveUser(parts[0])); break;
+      case "removeowner": await mod.removeowner(await resolveUser(parts[0])); break;
+      case "kick":    await mod.kick(await resolveUser(parts[0])); break;
+      case "mute":    await mod.mute(await resolveUser(parts[0]), parseInt(parts[1], 10) || 10); break;
+      case "unmute":  await mod.unmute(await resolveUser(parts[0])); break;
+      case "ban":     await mod.ban(await resolveUser(parts[0]), parts.slice(1).join(" ")); break;
+      case "unban":   await mod.unban(await resolveUser(parts[0])); break;
+      case "promote": await mod.promote(await resolveUser(parts[0])); break;
+      case "demote":  await mod.demote(await resolveUser(parts[0])); break;
+      case "banlist": {
+        const bans = (await db.ref("bans").once("value")).val() || {};
+        const ids = Object.keys(bans);
+        if (!ids.length) { localNote("Nobody is banned."); break; }
+        const names = await Promise.all(ids.map(async id => ((await db.ref("users/" + id).once("value")).val() || {}).name || id));
+        localNote("Banned: " + names.join(", "));
+        break;
+      }
+      case "clear":
+        if (!confirm("Delete every message in #" + currentChan + "?")) break;
+        await db.ref(msgPath()).remove();
+        await sys(`${me.name} cleared this channel.`);
+        break;
+      case "announce":
+        if (!arg) throw new Error("Usage: /announce <text>");
+        await db.ref(msgPath()).push({ uid: me.uid, name: me.name, type: "announce", text: arg.slice(0, 1000), ts: TS() });
+        break;
+      case "newchannel": {
+        const [nm, minArg] = arg.split(/\s+/); const min = ["mod", "admin", "owner"].includes((minArg || "").toLowerCase()) ? minArg.toLowerCase() : null;
+        if (min && LV[min] > levelOf()) throw new Error("You can’t make a channel above your own rank.");
+        const id = (nm || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 20);
+        if (id.length < 2) throw new Error("Channel names need 2–20 letters or numbers.");
+        if (channels[id]) throw new Error("#" + id + " already exists.");
+        await db.ref("channels/" + id).set(min ? { name: id, min, by: me.uid, ts: TS() } : { name: id, by: me.uid, ts: TS() });
+        selectChannel(id);
+        break;
+      }
+      case "delchannel": {
+        const id = arg.toLowerCase().replace(/^#/, "");
+        if (DEFAULT_CHANNELS.some(d => d[0] === id)) throw new Error("#" + id + " is a built-in channel and can’t be deleted.");
+        if (!channels[id]) throw new Error("No channel named #" + id + ".");
+        if (!confirm("Delete #" + id + " and all its messages?")) break;
+        await db.ref("messages/" + id).remove();
+        await db.ref("channels/" + id).remove();
+        break;
+      }
+    }
+  } catch (e) {
+    localNote(e.code === "PERMISSION_DENIED" || /permission_denied/i.test(e.message || "") ? "Permission denied. The server wouldn’t allow that." : (e.message || "That didn’t work."), true);
+  }
+}
+
+/* command hints */
+function closeHints() { $("#hints").hidden = true; }
+function mentionHints(mm, caret) {
+  const h = $("#hints"), v = input.value, q = mm[2].toLowerCase(), start = caret - mm[2].length - 1;
+  const list = Object.entries(usersMap).filter(([uid, u]) => u && u.name && uid !== me.uid && u.name.toLowerCase().startsWith(q))
+    .map(([uid, u]) => ({ name: u.name, on: !!presence[uid] })).sort((a, b) => b.on - a.on || a.name.localeCompare(b.name)).slice(0, 6);
+  if (isStaff() && !currentDM && !currentRoom && "everyone".startsWith(q)) list.unshift({ name: "everyone", all: true });
+  if (!list.length) { h.hidden = true; return; }
+  h.dataset.mode = "mention"; h.innerHTML = "";
+  list.forEach((u, i) => {
+    const b = document.createElement("button"); b.type = "button"; if (i === 0) b.className = "on";
+    b.innerHTML = `<b>@${esc(u.name)}</b><span>${u.all ? "notify everyone in this channel" : u.on ? "online" : "offline"}</span>`;
+    b.onclick = () => { const t = "@" + u.name + " "; input.value = v.slice(0, start) + t + v.slice(caret); const p = start + t.length; h.hidden = true; input.focus(); input.setSelectionRange(p, p); autosize(); };
+    h.appendChild(b);
+  });
+  h.hidden = false;
+}
+function updateHints() {
+  const v = input.value, h = $("#hints");
+  const caret = input.selectionStart ?? v.length;
+  const mm = /(^|\s)@([A-Za-z0-9_]{0,16})$/.exec(v.slice(0, caret));
+  if (mm && !v.startsWith("/")) { mentionHints(mm, caret); return; }
+  h.dataset.mode = "cmd";
+  if (!v.startsWith("/") || /\s/.test(v)) { h.hidden = true; return; }
+  const q = v.slice(1).toLowerCase();
+  const list = available().filter(([k]) => k.startsWith(q));
+  if (!list.length) { h.hidden = true; return; }
+  h.innerHTML = "";
+  list.forEach(([k, c], i) => {
+    const b = document.createElement("button"); b.type = "button"; if (i === 0) b.className = "on";
+    b.innerHTML = `<b>${esc(c.usage.split(" ")[0])}</b><span>${esc(c.desc)}</span>`;
+    b.onclick = () => { input.value = "/" + k + " "; h.hidden = true; input.focus(); autosize(); };
+    h.appendChild(b);
+  });
+  h.hidden = false;
+}
+
+/* ───────── profiles & member directory ───────── */
+function modal(html, wide) { $("#modalCard").className = "card" + (wide ? " wide" : ""); $("#modalCard").innerHTML = html; $("#modal").hidden = false; return $("#modalCard"); }
+function closeModal() { $("#modal").hidden = true; }
+$("#modal").onclick = e => { if (e.target.id === "modal") closeModal(); };
+$("#meAv").onclick = () => openProfile(me.uid);
+$("#addDM").onclick = () => openDirectory();
+const fmtJoin = ts => ts ? new Date(ts).toLocaleDateString([], { year: "numeric", month: "long", day: "numeric" }) : "unknown";
+function openProfile(uid) {
+  const u = usersMap[uid]; if (!u) { toast("Profile not found."); return; }
+  const c = modal(`<div style="display:flex;gap:14px;align-items:center"><div id="pfAv"></div><div style="min-width:0"><h2 style="margin:0 0 4px" id="pfName"></h2><div id="pfBadge"></div></div></div><p class="pf-bio" id="pfBio"></p><p class="sub" style="margin:10px 0 14px" id="pfInfo"></p><div id="pfBtns"></div>`);
+  const av = makeAvatar(u.name, uid); av.classList.add("big"); $("#pfAv").replaceWith(av);
+  $("#pfName").textContent = u.name;
+  const bd = badgeEl(rankOf(uid)); if (bd) $("#pfBadge").appendChild(bd);
+  $("#pfBio").textContent = u.bio || (uid === me.uid ? "You haven’t written a bio yet." : "No bio yet.");
+  $("#pfInfo").textContent = `Joined ${fmtJoin(u.joined)} · ${presence[uid] ? "online" : "offline"}`;
+  const add = (t, fn, ghost) => { const b = document.createElement("button"); b.className = "btn" + (ghost ? " ghost" : ""); b.textContent = t; b.onclick = fn; $("#pfBtns").appendChild(b); };
+  if (uid === me.uid) add("Edit profile", editProfile); else add("Send message", () => { closeModal(); selectDM(uid); });
+  add("Close", closeModal, true);
+}
+function squarePhoto(file) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); const z = Math.min(img.width, img.height), c = document.createElement("canvas"); c.width = c.height = 160; c.getContext("2d").drawImage(img, (img.width - z) / 2, (img.height - z) / 2, z, z, 0, 0, 160, 160); res(c.toDataURL("image/jpeg", .82)); };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(); }; img.src = url;
+  });
+}
+function editProfile() {
+  modal(`<h2>Edit profile</h2><p class="sub">Joined ${fmtJoin((usersMap[me.uid] || {}).joined)}</p><div class="field"><label for="pfFile">Profile photo</label><input type="file" id="pfFile" accept="image/*"></div><div class="field"><label for="pfBioIn">Bio</label><textarea id="pfBioIn" maxlength="200" rows="4" placeholder="Tell people about yourself"></textarea></div><div class="err" id="pfErr"></div><button class="btn" id="pfSave">Save</button><button class="btn ghost" id="pfRm">Remove photo</button><button class="btn ghost" id="pfX">Cancel</button>`);
+  $("#pfBioIn").value = (usersMap[me.uid] || {}).bio || "";
+  let photo = null;
+  $("#pfFile").onchange = async e => { const f = e.target.files[0]; if (!f) return; try { photo = await squarePhoto(f); $("#pfErr").textContent = "Photo ready. Press Save."; } catch (x) { $("#pfErr").textContent = "Couldn’t read that image."; } };
+  $("#pfSave").onclick = async () => {
+    try { const up = {}; up["users/" + me.uid + "/bio"] = $("#pfBioIn").value.trim().slice(0, 200) || null; if (photo) up["avatars/" + me.uid] = photo; await db.ref().update(up); closeModal(); toast("Profile saved."); }
+    catch (x) { $("#pfErr").textContent = "Couldn’t save. Check your database rules."; }
+  };
+  $("#pfRm").onclick = async () => { try { await db.ref("avatars/" + me.uid).remove(); closeModal(); toast("Photo removed."); } catch (x) { $("#pfErr").textContent = "Couldn’t remove it."; } };
+  $("#pfX").onclick = closeModal;
+}
+function openDirectory() {
+  modal(`<h2>Members</h2><div class="field" style="margin-top:10px"><input id="dirQ" placeholder="Search people" autocomplete="off"></div><div class="dir" id="dirList"></div><button class="btn ghost" id="dirX">Close</button>`);
+  $("#dirX").onclick = closeModal;
+  const draw = () => {
+    const q = $("#dirQ").value.trim().toLowerCase(), box = $("#dirList"); box.innerHTML = "";
+    Object.entries(usersMap).filter(([, u]) => u.name.toLowerCase().includes(q)).sort((a, b) => lvl(b[0]) - lvl(a[0]) || a[1].name.localeCompare(b[1].name)).forEach(([uid, u]) => {
+      const b = document.createElement("button"); b.className = "mem"; b.appendChild(makeAvatar(u.name, uid, true));
+      const w = document.createElement("span"); w.className = "nm"; w.innerHTML = `${esc(u.name)}${uid === me.uid ? " (you)" : ""} <small>${LABEL[rankOf(uid)]} · joined ${esc(fmtJoin(u.joined))}</small>`;
+      b.appendChild(w); if (presence[uid]) { const d = document.createElement("span"); d.className = "on-dot"; b.appendChild(d); }
+      b.onclick = () => openProfile(uid); box.appendChild(b);
+    });
+  };
+  $("#dirQ").oninput = draw; draw(); $("#dirQ").focus();
+}
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+
+/* ───────── starfield ───────── */
+(function () {
+  const cv = $("#stars"), cx = cv.getContext("2d");
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let on = true, W, H, stars = [], shoot = null, nextShoot = 0, raf;
+  try { on = localStorage.getItem("nebulaFx") !== "off"; } catch (e) {}
+  function size() {
+    const d = devicePixelRatio || 1; W = innerWidth; H = innerHeight;
+    cv.width = W * d; cv.height = H * d; cx.setTransform(d, 0, 0, d, 0, 0);
+    stars = Array.from({ length: Math.round(W * H / 9000) }, () => ({ x: Math.random() * W, y: Math.random() * H, r: Math.random() * 1.4 + .3, p: Math.random() * 6.28, s: Math.random() * .02 + .005, v: Math.random() * .12 + .02, h: 200 + Math.random() * 100 }));
+  }
+  function frame(t) {
+    cx.clearRect(0, 0, W, H);
+    if (on) {
+      for (const st of stars) {
+        const a = .35 + .65 * Math.abs(Math.sin(st.p + t * st.s * .06));
+        cx.fillStyle = `hsla(${st.h},90%,85%,${a})`; cx.beginPath(); cx.arc(st.x, st.y, st.r, 0, 6.28); cx.fill();
+        if (!still) { st.y += st.v; if (st.y > H + 2) { st.y = -2; st.x = Math.random() * W; } }
+      }
+      if (!still) {
+        if (!shoot && t > nextShoot) { shoot = { x: Math.random() * W * .8, y: Math.random() * H * .4, l: 0 }; nextShoot = t + 4000 + Math.random() * 6000; }
+        if (shoot) {
+          const g = cx.createLinearGradient(shoot.x, shoot.y, shoot.x - 120, shoot.y - 60);
+          g.addColorStop(0, "rgba(255,255,255,.95)"); g.addColorStop(1, "rgba(139,92,246,0)");
+          cx.strokeStyle = g; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(shoot.x, shoot.y); cx.lineTo(shoot.x - 120, shoot.y - 60); cx.stroke();
+          shoot.x += 14; shoot.y += 7; if (shoot.x > W + 130 || shoot.y > H + 70) shoot = null;
+        }
+      }
+    }
+    if (!still && !document.hidden) raf = requestAnimationFrame(frame);
+  }
+  const start = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(frame); };
+  size(); start();
+  addEventListener("resize", () => { size(); start(); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) start(); });
+  const btn = $("#fxBtn"), paint = () => btn.style.opacity = on ? 1 : .4;
+  paint();
+  btn.onclick = () => { on = !on; try { localStorage.setItem("nebulaFx", on ? "on" : "off"); } catch (e) {} paint(); start(); };
+})();
+
+/* ───────── temporary rooms (join code, 30 minute life) ───────── */
+const ROOM_MS = 30 * 60000, CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789", expiring = {};
+const roomLeft = c => (myRooms[c] ? myRooms[c].created + ROOM_MS - now() : 0);
+function renderRooms() {
+  const box = $("#roomList"); if (!box) return; box.innerHTML = "";
+  Object.entries(myRooms).filter(([c]) => roomLeft(c) > 0).sort((a, b) => b[1].created - a[1].created).forEach(([c, r]) => {
+    const b = document.createElement("button"); b.className = "chan" + (c === currentRoom ? " on" : "");
+    b.innerHTML = `<span class="hash">🔑</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis">${esc(r.name)}</span><span style="opacity:.5;font-size:12px">${esc(c)}</span>`;
+    b.onclick = () => selectRoom(c); box.appendChild(b);
+  });
+}
+function selectRoom(code) {
+  const r = myRooms[code]; if (!r) return;
+  detachChannel(); currentRoom = code; currentChan = null; currentDM = null;
+  startConv("🔑", r.name, `Message ${r.name}`); tickRooms();
+}
+async function expireRoom(code) {
+  if (expiring[code]) return; expiring[code] = 1;
+  try { await db.ref().update({ ["roomMsgs/" + code]: null, ["roomTyping/" + code]: null, ["rooms/" + code]: null }); } catch (e) {}
+  try { await db.ref("userRooms/" + me.uid + "/" + code).remove(); } catch (e) {}
+}
+function tickRooms() {
+  if (!me) return;
+  Object.keys(myRooms).forEach(c => { if (roomLeft(c) <= 0) expireRoom(c); });
+  if (currentRoom) {
+    const l = roomLeft(currentRoom);
+    if (l <= 0) { toast("That room expired and was deleted."); selectChannel(DEFAULT_CHANNEL); return; }
+    const t = Math.ceil(l / 1000); $("#roomTimer").textContent = `⏳ ${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
+  }
+  renderRooms();
+}
+setInterval(tickRooms, 1000);
+$("#addRoom").onclick = () => openRooms();
+function openRooms() {
+  modal(`<h2>Temporary rooms</h2><p class="sub" style="margin:4px 0 14px">Private rooms you enter with a code. They last 30 minutes, then everything in them is deleted.</p><div class="field"><label for="rmName">Room name (optional)</label><input id="rmName" maxlength="20" autocomplete="off"></div><button class="btn" id="rmCreate">Create room</button><div class="field" style="margin-top:18px"><label for="rmCode">Have a code?</label><input id="rmCode" maxlength="6" placeholder="ABC123" autocomplete="off" style="text-transform:uppercase"></div><div class="err" id="rmErr"></div><button class="btn ghost" id="rmJoin">Join room</button><button class="btn ghost" id="rmX">Close</button>`);
+  $("#rmX").onclick = closeModal;
+  $("#rmCreate").onclick = async () => {
+    const name = $("#rmName").value.trim().slice(0, 20);
+    for (let i = 0; i < 4; i++) {
+      const code = Array.from({ length: 6 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join(""), nm = name || "Room " + code;
+      try {
+        await db.ref("rooms/" + code).set({ info: { name: nm, by: me.uid, created: TS() }, members: { [me.uid]: true } });
+        const created = (await db.ref("rooms/" + code + "/info/created").once("value")).val();
+        await db.ref("userRooms/" + me.uid + "/" + code).set({ name: nm, created });
+        modal(`<h2>Room created</h2><p class="sub" style="margin:4px 0 8px">Share this code. The room closes in 30 minutes.</p><div style="font-size:38px;font-weight:800;letter-spacing:.18em;text-align:center;margin:10px 0 14px" class="wordmark">${code}</div><button class="btn" id="rmEnter">Enter room</button><button class="btn ghost" id="rmCopy">Copy code</button>`);
+        $("#rmEnter").onclick = () => { closeModal(); selectRoom(code); };
+        $("#rmCopy").onclick = () => { try { navigator.clipboard.writeText(code); toast("Code copied."); } catch (e) { toast(code); } };
+        return;
+      } catch (e) { if (i === 3) $("#rmErr").textContent = "Couldn’t create a room. Check your database rules."; }
+    }
+  };
+  $("#rmJoin").onclick = async () => {
+    const code = $("#rmCode").value.trim().toUpperCase(), err = $("#rmErr");
+    if (!/^[A-Z2-9]{6}$/.test(code)) { err.textContent = "Codes are 6 letters and numbers."; return; }
+    try {
+      const info = (await db.ref("rooms/" + code + "/info").once("value")).val();
+      if (!info) { err.textContent = "No room with that code."; return; }
+      if (info.created + ROOM_MS <= now()) { err.textContent = "That room has expired."; return; }
+      await db.ref("rooms/" + code + "/members/" + me.uid).set(true);
+      await db.ref("userRooms/" + me.uid + "/" + code).set({ name: info.name, created: info.created });
+      closeModal(); selectRoom(code);
+    } catch (e) { err.textContent = "Couldn’t join that room."; }
+  };
+}
+
+/* ───────── image permission, ranks & logs ───────── */
+const canImg = () => !!me && (lvl(me.uid) >= 2 || imgAccess[me.uid] === true);
+function updateImgUI() { if (!me) return; $("#attachBtn").hidden = !canImg(); if (!canImg()) clearStage(); }
+$("#rankBtn").onclick = () => openRanks();
+$("#logBtn").onclick = () => openLogs();
+const PERKS = {
+  owner: ["Reads every channel and the chat logs", "Adds and removes admins", "Always sends images"],
+  admin: ["Bans and unbans", "Manages channels and announcements", "Grants image permission", "Always sends images"],
+  mod: ["Deletes messages in channels", "Reads #mod", "Sends images only if granted"],
+  regular: ["Chats, sends DMs, makes temporary rooms", "Sends images only if granted"]
+};
+function openRanks() {
+  const html = ["owner", "admin", "mod", "regular"].map(r => {
+    const cmds = Object.values(COMMANDS).filter(c => c.level === LV[r]);
+    return `<div style="border:1px solid ${r === myRank() ? "var(--blue)" : "var(--line)"};border-radius:14px;padding:10px 12px;margin-bottom:10px"><b>${ICON[r]} ${esc(LABEL[r].replace(/^\S+ /, ""))}${r === myRank() ? " (you)" : ""}</b><div style="color:var(--mute);font-size:13px;margin:4px 0">${PERKS[r].map(esc).join(" · ")}</div>${cmds.map(c => `<div style="font-size:13.5px"><b style="color:#b9a6ff">${esc(c.usage)}</b> <span style="color:var(--mute)">${esc(c.desc)}</span></div>`).join("")}</div>`;
+  }).join("");
+  modal(`<h2>Ranks &amp; commands</h2><p class="sub" style="margin:4px 0 12px">Each rank also has every command of the ranks below it.</p><div class="dir" style="max-height:60dvh">${html}</div><button class="btn ghost" id="rkX">Close</button>`, true);
+  $("#rkX").onclick = closeModal;
+}
+function openLogs() {
+  if (myRank() !== "owner") return;
+  const chans = Object.keys(channels).sort(); let tab = "m", rows = [];
+  modal(`<h2>Chat logs</h2><p class="sub" style="margin:4px 0 12px">Last 300 entries. Direct messages and temporary rooms are never logged.</p><div class="tabs"><button type="button" id="lgM" class="on">Messages</button><button type="button" id="lgA">Actions</button></div><div class="field" id="lgSel"><select id="lgChan">${chans.map(c => `<option>${esc(c)}</option>`).join("")}</select></div><div class="field"><input id="lgQ" placeholder="Filter by name or text" autocomplete="off"></div><div class="dir" id="lgList" style="font-size:13.5px"></div><button class="btn ghost" id="lgX">Close</button>`, true);
+  $("#lgX").onclick = closeModal;
+  const draw = () => {
+    const q = $("#lgQ").value.toLowerCase(), box = $("#lgList"); box.innerHTML = "";
+    const list = rows.filter(r => (r.who + " " + r.txt).toLowerCase().includes(q));
+    if (!list.length) { box.textContent = "Nothing here."; return; }
+    list.slice().reverse().forEach(r => {
+      const d = document.createElement("div"); d.style.cssText = "padding:5px 4px;border-bottom:1px solid var(--line);word-break:break-word";
+      d.innerHTML = `<span style="color:var(--mute)">${esc(new Date(r.ts || 0).toLocaleString())}</span> <b style="color:${nameColor(r.uid)}">${ICON[rankOf(r.uid)]} ${esc(r.who)}</b>: ${esc(r.txt)}`;
+      box.appendChild(d);
+    });
+  };
+  const load = async () => {
+    $("#lgList").textContent = "Loading…"; $("#lgSel").hidden = tab !== "m";
+    try {
+      if (tab === "m") {
+        const v = (await db.ref("messages/" + $("#lgChan").value).limitToLast(300).once("value")).val() || {};
+        rows = Object.values(v).map(m => ({ ts: m.ts, uid: m.uid, who: m.name, txt: (m.type === "system" ? "[system] " : m.type === "announce" ? "[announcement] " : "") + (m.text || "") + (m.img ? " [image]" : "") }));
+      } else {
+        const v = (await db.ref("modLog").limitToLast(300).once("value")).val() || {};
+        rows = Object.values(v).map(m => ({ ts: m.ts, uid: m.uid, who: m.name, txt: m.text }));
+      }
+      draw();
+    } catch (e) { $("#lgList").textContent = "Couldn’t load logs. Check your database rules."; }
+  };
+  $("#lgM").onclick = () => { tab = "m"; $("#lgM").classList.add("on"); $("#lgA").classList.remove("on"); load(); };
+  $("#lgA").onclick = () => { tab = "a"; $("#lgA").classList.add("on"); $("#lgM").classList.remove("on"); load(); };
+  $("#lgChan").onchange = load; $("#lgQ").oninput = draw; load();
+}
+
+init();
+</script>
+</body>
+</html>
