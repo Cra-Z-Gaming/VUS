@@ -5292,7 +5292,23 @@ function renderInventory() {
   $inventoryList.innerHTML = "";
   const mine = (myLoginId && inventoryData[String(myLoginId)]) || {};
   const owned = Object.entries(mine).filter(([, qty]) => Number(qty) > 0);
+  try { ensureCrateWatch(); } catch (e) {}
+  const stock = typeof crateStock === "function" ? crateStock() : 0;
+  if (stock > 0) {   // crates always sit on top; clicking them goes to the crate menu (1x / 3x / Max + crate type)
+    const card = document.createElement("button");
+    card.type = "button"; card.className = "inv-crates";
+    const ic = document.createElement("span"); ic.className = "inv-crates-ic"; ic.textContent = "\uD83D\uDCE6";
+    const tx = document.createElement("span"); tx.className = "inv-crates-tx";
+    const b = document.createElement("b"); b.textContent = "Crates";
+    const sm = document.createElement("small"); sm.textContent = "Click to open them";
+    tx.append(b, sm);
+    const n = document.createElement("span"); n.className = "inv-crates-n"; n.textContent = "\u00D7" + stock;
+    card.append(ic, tx, n);
+    card.addEventListener("click", () => { $inventoryOverlay.style.display = "none"; openCrateModal(); });
+    $inventoryList.appendChild(card);
+  }
   if (owned.length === 0) {
+    if (stock > 0) return;
     const empty = document.createElement("div");
     empty.className = "rooms-empty";
     empty.textContent = "You have no items";
@@ -8936,6 +8952,9 @@ function crateTick(noTime) {
     showGlobalPopup({ kind: "crate", title: "📦 A crate was added to your inventory!", body: "You have " + crateStock() + " to open. Use the crate button on the left.", buttonLabel: "Open crates", onButton: () => openCrateModal(), autoCloseMs: 12000 });
   }
   if (crateModal && !crateBusy) paintCrateModal();
+  const ib = document.getElementById("inventoryBtn");
+  if (ib) { const t = "\uD83C\uDF92 Inventory" + (crateStock() > 0 ? " \u00B7 " + crateStock() + " \uD83D\uDCE6" : ""); if (ib.textContent !== t) ib.textContent = t; }
+  if ($inventoryOverlay && $inventoryOverlay.style.display === "flex") renderInventory();
 }
 setInterval(() => crateTick(false), 5000);
 

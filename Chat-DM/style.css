@@ -2577,3 +2577,11 @@ body.hide-verified .verified-tag { display: none !important; }
 .gif-via{padding:2px 2px 0}
 .drop-hint{position:fixed;inset:10px;z-index:9500;border:3px dashed #3b82f6;border-radius:16px;background:rgba(15,23,42,.75);color:#e2e8f0;display:flex;align-items:center;justify-content:center;font-size:1.2rem;pointer-events:none}
 .aud-el{width:260px;max-width:100%;display:block}
+
+/* ══ patch 39: crates stack in the Inventory ══ */
+.inv-crates{display:flex;align-items:center;gap:12px;width:100%;margin:0 0 10px;padding:12px 14px;border-radius:12px;border:1px solid #3b82f6;background:linear-gradient(135deg,rgba(59,130,246,.22),rgba(168,85,247,.18));color:inherit;font:inherit;cursor:pointer;text-align:left;transition:transform .12s,box-shadow .12s}
+.inv-crates:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(59,130,246,.35)}
+.inv-crates-ic{font-size:1.9rem;line-height:1}
+.inv-crates-tx{flex:1;display:flex;flex-direction:column}
+.inv-crates-tx small{opacity:.7}
+.inv-crates-n{font-weight:800;font-size:1.3rem}
