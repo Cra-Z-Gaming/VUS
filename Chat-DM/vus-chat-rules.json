@@ -195,9 +195,9 @@
           ".read": true,
           "$msg": {
             ".write": "!data.exists() && ($room !== 'vus-hub-main' || root.child('chatState/closed').val() !== true)",
-            ".validate": "(newData.child('system').val() === true && newData.hasChildren(['text','ts']) && newData.child('text').isString() && newData.child('text').val().matches(/^.{1,300}( joined| left)$/)) || (newData.hasChildren(['name','ts']) && (newData.child('text').exists() || newData.child('imageData').exists() || newData.child('video').exists()))",
+            ".validate": "(newData.child('system').val() === true && newData.hasChildren(['text','ts']) && newData.child('text').isString() && newData.child('text').val().matches(/^.{1,300}( joined| left)$/)) || (newData.hasChildren(['name','ts']) && (newData.child('text').exists() || newData.child('imageData').exists() || newData.child('video').exists() || newData.child('gif').exists()))",
             "name": {
-              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40 && newData.val().matches(/[^\\\\s​‌‍﻿]/) && !newData.val().matches(/[­​‌‎‏‪‫‬‭‮⁠⁦⁧⁨⁩﻿]/)"
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40 && newData.val().matches(/[^\\\\s\u200b\u200c\u200d\ufeff]/) && !newData.val().matches(/[\u00ad\u200b\u200c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2060\u2066\u2067\u2068\u2069\ufeff]/)"
             },
             "loginId": {
               ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4,12}$/)"
@@ -258,7 +258,7 @@
                 ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 50000000"
               },
               "mime": {
-                ".validate": "newData.isString() && newData.val().matches(/^video\\/[A-Za-z0-9.+-]{1,30}$/)"
+                ".validate": "newData.isString() && newData.val().matches(/^(video|audio|image)\\/[A-Za-z0-9.+-]{1,30}$/)"
               },
               "dur": {
                 ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 181"
@@ -301,6 +301,9 @@
             },
             "fx": {
               ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]{1,24}$/)"
+            },
+            "gif": {
+              ".validate": "newData.isString() && newData.val().length <= 300 && newData.val().matches(/^https:\\/\\/media[0-9]*\\.giphy\\.com\\/[A-Za-z0-9_\\/.?=&%-]{5,280}$/)"
             }
           }
         },
@@ -308,7 +311,7 @@
           ".read": true,
           "$name": {
             ".write": "(!newData.exists() || $room !== 'vus-hub-main' || root.child('chatState/closed').val() !== true) && (!newData.exists() || !data.exists() || data.child('loginId').val() === newData.child('loginId').val())",
-            ".validate": "$name.length >= 1 && $name.length <= 60 && $name.matches(/[^\\\\s​‌‍﻿]/) && !$name.matches(/[­​‌‎‏‪‫‬‭‮⁠⁦⁧⁨⁩﻿]/) && newData.hasChildren(['loginId','joinedAt'])",
+            ".validate": "$name.length >= 1 && $name.length <= 60 && $name.matches(/[^\\\\s\u200b\u200c\u200d\ufeff]/) && !$name.matches(/[\u00ad\u200b\u200c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2060\u2066\u2067\u2068\u2069\ufeff]/) && newData.hasChildren(['loginId','joinedAt'])",
             "loginId": {
               ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4,12}$/)"
             },
@@ -329,7 +332,7 @@
             ".write": true,
             ".validate": "newData.hasChildren(['name','ts'])",
             "name": {
-              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40 && !newData.val().matches(/[­​‌‎‏‪‫‬‭‮⁠⁦⁧⁨⁩﻿]/)"
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40 && !newData.val().matches(/[\u00ad\u200b\u200c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2060\u2066\u2067\u2068\u2069\ufeff]/)"
             },
             "ts": {
               ".validate": "newData.isNumber()"
@@ -345,7 +348,7 @@
             ".write": true,
             ".validate": "newData.hasChildren(['name','ts'])",
             "name": {
-              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40 && newData.val().matches(/[^\\\\s​‌‍﻿]/) && !newData.val().matches(/[­​‌‎‏‪‫‬‭‮⁠⁦⁧⁨⁩﻿]/)"
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40 && newData.val().matches(/[^\\\\s\u200b\u200c\u200d\ufeff]/) && !newData.val().matches(/[\u00ad\u200b\u200c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2060\u2066\u2067\u2068\u2069\ufeff]/)"
             },
             "ts": {
               ".validate": "newData.isNumber()"
@@ -449,6 +452,9 @@
             },
             "reason": {
               ".validate": "newData.isString() && newData.val().length <= 100"
+            },
+            "altOf": {
+              ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4,12}$/)"
             }
           }
         },
@@ -617,7 +623,7 @@
     "crateClaims": {
       ".read": true,
       "$id": {
-        ".write": "$id.matches(/^[0-9]{4,12}$/) && newData.child('w').val() === (now - 14400000 - (now - 14400000) % 43200000) / 43200000 && (!data.exists() || data.child('w').val() < newData.child('w').val())",
+        ".write": "$id.matches(/^[0-9]{4,12}$/) && ((newData.child('w').val() === (now - 14400000 - (now - 14400000) % 10800000) / 10800000 && (!data.exists() || data.child('w').val() < newData.child('w').val()) && newData.child('n').val() === (data.child('n').exists() ? data.child('n').val() : 0) + 1 && (newData.child('o').exists() ? newData.child('o').val() : 0) === (data.child('o').exists() ? data.child('o').val() : 0)) || (data.exists() && newData.child('w').val() === data.child('w').val() && (newData.child('n').exists() ? newData.child('n').val() : 0) === (data.child('n').exists() ? data.child('n').val() : 0) && newData.child('o').val() > (data.child('o').exists() ? data.child('o').val() : 0) && newData.child('o').val() <= (newData.child('n').exists() ? newData.child('n').val() : 0) && newData.child('o').val() - (data.child('o').exists() ? data.child('o').val() : 0) <= 50))",
         ".validate": "newData.hasChildren(['w','ts'])",
         "w": {
           ".validate": "newData.isNumber()"
@@ -630,6 +636,12 @@
         },
         "$x": {
           ".validate": false
+        },
+        "n": {
+          ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 1000000"
+        },
+        "o": {
+          ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 1000000"
         }
       }
     },
@@ -644,6 +656,51 @@
             ".write": "$id.matches(/^[0-9]{4,12}$/) && !data.exists()",
             ".validate": "$item.matches(/^[a-z0-9-]{1,24}$/) && newData.val() === now && (!$item.beginsWith('sea-') || $item.beginsWith('sea-' + root.child('crateClaims/' + $id + '/s').val() + '-'))"
           }
+        }
+      }
+    },
+    "deviceLinks": {
+      "$h": {
+        ".read": true,
+        ".validate": "$h.matches(/^[a-f0-9]{32}$/) && newData.numChildren() <= 60",
+        "$id": {
+          ".write": true,
+          ".validate": "$id.matches(/^[0-9]{4,12}$/) && newData.val() === now"
+        }
+      }
+    },
+    "accountDevices": {
+      "$id": {
+        ".read": true,
+        ".validate": "$id.matches(/^[0-9]{4,12}$/) && newData.numChildren() <= 40",
+        "$h": {
+          ".write": true,
+          ".validate": "$h.matches(/^[a-f0-9]{32}$/) && newData.val() === now"
+        }
+      }
+    },
+    "bannedDevices": {
+      "$h": {
+        ".read": true,
+        ".write": true,
+        ".validate": "$h.matches(/^[a-f0-9]{32}$/) && newData.hasChildren(['loginId','bannedAt'])",
+        "loginId": {
+          ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4,12}$/)"
+        },
+        "byLoginId": {
+          ".validate": "newData.isString() && newData.val().length <= 12"
+        },
+        "bannedAt": {
+          ".validate": "newData.val() === now"
+        },
+        "expiresAt": {
+          ".validate": "newData.isNumber() && newData.val() > now && newData.val() <= now + 2764800000"
+        },
+        "reason": {
+          ".validate": "newData.isString() && newData.val().length <= 100"
+        },
+        "$x": {
+          ".validate": false
         }
       }
     }

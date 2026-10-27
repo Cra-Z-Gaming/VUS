@@ -22,6 +22,9 @@ const FIREBASE_APP_NAME = "vusChat";
 let dmAuthDb = null; // accounts database (vus-dm), shared with dm.js
 
 const MAIN_ROOM_ID = "vus-hub-main";
+const GIPHY_KEY = "I9fFlwBYOG1ao4aqKqRoCMFwLI8QcJpK";
+const GIPHY_URL_RE = /^https:\/\/media\d*\.giphy\.com\/[A-Za-z0-9_\/.\-?=&%]{5,280}$/;
+const GIF_INLINE_MAX_BYTES = 480 * 1024;          // small GIFs stay as animated images; bigger ones go through the clip uploader
 const VIDEO_MAX_SECONDS = 180;
 const VIDEO_MAX_BYTES = 48 * 1024 * 1024;        // the chat database caps what one clip can be
 const VIDEO_TTL_MS = 4 * 60 * 1000;               // a clip disappears 4 minutes after it is posted
@@ -205,6 +208,59 @@ function nameSkeleton(name) {
   t = t.toLowerCase();
   t = Array.from(t).map(ch => LOOKALIKES[ch] || ch).join("");
   return t.replace(/\s+/g, " ").trim();
+}
+
+/* ══════════ Browser ID (for ban evasion) ══════════
+   A random ID kept in this browser (localStorage + a cookie + IndexedDB, each one restores the others). Only a SHA-256
+   hash of it ever reaches the database. Accounts that log in here are linked to the hash; a ban on one of them also
+   covers the browser and the other accounts linked to it. Clearing all site data / another browser / private mode gives a
+   new ID. Like everything else here it is enforced by the app itself, so it stops normal users, not a modified client. */
+const DEVICE_KEY = "vusDeviceId", DEVICE_COOKIE = "vusdev";
+const DEVICE_LINK_FRESH_MS = 30 * 24 * 3600 * 1000;   // links older than this no longer count
+const ALT_BAN_MIN_MS = 60 * 1000;                     // bans of a minute or less stay on the one account
+let deviceHashPromise = null;
+function idbDeviceOp(write) {
+  return new Promise(resolve => {
+    try {
+      const req = indexedDB.open("vusDevice", 1);
+      req.onupgradeneeded = () => { try { req.result.createObjectStore("kv"); } catch (e) {} };
+      req.onerror = () => resolve("");
+      req.onsuccess = () => {
+        try {
+          const tx = req.result.transaction("kv", write ? "readwrite" : "readonly"), st = tx.objectStore("kv");
+          if (write) { st.put(write, "id"); tx.oncomplete = () => resolve(write); tx.onerror = () => resolve(""); }
+          else { const g = st.get("id"); g.onsuccess = () => resolve(g.result || ""); g.onerror = () => resolve(""); }
+        } catch (e) { resolve(""); }
+      };
+    } catch (e) { resolve(""); }
+  });
+}
+async function sha256Hex(str) {
+  try {
+    if (window.crypto && crypto.subtle) {
+      const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+      return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+    }
+  } catch (e) {}
+  let h1 = 0x811c9dc5, h2 = 0x1b873593, out = "";
+  for (let r = 0; r < 4; r++) { for (let i = 0; i < str.length; i++) { h1 = Math.imul(h1 ^ str.charCodeAt(i), 0x01000193) >>> 0; h2 = Math.imul(h2 + h1 + i, 0x85ebca6b) >>> 0; } out += h1.toString(16).padStart(8, "0") + h2.toString(16).padStart(8, "0"); }
+  return out;
+}
+function deviceHash() {
+  if (deviceHashPromise) return deviceHashPromise;
+  deviceHashPromise = (async () => {
+    const good = v => /^[a-f0-9]{32}$/.test(v || "");
+    let id = "";
+    try { id = localStorage.getItem(DEVICE_KEY) || ""; } catch (e) {}
+    if (!good(id)) { const m = document.cookie.match(new RegExp("(?:^|; )" + DEVICE_COOKIE + "=([a-f0-9]{32})")); if (m) id = m[1]; }
+    if (!good(id)) id = await idbDeviceOp();
+    if (!good(id)) { const u = new Uint8Array(16); crypto.getRandomValues(u); id = [...u].map(b => b.toString(16).padStart(2, "0")).join(""); }
+    try { localStorage.setItem(DEVICE_KEY, id); } catch (e) {}
+    try { document.cookie = DEVICE_COOKIE + "=" + id + "; max-age=31536000; path=/; SameSite=Lax"; } catch (e) {}
+    idbDeviceOp(id);
+    return (await sha256Hex("vus-device:" + id)).slice(0, 32);
+  })();
+  return deviceHashPromise;
 }
 
 const ChatBackend = {
@@ -599,6 +655,26 @@ const ChatBackend = {
     });
   },
 
+  async sendGif(name, url, loginId, replyTo) {
+    const prof = await this.getProfile(loginId);
+    const color = prof && prof.color ? prof.color : null, cos = cosmFields(prof && prof.cosm);
+    delete cos.fx;
+    const data = {
+      name: name,
+      ...(loginId ? { loginId: String(loginId) } : {}),
+      gif: url,
+      ts: firebase.database.ServerValue.TIMESTAMP,
+      ...(color && color.ring ? { ring: color.ring } : {}),
+      ...cos,
+      ...(replyTo ? { replyTo } : {})
+    };
+    try { return await this._ref.push(data); }
+    catch (e) {
+      if ((replyTo || data.ring || data.rfx || data.tag) && isPermissionDenied(e)) { delete data.replyTo; delete data.ring; delete data.rfx; delete data.tag; return this._ref.push(data); }
+      throw e;
+    }
+  },
+
   async sendImage(name, dataUrl, loginId, caption, replyTo) {
     const prof = await this.getProfile(loginId);
     const color = prof && prof.color ? prof.color : null, cos = cosmFields(prof && prof.cosm);
@@ -726,8 +802,9 @@ const ChatBackend = {
   async claimPresence(name, silent, loginId) {
     if (!loginId) return { ok: false, reason: "missing-id" };
     const presRef = this._presenceRef;   // the room this claim is for (the person may switch away while we wait)
-    const ban = await this.getBan(loginId);
-    if (ban) return { ok: false, reason: "banned", ban };
+    this.linkDevice(loginId);   // remember that this browser has been used by this account
+    const ban = await this.getOwnBan(loginId);
+    if (ban) { this.banThisDevice(loginId, ban); return { ok: false, reason: "banned", ban }; }
 
     const presenceSnapshot = await presRef.get();
     const presence = presenceSnapshot.val() || {};
@@ -1095,8 +1172,9 @@ const ChatBackend = {
     }
   },
 
-  async banUser(loginId, username, byLoginId, durationMs, reason) {
+  async banUser(loginId, username, byLoginId, durationMs, reason, opts) {
     if (!loginId) throw new Error("Missing login ID");
+    opts = opts || {};
     // Server time, not this device's clock (see _serverOffset above).
     await this.issue("actions", { k: "ban", t: loginId, d: durationMs || 0 });
     const expiresAt = durationMs ? (await this._serverNow()) + durationMs : 0;
@@ -1106,6 +1184,7 @@ const ChatBackend = {
       byLoginId: byLoginId ? String(byLoginId) : null,
       bannedAt: firebase.database.ServerValue.TIMESTAMP,
       ...(expiresAt ? { expiresAt } : {}),
+      ...(opts.altOf ? { altOf: String(opts.altOf) } : {}),
       ...(reason ? { reason: String(reason).slice(0, 100) } : {})
     };
     try { await this._bansRef.child(this._safeKey(String(loginId))).set(banRec); }
@@ -1115,6 +1194,79 @@ const ChatBackend = {
     await Promise.all(Object.entries(entries)
       .filter(([, value]) => value && String(value.loginId) === String(loginId))
       .map(([key]) => this._presenceRef.child(key).remove()));
+    // Longer than a minute: the browsers linked to this account are banned too, and so are the other accounts linked to them.
+    if (!opts.altOf && (!durationMs || durationMs > ALT_BAN_MIN_MS)) {
+      try { await this.banLinked(loginId, byLoginId, durationMs, expiresAt, reason); } catch (e) { console.warn("device ban failed", e); }
+    }
+  },
+
+  // ── browser links: deviceLinks/<hash>/<loginId> = ts and accountDevices/<loginId>/<hash> = ts ──
+  async linkDevice(loginId) {
+    if (!loginId || !/^\d{4,12}$/.test(String(loginId)) || !this._db) return;
+    try {
+      const h = await deviceHash();
+      const now = firebase.database.ServerValue.TIMESTAMP;
+      await Promise.all([this._db.ref("deviceLinks/" + h + "/" + loginId).set(now), this._db.ref("accountDevices/" + loginId + "/" + h).set(now)]);
+    } catch (e) {}
+  },
+  async freshHashesOf(loginId) {
+    const snap = await this._db.ref("accountDevices/" + loginId).get();
+    const v = snap.val() || {}, now = await this._serverNow();
+    return Object.keys(v).filter(h => /^[a-f0-9]{32}$/.test(h) && now - Number(v[h]) < DEVICE_LINK_FRESH_MS);
+  },
+  async linkedAccountsOf(loginId) {
+    const hashes = await this.freshHashesOf(loginId), now = await this._serverNow(), ids = new Set();
+    await Promise.all(hashes.map(async h => {
+      const v = (await this._db.ref("deviceLinks/" + h).get()).val() || {};
+      Object.keys(v).forEach(id => { if (id !== String(loginId) && /^\d{4,12}$/.test(id) && now - Number(v[id]) < DEVICE_LINK_FRESH_MS) ids.add(id); });
+    }));
+    return { hashes, ids: [...ids] };
+  },
+  async banLinked(loginId, byLoginId, durationMs, expiresAt, reason) {
+    const { hashes, ids } = await this.linkedAccountsOf(loginId);
+    const rec = { loginId: String(loginId), bannedAt: firebase.database.ServerValue.TIMESTAMP, byLoginId: byLoginId ? String(byLoginId) : null, ...(expiresAt ? { expiresAt } : {}), ...(reason ? { reason: String(reason).slice(0, 100) } : {}) };
+    await Promise.all(hashes.map(h => this._db.ref("bannedDevices/" + h).set(rec).catch(() => {})));
+    const byRole = byLoginId ? await this.getEffectiveRole(byLoginId) : "unranked";
+    for (const id of ids) {
+      try {
+        const role = await this.getEffectiveRole(id);
+        if (ROLES[role].rank >= ROLES.coowner.rank || ROLES[role].rank >= ROLES[byRole].rank) continue;   // never ban staff this way
+        if (await this.getBan(id)) continue;
+        const prof = await this.getProfile(id).catch(() => null);
+        await this.banUser(id, (prof && prof.lastName) || "Linked account", byLoginId, durationMs, ("Possible alt of #" + loginId + (reason ? ": " + reason : "")).slice(0, 100), { altOf: loginId });
+      } catch (e) {}
+    }
+  },
+  // A banned account logging in on a browser that isn't banned yet: this browser becomes banned too.
+  async banThisDevice(loginId, ban) {
+    try {
+      if (!ban || ban.device || !this._db) return;
+      const now = await this._serverNow();
+      if (ban.expiresAt && Number(ban.expiresAt) - now <= ALT_BAN_MIN_MS) return;
+      const h = await deviceHash();
+      const ref = this._db.ref("bannedDevices/" + h);
+      const cur = (await ref.get()).val();
+      if (cur && (!cur.expiresAt || Number(cur.expiresAt) > now)) return;
+      await ref.set({ loginId: String(loginId), bannedAt: firebase.database.ServerValue.TIMESTAMP, ...(ban.byLoginId ? { byLoginId: String(ban.byLoginId) } : {}), ...(ban.expiresAt ? { expiresAt: Number(ban.expiresAt) } : {}), ...(ban.reason ? { reason: String(ban.reason).slice(0, 100) } : {}) });
+    } catch (e) {}
+  },
+  async getDeviceBan(loginId) {
+    try {
+      if (!this._db) return null;
+      const h = await deviceHash();
+      const snap = await this._db.ref("bannedDevices/" + h).get();
+      const d = snap.exists() ? snap.val() : null;
+      if (!d || !d.loginId || String(d.loginId) === String(loginId)) return null;
+      if (ROLES[await this.getEffectiveRole(loginId)].rank >= ROLES.coowner.rank) return null;   // same protection as account bans
+      if (d.expiresAt && Number(d.expiresAt) <= (await this._serverNow())) return null;
+      const origin = await this.getBan(d.loginId);   // only counts while the ban that created it is real
+      if (!origin) return null;
+      return { loginId: String(loginId), username: "", device: true, altOf: String(d.loginId), bannedAt: origin.bannedAt, ...(origin.expiresAt ? { expiresAt: origin.expiresAt } : {}), ...(origin.reason ? { reason: origin.reason } : {}) };
+    } catch (e) { return null; }
+  },
+  async getOwnBan(loginId) { return (await this.getBan(loginId)) || (await this.getDeviceBan(loginId)); },
+  async possibleAlts(loginId) {
+    try { return (await this.linkedAccountsOf(loginId)).ids; } catch (e) { return []; }
   },
 
   // ── ID-keyed role grants ──
@@ -1187,12 +1339,40 @@ const ChatBackend = {
     }
 
     await this._bansRef.child(this._safeKey(loginId)).remove();
+    try {
+      const hashes = await this.freshHashesOf(loginId).catch(() => []);
+      const all = (await this._db.ref("accountDevices/" + loginId).get()).val() || {};
+      for (const h of new Set([...hashes, ...Object.keys(all)])) {
+        if (!/^[a-f0-9]{32}$/.test(h)) continue;
+        const d = (await this._db.ref("bannedDevices/" + h).get()).val();
+        if (d && String(d.loginId) === String(loginId)) await this._db.ref("bannedDevices/" + h).remove();
+        const links = (await this._db.ref("deviceLinks/" + h).get()).val() || {};
+        for (const other of Object.keys(links)) {
+          if (other === loginId) continue;
+          const b = (await this._bansRef.child(this._safeKey(other)).get()).val();
+          if (b && String(b.altOf || "") === loginId) await this._bansRef.child(this._safeKey(other)).remove();
+        }
+      }
+    } catch (e) {}
     return loginId;
   },
 
-  watchBan(loginId, onChange) {
+  watchBan(loginId, onChange, ownDevice) {
     if (!loginId) return () => {};
     const ref = this._bansRef.child(this._safeKey(String(loginId)));
+    let devRef = null, devHandler = null;
+    if (ownDevice && this._db) {
+      deviceHash().then(h => {
+        if (devHandler === false) return;
+        devRef = this._db.ref("bannedDevices/" + h);
+        devHandler = async () => {
+          if (lastSnap && lastSnap.exists()) return;                 // the account's own ban already decides
+          const d = await this.getDeviceBan(loginId);
+          onChange(d);
+        };
+        devRef.on("value", devHandler);
+      });
+    }
     let lastSnap = null, retryTimer = null;
     const handler = async (snap, n) => {
       lastSnap = snap;
@@ -1210,7 +1390,7 @@ const ChatBackend = {
     };
     ref.on("value", handler);
     this._banRecheck = () => { if (lastSnap) handler(lastSnap, 0); };
-    return () => { ref.off("value", handler); clearTimeout(retryTimer); this._banRecheck = null; };
+    return () => { ref.off("value", handler); clearTimeout(retryTimer); this._banRecheck = null; if (devRef && devHandler) devRef.off("value", devHandler); devHandler = false; };
   },
 
   // Stored per-room at rooms/{roomId}/timeouts/{loginId} = { expiresAt, by }.
@@ -1876,7 +2056,7 @@ function fillBubbleTextRaw(bubble, text, legacy) {
   if (pos < text.length) bubble.appendChild(document.createTextNode(text.slice(pos)));
 }
 function mentionInfoFor(msg) {
-  if (!myName || ((msg.imageData || msg.video) && !msg.text)) return { me: false, ping: false };
+  if (!myName || ((msg.imageData || msg.video || msg.gif) && !msg.text)) return { me: false, ping: false };
   const toks = parseMentionTokens(msg.text);
   let me = false, ping = false;
   toks.forEach(t => { if (t.name === myName) { me = true; if (t.ping) ping = true; } });
@@ -2499,7 +2679,7 @@ function buildMessageActions(msg, mine) {
   };
   add("\uD83D\uDE0A", "Add reaction", (b) => { if (window.VUS_UI && window.VUS_UI.openEmojiPicker) window.VUS_UI.openEmojiPicker(b, e => reactTo(String(msg.id), e)); });
   add("\u21A9", "Reply", () => startReply(String(msg.id)));
-  if (mine && msg.text && !msg.imageData) add("\u270F\uFE0F", "Edit", () => startEdit(String(msg.id)));
+  if (mine && msg.text && !msg.imageData && !msg.gif) add("\u270F\uFE0F", "Edit", () => startEdit(String(msg.id)));
   return bar;
 }
 
@@ -2520,15 +2700,15 @@ function violatesRateLimit(msg) {
   if (!msg.loginId || !msg.ts || msg.ts < liveSince || !rolesReady) return false;
   const id = String(msg.loginId);
   const role = effectiveRoleForLoginId(id);
-  const table = (msg.imageData || msg.video) ? ROLE_IMAGE_COOLDOWNS_MS : ROLE_MESSAGE_COOLDOWNS_MS;
+  const table = (msg.imageData || msg.video || msg.gif) ? ROLE_IMAGE_COOLDOWNS_MS : ROLE_MESSAGE_COOLDOWNS_MS;
   const cd = table[role] != null ? table[role] : 10000;
   const prev = lastAccepted[id];
   if (prev) {
     const gap = msg.ts - prev.ts;
-    const captionAfterImage = prev.image && !msg.imageData && !msg.video && gap < 2500;   // an image and its caption go out together
+    const captionAfterImage = prev.image && !msg.imageData && !msg.video && !msg.gif && gap < 2500;   // an image and its caption go out together
     if (!captionAfterImage && gap < cd - RATE_TOLERANCE_MS) return true;     // too soon for their role: not accepted, doesn't reset their timer
   }
-  lastAccepted[id] = { ts: msg.ts, image: !!(msg.imageData || msg.video) };
+  lastAccepted[id] = { ts: msg.ts, image: !!(msg.imageData || msg.video || msg.gif) };
   return false;
 }
 const imgAccessCache = {};
@@ -2673,7 +2853,7 @@ function renderMessage(msg) {
     if (!/^\d{6}$/.test(String(msg.loginId || "")) || !String(msg.name || "").trim()) { el.classList.add("anon-hidden"); hiddenForMe = true; }
     else {
       needsVerify = true;
-      if (msg.imageData || msg.video) el.classList.add("anon-hidden");   // images and videos stay hidden until the sender is confirmed
+      if (msg.imageData || msg.video || msg.gif) el.classList.add("anon-hidden");   // images and videos stay hidden until the sender is confirmed
     }
   }
 
@@ -2730,6 +2910,16 @@ function renderMessage(msg) {
     bubble.appendChild(link);
     bubble.style.padding = "6px";
     if (msg.text) { const cap = document.createElement("div"); cap.className = "media-caption"; fillBubbleText(cap, msg.text, msg.mention); bubble.appendChild(cap); }
+  } else if (msg.gif && GIPHY_URL_RE.test(String(msg.gif))) {
+    const g = document.createElement("img");
+    g.src = String(msg.gif); g.alt = "GIF"; g.loading = "lazy";
+    g.style.cssText = "max-width:100%;max-height:240px;border-radius:10px;display:block";
+    g.addEventListener("click", () => { if (window.VUS_UI && window.VUS_UI.openImage) window.VUS_UI.openImage(g.src); });
+    g.style.cursor = "zoom-in";
+    bubble.appendChild(g);
+    const via = document.createElement("div"); via.className = "gif-via"; via.textContent = "via GIPHY"; bubble.appendChild(via);
+    bubble.style.padding = "6px";
+    if (msg.text) { const cap = document.createElement("div"); cap.className = "media-caption"; fillBubbleText(cap, msg.text, msg.mention); bubble.appendChild(cap); }
   } else if (msg.video && typeof msg.video === "object") {
     buildVideoBubble(bubble, msg);
     bubble.style.padding = "8px";
@@ -2742,7 +2932,7 @@ function renderMessage(msg) {
     fillBubbleText(bubble, msg.text, msg.mention);
   }
 
-  if (!msg.imageData && !msg.video && !msg.poll) {
+  if (!msg.imageData && !msg.video && !msg.gif && !msg.poll) {
     if (msg.bubble) bubble.style.background = msg.bubble;
     if (msg.textColor) bubble.style.color = msg.textColor;
   }
@@ -2761,7 +2951,7 @@ function renderMessage(msg) {
   reactRow.className = "msg-reactions";
   el.appendChild(reactRow);
   if (msg.id) {
-    msgEls.set(String(msg.id), { el, bubble, reactRow, loginId: String(msg.loginId || ""), ts: Number(msg.ts) || 0, isImage: !!(msg.imageData || msg.video), kind: msg.video ? "video" : msg.imageData ? "image" : "text", mention: msg.mention || "" , text: msg.text || "" });
+    msgEls.set(String(msg.id), { el, bubble, reactRow, loginId: String(msg.loginId || ""), ts: Number(msg.ts) || 0, isImage: !!(msg.imageData || msg.video || msg.gif), kind: msg.video ? "video" : (msg.imageData || msg.gif) ? "image" : "text", mention: msg.mention || "" , text: msg.text || "" });
     el.appendChild(buildMessageActions(msg, mine));
     el.addEventListener("click", (ev) => {
       if (!(window.matchMedia && window.matchMedia("(hover: none)").matches)) return;
@@ -2819,13 +3009,13 @@ function renderMessage(msg) {
     window.VUS_DM.verifySender(msg.loginId, msg.name).then(async r => {
       // Text: hidden only if the id isn't a real account. Images: the account must be real, the name must match it,
       // and the sender must actually have image access (rank above Normie, or granted by a higher-up).
-      const isMedia = !!(msg.imageData || msg.video);
+      const isMedia = !!(msg.imageData || msg.video || msg.gif);
       let bad = !r.ok || (isMedia && !r.nameMatches);
       if (!bad && isMedia && !(await senderMayPostImages(String(msg.loginId)))) bad = true;
       if (bad && !(r.unknown && !isMedia)) { el.classList.add("anon-hidden"); }
       else { el.classList.remove("anon-hidden"); if (r.ok && r.nameMatches) rememberPerson(msg.loginId, msg.name); firePing(); }
       if (autoScroll && stickToBottom) scrollToBottom();
-    }).catch(() => { if (msg.imageData || msg.video) el.classList.add("anon-hidden"); else firePing(); });
+    }).catch(() => { if (msg.imageData || msg.video || msg.gif) el.classList.add("anon-hidden"); else firePing(); });
   } else {
     firePing();
   }
@@ -3103,7 +3293,7 @@ async function joinWithDmSession(session, nickname) {
   if (!result.ok) {
     if (result.reason === "banned") {
       // claimPresence already read the ban; only do a fresh read if it did not hand it back.
-      const ban = result.ban || (await ChatBackend.getBan(session.id).catch(() => null));
+      const ban = result.ban || (await ChatBackend.getOwnBan(session.id).catch(() => null));
       if (ban) {
         showBanScreen(ban);
         watchMyBan(session);   // so an unban while they sit here lets them straight back in
@@ -3356,7 +3546,7 @@ function showBanScreen(ban) {
 
   const isTemporary = !!ban.expiresAt;
   $banTitle.textContent = isTemporary ? "You're temporarily banned" : "You are banned";
-  $banReason.textContent = "Your account was removed from VUS Chat by staff." + (ban.reason ? " Reason: " + String(ban.reason).slice(0, 100) : "");
+  $banReason.textContent = (ban.device ? "This browser is linked to a banned account (#" + ban.altOf + ")." : ban.altOf ? "This account was banned as a possible alt of #" + ban.altOf + "." : "Your account was removed from VUS Chat by staff.") + (ban.reason ? " Reason: " + String(ban.reason).slice(0, 100) : "");
   $banCountdownWrap.style.display = isTemporary ? "block" : "none";
   $banPermanentNote.style.display = isTemporary ? "none" : "block";
 
@@ -3399,7 +3589,7 @@ async function recheckBanStatus() {
     const id = myLoginId || (saved && saved.id);
     let ban = null;
     if (id) {
-      try { ban = await ChatBackend.getBan(id); } catch (e) { return; }   // can't reach the server: stay put
+      try { ban = await ChatBackend.getOwnBan(id); } catch (e) { return; }   // can't reach the server: stay put
     }
     if (ban) { showBanScreen(ban); return; }
     hideBanScreen();
@@ -3445,7 +3635,7 @@ function watchMyBan(forSession) {
     $joinScreen.style.display = "flex";
     if (watchedSession) rejoinAfterBanLifted(watchedSession);
     else autoLoginOrPrompt();
-  });
+  }, true);
 }
 
 // Rejoins directly under the account that was banned, rather than routing
@@ -3485,6 +3675,8 @@ const SLASH_COMMANDS = [
     desc: rank => rank >= ROLES.admin.rank ? "Take away a rank below yours." : "Take away Normie from someone.", insert: "/remove " },
   { name: "/image",   args: "on|off username",        minRank: ROLES.admin.rank,
     desc: "Give or take away image access for someone below your rank.", insert: "/image " },
+  { name: "/afk", args: "", minRank: 0,
+    desc: "Mark yourself AFK (yellow dot). Takes effect after 1 second; any click or key press brings you back.", insert: "/afk" },
   { name: "/poll", args: "", minRank: ROLES.admin.rank,
     desc: "Open the poll menu: a question with Yes / No (add up to 4 options). Lasts 1 minute.", insert: "/poll" },
   { name: "/verify", args: "[on]",              minRank: ROLES.crown.rank,
@@ -3722,6 +3914,12 @@ async function handleModerationCommand(text) {
     return true;
   }
 
+  if (command === "/afk") {
+    // 1 second delay so the click/keypress that sent the command doesn't instantly cancel it
+    showComposerNotice("Going AFK in a second…");
+    setTimeout(() => { lastActivityAt = Date.now(); manualAfk = true; setMyAfk(true); afkHold = Date.now() + 1000; }, 1000);
+    return true;
+  }
   if (command === "/poll") { openPollMenu(); return true; }
 
   // ── /verify (Owner) ──
@@ -4148,32 +4346,61 @@ function probeVideo(file) {
     v.src = url;
   });
 }
-async function stageVideoFile(file) {
+const EXT_MIME = { mp4: "video/mp4", m4v: "video/mp4", webm: "video/webm", mov: "video/quicktime", ogv: "video/ogg", mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg", oga: "audio/ogg", m4a: "audio/mp4", aac: "audio/aac", flac: "audio/flac", opus: "audio/ogg", gif: "image/gif" };
+function guessMime(file) {
+  const t = String(file.type || "");
+  if (t && t !== "application/octet-stream") return t;
+  const ext = String(file.name || "").split(".").pop().toLowerCase();
+  return EXT_MIME[ext] || t;
+}
+const AUDIO_ICON = "data:image/svg+xml;utf8," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='90' height='60'><rect width='90' height='60' rx='8' fill='#1e293b'/><text x='45' y='42' font-size='34' text-anchor='middle'>\uD83C\uDFB5</text></svg>");
+function probeAudio(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file), a = document.createElement("audio");
+    a.preload = "metadata";
+    const t = setTimeout(() => { URL.revokeObjectURL(url); reject(new Error("timeout")); }, 15000);
+    a.onerror = () => { clearTimeout(t); URL.revokeObjectURL(url); reject(new Error("unplayable")); };
+    a.onloadedmetadata = () => { clearTimeout(t); URL.revokeObjectURL(url); resolve({ dur: a.duration }); };
+    a.src = url;
+  });
+}
+function retypeFile(file, mime) { return file.type === mime ? file : new File([file], file.name || "file", { type: mime }); }
+function resetUploadBtn() { $uploadImageBtn.disabled = false; $uploadImageBtn.textContent = "\uD83D\uDCCE Media"; $imageFileInput.value = ""; }
+async function stageVideoFile(file0) {
   const note = (m) => { $connError.textContent = m; $connError.style.display = "block"; };
-  if (file.size > VIDEO_MAX_BYTES) { note("That video is " + fmtBytes(file.size) + ". The chat can hold clips up to " + fmtBytes(VIDEO_MAX_BYTES) + " (about 3 minutes of lower-quality video)."); return; }
+  const mime = guessMime(file0) || "video/mp4";
+  const file = retypeFile(file0, mime);
+  const isAudio = /^audio\//.test(mime), isGif = /^image\/gif/.test(mime);
+  const what = isAudio ? "audio file" : isGif ? "GIF" : "video";
+  if (file.size > VIDEO_MAX_BYTES) { note("That " + what + " is " + fmtBytes(file.size) + ". The chat can hold files up to " + fmtBytes(VIDEO_MAX_BYTES) + "."); return; }
   $uploadImageBtn.disabled = true; $uploadImageBtn.textContent = "Checking…";
   try {
-    const info = await probeVideo(file);
-    if (info.dur > VIDEO_MAX_SECONDS + 0.5) { note("Videos can be at most " + VIDEO_MAX_SECONDS + " seconds. This one is " + Math.round(info.dur) + "s."); return; }
+    let info;
+    if (isGif) info = { dur: 0, poster: URL.createObjectURL(file) };
+    else if (isAudio) { info = await probeAudio(file); info.poster = AUDIO_ICON; }
+    else info = await probeVideo(file);
+    if (!isGif && info.dur > VIDEO_MAX_SECONDS + 0.5) { note("Clips can be at most " + VIDEO_MAX_SECONDS + " seconds. This one is " + Math.round(info.dur) + "s."); return; }
     pendingImageDataUrl = null;
-    pendingVideo = { file, dur: info.dur };
+    pendingVideo = { file, dur: isFinite(info.dur) ? info.dur : 0 };
     $pendingImagePreview.src = info.poster || "";
-    document.getElementById("chatPendingLabel").textContent = "Video ready (" + Math.round(info.dur) + "s, " + fmtBytes(file.size) + ") — click Send. It disappears 4 minutes after posting.";
+    document.getElementById("chatPendingLabel").textContent = (isGif ? "GIF ready (" : isAudio ? "Audio ready (" : "Video ready (") + (isGif ? "" : Math.round(info.dur) + "s, ") + fmtBytes(file.size) + ") — click Send. It disappears 4 minutes after posting.";
     $pendingImageBar.style.display = "flex";
-  } catch (e) { note("Couldn't read that video — try an MP4 or WebM."); }
-  finally { $uploadImageBtn.disabled = false; $uploadImageBtn.textContent = "\uD83D\uDCCE Image / video"; $imageFileInput.value = ""; }
+  } catch (e) { note(isAudio ? "Couldn't read that audio — try an MP3, WAV or OGG." : "Couldn't read that video — try an MP4 or WebM."); }
+  finally { resetUploadBtn(); }
 }
 
 function stageImageFile(file) {
   if (!canPostImages()) return;
 
   if (!file) return;
-  if (/^video\//.test(file.type)) { stageVideoFile(file); return; }
-  if (!file.type.startsWith("image/")) {
-    $connError.textContent = "That file isn't an image.";
+  const mime = guessMime(file);
+  if (/^video\//.test(mime) || /^audio\//.test(mime)) { stageVideoFile(file); return; }
+  if (!mime.startsWith("image/")) {
+    $connError.textContent = "That file isn't an image, GIF, video or audio file.";
     $connError.style.display = "block";
     return;
   }
+  if (/^image\/gif/.test(mime) && file.size > GIF_INLINE_MAX_BYTES) { stageVideoFile(file); return; }   // big GIFs: temporary clip, still animated
   if (file.size > MAX_IMAGE_SOURCE_BYTES) {
     $connError.textContent = "Image is too large.";
     $connError.style.display = "block";
@@ -4183,21 +4410,23 @@ function stageImageFile(file) {
   $uploadImageBtn.disabled = true;
   $uploadImageBtn.textContent = "Processing…";
 
-  compressImageFile(file)
+  const job = /^image\/gif/.test(mime)
+    ? new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(file); })   // keep the animation: no re-encoding
+    : compressImageFile(file);
+  job
     .then(dataUrl => {
+      if (/^image\/gif/.test(mime)) dataUrl = dataUrl.replace(/^data:[^;,]*/, "data:image/gif");
       pendingImageDataUrl = dataUrl;
+      pendingVideo = null;
       $pendingImagePreview.src = dataUrl;
+      document.getElementById("chatPendingLabel").textContent = "Image ready — click Send to post it";
       $pendingImageBar.style.display = "flex";
     })
     .catch(() => {
       $connError.textContent = "Couldn't process that image — try another.";
       $connError.style.display = "block";
     })
-    .finally(() => {
-      $uploadImageBtn.disabled = false;
-      $uploadImageBtn.textContent = "\uD83D\uDCCE Image / video";
-      $imageFileInput.value = "";
-    });
+    .finally(resetUploadBtn);
 }
 
 $cancelPendingImageBtn.addEventListener("click", clearPendingImage);
@@ -4210,6 +4439,99 @@ $imageFileInput.addEventListener("change", () => {
   const file = $imageFileInput.files[0];
   stageImageFile(file);
 });
+
+
+/* ══════════ GIFs from GIPHY, and drag-and-drop uploads ══════════ */
+let gifModal = null, gifTimer = null, gifReq = 0;
+async function giphyFetch(q) {
+  const base = "https://api.giphy.com/v1/gifs/" + (q ? "search" : "trending");
+  const url = base + "?api_key=" + encodeURIComponent(GIPHY_KEY) + "&limit=24&rating=pg-13&lang=en" + (q ? "&q=" + encodeURIComponent(q) : "");
+  const r = await fetch(url); if (!r.ok) throw new Error("giphy " + r.status);
+  const j = await r.json();
+  return (j.data || []).map(d => {
+    const im = d.images || {};
+    const small = (im.fixed_width_small || im.fixed_width || im.fixed_height_small || {}).url;
+    const full = (im.fixed_height || im.downsized || im.original || {}).url;
+    return { id: String(d.id || ""), title: String(d.title || "GIF").slice(0, 60), small, full };
+  }).filter(g => g.small && g.full && GIPHY_URL_RE.test(g.full) && GIPHY_URL_RE.test(g.small));
+}
+function closeGifPicker() { if (gifModal) { gifModal.remove(); gifModal = null; } clearTimeout(gifTimer); }
+function openGifPicker() {
+  if (gifModal || !canPostImages()) return;
+  const ov = document.createElement("div"); ov.className = "gif-overlay";
+  const box = document.createElement("div"); box.className = "gif-modal";
+  const head = document.createElement("div"); head.className = "gif-head";
+  const inp = document.createElement("input"); inp.type = "search"; inp.placeholder = "Search GIFs…"; inp.className = "gif-search"; inp.maxLength = 60; inp.autocomplete = "off";
+  const x = document.createElement("button"); x.type = "button"; x.className = "poll-x gif-x"; x.textContent = "×"; x.addEventListener("click", closeGifPicker);
+  head.append(inp, x);
+  const grid = document.createElement("div"); grid.className = "gif-grid";
+  const foot = document.createElement("div"); foot.className = "gif-foot"; foot.textContent = "Powered by GIPHY";
+  box.append(head, grid, foot); ov.appendChild(box);
+  ov.addEventListener("click", e => { if (e.target === ov) closeGifPicker(); });
+  document.body.appendChild(ov); gifModal = ov;
+  const load = async () => {
+    const my = ++gifReq, q = inp.value.trim();
+    grid.replaceChildren(); const st = document.createElement("div"); st.className = "gif-state"; st.textContent = "Loading…"; grid.appendChild(st);
+    try {
+      const list = await giphyFetch(q);
+      if (my !== gifReq || !gifModal) return;
+      grid.replaceChildren();
+      if (!list.length) { const n = document.createElement("div"); n.className = "gif-state"; n.textContent = "No GIFs found."; grid.appendChild(n); return; }
+      list.forEach(g => {
+        const b = document.createElement("button"); b.type = "button"; b.className = "gif-item"; b.title = g.title;
+        const im = document.createElement("img"); im.src = g.small; im.alt = g.title; im.loading = "lazy"; b.appendChild(im);
+        b.addEventListener("click", () => sendGifFromPicker(g.full));
+        grid.appendChild(b);
+      });
+    } catch (e) {
+      if (my !== gifReq) return;
+      grid.replaceChildren(); const n = document.createElement("div"); n.className = "gif-state"; n.textContent = "Couldn't reach GIPHY. Check your connection and try again."; grid.appendChild(n);
+    }
+  };
+  inp.addEventListener("input", () => { clearTimeout(gifTimer); gifTimer = setTimeout(load, 350); });
+  document.addEventListener("keydown", function esc(e) { if (!gifModal) { document.removeEventListener("keydown", esc); return; } if (e.key === "Escape") { closeGifPicker(); document.removeEventListener("keydown", esc); } });
+  load(); inp.focus();
+}
+async function sendGifFromPicker(url) {
+  if (!canPostImages()) { closeGifPicker(); showComposerNotice("You don't have image access. Ask an Admin or higher."); return; }
+  if (!GIPHY_URL_RE.test(url)) return;
+  const wait = currentImageCooldownMs() - (Date.now() - lastImageSentAt);
+  if (wait > 0) { showComposerNotice("Images and GIFs have a " + Math.round(currentImageCooldownMs() / 1000) + "s delay for your rank — wait " + Math.ceil(wait / 1000) + "s."); return; }
+  closeGifPicker();
+  lastSentAt = Date.now(); lastImageSentAt = Date.now();
+  try {
+    await ChatBackend.sendGif(myName, url, myLoginId, currentReplyPayload());
+    cancelReply(); autoScroll = true; setAutoScrollUI();
+  } catch (e) {
+    $connError.textContent = isPermissionDenied(e) ? "GIFs need the updated database rules. Publish the new chat rules." : "GIF failed to send — check your connection.";
+    $connError.style.display = "block";
+  }
+}
+(function wireGifAndDrop() {
+  const gb = document.getElementById("chatGifBtn");
+  if (gb) gb.addEventListener("click", () => { if (gifModal) closeGifPicker(); else openGifPicker(); });
+  // drag a file anywhere onto the chat to stage it like an upload
+  let depth = 0, hint = null;
+  const hasFiles = e => e.dataTransfer && [...(e.dataTransfer.types || [])].includes("Files");
+  const chatVisible = () => $chatScreen && $chatScreen.style.display !== "none" && !!myLoginId;
+  const showHint = on => {
+    if (on && !hint) { hint = document.createElement("div"); hint.className = "drop-hint"; hint.textContent = "Drop a picture, GIF, video or audio file to attach it"; document.body.appendChild(hint); }
+    if (!on && hint) { hint.remove(); hint = null; }
+  };
+  window.addEventListener("dragenter", e => { if (!hasFiles(e) || !chatVisible()) return; e.preventDefault(); depth++; showHint(true); });
+  window.addEventListener("dragover", e => { if (!hasFiles(e) || !chatVisible()) return; e.preventDefault(); e.dataTransfer.dropEffect = "copy"; });
+  window.addEventListener("dragleave", e => { if (!hasFiles(e)) return; depth = Math.max(0, depth - 1); if (!depth) showHint(false); });
+  window.addEventListener("drop", e => {
+    if (!hasFiles(e) || !chatVisible()) return;
+    e.preventDefault(); depth = 0; showHint(false);
+    if (activeChannelId === "announce") { showComposerNotice("Files can't be posted in announcements."); return; }
+    if (!canPostImages()) { showComposerNotice("You don't have image/video access. Ask an Admin or higher."); return; }
+    const files = [...e.dataTransfer.files];
+    if (!files.length) return;
+    if (files.length > 1) showComposerNotice("One file at a time — using " + files[0].name + ".");
+    stageImageFile(files[0]);
+  });
+})();
 
 function updateCharCounter() {
   const remaining = MAX_CHARS - $msgInput.value.length - composerSegments($msgInput.value).length;
@@ -4268,6 +4590,7 @@ function canPostImages() {
 function updateUploadButtonVisibility() {
   const may = canPostImages() && activeChannelId !== "announce";
   $uploadImageBtn.style.display = may ? "inline-block" : "none";
+  const gb = document.getElementById("chatGifBtn"); if (gb) gb.style.display = may ? "inline-block" : "none";
   if (!may) clearPendingImage();
 }
 
@@ -5343,7 +5666,7 @@ window.__logs={add(batch){for(const r of batch)rows.push(r);rows.sort((a,b)=>(b.
         const valid = ed && typeof ed.text === "string" && String(ed.by) === id && (!ed.ts || !m.ts || Number(ed.ts) - Number(m.ts) <= EDIT_WINDOW_MS + 5000);
         batch.push({
           id: k, ts: Number(m.ts) || 0, name: String(m.name || ""), loginId: id,
-          text: stripMentionMarks(String(m.text || "")), kind: m.video ? "video" : m.imageData ? "image" : "text",
+          text: stripMentionMarks(String(m.text || "")), kind: m.video ? "video" : (m.imageData || m.gif) ? "image" : "text",
           edited: valid ? { text: stripMentionMarks(ed.text), ts: Number(ed.ts) || 0 } : null,
           role: (ROLES[roleId] || ROLES.unranked).label, tags: [roleId].concat(verified ? ["verified"] : []), verified
         });
@@ -8023,21 +8346,30 @@ function paintVideo(rec) {
   bubble.replaceChildren();
   if (want === "expired") {
     const url = localVideoUrls.get(rec.id); if (url) { URL.revokeObjectURL(url); localVideoUrls.delete(rec.id); }
-    const t = document.createElement("div"); t.className = "vid-gone"; t.textContent = "\u23F1 Countdown reached \u2014 this video was removed.";
+    const t = document.createElement("div"); t.className = "vid-gone"; t.textContent = "\u23F1 Countdown reached \u2014 this " + (/^audio\//.test(String(v.mime || "")) ? "audio" : /^image\//.test(String(v.mime || "")) ? "GIF" : "video") + " was removed.";
     bubble.appendChild(t); return;
   }
   const count = document.createElement("div"); count.className = "vid-count"; rec.countEl = count;
   if (want === "playing") {
-    const vid = document.createElement("video");
-    vid.src = localVideoUrls.get(rec.id); vid.controls = true; vid.playsInline = true; vid.preload = "auto";
-    vid.className = "vid-el"; rec.vidEl = vid;
+    const mime = String(v.mime || "");
+    if (/^image\//.test(mime)) {
+      const im = document.createElement("img"); im.src = localVideoUrls.get(rec.id); im.alt = "GIF"; im.className = "vid-el";
+      im.style.cssText = "max-width:100%;max-height:280px;border-radius:10px;display:block";
+      bubble.append(im, count); return;
+    }
+    const vid = document.createElement(/^audio\//.test(mime) ? "audio" : "video");
+    vid.src = localVideoUrls.get(rec.id); vid.controls = true; vid.preload = "auto";
+    if (vid.tagName === "VIDEO") { vid.playsInline = true; if (Number(v.dur) <= 10) vid.loop = true; }
+    vid.className = vid.tagName === "AUDIO" ? "aud-el" : "vid-el"; rec.vidEl = vid;
     bubble.append(vid, count);
     return;
   }
   const card = document.createElement("button"); card.type = "button"; card.className = "vid-card";
   const play = document.createElement("span"); play.className = "vid-play"; play.textContent = "\u25B6";
   const info = document.createElement("span"); info.className = "vid-info";
-  const l1 = document.createElement("b"); l1.textContent = "Video \u00b7 " + Math.round(Number(v.dur) || 0) + "s \u00b7 " + fmtBytes(Number(v.size) || 0);
+  const l1 = document.createElement("b");
+  const kindWord = /^audio\//.test(String(v.mime || "")) ? "Audio" : /^image\//.test(String(v.mime || "")) ? "GIF" : "Video";
+  l1.textContent = kindWord + " \u00b7 " + (kindWord === "GIF" ? "" : Math.round(Number(v.dur) || 0) + "s \u00b7 ") + fmtBytes(Number(v.size) || 0);
   const l2 = document.createElement("span"); l2.className = "vid-sub"; l2.textContent = "Click to download";
   info.append(l1, l2); card.append(play, info);
   const load = async () => {
@@ -8058,7 +8390,7 @@ function videoTick() {
   videoRecs.forEach(rec => {
     if (!rec.bubble.isConnected) { videoRecs.delete(rec); return; }
     paintVideo(rec);
-    if (rec.state === "card" && rec.load && !rec.autoTried && (Number(rec.v.dur) <= VIDEO_AUTO_SECONDS || chatPrefs.autoVideo === true)
+    if (rec.state === "card" && rec.load && !rec.autoTried && (Number(rec.v.dur) <= VIDEO_AUTO_SECONDS || chatPrefs.autoVideo === true || /^image\//.test(String(rec.v.mime || "")))
         && !rec.bubble.closest(".anon-hidden, .spam-hidden, .silenced-hidden, .muted-hidden")) { rec.autoTried = true; rec.load(); }
     if (rec.countEl) rec.countEl.textContent = "disappears in " + fmtCountdown(rec.exp - now);
   });
@@ -8128,7 +8460,7 @@ function attestStatus(kind, id, v, ts) {
 }
 function annStatus(msg) {
   const id = String(msg.loginId || "");
-  if (!/^\d{6}$/.test(id) || typeof msg.text !== "string" || !msg.text || msg.imageData || msg.video || msg.poll) return "no";
+  if (!/^\d{6}$/.test(id) || typeof msg.text !== "string" || !msg.text || msg.imageData || msg.video || msg.gif || msg.poll) return "no";
   if (!rolesReady) return "pending";
   if (rankOfLoginId(id) < ROLES.admin.rank) return "no";
   return attestStatus("announce", id, annHash(msg.text), Number(msg.ts) || 0);
@@ -8369,20 +8701,21 @@ function openPollMenu() {
 
 /* ══════════ Auto AFK: a yellow dot after 2 minutes without clicking or messaging (typing counts as active) ══════════ */
 const AFK_AFTER_MS = 120000;
-let lastActivityAt = Date.now(), myAfk = false;
+let lastActivityAt = Date.now(), myAfk = false, manualAfk = false;
 function setMyAfk(v) {
   if (myAfk === v) return;
-  myAfk = v;
+  myAfk = v; if (!v) manualAfk = false;
   try { ChatBackend.setAfk(v); } catch (e) {}
   try { if (window.VUS_DM && window.VUS_DM.setAfk) window.VUS_DM.setAfk(v); } catch (e) {}
   if ($onlineDot) $onlineDot.classList.toggle("afk", v);
 }
 function afkCheck(force) {
-  if (!myLoginId || chatPrefs.autoAfk === false) { if (myAfk) setMyAfk(false); return; }
+  if (!myLoginId || (chatPrefs.autoAfk === false && !manualAfk)) { if (myAfk) setMyAfk(false); return; }
   if (Date.now() - lastActivityAt >= AFK_AFTER_MS) setMyAfk(true);
   else if (force && myAfk) setMyAfk(false);
 }
-function noteActivity() { lastActivityAt = Date.now(); if (myAfk) setMyAfk(false); }
+let afkHold = 0;
+function noteActivity() { lastActivityAt = Date.now(); if (myAfk && Date.now() >= afkHold) setMyAfk(false); }
 ["pointerdown", "mousedown", "keydown", "touchstart", "wheel"].forEach(ev => window.addEventListener(ev, noteActivity, true));
 setInterval(() => afkCheck(false), 5000);
 ChatBackend.setAfk = function (v) {
@@ -8392,11 +8725,12 @@ ChatBackend.setAfk = function (v) {
 };
 
 /* ══════════ Crates ══════════
-   One crate per 12-hour window (04:00 and 16:00 UTC = noon and midnight US Eastern during daylight time).
-   To claim: 15 messages and 5 minutes online inside the window. The database keeps one claim record per account and
-   only accepts the window that is current on ITS clock, so changing your device clock does nothing.
+   One crate can be earned per 3-hour window. To earn it: 15 messages and 5 minutes online inside the window; it then goes
+   to your inventory (stacking) and can be opened any time, one, 3 or all at once. The database keeps one record per account
+   (`w` last window earned, `n` crates earned, `o` crates opened) and only accepts the window that is current on ITS clock,
+   so changing your device clock does nothing.
    Rings, tags and text effects come from here; what you equip is stored on your profile (`cosm`). */
-const CRATE_WINDOW_MS = 12 * 3600 * 1000, CRATE_OFFSET_MS = 4 * 3600 * 1000;
+const CRATE_WINDOW_MS = 3 * 3600 * 1000, CRATE_OFFSET_MS = 4 * 3600 * 1000;
 const CRATE_NEED_MSGS = 15, CRATE_NEED_MS = 5 * 60 * 1000;
 const RARITY = {
   common:    { label: "Common",    color: "#94a3b8", weight: 70 },
@@ -8546,7 +8880,7 @@ function rollCrate(type, w, owned) {
 const CRATE_KEY = "vus_crate_progress_v1";
 let crateProgAll = {};
 try { crateProgAll = JSON.parse(localStorage.getItem(CRATE_KEY) || "{}") || {}; } catch (e) { crateProgAll = {}; }
-let crateClaimedW = null, crateOwned = new Set(), crateWatchId = "", crateWatchRefs = [], crateNotifiedW = null, lastCrateMsgAt = 0, myCosm = {};
+let crateClaimedW = null, crateEarned = 0, crateOpened = 0, crateEarning = false, crateOwned = new Set(), crateWatchId = "", crateWatchRefs = [], crateNotifiedW = null, lastCrateMsgAt = 0, myCosm = {};
 function progFor() {
   const w = crateWindow(srvNow());
   let p = crateProgAll[myLoginId];
@@ -8561,17 +8895,29 @@ function crateCountMessage() {
   lastCrateMsgAt = now;
   progFor().msgs++; saveProg(); crateTick(true);
 }
-function crateReady() {
+function crateStock() { return Math.max(0, crateEarned - crateOpened); }
+function crateReady() { return !!myLoginId && crateClaimedW !== undefined && crateStock() > 0; }   // something to open
+function crateEarnable() {
   if (!myLoginId || crateClaimedW === undefined) return false;
   const p = progFor();
   return crateClaimedW !== crateWindow(srvNow()) && p.msgs >= CRATE_NEED_MSGS && p.ms >= CRATE_NEED_MS;
 }
+async function earnCrate() {
+  if (crateEarning || !crateEarnable()) return;
+  crateEarning = true;
+  const w = crateWindow(srvNow());
+  try {
+    await ChatBackend._db.ref("crateClaims/" + myLoginId).update({ w, ts: firebase.database.ServerValue.TIMESTAMP, n: crateEarned + 1 });
+  } catch (e) { /* stale count or rules not published: the listener refreshes and the next tick retries */ if (isPermissionDenied(e)) crateRulesBad = true; }
+  crateEarning = false;
+}
+let crateRulesBad = false;
 function ensureCrateWatch() {
   if (!myLoginId || !ChatBackend._db || crateWatchId === myLoginId) return;
   crateWatchRefs.forEach(r => { try { r.off(); } catch (e) {} });
-  crateWatchId = myLoginId; crateClaimedW = undefined; crateOwned = new Set(); myCosm = {};
+  crateWatchId = myLoginId; crateClaimedW = undefined; crateEarned = 0; crateOpened = 0; crateOwned = new Set(); myCosm = {};
   const claim = ChatBackend._db.ref("crateClaims/" + myLoginId), inv = ChatBackend._db.ref("crateInv/" + myLoginId + "/items");
-  claim.on("value", s => { const v = s.val(); crateClaimedW = v && typeof v.w === "number" ? v.w : null; crateTick(true); }, () => { crateClaimedW = null; });
+  claim.on("value", s => { const v = s.val(); crateClaimedW = v && typeof v.w === "number" ? v.w : null; crateEarned = v && Number(v.n) > 0 ? Number(v.n) : 0; crateOpened = v && Number(v.o) > 0 ? Number(v.o) : 0; crateTick(true); }, () => { crateClaimedW = null; });
   inv.on("value", s => { crateOwned = new Set(Object.keys(s.val() || {}).filter(k => itemOf(k))); if (crateModal && !crateBusy) paintCrateModal(); });
   const seasons = ChatBackend._db.ref("crateSeasons");
   seasons.on("value", s => { crateSeasons = s.val() || {}; crateTick(true); }, () => { crateSeasons = {}; });
@@ -8582,12 +8928,12 @@ function crateTick(noTime) {
   if (!myLoginId) return;
   ensureCrateWatch();
   if (!noTime && myName && $chatScreen.style.display !== "none") { progFor().ms += 5000; saveProg(); }
+  if (crateEarnable() && !crateRulesBad) earnCrate();
   const ready = crateReady();
   const dot = document.getElementById("crateRailDot"); if (dot) dot.classList.toggle("show", ready);
-  const w = crateWindow(srvNow());
-  if (ready && crateNotifiedW !== w) {
-    crateNotifiedW = w;
-    showGlobalPopup({ kind: "crate", title: "📦 Your crate is ready!", body: "Open it from the crate button on the left.", buttonLabel: "Open crates", onButton: () => openCrateModal(), autoCloseMs: 12000 });
+  if (ready && (crateNotifiedW === null || crateEarned > crateNotifiedW)) {
+    crateNotifiedW = crateEarned;
+    showGlobalPopup({ kind: "crate", title: "📦 A crate was added to your inventory!", body: "You have " + crateStock() + " to open. Use the crate button on the left.", buttonLabel: "Open crates", onButton: () => openCrateModal(), autoCloseMs: 12000 });
   }
   if (crateModal && !crateBusy) paintCrateModal();
 }
@@ -8659,26 +9005,50 @@ function paintCrateModal() {
   crateModal.querySelectorAll(".cr-side").forEach(n => n.remove());
   if (crateView === "open") crateModal.appendChild(buildOddsBar(crateBarType));
 }
+let crateOpenCount = 1;
+const CRATE_MAX_OPEN = 50;
+function openChoices() {
+  const n = crateStock(), c = [];
+  if (n >= 1) c.push({ k: 1, label: "1×" });
+  if (n >= 3) c.push({ k: 3, label: "3×" });
+  if (n >= 2 && n !== 3) c.push({ k: Math.min(n, CRATE_MAX_OPEN), label: "Max (" + Math.min(n, CRATE_MAX_OPEN) + ")" });
+  return c;
+}
 function paintOpen(box) {
   if (crateReveal) { box.appendChild(crateReveal); return; }
-  const p = progFor(), w = crateWindow(srvNow()), claimed = crateClaimedW === w, ready = crateReady();
-  box.appendChild(el("h3", "cr-h", claimed ? "You've opened this window's crate" : ready ? "Your crate is ready!" : "Earn your crate"));
+  const p = progFor(), w = crateWindow(srvNow()), earned = crateClaimedW === w, stock = crateStock(), ready = crateReady();
+  const choices = openChoices();
+  if (!choices.some(c => c.k === crateOpenCount)) crateOpenCount = choices.length ? choices[0].k : 1;
+  const inv = el("div", "cr-inv");
+  inv.append(el("span", "cr-inv-ic", "🎒"), el("b", "", stock + (stock === 1 ? " crate" : " crates") + " in your inventory"));
+  box.appendChild(inv);
+  box.appendChild(el("h3", "cr-h", ready ? "Pick a crate to open" : earned ? "Nothing to open yet" : "Earn your next crate"));
   const bar = (label, val, need, fmt) => {
     const r = el("div", "cr-prog"); const t = el("div", "cr-prog-t", label + "  " + fmt(Math.min(val, need)) + " / " + fmt(need));
     const b = el("div", "cr-bar"); const f = el("span"); f.style.width = Math.min(100, Math.round(val * 100 / need)) + "%"; b.appendChild(f); r.append(t, b); return r;
   };
-  if (!claimed) {
+  if (!earned) {
     box.appendChild(bar("Messages", p.msgs, CRATE_NEED_MSGS, v => String(v)));
     box.appendChild(bar("Time online", p.ms, CRATE_NEED_MS, v => Math.floor(v / 60000) + ":" + String(Math.floor(v % 60000 / 1000)).padStart(2, "0")));
+  } else box.appendChild(el("div", "cr-note", "You've earned this window's crate."));
+  box.appendChild(el("div", "cr-note", "A new crate can be earned in " + fmtLeft(crateWindowEnd(w) - srvNow()) + " (every 3 hours). Earned crates stack in your inventory, so nothing is lost if you wait."));
+  if (choices.length) {
+    const row = el("div", "cr-count");
+    row.appendChild(el("span", "cr-count-l", "Open"));
+    choices.forEach(c => {
+      const b = el("button", "cr-count-b" + (c.k === crateOpenCount ? " on" : ""), c.label); b.type = "button"; b.disabled = crateBusy;
+      b.addEventListener("click", () => { crateOpenCount = c.k; paintCrateModal(); });
+      row.appendChild(b);
+    });
+    box.appendChild(row);
   }
-  box.appendChild(el("div", "cr-note", "A new crate window starts in " + fmtLeft(crateWindowEnd(w) - srvNow()) + " (every 12 hours, at noon and midnight US Eastern — an hour earlier in winter)."));
   const grid = el("div", "cr-types");
   visibleTypes().forEach(t => {
     const b = el("button", "cr-type" + (t.id === "season" ? " cr-season" : "")); b.type = "button"; b.disabled = !ready || crateBusy;
     let label = t.label, blurb = t.blurb;
     if (t.id === "season") { const a = activeSeason(); label = a.name + " crate"; blurb = "Only this season · ends in " + Math.max(1, Math.ceil((a.end - srvNow()) / 86400000)) + "d"; }
     b.append(el("span", "cr-type-ic", t.icon), el("b", "", label), el("small", "", blurb));
-    b.addEventListener("click", () => openCrate(t.id));
+    b.addEventListener("click", () => openCrate(t.id, crateOpenCount));
     b.addEventListener("mouseenter", () => { if (crateBusy || crateBarType === t.id) return; crateBarType = t.id; const old = crateModal && crateModal.querySelector(".cr-side"); if (old) old.replaceWith(buildOddsBar(t.id)); });
     grid.appendChild(b);
   });
@@ -8774,52 +9144,71 @@ function revealCard(item, heading, sub) {
   if (sub) c.appendChild(el("div", "cr-note", sub));
   return c;
 }
-async function openCrate(type) {
+async function openCrate(type, count) {
+  count = Math.max(1, Math.min(CRATE_MAX_OPEN, Number(count) || 1));
   if (crateBusy || !crateReady()) return;
+  count = Math.min(count, crateStock());
+  if (count < 1) return;
   crateBusy = true;
-  const w = crateWindow(srvNow());
   try {
     const sea = type === "season" ? activeSeason() : null;
     if (type === "season" && !sea) throw new Error("no-season");
-    await ChatBackend._db.ref("crateClaims/" + myLoginId).set(Object.assign({ w, ts: firebase.database.ServerValue.TIMESTAMP }, sea ? { s: sea.id } : {}));
+    await ChatBackend._db.ref("crateClaims/" + myLoginId).update({ o: crateOpened + count, s: sea ? sea.id : null });
   } catch (e) {
     crateBusy = false;
     showComposerNotice(isPermissionDenied(e) ? "Crates need the updated database rules (crateClaims). Publish the new chat rules." : String(e && e.message) === "no-season" ? "That season has just ended." : "Couldn't open the crate — check your connection.");
     return;
   }
-  crateClaimedW = w;
-  const res = rollCrate(type, w, crateOwned);
+  crateOpened += count;
   crateBarType = type;
   const wheel = buildWheel(type); lastWheel = wheel;
   const status = el("div", "cr-note", "Spinning…");
   const spinBox = el("div", "cr-shake"); spinBox.append(wheel.wrap, status);
   crateReveal = spinBox; paintCrateModal();
   await annSleep(400);
-  const SPIN_MS = 4600;
-  for (const st of res.steps) {
-    wheel.spinTo(st.item, SPIN_MS);
-    status.textContent = "Spinning…";
-    await annSleep(SPIN_MS + 250);
-    if (st.dup) {
-      status.replaceChildren(); status.append(el("b", "", "Duplicate: " + st.item.name + ". "), document.createTextNode(st.retry ? "You already own it — spinning again…" : "You already own it — nothing this time."));
-      await annSleep(1700);
+  const owned = new Set(crateOwned), got = [];
+  let nothing = 0;
+  for (let n = 0; n < count; n++) {
+    const res = rollCrate(type, 0, owned);
+    if (res.final) owned.add(res.final.id);
+    const SPIN_MS = count === 1 ? 4600 : 1700;
+    const steps = count === 1 ? res.steps : res.steps.slice(-1);
+    for (const st of steps) {
+      wheel.spinTo(st.item, SPIN_MS);
+      status.textContent = count > 1 ? "Crate " + (n + 1) + " of " + count + "…" : "Spinning…";
+      await annSleep(SPIN_MS + (count === 1 ? 250 : 120));
+      if (st.dup && count === 1) {
+        status.replaceChildren(); status.append(el("b", "", "Duplicate: " + st.item.name + ". "), document.createTextNode(st.retry ? "You already own it — spinning again…" : "You already own it — nothing this time."));
+        await annSleep(1700);
+      }
     }
+    if (res.final) got.push(res.final); else nothing++;
   }
-  let wrote = true;
-  if (res.final) {
-    wrote = false;
+  let failed = [];
+  for (const it of got) {
+    let wrote = false;
     for (let i = 0; i < 3 && !wrote; i++) {
-      try { await ChatBackend._db.ref("crateInv/" + myLoginId + "/items/" + res.final.id).set(firebase.database.ServerValue.TIMESTAMP); wrote = true; } catch (e) { await annSleep(600); }
+      try { await ChatBackend._db.ref("crateInv/" + myLoginId + "/items/" + it.id).set(firebase.database.ServerValue.TIMESTAMP); wrote = true; } catch (e) { await annSleep(600); }
     }
+    if (!wrote) failed.push(it);
   }
+  const saved = got.filter(i => !failed.includes(i));
   const done = el("div", "cr-shake");
-  done.appendChild(wheel.wrap);
-  if (res.final && wrote) {
-    done.appendChild(revealCard(res.final, "You got", "Open the Collection tab to equip it."));
-  } else if (res.final) {
-    done.appendChild(el("div", "cr-note", "You got " + res.final.name + " but it couldn't be saved. Check your connection; the crate is used up for this window."));
-  } else done.appendChild(el("div", "cr-note", "No new item this time. Come back next window!"));
-  const again = el("button", "pm-go", "Nice"); again.type = "button"; again.addEventListener("click", () => { crateReveal = null; paintCrateModal(); });
+  if (count === 1) {
+    done.appendChild(wheel.wrap);
+    if (saved.length) done.appendChild(revealCard(saved[0], "You got", "Open the Collection tab to equip it."));
+    else if (failed.length) done.appendChild(el("div", "cr-note", "You got " + failed[0].name + " but it couldn't be saved. Check your connection; the crate is used up."));
+    else done.appendChild(el("div", "cr-note", "No new item this time. Come back for the next crate!"));
+  } else {
+    done.appendChild(el("h3", "cr-h", "Opened " + count + " crates"));
+    if (saved.length) {
+      const grid = el("div", "cr-multi");
+      saved.forEach(it => grid.appendChild(revealCard(it, "New", "")));
+      done.appendChild(grid);
+    }
+    done.appendChild(el("div", "cr-note", saved.length + " new item" + (saved.length === 1 ? "" : "s") + ", " + nothing + " crate" + (nothing === 1 ? "" : "s") + " with nothing new" + (failed.length ? ", " + failed.length + " couldn't be saved" : "") + ". Open the Collection tab to equip."));
+  }
+  const again = el("button", "pm-go", crateStock() ? "Nice — " + crateStock() + " left" : "Nice"); again.type = "button"; again.addEventListener("click", () => { crateReveal = null; paintCrateModal(); });
   done.appendChild(again);
   crateReveal = done; crateBusy = false;
   crateTick(true);
@@ -9225,6 +9614,10 @@ window.VUS_CHAT = {
   getPrefsState, restorePrefsState,
   _idleFor(ms) { lastActivityAt = Date.now() - ms; afkCheck(false); },
   _annHash: annHash,
+  possibleAlts: id => ChatBackend.possibleAlts(id),
+  _newDevice() { deviceHashPromise = null; },
+  _toLogin() { hideBanScreen(); $joinScreen.style.display = "flex"; },
+  _deviceHash: () => deviceHash(),
   _wheelSlices() { return lastWheel ? lastWheel.slices.map(x => ({ id: x.it.id, a0: x.a0, w: x.w })) : null; },
   _crateProg(m, ms) { const p = progFor(); p.msgs = m; p.ms = ms; saveProg(); crateTick(true); },
   cosmFor: async id => { try { const p = await ChatBackend.getProfile(id); const c = cosmFields(p && p.cosm); if (!c.ring && p && p.color && p.color.ring) c.ring = p.color.ring; return c; } catch (e) { return {}; } },

@@ -2547,3 +2547,33 @@ body.hide-verified .verified-tag { display: none !important; }
 
 /* ── patch 35: VUS AI channel — long replies keep their line breaks ── */
 .msg.ai-post .msg-bubble { white-space: pre-wrap; overflow-wrap: anywhere; max-width: min(100%, 760px); }
+
+/* ── patch 36: possible alts ── */
+.pc-alts { display: none; margin-top: 6px; font-size: 11.5px; color: #fbbf24; line-height: 1.4; }
+
+/* ══ patch 37: crate inventory, open count, multi results ══ */
+.cr-inv{display:flex;align-items:center;gap:8px;justify-content:center;margin:2px 0 6px;font-size:.95rem}
+.cr-inv-ic{font-size:1.2rem}
+.cr-count{display:flex;align-items:center;justify-content:center;gap:6px;margin:10px 0 4px}
+.cr-count-l{opacity:.7;font-size:.85rem;margin-right:4px}
+.cr-count-b{border:1px solid rgba(148,163,184,.35);background:rgba(15,23,42,.5);color:inherit;border-radius:999px;padding:4px 14px;font:inherit;font-size:.85rem;cursor:pointer}
+.cr-count-b.on{background:#3b82f6;border-color:#3b82f6;color:#fff}
+.cr-count-b:disabled{opacity:.5;cursor:default}
+.cr-multi{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;max-height:260px;overflow:auto;margin:8px 0}
+.cr-multi .cr-reveal-card{padding:8px;transform:scale(.95)}
+
+/* ══ patch 38: GIPHY picker, drop hint, audio ══ */
+.gif-overlay{position:fixed;inset:0;background:rgba(2,6,23,.6);z-index:9000;display:flex;align-items:center;justify-content:center;padding:12px}
+.gif-modal{background:#0f172a;border:1px solid #1f2937;border-radius:14px;width:min(560px,100%);max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
+.gif-head{display:flex;gap:8px;align-items:center;padding:10px}
+.gif-search{flex:1;background:#0b1220;border:1px solid #334155;border-radius:10px;color:inherit;padding:9px 12px;font:inherit}
+.gif-x{position:static!important}
+.gif-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;padding:0 10px 10px;overflow:auto;min-height:160px}
+.gif-item{border:0;padding:0;background:#0b1220;border-radius:8px;overflow:hidden;cursor:pointer;aspect-ratio:1.2/1}
+.gif-item img{width:100%;height:100%;object-fit:cover;display:block}
+.gif-item:hover{outline:2px solid #3b82f6}
+.gif-state{grid-column:1/-1;text-align:center;opacity:.7;padding:30px 0}
+.gif-foot,.gif-via{font-size:.7rem;opacity:.55;text-align:right;padding:2px 10px 6px}
+.gif-via{padding:2px 2px 0}
+.drop-hint{position:fixed;inset:10px;z-index:9500;border:3px dashed #3b82f6;border-radius:16px;background:rgba(15,23,42,.75);color:#e2e8f0;display:flex;align-items:center;justify-content:center;font-size:1.2rem;pointer-events:none}
+.aud-el{width:260px;max-width:100%;display:block}

@@ -3613,6 +3613,7 @@ function fillRoles(container, loginId) {
 }
 
 function resetProfileCard() {
+  { const ab = document.getElementById("chatUserProfileAlts"); if (ab) { ab.style.display = "none"; ab.replaceChildren(); } }
   paintBanner(document.querySelector(".pc-banner"), null);
   $chatUserProfileName.textContent = "Loading…";
   $chatUserProfileAvatar.classList.remove("has-ring"); $chatUserProfileAvatar.style.removeProperty("--ring"); [...$chatUserProfileAvatar.classList].filter(c => c.startsWith("rfx")).forEach(c => $chatUserProfileAvatar.classList.remove(c));
@@ -3689,6 +3690,23 @@ function fillProfileCard(prof, accountKey) {
     if (c.tag) { const te = window.VUS_CHAT.tagEl(c.tag); if (te) $chatUserProfileRoles.appendChild(te); }
   });
   fillRoles($chatUserProfileRoles, prof.id);
+  { // Possible alts: other accounts that have logged in from the same browser (last 30 days)
+    let box = document.getElementById("chatUserProfileAlts");
+    if (!box) {
+      box = h("div", { id: "chatUserProfileAlts", className: "pc-alts" });
+      const anchor = document.getElementById("chatUserProfileSeen");
+      if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(box, anchor.nextSibling); else $chatUserProfileRoles.parentNode.appendChild(box);
+    }
+    box.style.display = "none"; box.replaceChildren();
+    if (window.VUS_CHAT && window.VUS_CHAT.possibleAlts) window.VUS_CHAT.possibleAlts(String(prof.id)).then(async ids => {
+      if (!ids.length || $chatUserProfileName.textContent !== prof.username) return;
+      const names = await Promise.all(ids.slice(0, 6).map(async id => { const k = await accountKeyForLoginId(id); const p2 = k ? await fetchAccountProfile(k) : null; return p2 ? p2.username + " (#" + id + ")" : "#" + id; }));
+      if ($chatUserProfileName.textContent !== prof.username) return;
+      box.textContent = "Possible alts: " + names.join(", ") + (ids.length > 6 ? " +" + (ids.length - 6) + " more" : "");
+      box.title = "Accounts that have logged in from the same browser in the last 30 days. It can also be family or a shared computer.";
+      box.style.display = "block";
+    }).catch(() => {});
+  }
   isVerifiedLoginId(prof.id).then(v => {
     if (!v || $chatUserProfileName.textContent !== prof.username) return;
     $chatUserProfileRoles.appendChild(h("span", { className: "verified-tag in-card" }, "\u2713 Verified"));
