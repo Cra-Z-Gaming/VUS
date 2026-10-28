@@ -2589,3 +2589,11 @@ body.hide-verified .verified-tag { display: none !important; }
 /* ══ patch 40: skip button for big crate batches ══ */
 .cr-skip{display:block;margin:10px auto 0;border:1px solid rgba(148,163,184,.4);background:rgba(15,23,42,.6);color:inherit;border-radius:999px;padding:5px 16px;font:inherit;font-size:.85rem;cursor:pointer}
 .cr-skip:hover{background:rgba(59,130,246,.25)}
+
+/* ══ patch 42: crate batch tray ══ */
+.cr-tray{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;max-height:96px;overflow:auto;margin-top:10px;padding:0 6px}
+.cr-chip{font-size:.72rem;padding:2px 9px;border-radius:999px;border:1px solid;background:rgba(15,23,42,.6);animation:crChip .28s ease-out}
+.cr-chip.dud{opacity:.45;border-color:rgba(148,163,184,.4);color:#94a3b8}
+@keyframes crChip{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+.cr-best{display:inline-block;margin:4px auto 6px;padding:4px 14px;border-radius:999px;font-weight:700;font-size:.9rem;border:1px solid currentColor;animation:crChip .4s ease-out}
+.cr-best.r-legendary{color:#f59e0b}.cr-best.r-epic{color:#c084fc}.cr-best.r-rare{color:#38bdf8}.cr-best.r-common{color:#94a3b8}

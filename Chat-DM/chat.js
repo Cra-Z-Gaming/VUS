@@ -9198,26 +9198,43 @@ async function openCrate(type, count) {
   await annSleep(400);
   const owned = new Set(crateOwned), got = [];
   let nothing = 0, skip = false;
-  // Speed scales with how many are opened: 1 = full show, 2-3 = quick spins, 4-10 = rapid spins, 11+ = one short spin.
-  // Everything is rolled up front, so skipping just stops the animation and shows the results.
-  const SPIN_MS = count === 1 ? 4600 : count <= 3 ? 1700 : count <= 10 ? 600 : 0;
-  const PAUSE = count === 1 ? 250 : count <= 3 ? 120 : 60;
+  // Pacing scales with how many are opened. Everything is rolled up front, so Skip only stops the show.
+  //   1: the full spin   2-3: quick spins   4-10: one smooth spin per crate, results pop into a tray   11+: one long roll while the tray fills
+  const PER = count === 1 ? 4600 : count <= 3 ? 1700 : count <= 10 ? 1050 : 0;
+  const PAUSE = count === 1 ? 250 : count <= 3 ? 120 : 140;
+  let tray = null;
   if (count > 3) {
     const sk = el("button", "cr-skip", "Skip animation"); sk.type = "button";
     sk.addEventListener("click", () => { skip = true; sk.remove(); });
-    spinBox.appendChild(sk);
+    tray = el("div", "cr-tray");
+    spinBox.append(tray, sk);
   }
   const rolls = [];
   for (let n = 0; n < count; n++) { const res = rollCrate(type, 0, owned); if (res.final) owned.add(res.final.id); rolls.push(res); }
+  const addChip = res => {
+    if (!tray) return;
+    const chip = el("span", "cr-chip" + (res.final ? " r-" + res.final.rar : " dud"), res.final ? res.final.name.replace(/ \(animated\)/, "") : "—");
+    if (res.final) { const c = RARITY[res.final.rar].color; chip.style.color = c; chip.style.borderColor = c; }
+    tray.appendChild(chip); tray.scrollTop = tray.scrollHeight;
+  };
+  const bigRoll = count > 10 && !skip;
+  if (bigRoll) {   // one long, slowing roll over the whole batch
+    const lastHit = rolls.map(r => r.final).filter(Boolean).pop();
+    wheel.spinTo(lastHit || rolls[rolls.length - 1].steps[0].item, Math.min(9000, 3000 + count * 80));
+  }
+  const tick = bigRoll ? Math.max(90, Math.min(260, 3200 / count)) : 0;
   for (let n = 0; n < count; n++) {
     const res = rolls[n];
-    if (!skip && SPIN_MS) {
+    if (!skip && bigRoll) {
+      status.textContent = "Crate " + (n + 1) + " of " + count + "…";
+      await annSleep(tick);
+    } else if (!skip && PER) {
       const steps = count === 1 ? res.steps : res.steps.slice(-1);
       for (const st of steps) {
         if (skip) break;
-        wheel.spinTo(st.item, SPIN_MS);
+        wheel.spinTo(st.item, PER);
         status.textContent = count > 1 ? "Crate " + (n + 1) + " of " + count + "…" : "Spinning…";
-        await annSleep(SPIN_MS + PAUSE);
+        await annSleep(PER + PAUSE);
         if (st.dup && count === 1) {
           status.replaceChildren(); status.append(el("b", "", "Duplicate: " + st.item.name + ". "), document.createTextNode(st.retry ? "You already own it — spinning again…" : "You already own it — nothing this time."));
           await annSleep(1700);
@@ -9225,12 +9242,9 @@ async function openCrate(type, count) {
       }
     }
     if (res.final) got.push(res.final); else nothing++;
+    addChip(res);
   }
-  if (count > 10 && !skip) {   // big batches: a single short spin to a result before the summary
-    status.textContent = "Opened " + count + " crates…";
-    const last = got[got.length - 1];
-    if (last) { wheel.spinTo(last, 1500); await annSleep(1700); }
-  }
+  if (bigRoll && !skip) { status.textContent = "Opened " + count + " crates…"; await annSleep(900); }
   let failed = [];
   for (const it of got) {
     let wrote = false;
@@ -9249,6 +9263,10 @@ async function openCrate(type, count) {
   } else {
     done.appendChild(el("h3", "cr-h", "Opened " + count + " crates"));
     if (saved.length) {
+      const ord = { legendary: 0, epic: 1, rare: 2, common: 3 };
+      saved.sort((x, y) => ord[x.rar] - ord[y.rar]);
+      const best = saved[0];
+      done.appendChild(el("div", "cr-best r-" + best.rar, "Best pull: " + best.name.replace(/ \(animated\)/, "") + " · " + RARITY[best.rar].label));
       const grid = el("div", "cr-multi");
       saved.forEach(it => grid.appendChild(revealCard(it, "New", "")));
       done.appendChild(grid);
