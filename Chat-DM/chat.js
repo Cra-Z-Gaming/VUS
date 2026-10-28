@@ -9172,13 +9172,24 @@ async function openCrate(type, count) {
   try {
     const sea = type === "season" ? activeSeason() : null;
     if (type === "season" && !sea) throw new Error("no-season");
-    await ChatBackend._db.ref("crateClaims/" + myLoginId).update({ o: crateOpened + count, s: sea ? sea.id : null });
+    const ref = ChatBackend._db.ref("crateClaims/" + myLoginId);
+    // Always count from what the database says right now, never from a local running total.
+    const fresh = async () => { const v = (await ref.get()).val() || {}; crateEarned = Number(v.n) > 0 ? Number(v.n) : 0; crateOpened = Number(v.o) > 0 ? Number(v.o) : 0; };
+    await fresh();
+    count = Math.min(count, crateStock());
+    if (count < 1) throw new Error("no-crates");
+    try { await ref.update({ o: crateOpened + count, s: sea ? sea.id : null }); }
+    catch (e1) {
+      if (!isPermissionDenied(e1)) throw e1;
+      await fresh(); count = Math.min(count, crateStock());   // stale numbers: re-read once and try again
+      if (count < 1) throw new Error("no-crates");
+      await ref.update({ o: crateOpened + count, s: sea ? sea.id : null });
+    }
   } catch (e) {
     crateBusy = false;
-    showComposerNotice(isPermissionDenied(e) ? "Crates need the updated database rules (crateClaims). Publish the new chat rules." : String(e && e.message) === "no-season" ? "That season has just ended." : "Couldn't open the crate — check your connection.");
+    showComposerNotice(isPermissionDenied(e) ? "Crates need the updated database rules (crateClaims). Publish the new chat rules." : String(e && e.message) === "no-season" ? "That season has just ended." : String(e && e.message) === "no-crates" ? "You have no crates to open." : "Couldn't open the crate — check your connection.");
     return;
   }
-  crateOpened += count;
   crateBarType = type;
   const wheel = buildWheel(type); lastWheel = wheel;
   const status = el("div", "cr-note", "Spinning…");
