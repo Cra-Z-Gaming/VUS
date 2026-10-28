@@ -9186,22 +9186,39 @@ async function openCrate(type, count) {
   crateReveal = spinBox; paintCrateModal();
   await annSleep(400);
   const owned = new Set(crateOwned), got = [];
-  let nothing = 0;
+  let nothing = 0, skip = false;
+  // Speed scales with how many are opened: 1 = full show, 2-3 = quick spins, 4-10 = rapid spins, 11+ = one short spin.
+  // Everything is rolled up front, so skipping just stops the animation and shows the results.
+  const SPIN_MS = count === 1 ? 4600 : count <= 3 ? 1700 : count <= 10 ? 600 : 0;
+  const PAUSE = count === 1 ? 250 : count <= 3 ? 120 : 60;
+  if (count > 3) {
+    const sk = el("button", "cr-skip", "Skip animation"); sk.type = "button";
+    sk.addEventListener("click", () => { skip = true; sk.remove(); });
+    spinBox.appendChild(sk);
+  }
+  const rolls = [];
+  for (let n = 0; n < count; n++) { const res = rollCrate(type, 0, owned); if (res.final) owned.add(res.final.id); rolls.push(res); }
   for (let n = 0; n < count; n++) {
-    const res = rollCrate(type, 0, owned);
-    if (res.final) owned.add(res.final.id);
-    const SPIN_MS = count === 1 ? 4600 : 1700;
-    const steps = count === 1 ? res.steps : res.steps.slice(-1);
-    for (const st of steps) {
-      wheel.spinTo(st.item, SPIN_MS);
-      status.textContent = count > 1 ? "Crate " + (n + 1) + " of " + count + "…" : "Spinning…";
-      await annSleep(SPIN_MS + (count === 1 ? 250 : 120));
-      if (st.dup && count === 1) {
-        status.replaceChildren(); status.append(el("b", "", "Duplicate: " + st.item.name + ". "), document.createTextNode(st.retry ? "You already own it — spinning again…" : "You already own it — nothing this time."));
-        await annSleep(1700);
+    const res = rolls[n];
+    if (!skip && SPIN_MS) {
+      const steps = count === 1 ? res.steps : res.steps.slice(-1);
+      for (const st of steps) {
+        if (skip) break;
+        wheel.spinTo(st.item, SPIN_MS);
+        status.textContent = count > 1 ? "Crate " + (n + 1) + " of " + count + "…" : "Spinning…";
+        await annSleep(SPIN_MS + PAUSE);
+        if (st.dup && count === 1) {
+          status.replaceChildren(); status.append(el("b", "", "Duplicate: " + st.item.name + ". "), document.createTextNode(st.retry ? "You already own it — spinning again…" : "You already own it — nothing this time."));
+          await annSleep(1700);
+        }
       }
     }
     if (res.final) got.push(res.final); else nothing++;
+  }
+  if (count > 10 && !skip) {   // big batches: a single short spin to a result before the summary
+    status.textContent = "Opened " + count + " crates…";
+    const last = got[got.length - 1];
+    if (last) { wheel.spinTo(last, 1500); await annSleep(1700); }
   }
   let failed = [];
   for (const it of got) {
