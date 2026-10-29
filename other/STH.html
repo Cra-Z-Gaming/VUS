@@ -18,6 +18,9 @@
     --danger: #ff6b8b;
     --gold: #ffcf6b;
     --radius: 16px;
+    --blue-rgb: 79,140,255; --violet-rgb: 139,92,246; --glow-rgb: 110,100,250;
+    --accent2: #b9a6ff; --accent3: #a9c4ff;
+    --wm1: #7fb0ff; --wm2: #b9a6ff; --wm3: #ff9ad5;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   [hidden] { display: none !important; }
@@ -34,18 +37,18 @@
     content: "";
     position: fixed; inset: 0; z-index: 0; pointer-events: none;
     background:
-      radial-gradient(60% 50% at 8% 0%, rgba(79,140,255,.22), transparent 70%),
-      radial-gradient(55% 55% at 100% 100%, rgba(139,92,246,.24), transparent 70%);
+      radial-gradient(60% 50% at 8% 0%, rgba(var(--blue-rgb),.22), transparent 70%),
+      radial-gradient(55% 55% at 100% 100%, rgba(var(--violet-rgb),.24), transparent 70%);
   }
   button { font: inherit; color: inherit; cursor: pointer; }
   input, textarea { font: inherit; color: var(--text); }
-  :focus-visible { outline: 2px solid #9db8ff; outline-offset: 2px; }
+  :focus-visible { outline: 2px solid var(--accent3); outline-offset: 2px; }
 
   /* ---------- Full-screen cards (setup / auth / banned) ---------- */
   .center-screen { position: fixed; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; padding: 24px; overflow-y: auto; }
   .card {
     width: 100%; max-width: 380px;
-    background: rgba(16,22,45,.82);
+    background: color-mix(in srgb, var(--panel) 86%, transparent);
     border: 1px solid var(--line);
     border-radius: 22px;
     padding: 30px 26px;
@@ -53,7 +56,7 @@
     box-shadow: 0 30px 80px rgba(5,8,25,.6);
   }
   .card.wide { max-width: 560px; }
-  .logo { width: 44px; height: 44px; border-radius: 14px; background: var(--grad); display: grid; place-items: center; box-shadow: 0 8px 30px rgba(110,100,250,.45); margin-bottom: 14px; }
+  .logo { width: 44px; height: 44px; border-radius: 14px; background: var(--grad); display: grid; place-items: center; box-shadow: 0 8px 30px rgba(var(--glow-rgb),.45); margin-bottom: 14px; }
   .logo svg { width: 24px; height: 24px; }
   .card h1 { font-size: 26px; font-weight: 700; letter-spacing: -.01em; }
   .card p.sub { color: var(--mute); margin: 6px 0 20px; }
@@ -66,10 +69,10 @@
   .tabs button.on { background: var(--grad); color: #fff; }
   .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
   .field label { font-size: 13px; color: var(--mute); font-weight: 600; }
-  .field input { background: var(--panel2); border: 1px solid var(--line); border-radius: 11px; padding: 11px 13px; outline: none; }
-  .field input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(79,140,255,.2); }
+  .field input { background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; font-size: 16px; outline: none; }
+  .field input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(var(--blue-rgb),.2); }
   .err { color: var(--danger); font-size: 13px; min-height: 18px; margin-bottom: 8px; }
-  .btn { width: 100%; border: none; background: var(--grad); color: #fff; font-weight: 700; padding: 12px; border-radius: 12px; box-shadow: 0 8px 24px rgba(110,100,250,.35); }
+  .btn { width: 100%; border: none; background: var(--grad); color: #fff; font-weight: 700; padding: 12px; border-radius: 12px; box-shadow: 0 8px 24px rgba(var(--glow-rgb),.35); }
   .btn:hover { filter: brightness(1.08); }
   .btn:disabled { opacity: .55; cursor: not-allowed; }
   .btn.ghost { background: transparent; border: 1px solid var(--line); box-shadow: none; color: var(--mute); margin-top: 10px; }
@@ -78,7 +81,7 @@
   #app { position: relative; z-index: 1; height: 100dvh; display: grid; grid-template-columns: 260px minmax(0,1fr) 240px; }
   body.hide-members #app { grid-template-columns: 260px minmax(0,1fr); }
   body.hide-members #members { display: none; }
-  #sidebar, #members { background: rgba(14,19,40,.78); backdrop-filter: blur(10px); display: flex; flex-direction: column; min-height: 0; }
+  #sidebar, #members { background: color-mix(in srgb, var(--panel) 80%, transparent); backdrop-filter: blur(10px); display: flex; flex-direction: column; min-height: 0; }
   #sidebar { border-right: 1px solid var(--line); }
   #members { border-left: 1px solid var(--line); }
   .brand { display: flex; align-items: center; gap: 10px; padding: 16px 16px 12px; font-weight: 700; font-size: 17px; }
@@ -91,7 +94,7 @@
   #channelList { flex: 1; overflow-y: auto; padding: 0 8px; }
   .chan { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: none; background: transparent; padding: 8px 10px; border-radius: 10px; color: var(--mute); }
   .chan:hover { background: var(--panel2); color: var(--text); }
-  .chan.on { background: linear-gradient(90deg, rgba(79,140,255,.22), rgba(139,92,246,.22)); color: #fff; font-weight: 600; }
+  .chan.on { background: linear-gradient(90deg, rgba(var(--blue-rgb),.22), rgba(var(--violet-rgb),.22)); color: #fff; font-weight: 600; }
   .chan .hash { opacity: .6; }
   .me-card { display: flex; align-items: center; gap: 10px; padding: 12px; margin: 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel2); }
   .me-card .who { flex: 1; min-width: 0; }
@@ -102,7 +105,7 @@
   .avatar.sm { width: 28px; height: 28px; font-size: 12px; }
 
   main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-  .topbar { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--line); background: rgba(10,14,31,.55); backdrop-filter: blur(8px); }
+  .topbar { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--bg) 60%, transparent); backdrop-filter: blur(8px); }
   .topbar h2 { font-size: 17px; font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .topbar h2 .hash { color: var(--violet); margin-right: 4px; }
   .pill { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--line); color: var(--mute); font-size: 13px; }
@@ -127,28 +130,24 @@
   .meta .tm { color: var(--mute); font-size: 12px; }
   .badge { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; font-weight: 700; padding: 1px 8px; border-radius: 999px; }
   .badge.owner { background: rgba(255,207,107,.14); color: var(--gold); border: 1px solid rgba(255,207,107,.4); }
-  .badge.admin { background: rgba(139,92,246,.18); color: #c4adff; border: 1px solid rgba(139,92,246,.5); }
+  .badge.admin { background: rgba(var(--violet-rgb),.18); color: #c4adff; border: 1px solid rgba(var(--violet-rgb),.5); }
   .bubble { background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); border-bottom-left-radius: 5px; padding: 10px 14px; word-break: break-word; white-space: pre-wrap; max-width: 100%; }
-  .msg.mine .bubble { background: var(--grad); border-color: transparent; border-bottom-left-radius: var(--radius); border-bottom-right-radius: 5px; color: #fff; box-shadow: 0 8px 26px rgba(110,100,250,.28); }
-  .bubble a { color: #a9c4ff; }
+  .msg.mine .bubble { background: var(--grad); border-color: transparent; border-bottom-left-radius: var(--radius); border-bottom-right-radius: 5px; color: #fff; box-shadow: 0 8px 26px rgba(var(--glow-rgb),.28); }
+  .bubble a { color: var(--accent3); }
   .msg.mine .bubble a { color: #fff; text-decoration: underline; }
-  .bubble.pinged { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(79,140,255,.18); }
-  .mention { color: #b9a6ff; font-weight: 700; background: rgba(139,92,246,.16); border-radius: 6px; padding: 0 4px; }
-  .mention.me { color: #fff; background: rgba(79,140,255,.45); }
+  .bubble.pinged { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(var(--blue-rgb),.18); }
+  .mention { color: var(--accent2); font-weight: 700; background: rgba(var(--violet-rgb),.16); border-radius: 6px; padding: 0 4px; }
+  .mention.me { color: #fff; background: rgba(var(--blue-rgb),.45); }
   .msg.mine .mention { background: rgba(255,255,255,.22); color: #fff; }
   .msg-img { display: block; max-width: min(100%, 360px); max-height: 320px; border-radius: 12px; cursor: zoom-in; margin-top: 2px; }
   .bubble .msg-img:first-child { margin-top: 0; }
   .bubble .cap { margin-top: 8px; display: block; }
-  .del { position: absolute; top: -8px; right: -4px; opacity: 0; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--mute); font-size: 13px; line-height: 1; transition: opacity .12s; }
-  .msg.mine .del { right: auto; left: -4px; }
-  .msg:hover .del, .del:focus-visible { opacity: 1; }
-  .del:hover { color: var(--danger); border-color: var(--danger); }
 
   .note { align-self: center; max-width: 90%; text-align: center; color: var(--mute); font-size: 13.5px; font-style: italic; padding: 2px 10px; }
   .note.local::after { content: " (only you can see this)"; opacity: .6; font-size: 12px; }
   .note.err { color: var(--danger); }
   .announce { align-self: stretch; border: 1px solid transparent; border-radius: 14px; padding: 12px 16px; background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--grad) border-box; }
-  .announce b { display: block; font-size: 13px; color: #b9a6ff; margin-bottom: 2px; }
+  .announce b { display: block; font-size: 13px; color: var(--accent2); margin-bottom: 2px; }
   .announce span { white-space: pre-wrap; word-break: break-word; }
   .daysep { align-self: stretch; display: flex; align-items: center; gap: 12px; color: var(--mute); font-size: 12.5px; }
   .daysep::before, .daysep::after { content: ""; flex: 1; height: 1px; background: var(--line); }
@@ -163,16 +162,16 @@
   #hints { position: absolute; bottom: 100%; left: 18px; right: 18px; margin-bottom: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 6px; max-height: 240px; overflow-y: auto; z-index: 10; box-shadow: 0 16px 40px rgba(5,8,25,.55); }
   #hints button { display: flex; gap: 10px; width: 100%; text-align: left; background: transparent; border: none; padding: 7px 10px; border-radius: 9px; }
   #hints button:hover, #hints button.on { background: var(--panel2); }
-  #hints b { color: #b9a6ff; min-width: 110px; }
+  #hints b { color: var(--accent2); min-width: 110px; }
   #hints span { color: var(--mute); }
   #stage { display: flex; margin-bottom: 8px; }
   #stage .thumb { position: relative; }
   #stage img { height: 84px; border-radius: 12px; border: 1px solid var(--line); display: block; }
   #stage button { position: absolute; top: -8px; right: -8px; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--text); }
-  .composer { display: flex; align-items: flex-end; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 8px; }
-  .composer:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(79,140,255,.16); }
-  #input { flex: 1; resize: none; border: none; outline: none; background: transparent; padding: 8px 6px; max-height: 140px; min-height: 24px; line-height: 1.4; }
-  .send { width: 40px; height: 40px; border-radius: 13px; border: none; background: var(--grad); color: #fff; display: grid; place-items: center; flex-shrink: 0; box-shadow: 0 6px 18px rgba(110,100,250,.4); }
+  .composer { display: flex; align-items: flex-end; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 10px 12px; }
+  .composer:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(var(--blue-rgb),.16); }
+  #input { flex: 1; resize: none; border: none; outline: none; background: transparent; padding: 12px 8px; max-height: 240px; min-height: 48px; font-size: 16.5px; line-height: 1.45; }
+  .send { width: 46px; height: 46px; border-radius: 14px; border: none; background: var(--grad); color: #fff; display: grid; place-items: center; flex-shrink: 0; box-shadow: 0 6px 18px rgba(var(--glow-rgb),.4); }
   .send:hover { filter: brightness(1.1); }
   .send svg { width: 19px; height: 19px; }
   #emojiPop { position: absolute; bottom: 100%; right: 18px; margin-bottom: 6px; width: 264px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 8px; display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; z-index: 10; box-shadow: 0 16px 40px rgba(5,8,25,.55); }
@@ -208,12 +207,12 @@
   .note.presence { font-style: normal; font-size: 12.5px; padding: 0 10px; }
   .note.presence.joined { color: #5fe3b0; }
   .note.presence.left { color: var(--mute); }
-  #notifBar { display: flex; align-items: center; gap: 10px; padding: 8px 18px; background: rgba(79,140,255,.12); border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  #notifBar { display: flex; align-items: center; gap: 10px; padding: 8px 18px; background: rgba(var(--blue-rgb),.12); border-bottom: 1px solid var(--line); font-size: 13.5px; }
   #notifBar span { flex: 1; min-width: 0; }
   #notifBar button { border: 1px solid var(--line); background: var(--panel2); border-radius: 9px; padding: 5px 12px; }
   #notifBar button.primary { background: var(--grad); border-color: transparent; color: #fff; font-weight: 600; }
   #filterBtn:not(.on) { opacity: .6; }
-  #filterBtn.on { background: rgba(79,140,255,.18); border-color: var(--blue); color: var(--text); }
+  #filterBtn.on { background: rgba(var(--blue-rgb),.18); border-color: var(--blue); color: var(--text); }
 
   #userMenu { position: fixed; z-index: 60; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 6px; min-width: 190px; box-shadow: 0 18px 50px rgba(5,8,25,.65); }
   #userMenu .hd { padding: 6px 10px 8px; color: var(--mute); font-size: 12.5px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
@@ -256,19 +255,120 @@
   #modal { z-index: 70; background: rgba(5,7,20,.72); }
   #modalCard { max-height: 90dvh; overflow-y: auto; }
   .pf-bio { margin: 14px 0 6px; white-space: pre-wrap; word-break: break-word; }
-  .field textarea { background: var(--panel2); border: 1px solid var(--line); border-radius: 11px; padding: 11px 13px; outline: none; resize: vertical; }
+  .field textarea { background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; font-size: 16px; min-height: 120px; outline: none; resize: vertical; }
   .field input[type=file] { padding: 8px; }
   #pfBtns .btn, #modalCard .btn { margin-top: 8px; }
   .dir { max-height: 50dvh; overflow-y: auto; margin-bottom: 4px; }
   .dir .mem small { color: var(--mute); display: block; font-size: 12px; }
 
   #stars { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
-  .wordmark { background: linear-gradient(90deg, #7fb0ff, #b9a6ff, #ff9ad5, #7fb0ff); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 6s linear infinite; filter: drop-shadow(0 0 14px rgba(139,92,246,.45)); }
+  .wordmark { background: linear-gradient(90deg, var(--wm1), var(--wm2), var(--wm3), var(--wm1)); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 6s linear infinite; filter: drop-shadow(0 0 14px rgba(var(--violet-rgb),.45)); }
   @keyframes shimmer { to { background-position: 300% 0; } }
   .logo { animation: glow 3.5s ease-in-out infinite; }
-  @keyframes glow { 50% { box-shadow: 0 8px 42px rgba(139,92,246,.85); } }
+  @keyframes glow { 50% { box-shadow: 0 8px 42px rgba(var(--violet-rgb),.85); } }
   #fxBtn { font-size: 15px; }
   .field select { background: var(--panel2); border: 1px solid var(--line); border-radius: 11px; padding: 10px 12px; color: var(--text); }
+
+  /* ---------- replies, edits, message actions ---------- */
+  .brow { position: relative; }
+  .acts { position: absolute; top: -15px; left: 6px; display: flex; gap: 1px; padding: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 2; box-shadow: 0 6px 18px rgba(5,8,25,.5); }
+  .msg.mine .acts { left: auto; right: 6px; }
+  .msg:hover .acts, .acts:focus-within, .msg.open .acts { opacity: 1; pointer-events: auto; }
+  .acts button { width: 26px; height: 26px; border: none; background: transparent; border-radius: 8px; color: var(--mute); font-size: 14px; line-height: 1; }
+  .acts button:hover { background: var(--panel2); color: var(--text); }
+  .acts button.del-b:hover { color: var(--danger); }
+  .replyref { display: flex; align-items: baseline; gap: 6px; align-self: flex-start; max-width: min(100%, 340px); text-align: left; background: rgba(var(--violet-rgb),.12); border: 1px solid var(--line); border-left: 3px solid var(--violet); border-radius: 10px; padding: 3px 10px; color: var(--mute); font-size: 12.5px; cursor: pointer; }
+  .msg.mine .replyref { align-self: flex-end; }
+  .replyref:hover:not(.gone) { background: rgba(var(--violet-rgb),.22); }
+  .replyref.gone { cursor: default; font-style: italic; }
+  .replyref b { font-weight: 600; flex-shrink: 0; }
+  .replyref span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ed { color: var(--mute); font-size: 11.5px; }
+  .editbox { display: flex; flex-direction: column; gap: 6px; min-width: min(420px, 70vw); }
+  .editbox textarea { background: var(--panel2); border: 1px solid var(--blue); border-radius: 12px; padding: 10px 12px; font-size: 16px; outline: none; resize: none; color: var(--text); min-height: 64px; max-height: 220px; }
+  .editbox .row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--mute); }
+  .editbox .row span { flex: 1; }
+  .editbox button { border: 1px solid var(--line); background: var(--panel2); border-radius: 8px; padding: 3px 12px; font-size: 13px; }
+  .editbox button.primary { background: var(--grad); border-color: transparent; color: #fff; font-weight: 600; }
+  .msg.flash .bubble { animation: flash 1.5s ease-out; }
+  @keyframes flash { 0%, 55% { box-shadow: 0 0 0 3px rgba(255,207,107,.6); } 100% { box-shadow: 0 0 0 3px rgba(255,207,107,0); } }
+  #replyBar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 6px 8px 6px 12px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--violet); border-radius: 12px; color: var(--mute); font-size: 13px; }
+  #replyBar .rb-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #replyBar b { color: var(--text); }
+  #replyBar button { border: none; background: transparent; color: var(--mute); width: 24px; height: 24px; border-radius: 50%; }
+  #replyBar button:hover { background: var(--panel2); color: var(--text); }
+
+  /* ---------- VIP role, suggestions, notification button ---------- */
+  .badge.vip { background: rgba(255,154,213,.14); color: #ff9ad5; border: 1px solid rgba(255,154,213,.4); }
+  #sugFab { position: fixed; right: 14px; bottom: 14px; z-index: 30; display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: color-mix(in srgb, var(--panel2) 92%, transparent); backdrop-filter: blur(6px); color: var(--text); font-size: 13px; box-shadow: 0 8px 26px rgba(5,8,25,.5); opacity: .85; }
+  #sugFab:hover { opacity: 1; border-color: var(--blue); }
+  #memberList { padding-bottom: 64px; }
+  body.hide-members #sugFab { bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
+  @media (max-width: 1000px) { #sugFab { bottom: calc(100px + env(safe-area-inset-bottom, 0px)); } }
+  @media (max-width: 720px) { #sugFab { right: 10px; padding: 9px 11px; } #sugFab span { display: none; } }
+  #sugListBtn { position: relative; }
+  #sugListBtn[data-n]::after { content: attr(data-n); position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: #ff5d7a; color: #fff; font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; }
+  @media (max-width: 720px) { .topbar { gap: 4px; padding: 12px 10px; } .topbar .icon-btn { width: 28px; } .topbar .pill { white-space: nowrap; padding: 6px 9px; } }
+  #notifBtn:not(.on) { opacity: .6; }
+  #notifBtn.on { background: rgba(var(--blue-rgb),.18); border-color: var(--blue); color: var(--text); }
+
+  /* ---------- XP, levels ---------- */
+  .me-card .who { cursor: pointer; }
+  .lvline { display: block; }
+  .xpbar { height: 5px; border-radius: 99px; background: rgba(255,255,255,.08); overflow: hidden; margin-top: 5px; }
+  .xpbar i { display: block; height: 100%; width: 0; background: var(--grad); border-radius: 99px; transition: width .5s ease; }
+  .xpbar.big { height: 10px; }
+  .lv { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 700; padding: 0 7px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,.04); color: var(--mute); line-height: 18px; white-space: nowrap; }
+  .lv.t3, .lv.t4 { border-color: rgba(var(--blue-rgb),.5); color: var(--accent3); }
+  .lv.t5, .lv.t6 { border-color: rgba(var(--violet-rgb),.6); color: var(--accent2); }
+  .lv.t7, .lv.t8 { border-color: rgba(255,207,107,.55); color: var(--gold); }
+  .lv.t9 { border-color: transparent; color: #fff; background: linear-gradient(90deg,#ff4fd8,#7a5cff,#2fd6ff,#ff4fd8); background-size: 300% 100%; animation: shimmer 4s linear infinite; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+  .lv-row { display: flex; align-items: center; gap: 10px; padding: 7px 6px; border-bottom: 1px solid var(--line); opacity: .55; }
+  .lv-row.got { opacity: 1; }
+  .lv-row b { white-space: nowrap; }
+  .lv-row small { flex: 1; color: var(--mute); font-size: 12.5px; }
+  .lv-row em { color: #5fe3b0; font-style: normal; }
+
+  /* ---------- themes ---------- */
+  .th-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 6px 0 4px; }
+  .th-card { text-align: left; border: 1px solid var(--line); background: var(--panel2); border-radius: 14px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .th-card:hover { border-color: var(--blue); }
+  .th-card.on { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(var(--blue-rgb),.28); }
+  .th-card.locked { opacity: .55; }
+  .th-sw { height: 36px; border-radius: 9px; }
+  .th-card b { font-size: 14px; }
+  .th-card small { color: var(--mute); font-size: 12px; }
+  :root[data-theme="aurora"] { --bg:#061611; --panel:#0b2119; --panel2:#10302a; --line:#1d4a3f; --text:#e6fff6; --mute:#84b8a6; --blue:#2fe0aa; --violet:#3aa8ff; --grad:linear-gradient(135deg,#0fa57d 0%,#2f86ff 60%,#8a5cf6 100%); --blue-rgb:47,224,170; --violet-rgb:58,168,255; --glow-rgb:40,190,200; --accent2:#8ff0d0; --accent3:#9be8ff; --wm1:#7dffd0; --wm2:#7fd0ff; --wm3:#c49cff; }
+  :root[data-theme="supernova"] { --bg:#170a0c; --panel:#251013; --panel2:#351820; --line:#5a2a33; --text:#fff0e8; --mute:#c79a8f; --blue:#ff9a4f; --violet:#ff4f8b; --grad:linear-gradient(135deg,#d9480f 0%,#d6204f 60%,#a21caf 100%); --blue-rgb:255,154,79; --violet-rgb:255,79,139; --glow-rgb:255,110,90; --accent2:#ffb38a; --accent3:#ffd0a8; --wm1:#ffb347; --wm2:#ff6b8b; --wm3:#ffd36b; }
+  :root[data-theme="glacier"] { --bg:#07131c; --panel:#0d2230; --panel2:#133246; --line:#25506b; --text:#eaf8ff; --mute:#8fb6cc; --blue:#5cc8ff; --violet:#8fa8ff; --grad:linear-gradient(135deg,#0b78c4 0%,#4f74e8 100%); --blue-rgb:92,200,255; --violet-rgb:143,168,255; --glow-rgb:80,170,240; --accent2:#bfe6ff; --accent3:#cfeeff; --wm1:#aee6ff; --wm2:#ffffff; --wm3:#8fb4ff; }
+  :root[data-theme="void"] { --bg:#040405; --panel:#0c0c10; --panel2:#15151b; --line:#2a2a35; --text:#f1f1f5; --mute:#9a9aae; --blue:#e0c36a; --violet:#9aa0b5; --grad:linear-gradient(135deg,#a8842c 0%,#5b4a1f 50%,#2f2f3d 100%); --blue-rgb:224,195,106; --violet-rgb:154,160,181; --glow-rgb:200,160,60; --accent2:#f0dc9a; --accent3:#f5e6b8; --wm1:#f0dc9a; --wm2:#ffffff; --wm3:#c9a227; }
+  :root[data-theme="cosmic"] { --bg:#070514; --panel:#120c28; --panel2:#1c1340; --line:#3a2a78; --text:#f4eeff; --mute:#a99bd6; --blue:#ff7ad9; --violet:#7a7aff; --grad:linear-gradient(135deg,#d62fb0 0%,#6a4cf0 38%,#1c9fd6 70%,#d62fb0 100%); --blue-rgb:255,122,217; --violet-rgb:122,122,255; --glow-rgb:200,90,240; --accent2:#ffb0ec; --accent3:#b0e8ff; --wm1:#ff7ad9; --wm2:#7ad0ff; --wm3:#ffe27a; }
+  :root[data-theme="cosmic"] .btn:not(.ghost), :root[data-theme="cosmic"] .send, :root[data-theme="cosmic"] .msg.mine .bubble:not(.cbg), :root[data-theme="cosmic"] .tabs button.on, :root[data-theme="cosmic"] .xpbar i { background-size: 300% 300%; animation: cosmicShift 9s ease infinite; }
+  @keyframes cosmicShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+
+  /* ---------- polls ---------- */
+  .bubble.poll { white-space: normal; min-width: min(290px, 72vw); }
+  .pl-hd { font-size: 12px; font-weight: 700; letter-spacing: .04em; opacity: .8; margin-bottom: 4px; }
+  .pl-q { font-weight: 600; margin-bottom: 8px; white-space: pre-wrap; word-break: break-word; }
+  .pl-opt { position: relative; display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; margin-top: 6px; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,.16); background: rgba(8,12,30,.3); color: inherit; overflow: hidden; }
+  .pl-opt:hover { border-color: rgba(255,255,255,.42); }
+  .pl-opt.mine { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue) inset; }
+  .msg.mine .pl-opt.mine { border-color: #fff; box-shadow: 0 0 0 1px #fff inset; }
+  .pl-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: rgba(var(--blue-rgb),.38); transition: width .4s ease; z-index: 0; }
+  .msg.mine .pl-fill { background: rgba(255,255,255,.28); }
+  .pl-opt > span:not(.pl-fill) { position: relative; z-index: 1; }
+  .pl-lbl { flex: 1; min-width: 0; word-break: break-word; }
+  .pl-pct { font-variant-numeric: tabular-nums; font-size: 12.5px; opacity: .9; white-space: nowrap; }
+  .pl-ft { margin-top: 8px; font-size: 12px; opacity: .7; }
+
+  /* ---------- pinned messages ---------- */
+  #pinBar { display: flex; align-items: center; gap: 10px; padding: 7px 18px; background: rgba(var(--violet-rgb),.1); border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  #pinBar .pin-txt { flex: 1; min-width: 0; text-align: left; background: none; border: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+  #pinBar .pin-txt:hover { text-decoration: underline; }
+  #pinBar .pin-more { border: 1px solid var(--line); background: var(--panel2); border-radius: 999px; padding: 2px 12px; font-size: 12.5px; color: var(--mute); white-space: nowrap; }
+  #pinBar .pin-more:hover { color: var(--text); }
+  .msg.pinned .meta::after { content: "📌"; font-size: 11px; }
+  @media (max-width: 720px) { #themeBtn { display: none; } }   /* on phones, open themes from your level in the sidebar or with /theme */
 </style>
 </head>
 <body>
@@ -334,7 +434,7 @@
     <nav id="roomList" style="max-height:25%;overflow-y:auto;padding:0 8px 6px"></nav>
     <div class="me-card">
       <div class="avatar" id="meAv"></div>
-      <div class="who"><b id="meName"></b><span id="meRank"></span></div>
+      <div class="who" id="meWho" title="Levels &amp; XP"><b id="meName"></b><span id="meRank"></span><span class="lvline" id="meLv"></span><div class="xpbar" id="xpBar"><i id="xpFill"></i></div></div>
       <button class="icon-btn" id="colorBtn" title="Chat colors">🎨</button>
       <button class="icon-btn" id="logoutBtn" title="Log out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button>
     </div>
@@ -345,18 +445,23 @@
       <button class="icon-btn" id="menuBtn" title="Channels"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
       <h2><span class="hash" id="chanHash">#</span><span id="chanTitle">lounge</span></h2>
       <span class="pill" id="roomTimer" hidden></span>
+      <button class="icon-btn" id="notifBtn" title="Notifications">🔔</button>
       <button class="icon-btn" id="rankBtn" title="Ranks &amp; commands">📋</button>
       <button class="icon-btn" id="logBtn" title="Chat logs" hidden>📜</button>
+      <button class="icon-btn" id="sugListBtn" title="Suggestions" hidden>📥</button>
       <button class="icon-btn" id="filterBtn" title="Chat filter" aria-pressed="false">🧼</button>
       <button class="icon-btn" id="fxBtn" title="Toggle starfield">✨</button>
+      <button class="icon-btn" id="themeBtn" title="Levels &amp; themes">🪐</button>
       <button class="pill" id="membersBtn" title="Who’s online"><span class="dot off" id="connDot"></span><span id="onlineCount">0 online</span></button>
     </div>
     <div id="notifBar" hidden><span>🔔 Get a notification when someone @mentions you.</span><button type="button" class="primary" id="notifOn">Turn on</button><button type="button" id="notifNo" aria-label="Dismiss" title="Not now">✕</button></div>
+    <div id="pinBar" hidden><span class="pin-ic">📌</span><button type="button" class="pin-txt" id="pinTxt"></button><button type="button" class="pin-more" id="pinMore"></button></div>
     <div id="messages"></div>
     <div id="typing"></div>
     <div class="composer-wrap">
       <div id="hints" hidden></div>
       <div id="emojiPop" hidden></div>
+      <div id="replyBar" hidden><span class="rb-text"></span><button type="button" id="replyX" title="Cancel reply" aria-label="Cancel reply">✕</button></div>
       <div id="stage" hidden></div>
       <div class="composer">
         <button class="icon-btn" id="attachBtn" title="Send an image"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg></button>
@@ -372,6 +477,7 @@
     <h3>Members</h3>
     <div id="memberList"></div>
   </aside>
+  <button type="button" id="sugFab" title="Suggest an update">💡 <span>Suggest</span></button>
 </div>
 <div class="center-screen" id="modal" hidden><div class="card" id="modalCard"></div></div>
 <div id="scrim"></div>
@@ -438,10 +544,19 @@ function toast(msg) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, 3200);
 }
 let audioCtx;
-function ping() {
+function audio() {
   try {
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    const c = audioCtx, o = c.createOscillator(), g = c.createGain();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  } catch (e) { return null; }
+}
+// Browsers keep sound locked until you interact with the page, so unlock it on the first click or key press.
+["pointerdown", "keydown"].forEach(ev => document.addEventListener(ev, () => audio(), { once: true }));
+function ping() {
+  try {
+    const c = audio(); if (!c) return;
+    const o = c.createOscillator(), g = c.createGain();
     o.type = "sine";
     o.frequency.setValueAtTime(660, c.currentTime);
     o.frequency.setValueAtTime(880, c.currentTime + .09);
@@ -452,30 +567,89 @@ function ping() {
 }
 /* ───────── pings ───────── */
 // A message pings you if it @mentions your name, or uses @everyone from a staff member (rank is checked from the database, not the message).
+const MENTION_BEFORE = "(^|[^A-Za-z0-9_@])";
 function mentionsMe(m) {
   if (!me || !m || !m.text || m.uid === me.uid) return false;
-  if (new RegExp("(^|\\s)@" + me.name + "\\b", "i").test(m.text)) return true;
-  return /(^|\s)@everyone\b/i.test(m.text) && lvl(m.uid) >= 1;
+  if (new RegExp(MENTION_BEFORE + "@" + me.name + "\\b", "i").test(m.text)) return true;
+  return new RegExp(MENTION_BEFORE + "@everyone\\b", "i").test(m.text) && lvl(m.uid) >= 1;
 }
-function desktopNotify(m, where, open) {
-  if (!("Notification" in window) || Notification.permission !== "granted") return;
-  if (!document.hidden && document.hasFocus()) return;   // you're looking at the chat; the in-app ping is enough
+
+/* Desktop notifications. They only show while you're looking at something else (another tab or window). */
+const notifOK = () => "Notification" in window;
+const inFrame = (() => { try { return window.top !== window.self; } catch (e) { return true; } })();
+function notifStatus() {
+  if (!notifOK()) return "unsupported";
+  if (window.isSecureContext === false) return "insecure";
+  return Notification.permission;   // "default", "granted" or "denied"
+}
+function desktopNotify(title, body, tag, open, force) {
+  if (!notifOK() || Notification.permission !== "granted") return false;
+  if (!force && !document.hidden && document.hasFocus()) return false;   // you're looking at the chat; the in-app ping is enough
   try {
-    const n = new Notification(m.name + " mentioned you" + (where ? " in " + where : ""), { body: String(maskBad(m.text)).slice(0, 120), tag: "nebula-ping", renotify: true });
+    const n = new Notification(title, { body: String(body || "").slice(0, 140), tag: tag || "nebula", renotify: true });
     n.onclick = () => { window.focus(); if (open) open(); n.close(); };
-  } catch (e) {}
+    setTimeout(() => { try { n.close(); } catch (e) {} }, 9000);
+    return true;
+  } catch (e) { return false; }
+}
+const mentionNotify = (m, where, open) => desktopNotify(m.name + " mentioned you" + (where ? " in " + where : ""), maskBad(m.text), "nebula-" + (where || "chat"), open);
+const dmNotify = m => desktopNotify(m.name + " sent you a message", maskBad(m.text) || "📷 Image", "nebula-dm-" + m.uid, () => selectDM(m.uid));
+function bumpTitle() { if (document.hidden) { unread++; document.title = `(${unread}) ${APP_TITLE}`; } }
+function paintNotifBtn() {
+  const b = $("#notifBtn"), s = notifStatus();
+  b.classList.toggle("on", s === "granted");
+  b.title = s === "granted" ? "Desktop notifications are on" : "Desktop notifications are off. Click to set them up.";
 }
 function updateNotifBar() {
   let asked = false; try { asked = localStorage.getItem("nebulaNotifAsk") === "no"; } catch (e) {}
-  $("#notifBar").hidden = !("Notification" in window && Notification.permission === "default" && !asked);
+  $("#notifBar").hidden = !(notifStatus() === "default" && !asked && !inFrame);
+  paintNotifBtn();
 }
 $("#notifOn").onclick = async () => {
+  if (notifStatus() !== "default" || inFrame) { openNotifs(); return; }
   try { await Promise.resolve(Notification.requestPermission()); } catch (e) {}
   updateNotifBar();
-  toast(Notification.permission === "granted" ? "Notifications are on. You’ll be alerted when someone @mentions you." : "Notifications are blocked. Allow them in your browser’s site settings to turn them on.");
+  toast(Notification.permission === "granted" ? "Notifications are on. You’ll be alerted when someone @mentions you or sends you a DM." : "Notifications are blocked. Click the 🔔 button for help turning them on.");
 };
 $("#notifNo").onclick = () => { try { localStorage.setItem("nebulaNotifAsk", "no"); } catch (e) {} $("#notifBar").hidden = true; };
-let chanPings = {}, chanWatch = {};
+$("#notifBtn").onclick = () => openNotifs();
+try { navigator.permissions.query({ name: "notifications" }).then(p => { p.onchange = () => updateNotifBar(); }).catch(() => {}); } catch (e) {}
+function openNotifs() {
+  const s = notifStatus();
+  const key = s === "granted" || s === "unsupported" || s === "insecure" ? s : inFrame ? "frame" : s;
+  const lines = {
+    unsupported: "This browser doesn’t support desktop notifications.",
+    insecure: `Browsers only allow notifications on secure pages (https:// or localhost). This page is loaded over <b>${esc(location.protocol)}</b>. Host the file on https, for example with Firebase Hosting, and they’ll work.`,
+    frame: "This chat is running inside another page, and browsers don’t let embedded pages ask for notification permission. Open the chat in its own tab to turn them on.",
+    denied: "Notifications are blocked for this site. Click the lock icon next to the address bar, set <b>Notifications</b> to <b>Allow</b>, then reload this page.",
+    default: "Turn notifications on to get a popup when someone @mentions you or sends you a direct message while you’re in another tab or window.",
+    granted: "Notifications are on. You’ll get a popup when someone @mentions you or sends you a DM while this tab is in the background or another window is in front. Send a test to check that popups reach your desktop."
+  };
+  modal(`<h2>🔔 Notifications</h2><p class="sub" style="margin:6px 0 14px">${lines[key]}</p><p class="sub" id="ntMsg" style="margin:0 0 6px"></p><div id="ntBtns"></div>`);
+  const add = (t, fn, ghost) => { const b = document.createElement("button"); b.className = "btn" + (ghost ? " ghost" : ""); b.textContent = t; b.onclick = fn; $("#ntBtns").appendChild(b); };
+  if (key === "default") add("Turn on notifications", async () => { try { await Promise.resolve(Notification.requestPermission()); } catch (e) {} updateNotifBar(); openNotifs(); });
+  if (key === "frame") add("Open in a new tab", () => window.open(location.href, "_blank", "noopener"));
+  if (key === "granted") add("Send a test notification", () => {
+    ping();
+    const ok = desktopNotify(APP_TITLE + " test", "If you can see this, desktop notifications are working.", "nebula-test", null, true);
+    $("#ntMsg").textContent = ok ? "Test sent. If nothing appeared, turn off Do Not Disturb or Focus mode, and check that your browser is allowed to show notifications in your computer’s system settings." : "The browser refused to show it. Try reloading the page.";
+  });
+  add("Close", closeModal, true);
+}
+let chanPings = {}, chanWatch = {}, dmWatch = {};
+function watchDMs() {
+  if (!db || !me) return;
+  Object.keys(dmIdx).forEach(o => {
+    if (dmWatch[o]) return; dmWatch[o] = 1;
+    const r = db.ref("dms/" + pairId(o) + "/messages").limitToLast(1);
+    const cb = snap => {
+      const m = snap.val();
+      if (!m || m.uid === me.uid || m.type === "system" || (m.ts || 0) <= sessionStart || currentDM === o) return;   // the open DM handles its own
+      ping(); toast(m.name + " sent you a message"); dmNotify(m); bumpTitle();
+    };
+    r.on("child_added", cb, () => {}); listeners.push([r, "child_added", cb]);
+  });
+}
 function watchPings() {
   if (!db || !me) return;
   Object.keys(channels).filter(canSee).forEach(id => {
@@ -485,7 +659,7 @@ function watchPings() {
       if (!m || m.type === "system" || (m.ts || 0) <= sessionStart || !mentionsMe(m)) return;
       if (!currentDM && !currentRoom && currentChan === id) return;   // already handled in the open channel
       chanPings[id] = (chanPings[id] || 0) + 1; renderChannels();
-      ping(); toast(m.name + " mentioned you in #" + id); desktopNotify(m, "#" + id, () => selectChannel(id));
+      ping(); toast(m.name + " mentioned you in #" + id); mentionNotify(m, "#" + id, () => selectChannel(id)); bumpTitle();
     });
   });
 }
@@ -499,7 +673,7 @@ function watchRoomPings() {
       const m = snap.val();
       if (!m || (m.ts || 0) <= sessionStart || !mentionsMe(m) || currentRoom === code) return;   // the open room handles its own
       const nm = (myRooms[code] || {}).name || "a room";
-      ping(); toast(m.name + " mentioned you in " + nm); desktopNotify(m, nm, () => selectRoom(code));
+      ping(); toast(m.name + " mentioned you in " + nm); mentionNotify(m, nm, () => selectRoom(code)); bumpTitle();
     };
     r.on("child_added", cb, () => {}); listeners.push([r, "child_added", cb]);
   });
@@ -507,7 +681,7 @@ function watchRoomPings() {
 function fmt(text) {
   return String(text).split(/(https?:\/\/[^\s<]+)/g).map((p, i) => i % 2
     ? `<a href="${esc(p)}" target="_blank" rel="noopener noreferrer">${esc(p)}</a>`
-    : esc(maskBad(p)).replace(/(^|\s)@([A-Za-z0-9_]{3,16})\b/g, (m, s, n) =>
+    : esc(maskBad(p)).replace(/(^|[^A-Za-z0-9_@])@([A-Za-z0-9_]{3,16})\b/g, (m, s, n) =>
         `${s}<span class="mention${me && (n.toLowerCase() === me.name.toLowerCase() || n.toLowerCase() === "everyone") ? " me" : ""}">@${n}</span>`)
   ).join("");
 }
@@ -528,6 +702,9 @@ let sessionStart = 0;
 let listeners = [];
 let signingUp = false;
 let attachTs = 0;
+let xpData = {}, xpLoaded = false, prevLvIdx = null, lastXpAt = 0, xpBusy = false, lastXpText = "", curTheme = "nebula";
+let pins = {}, pinRef = null, pinMsgs = {}, pinTop = null, votesData = {}, votesRef = null;
+let fxTheme = { shift: 0, cst: "159,180,255" };
 let stagedImg = null;
 let lastSend = 0;
 let unread = 0;
@@ -535,10 +712,12 @@ const msgEls = new Map();
 const msgData = new Map();     // id -> raw message, so the chat filter can re-render without reloading
 let lastDay = "";
 
-const LV = { regular: 0, mod: 1, admin: 2, owner: 3 };
-const ICON = { owner: "👑", admin: "🛡️", mod: "🔨", regular: "🌙" };
-const LABEL = { owner: "👑 Owner", admin: "🛡 Admin", mod: "🔨 Moderator", regular: "Member" };
-const rankOf = uid => (uid === ownerUid || owners[uid]) ? "owner" : roles[uid] === "admin" ? "admin" : roles[uid] === "mod" ? "mod" : "regular";
+// VIP is a badge-only role: it sits at the same level as Member, so it never unlocks commands or moderation.
+const LV = { regular: 0, vip: 0, mod: 1, admin: 2, owner: 3 };
+const ICON = { owner: "👑", admin: "🛡️", mod: "🔨", vip: "💎", regular: "🌙" };
+const LABEL = { owner: "👑 Owner", admin: "🛡 Admin", mod: "🔨 Moderator", vip: "💎 VIP", regular: "Member" };
+const rankOf = uid => (uid === ownerUid || owners[uid]) ? "owner" : roles[uid] === "admin" ? "admin" : roles[uid] === "mod" ? "mod" : roles[uid] === "vip" ? "vip" : "regular";
+const rankW = uid => lvl(uid) + (rankOf(uid) === "vip" ? .5 : 0);   // sort weight: VIPs list above plain members
 const lvl = uid => LV[rankOf(uid)];
 const myRank = () => me ? rankOf(me.uid) : "regular";
 const isStaff = () => me && lvl(me.uid) >= 1;
@@ -662,13 +841,15 @@ async function startSession(user) {
   $("#meName").textContent = me.name;
   const av = $("#meAv"); av.dataset.uid = me.uid; av.dataset.letter = me.name.charAt(0).toUpperCase(); paintAvatar(av);
   updateRankUI();
+  loadTheme(); paintMeXp();
 
   ensureAvatar(me.uid);
   watch(db.ref("meta/owner"), "value", s => { ownerUid = s.val(); updateRankUI(); renderMembers(); });
   watch(db.ref("owners"), "value", s => { owners = s.val() || {}; updateRankUI(); renderMembers(); });
   watch(db.ref("roles"), "value", s => { roles = s.val() || {}; updateRankUI(); renderMembers(); });
   watch(db.ref("users"), "value", s => { usersMap = s.val() || {}; renderMembers(); renderDMs(); refreshColors(); });
-  watch(db.ref("dmIndex/" + me.uid), "value", s => { dmIdx = s.val() || {}; renderDMs(); });
+  watch(db.ref("xp"), "value", s => { xpData = s.val() || {}; xpLoaded = true; onXpChange(); });
+  watch(db.ref("dmIndex/" + me.uid), "value", s => { dmIdx = s.val() || {}; renderDMs(); watchDMs(); });
   watch(db.ref("dmRead/" + me.uid), "value", s => { dmRead = s.val() || {}; renderDMs(); });
   watch(db.ref("userRooms/" + me.uid), "value", s => { myRooms = s.val() || {}; renderRooms(); watchRoomPings(); });
   watch(db.ref("imageAccess"), "value", s => { imgAccess = s.val() || {}; updateImgUI(); });
@@ -706,8 +887,9 @@ function endSession(keepUser) {
   detachChannel();
   clearInterval(typingTick);
   if (me && db) { db.ref("presence/" + me.uid).remove().catch(() => {}); }
-  presence = {}; presenceReady = false; channels = {}; roles = {}; owners = {}; usersMap = {}; dmIdx = {}; dmRead = {}; ownerUid = null; currentChan = null; currentDM = null; currentRoom = null; myRooms = {}; imgAccess = {}; chansLoaded = false; chanPings = {}; chanWatch = {}; roomWatch = {}; myMute = 0; Object.keys(avWatched).forEach(k => delete avWatched[k]);
+  presence = {}; presenceReady = false; channels = {}; roles = {}; owners = {}; usersMap = {}; dmIdx = {}; dmRead = {}; ownerUid = null; currentChan = null; currentDM = null; currentRoom = null; myRooms = {}; imgAccess = {}; chansLoaded = false; chanPings = {}; chanWatch = {}; roomWatch = {}; dmWatch = {}; replyTo = null; paintReplyBar(); Object.keys(replyCache).forEach(k => delete replyCache[k]); sugs = {}; sugWatching = false; myMute = 0; Object.keys(avWatched).forEach(k => delete avWatched[k]);
   msgEls.clear(); msgData.clear(); lastDay = "";
+  xpData = {}; xpLoaded = false; prevLvIdx = null; lastXpAt = 0; lastXpText = ""; pins = {}; pinMsgs = {}; votesData = {}; applyTheme("nebula");
   if (!keepUser) me = null;
   document.body.classList.remove("nav-open", "members-open");
 }
@@ -722,7 +904,7 @@ window.addEventListener("beforeunload", () => { if (me && db) db.ref("presence/"
 function updateRankUI() {
   if (!me) return;
   $("#meRank").textContent = LABEL[myRank()];
-  $("#addChan").hidden = lvl(me.uid) < 3; $("#logBtn").hidden = myRank() !== "owner"; updateImgUI();
+  $("#addChan").hidden = lvl(me.uid) < 3; $("#logBtn").hidden = myRank() !== "owner"; $("#sugListBtn").hidden = myRank() !== "owner"; watchSuggestions(); updateImgUI();
   ensureDefaults(); renderChannels(); checkCurrent();
 }
 const canSee = id => { const c = channels[id]; return !!c && me && lvl(me.uid) >= (LV[c.min] || 0); };
@@ -770,6 +952,9 @@ $("#addChan").onclick = () => {
 };
 function detachChannel() {
   stopTyping();
+  if (pinRef) { pinRef.off(); pinRef = null; }
+  if (votesRef) { votesRef.off(); votesRef = null; }
+  pins = {}; pinMsgs = {}; votesData = {};
   if (chanRef) { chanRef.off(); chanRef = null; }
   if (typingRef) { typingRef.off(); typingRef = null; }
 }
@@ -790,9 +975,12 @@ function startConv(h, title, ph) {
   chanRef = db.ref(msgPath()).limitToLast(80);
   chanRef.on("child_added", onAdded, e => localNote("Couldn’t load messages: " + e.message, true));
   chanRef.on("child_removed", onRemoved);
+  chanRef.on("child_changed", onChanged);
+  clearReply();
   typingRef = db.ref(typePath());
   typingRef.on("value", s => { typingNames = s.val() || {}; renderTyping(); });
   updateEmpty();
+  startPins(); startVotes();
   document.body.classList.remove("nav-open");
 }
 /* ───────── rendering messages ───────── */
@@ -828,14 +1016,18 @@ function onAdded(snap) {
   if (near || m.uid === me.uid) scrollBottom();
   markRead();
   if ((m.ts || 0) > attachTs && m.uid !== me.uid && m.type !== "system") {
-    const pinged = currentDM || mentionsMe(m);
-    if (pinged) { ping(); if (mentionsMe(m)) desktopNotify(m, currentDM ? "a DM" : currentRoom ? "a room" : "#" + currentChan); }
+    const mentioned = mentionsMe(m);
+    if (currentDM || mentioned) ping();
+    if (currentDM) dmNotify(m); else if (mentioned) mentionNotify(m, currentRoom ? "a room" : "#" + currentChan);
     if (document.hidden) { unread++; document.title = `(${unread}) ${APP_TITLE}`; }
   }
 }
 function onRemoved(snap) {
+  if (pins[snap.key]) { delete pinMsgs[snap.key]; renderPins(); }
   const el = msgEls.get(snap.key);
   if (el) { el.remove(); msgEls.delete(snap.key); msgData.delete(snap.key); }
+  replyCache[msgPath() + "/" + snap.key] = false;
+  document.querySelectorAll('.replyref[data-rid="' + snap.key + '"]').forEach(r => fillRef(r, null));
   // tidy day separators that no longer have messages under them
   const kids = [...msgBox().children];
   kids.forEach((k, i) => { if (k.classList.contains("daysep")) { const nx = kids[i + 1]; if (!nx || nx.classList.contains("daysep")) k.remove(); } });
@@ -861,6 +1053,7 @@ function buildMessage(id, m) {
   const wrap = document.createElement("div");
   wrap.className = "msg" + (mine ? " mine" : "");
   wrap.dataset.author = m.uid;
+  if (pins[id]) wrap.classList.add("pinned");
   const av = makeAvatar(m.name, m.uid, true);
   av.onclick = ev => openUserMenu(ev, { uid: m.uid, name: m.name });
   wrap.appendChild(av);
@@ -871,13 +1064,17 @@ function buildMessage(id, m) {
   else nm.style.color = "#c9d4ff";
   meta.appendChild(nm);
   const bd = badgeEl(rank); if (bd) meta.appendChild(bd);
+  meta.appendChild(lvBadge(m.uid));
   const tm = document.createElement("span"); tm.className = "tm"; tm.textContent = fmtTime(m.ts || now());
   meta.appendChild(tm);
+  if (m.edited) { const ed = document.createElement("span"); ed.className = "ed"; ed.textContent = "(edited)"; ed.title = "Edited " + new Date(m.edited).toLocaleString(); meta.appendChild(ed); }
   col.appendChild(meta);
+  if (typeof m.reply === "string" && m.reply) col.appendChild(replyRef(m.reply));
   const bub = document.createElement("div"); bub.className = "bubble";
   if (mentionsMe(m)) bub.classList.add("pinged");
   paintBubble(bub, userTc(m.uid), userBc(m.uid));
-  if (m.img && /^data:image\//.test(m.img)) {
+  if (type === "poll") { bub.classList.add("poll"); paintPoll(bub, id, m); }
+  else if (m.img && /^data:image\//.test(m.img)) {
     const img = document.createElement("img"); img.className = "msg-img"; img.src = m.img; img.alt = "Image sent by " + m.name;
     img.onclick = () => { $("#lightbox img").src = m.img; show("#lightbox", true); };
     bub.appendChild(img);
@@ -885,13 +1082,24 @@ function buildMessage(id, m) {
   } else {
     bub.innerHTML = fmt(m.text || "");
   }
-  col.appendChild(bub);
+  const row = document.createElement("div"); row.className = "brow";
+  row.appendChild(bub);
+  const acts = document.createElement("div"); acts.className = "acts";
+  const act = (icon, title, fn, cls) => { const b = document.createElement("button"); b.type = "button"; b.title = title; b.setAttribute("aria-label", title); b.textContent = icon; if (cls) b.className = cls; b.onclick = ev => { ev.stopPropagation(); wrap.classList.remove("open"); fn(); }; acts.appendChild(b); };
+  act("↩", "Reply", () => startReply(id));
+  if (canPin() && (type === "text" || type === "poll")) act("📌", "Pin or unpin this message", () => togglePin(id));
+  if (mine && type === "text") act("✎", "Edit message", () => beginEdit(id));
+  if (mine || (!currentDM && !currentRoom && canModerate(m.uid))) act("✕", "Delete message", () => db.ref(`${msgPath()}/${id}`).remove().catch(() => toast("You can’t delete that message.")), "del-b");
+  row.appendChild(acts);
+  col.appendChild(row);
   wrap.appendChild(col);
-  if (mine || (!currentDM && !currentRoom && canModerate(m.uid))) {
-    const del = document.createElement("button"); del.className = "del"; del.title = "Delete message"; del.textContent = "✕";
-    del.onclick = () => db.ref(`${msgPath()}/${id}`).remove().catch(() => toast("You can’t delete that message."));
-    wrap.appendChild(del);
-  }
+  // On touch screens there's no hover, so tapping a message shows its buttons.
+  wrap.addEventListener("click", ev => {
+    if (!matchMedia("(hover: none)").matches || ev.target.closest("a, .acts, .avatar, .msg-img, .replyref, .editbox")) return;
+    const was = wrap.classList.contains("open");
+    document.querySelectorAll(".msg.open").forEach(x => x.classList.remove("open"));
+    if (!was) wrap.classList.add("open");
+  });
   return wrap;
 }
 function localNote(text, isErr) {
@@ -994,7 +1202,7 @@ function renderMembers() {
     b.onclick = ev => openUserMenu(ev, u);
     return b;
   };
-  const groups = (list, on) => [["owner", "Owners"], ["admin", "Admins"], ["mod", "Moderators"], ["regular", "Members"]].forEach(([r, label]) => {
+  const groups = (list, on) => [["owner", "Owners"], ["admin", "Admins"], ["mod", "Moderators"], ["vip", "VIPs"], ["regular", "Members"]].forEach(([r, label]) => {
     const part = list.filter(e => e.rank === r);   // lists are already sorted by name
     if (!part.length) return;
     const h = document.createElement("div"); h.className = "grp"; h.textContent = `${label} · ${part.length}`; box.appendChild(h);
@@ -1050,6 +1258,8 @@ function openUserMenu(ev, u) {
     if (levelOf() >= 2) {
       add("Ban…", () => { const r = prompt("Reason for banning " + u.name + " (optional):"); if (r !== null) return mod.ban(t, r); }, true);
       add(rankOf(u.uid) === "mod" ? "Remove moderator" : "Make moderator", () => rankOf(u.uid) === "mod" ? mod.unmod(t) : mod.mod(t));
+      if (rankOf(u.uid) === "vip") add("Remove VIP", () => mod.unvip(t));
+      else if (rankOf(u.uid) === "regular") add("Give VIP", () => mod.vip(t));
     }
   }
   if (levelOf() >= 2 && u.uid !== me.uid && lvl(u.uid) < 2) add(imgAccess[u.uid] ? "Remove image permission" : "Allow images", () => imgAccess[u.uid] ? mod.takeimg(t) : mod.giveimg(t));
@@ -1071,7 +1281,7 @@ document.addEventListener("click", e => { if (!e.target.closest("#userMenu")) sh
 
 /* ───────── sending ───────── */
 const input = $("#input");
-function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 140) + "px"; }
+function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 240) + "px"; }
 // Owners and admins can post every 1 second; moderators and members every 2 seconds.
 const cooldownMs = () => lvl(me.uid) >= 2 ? 1000 : 2000;
 function checkCooldown() {
@@ -1089,11 +1299,11 @@ async function sendMessage() {
   }
   if (myMute && myMute > now()) { toast("You’re muted for another " + Math.ceil((myMute - now()) / 60000) + " min."); return; }
   if (!checkCooldown()) return;
-  if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
   const msg = { uid: me.uid, name: me.name, type: "text", ts: TS() };
   if (raw) msg.text = raw;
   if (stagedImg) msg.img = stagedImg;
-  input.value = ""; autosize(); clearStage(); stopTyping(); closeHints();
+  if (replyTo) msg.reply = replyTo.id;
+  input.value = ""; autosize(); clearStage(); clearReply(); stopTyping(); closeHints();
   try {
     if (currentDM) {
       const o = currentDM, k = db.ref(msgPath()).push().key, last = (raw || "📷 Image").slice(0, 60), u = {};
@@ -1102,8 +1312,9 @@ async function sendMessage() {
       u["dmIndex/" + o + "/" + me.uid] = { name: me.name, last, ts: TS() };
       await db.ref().update(u); markRead();
     } else await db.ref(msgPath()).push(msg);
+    xpFromMessage(raw);
   }
-  catch (e) { toast(e.code === "PERMISSION_DENIED" ? "That message was blocked. You may be muted." : "Couldn’t send. Try again."); }
+  catch (e) { toast(e.code === "PERMISSION_DENIED" ? (msg.reply ? "That reply was blocked. You may be muted, or the updated database rules aren’t published yet." : "That message was blocked. You may be muted.") : "Couldn’t send. Try again."); }
 }
 $("#sendBtn").onclick = sendMessage;
 input.addEventListener("keydown", e => {
@@ -1119,6 +1330,11 @@ input.addEventListener("keydown", e => {
     }
     if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && h.dataset.mode === "mention")) { e.preventDefault(); (items[idx] || items[0]).click(); return; }
   }
+  if (e.key === "ArrowUp" && !input.value && h.hidden && !stagedImg) {   // press Up on an empty box to edit your last message
+    const last = [...msgEls.keys()].reverse().find(i => { const x = msgData.get(i); return x && x.uid === me.uid && (x.type || "text") === "text"; });
+    if (last) { e.preventDefault(); msgEls.get(last).scrollIntoView({ block: "nearest" }); beginEdit(last); return; }
+  }
+  if (e.key === "Escape" && replyTo) { clearReply(); return; }
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
 input.addEventListener("input", () => { autosize(); noteTyping(); updateHints(); });
@@ -1201,6 +1417,8 @@ const mod = {
   async takeimg(t) { needAdmin(); if (lvl(t.uid) >= 2) throw new Error("Admins and owners can always send images."); await db.ref("imageAccess/" + t.uid).remove(); await sys(`${t.name} can no longer send images.`); },
   async mod(t) { needAdmin(); need(t); await db.ref("roles/" + t.uid).set("mod"); await sys(`${t.name} is now a moderator.`); },
   async unmod(t) { needAdmin(); if (rankOf(t.uid) !== "mod") throw new Error(t.name + " isn’t a moderator."); await db.ref("roles/" + t.uid).remove(); await sys(`${t.name} is no longer a moderator.`); },
+  async vip(t) { needAdmin(); need(t); const r = rankOf(t.uid); if (r !== "regular") throw new Error(r === "vip" ? t.name + " is already a VIP." : t.name + " already has a higher role."); await db.ref("roles/" + t.uid).set("vip"); await sys(`${t.name} is now a VIP.`); },
+  async unvip(t) { needAdmin(); need(t); if (rankOf(t.uid) !== "vip") throw new Error(t.name + " isn’t a VIP."); await db.ref("roles/" + t.uid).remove(); await sys(`${t.name} is no longer a VIP.`); },
   async promote(t) { needOwner(); if (rankOf(t.uid) === "owner") throw new Error(t.name + " is already an owner."); await db.ref("roles/" + t.uid).set("admin"); await sys(`${t.name} is now an admin.`); },
   async demote(t) { needOwner(); if (rankOf(t.uid) !== "admin") throw new Error(t.name + " isn’t an admin."); await db.ref("roles/" + t.uid).remove(); await sys(`${t.name} is no longer an admin.`); },
   async addowner(t) { needFounder(); if (rankOf(t.uid) === "owner") throw new Error(t.name + " is already an owner."); await db.ref("owners/" + t.uid).set(true); await db.ref("roles/" + t.uid).remove().catch(() => {}); await sys(`${t.name} is now an owner.`); },
@@ -1215,6 +1433,11 @@ const COMMANDS = {
   profile:     { level: 0, usage: "/profile <user>", desc: "Open someone’s profile" },
   dm:          { level: 0, usage: "/dm <user>", desc: "Open a direct message" },
   ranks:       { level: 0, usage: "/ranks", desc: "See what every rank can do" },
+  poll:        { level: 0, usage: "/poll <question> | <option> | <option>", desc: "Start a poll with 2 to 5 options (channels only)" },
+  pins:        { level: 0, usage: "/pins", desc: "See this channel’s pinned messages" },
+  xp:          { level: 0, usage: "/xp [user]", desc: "See your level and XP, or someone else’s" },
+  top:         { level: 0, usage: "/top", desc: "Show the XP leaderboard" },
+  theme:       { level: 0, usage: "/theme", desc: "Pick a theme (new ones unlock as you level up)" },
   kick:        { level: 1, usage: "/kick <user>", desc: "Remove someone; they can log back in" },
   mute:        { level: 1, usage: "/mute <user> [minutes]", desc: "Stop someone from posting" },
   unmute:      { level: 1, usage: "/unmute <user>", desc: "Let someone post again" },
@@ -1227,13 +1450,16 @@ const COMMANDS = {
   delchannel:  { level: 2, usage: "/delchannel <name>", desc: "Delete a channel and its messages" },
   mod:         { level: 2, usage: "/mod <user>", desc: "Make someone a moderator" },
   unmod:       { level: 2, usage: "/unmod <user>", desc: "Remove someone’s moderator role" },
+  vip:         { level: 2, usage: "/vip <user>", desc: "Give someone the VIP role (a badge, no commands)" },
+  unvip:       { level: 2, usage: "/unvip <user>", desc: "Remove someone’s VIP role" },
   giveimages:  { level: 2, usage: "/giveimages <user>", desc: "Let someone send images" },
   takeimages:  { level: 2, usage: "/takeimages <user>", desc: "Remove someone’s image permission" },
   promote:     { level: 3, usage: "/promote <user>", desc: "Make someone an admin" },
   demote:      { level: 3, usage: "/demote <user>", desc: "Remove someone’s admin rank" },
   addowner:    { level: 3, usage: "/addowner <user>", desc: "Make someone an owner (original owner only)" },
   removeowner: { level: 3, usage: "/removeowner <user>", desc: "Remove an owner (original owner only)" },
-  logs:        { level: 3, usage: "/logs", desc: "View chat and moderation logs" }
+  logs:        { level: 3, usage: "/logs", desc: "View chat and moderation logs" },
+  suggestions: { level: 3, usage: "/suggestions", desc: "Read the suggestions members have sent" }
 };
 const levelOf = () => lvl(me.uid);
 const available = () => Object.entries(COMMANDS).filter(([, c]) => c.level <= levelOf());
@@ -1244,7 +1470,7 @@ async function runCommand(raw) {
   const arg = parts.join(" ");
   const def = COMMANDS[name];
   if (!def) { localNote(`Unknown command “/${name}”. Type /help to see what you can use.`, true); return; }
-  if ((currentDM || currentRoom) && !["help", "me", "whois", "profile", "dm", "ranks"].includes(name)) { localNote("That command only works in channels.", true); return; }
+  if ((currentDM || currentRoom) && !["help", "me", "whois", "profile", "dm", "ranks", "xp", "top", "theme"].includes(name)) { localNote("That command only works in channels.", true); return; }
   if (def.level > levelOf()) { localNote("You don’t have permission to use /" + name + ".", true); return; }
   try {
     switch (name) {
@@ -1265,6 +1491,29 @@ async function runCommand(raw) {
         break;
       }
       case "ranks": openRanks(); break;
+      case "pins": openPins(); break;
+      case "top": openTop(); break;
+      case "theme": openThemes(); break;
+      case "xp": {
+        const t = parts[0] ? await resolveUser(parts[0]) : { uid: me.uid, name: me.name };
+        const x = xpOf(t.uid), i = lvIdx(t.uid), nx = LEVELS[i + 1];
+        localNote(`${t.name}: level ${i + 1} (${LEVELS[i].n}), ${x.toLocaleString()} XP` + (nx ? `, ${(nx.xp - x).toLocaleString()} XP to ${nx.n}.` : ". Max level reached."));
+        break;
+      }
+      case "poll": {
+        if (!currentChan) throw new Error("Polls only work in channels.");
+        const bits = arg.split("|").map(x => x.trim()).filter(Boolean);
+        if (bits.length < 3 || bits.length > 6) throw new Error("Usage: /poll Question | Option 1 | Option 2 (up to 5 options)");
+        const q = bits[0], opts = bits.slice(1);
+        if (q.length > 200) throw new Error("Keep the question under 200 characters.");
+        if (opts.some(o => o.length > 50)) throw new Error("Each option can be up to 50 characters.");
+        if (new Set(opts.map(o => o.toLowerCase())).size !== opts.length) throw new Error("Every option needs to be different.");
+        if (myMute > now()) throw new Error("You’re muted.");
+        if (!checkCooldown()) break;
+        await db.ref(msgPath()).push({ uid: me.uid, name: me.name, type: "poll", text: q, opts: opts.join("|"), ts: TS() });
+        awardXP(5);
+        break;
+      }
       case "logs": openLogs(); break;
       case "giveimages": await mod.giveimg(await resolveUser(parts[0])); break;
       case "takeimages": await mod.takeimg(await resolveUser(parts[0])); break;
@@ -1272,6 +1521,9 @@ async function runCommand(raw) {
       case "dm": { const t = await resolveUser(parts[0]); if (t.uid === me.uid) throw new Error("You can’t DM yourself."); selectDM(t.uid); break; }
       case "mod":         await mod.mod(await resolveUser(parts[0])); break;
       case "unmod":       await mod.unmod(await resolveUser(parts[0])); break;
+      case "vip":         await mod.vip(await resolveUser(parts[0])); break;
+      case "unvip":       await mod.unvip(await resolveUser(parts[0])); break;
+      case "suggestions": openSugs(); break;
       case "addowner":    await mod.addowner(await resolveUser(parts[0])); break;
       case "removeowner": await mod.removeowner(await resolveUser(parts[0])); break;
       case "kick":    await mod.kick(await resolveUser(parts[0])); break;
@@ -1292,6 +1544,7 @@ async function runCommand(raw) {
       case "clear":
         if (!confirm("Delete every message in #" + currentChan + "?")) break;
         await db.ref(msgPath()).remove();
+        db.ref("votes/" + currentChan).remove().catch(() => {}); db.ref("pins/" + currentChan).remove().catch(() => {});
         await sys(`${me.name} cleared this channel.`);
         break;
       case "announce":
@@ -1315,6 +1568,7 @@ async function runCommand(raw) {
         if (!channels[id]) throw new Error("No channel named #" + id + ".");
         if (!confirm("Delete #" + id + " and all its messages?")) break;
         await db.ref("messages/" + id).remove();
+        db.ref("votes/" + id).remove().catch(() => {}); db.ref("pins/" + id).remove().catch(() => {});
         await db.ref("channels/" + id).remove();
         break;
       }
@@ -1375,7 +1629,7 @@ function openProfile(uid) {
   $("#pfName").textContent = u.name;
   const bd = badgeEl(rankOf(uid)); if (bd) $("#pfBadge").appendChild(bd);
   $("#pfBio").textContent = u.bio || (uid === me.uid ? "You haven’t written a bio yet." : "No bio yet.");
-  $("#pfInfo").textContent = `Joined ${fmtJoin(u.joined)} · ${presence[uid] ? "online" : "offline"}`;
+  $("#pfInfo").textContent = `Level ${lvIdx(uid) + 1} ${LEVELS[lvIdx(uid)].n} · ${xpOf(uid).toLocaleString()} XP · Joined ${fmtJoin(u.joined)} · ${presence[uid] ? "online" : "offline"}`;
   const add = (t, fn, ghost) => { const b = document.createElement("button"); b.className = "btn" + (ghost ? " ghost" : ""); b.textContent = t; b.onclick = fn; $("#pfBtns").appendChild(b); };
   if (uid === me.uid) add("Edit profile", editProfile); else add("Send message", () => { closeModal(); selectDM(uid); });
   add("Close", closeModal, true);
@@ -1404,9 +1658,9 @@ function openDirectory() {
   $("#dirX").onclick = closeModal;
   const draw = () => {
     const q = $("#dirQ").value.trim().toLowerCase(), box = $("#dirList"); box.innerHTML = "";
-    Object.entries(usersMap).filter(([, u]) => u.name.toLowerCase().includes(q)).sort((a, b) => lvl(b[0]) - lvl(a[0]) || a[1].name.localeCompare(b[1].name)).forEach(([uid, u]) => {
+    Object.entries(usersMap).filter(([, u]) => u.name.toLowerCase().includes(q)).sort((a, b) => rankW(b[0]) - rankW(a[0]) || a[1].name.localeCompare(b[1].name)).forEach(([uid, u]) => {
       const b = document.createElement("button"); b.className = "mem"; b.appendChild(makeAvatar(u.name, uid, true));
-      const w = document.createElement("span"); w.className = "nm"; w.innerHTML = `${esc(u.name)}${uid === me.uid ? " (you)" : ""} <small>${LABEL[rankOf(uid)]} · joined ${esc(fmtJoin(u.joined))}</small>`;
+      const w = document.createElement("span"); w.className = "nm"; w.innerHTML = `${esc(u.name)}${uid === me.uid ? " (you)" : ""} <small>${LABEL[rankOf(uid)]} · Lv ${lvIdx(uid) + 1} · joined ${esc(fmtJoin(u.joined))}</small>`;
       b.appendChild(w); if (presence[uid]) { const d = document.createElement("span"); d.className = "on-dot"; b.appendChild(d); }
       b.onclick = () => openProfile(uid); box.appendChild(b);
     });
@@ -1463,30 +1717,80 @@ function openColors() {
 }
 $("#colorBtn").onclick = () => openColors();
 
-/* ───────── starfield ───────── */
+/* ───────── starfield & constellations ───────── */
 (function () {
   const cv = $("#stars"), cx = cv.getContext("2d");
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let on = true, W, H, stars = [], shoot = null, nextShoot = 0, raf;
+  let on = true, W, H, stars = [], cons = [], shoot = null, nextShoot = 0, raf;
   try { on = localStorage.getItem("nebulaFx") !== "off"; } catch (e) {}
+  // Real constellation outlines, drawn as simple point-and-line figures (x and y run 0 to 1).
+  const CONS = [
+    { name: "Orion", p: [[.25,.1],[.75,.12],[.38,.5],[.5,.48],[.62,.46],[.3,.95],[.78,.9]], e: [[0,1],[0,2],[1,4],[2,3],[3,4],[2,5],[4,6]] },
+    { name: "Big Dipper", p: [[0,.3],[.17,.4],[.33,.5],[.5,.56],[.52,.88],[.86,.9],[.9,.58]], e: [[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,3]] },
+    { name: "Cassiopeia", p: [[0,.7],[.22,.2],[.5,.6],[.78,.15],[1,.55]], e: [[0,1],[1,2],[2,3],[3,4]] },
+    { name: "Cygnus", p: [[.5,0],[.5,.5],[.5,1],[.08,.38],[.92,.62]], e: [[0,1],[1,2],[3,1],[1,4]] },
+    { name: "Lyra", p: [[.5,0],[.25,.45],[.75,.45],[.3,1],[.8,1]], e: [[0,1],[0,2],[1,2],[1,3],[2,4],[3,4]] },
+    { name: "Leo", p: [[.12,.65],[.08,.4],[.18,.2],[.32,.06],[.44,.2],[.4,.45],[.65,.5],[.95,.4],[.82,.78]], e: [[0,1],[1,2],[2,3],[3,4],[4,5],[5,0],[5,6],[6,7],[7,8],[8,6]] }
+  ];
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  function spawnCon(t, fresh) {
+    const tpl = CONS[Math.floor(Math.random() * CONS.length)];
+    const w = rnd(150, 290), rot = rnd(-.45, .45), cs = Math.cos(rot), sn = Math.sin(rot), life = rnd(18000, 30000);
+    const pts = tpl.p.map(([px, py]) => { const dx = (px - .5) * w, dy = (py - .5) * w * .8; return { x: dx * cs - dy * sn, y: dx * sn + dy * cs, ph: rnd(0, 6.28), r: rnd(1.3, 2.4) }; });
+    const reach = Math.min(w * .6, W / 2 - 4);
+    return { name: tpl.name, e: tpl.e, pts, x: rnd(reach, Math.max(reach + 1, W - reach)), y: rnd(w * .5, Math.max(w * .5 + 1, H - w * .5)),
+      vx: rnd(-.05, .05), vy: rnd(-.03, .03), life, born: fresh ? t - Math.random() * life * .75 : t, ext: Math.max(...pts.map(p => p.y)) };
+  }
   function size() {
     const d = devicePixelRatio || 1; W = innerWidth; H = innerHeight;
     cv.width = W * d; cv.height = H * d; cx.setTransform(d, 0, 0, d, 0, 0);
     stars = Array.from({ length: Math.round(W * H / 9000) }, () => ({ x: Math.random() * W, y: Math.random() * H, r: Math.random() * 1.4 + .3, p: Math.random() * 6.28, s: Math.random() * .02 + .005, v: Math.random() * .12 + .02, h: 200 + Math.random() * 100 }));
+    const n = Math.max(2, Math.min(6, Math.round(W * H / 190000)));
+    cons = Array.from({ length: n }, () => spawnCon(performance.now(), true));
+  }
+  const tone = (a, i, t) => fxTheme.rainbow ? `hsla(${(t * .02 + i * 70) % 360},90%,75%,${a})` : `rgba(${fxTheme.cst},${a})`;
+  function drawCons(t) {
+    for (let i = 0; i < cons.length; i++) {
+      let c = cons[i], k = still ? .5 : (t - c.born) / c.life;
+      if (k >= 1) { c = cons[i] = spawnCon(t, false); k = 0; }
+      const alpha = Math.max(0, Math.min(1, k / .12, (1 - k) / .2)) * .5;
+      if (alpha <= 0) continue;
+      if (!still) { c.x += c.vx; c.y += c.vy; }
+      const drawn = Math.min(1, k / .3) * c.e.length;   // the lines draw themselves in one by one
+      cx.lineWidth = 1;
+      c.e.forEach(([a, b], n) => {
+        const f = Math.max(0, Math.min(1, drawn - n)); if (f <= 0) return;
+        const p = c.pts[a], q = c.pts[b];
+        cx.strokeStyle = tone(alpha * .5, i, t);
+        cx.beginPath(); cx.moveTo(c.x + p.x, c.y + p.y); cx.lineTo(c.x + p.x + (q.x - p.x) * f, c.y + p.y + (q.y - p.y) * f); cx.stroke();
+      });
+      c.pts.forEach(p => {
+        const tw = .65 + .35 * Math.sin(t * .003 + p.ph);
+        cx.fillStyle = tone(alpha * .2, i, t); cx.beginPath(); cx.arc(c.x + p.x, c.y + p.y, p.r * 3.4, 0, 6.28); cx.fill();
+        cx.fillStyle = `rgba(255,255,255,${Math.min(1, alpha * tw * 1.4)})`; cx.beginPath(); cx.arc(c.x + p.x, c.y + p.y, p.r, 0, 6.28); cx.fill();
+      });
+      if (k > .25 && k < .85) {
+        cx.font = "10px 'Segoe UI', system-ui, sans-serif"; cx.textAlign = "center";
+        cx.fillStyle = tone(alpha * .55, i, t); cx.fillText(c.name.toUpperCase(), c.x, c.y + c.ext + 16);
+      }
+    }
   }
   function frame(t) {
     cx.clearRect(0, 0, W, H);
     if (on) {
+      const sh = fxTheme.shift || 0;
       for (const st of stars) {
         const a = .35 + .65 * Math.abs(Math.sin(st.p + t * st.s * .06));
-        cx.fillStyle = `hsla(${st.h},90%,85%,${a})`; cx.beginPath(); cx.arc(st.x, st.y, st.r, 0, 6.28); cx.fill();
+        const hue = fxTheme.rainbow ? (st.h * 3 + t * .02) % 360 : st.h + sh;
+        cx.fillStyle = `hsla(${hue},90%,85%,${a})`; cx.beginPath(); cx.arc(st.x, st.y, st.r, 0, 6.28); cx.fill();
         if (!still) { st.y += st.v; if (st.y > H + 2) { st.y = -2; st.x = Math.random() * W; } }
       }
+      drawCons(t);
       if (!still) {
         if (!shoot && t > nextShoot) { shoot = { x: Math.random() * W * .8, y: Math.random() * H * .4, l: 0 }; nextShoot = t + 4000 + Math.random() * 6000; }
         if (shoot) {
           const g = cx.createLinearGradient(shoot.x, shoot.y, shoot.x - 120, shoot.y - 60);
-          g.addColorStop(0, "rgba(255,255,255,.95)"); g.addColorStop(1, "rgba(139,92,246,0)");
+          g.addColorStop(0, "rgba(255,255,255,.95)"); g.addColorStop(1, `rgba(${fxTheme.rainbow ? "170,120,255" : fxTheme.cst},0)`);
           cx.strokeStyle = g; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(shoot.x, shoot.y); cx.lineTo(shoot.x - 120, shoot.y - 60); cx.stroke();
           shoot.x += 14; shoot.y += 7; if (shoot.x > W + 130 || shoot.y > H + 70) shoot = null;
         }
@@ -1498,7 +1802,9 @@ $("#colorBtn").onclick = () => openColors();
   size(); start();
   addEventListener("resize", () => { size(); start(); });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) start(); });
+  window.redrawStars = start;   // called when the theme changes
   const btn = $("#fxBtn"), paint = () => btn.style.opacity = on ? 1 : .4;
+  btn.title = "Toggle starfield and constellations";
   paint();
   btn.onclick = () => { on = !on; try { localStorage.setItem("nebulaFx", on ? "on" : "off"); } catch (e) {} paint(); start(); };
 })();
@@ -1577,11 +1883,12 @@ const PERKS = {
   owner: ["Posts every 1 second", "Creates permanent channels", "Reads every channel and the chat logs", "Adds and removes admins", "Always sends images"],
   admin: ["Posts every 1 second", "Bans and unbans", "Deletes channels and posts announcements", "Grants image permission", "Always sends images"],
   mod: ["Posts every 2 seconds", "Deletes messages in channels", "Reads #mod", "Sends images only if granted"],
+  vip: ["Gets a 💎 VIP badge", "No commands beyond the everyday ones every member has", "Posts every 2 seconds", "Sends images only if granted"],
   regular: ["Posts every 2 seconds", "Chats, sends DMs, makes temporary rooms", "Sends images only if granted"]
 };
 function openRanks() {
-  const html = ["owner", "admin", "mod", "regular"].map(r => {
-    const cmds = Object.values(COMMANDS).filter(c => c.level === LV[r]);
+  const html = ["owner", "admin", "mod", "vip", "regular"].map(r => {
+    const cmds = r === "vip" ? [] : Object.values(COMMANDS).filter(c => c.level === LV[r]);
     return `<div style="border:1px solid ${r === myRank() ? "var(--blue)" : "var(--line)"};border-radius:14px;padding:10px 12px;margin-bottom:10px"><b>${ICON[r]} ${esc(LABEL[r].replace(/^\S+ /, ""))}${r === myRank() ? " (you)" : ""}</b><div style="color:var(--mute);font-size:13px;margin:4px 0">${PERKS[r].map(esc).join(" · ")}</div>${cmds.map(c => `<div style="font-size:13.5px"><b style="color:#b9a6ff">${esc(c.usage)}</b> <span style="color:var(--mute)">${esc(c.desc)}</span></div>`).join("")}</div>`;
   }).join("");
   modal(`<h2>Ranks &amp; commands</h2><p class="sub" style="margin:4px 0 12px">Each rank also has every command of the ranks below it.</p><div class="dir" style="max-height:60dvh">${html}</div><button class="btn ghost" id="rkX">Close</button>`, true);
@@ -1607,7 +1914,7 @@ function openLogs() {
     try {
       if (tab === "m") {
         const v = (await db.ref("messages/" + $("#lgChan").value).limitToLast(300).once("value")).val() || {};
-        rows = Object.values(v).map(m => ({ ts: m.ts, uid: m.uid, who: m.name, txt: (m.type === "system" ? "[system] " : m.type === "announce" ? "[announcement] " : "") + (m.text || "") + (m.img ? " [image]" : "") }));
+        rows = Object.values(v).map(m => ({ ts: m.ts, uid: m.uid, who: m.name, txt: (m.type === "system" ? "[system] " : m.type === "announce" ? "[announcement] " : m.type === "poll" ? "[poll] " : "") + (m.text || "") + (m.opts ? " [" + String(m.opts).split("|").join(" / ") + "]" : "") + (m.img ? " [image]" : "") }));
       } else {
         const v = (await db.ref("modLog").limitToLast(300).once("value")).val() || {};
         rows = Object.values(v).map(m => ({ ts: m.ts, uid: m.uid, who: m.name, txt: m.text }));
@@ -1618,6 +1925,392 @@ function openLogs() {
   $("#lgM").onclick = () => { tab = "m"; $("#lgM").classList.add("on"); $("#lgA").classList.remove("on"); load(); };
   $("#lgA").onclick = () => { tab = "a"; $("#lgA").classList.add("on"); $("#lgM").classList.remove("on"); load(); };
   $("#lgChan").onchange = load; $("#lgQ").oninput = draw; load();
+}
+
+/* ───────── replies & edits ───────── */
+let replyTo = null;
+const replyCache = {};   // "path/id" -> message, or false if it was deleted
+const previewOf = m => m && m.text ? String(m.text).replace(/\s+/g, " ").slice(0, 100) : m && m.img ? "📷 Image" : "";
+function paintReplyBar() {
+  const b = $("#replyBar"); b.hidden = !replyTo;
+  if (replyTo) b.querySelector(".rb-text").innerHTML = `↩ Replying to <b>${esc(replyTo.name)}</b>: ${esc(maskBad(replyTo.text))}`;
+}
+function startReply(id) {
+  const m = msgData.get(id); if (!m) return;
+  replyTo = { id, name: m.name, text: previewOf(m) }; paintReplyBar(); input.focus();
+}
+function clearReply() { replyTo = null; paintReplyBar(); }
+$("#replyX").onclick = () => { clearReply(); input.focus(); };
+// The quoted preview is always read from the original message, never from what the reply claims, so it can't be faked.
+function fillRef(el, o) {
+  el.replaceChildren(); el.classList.toggle("gone", !o);
+  if (!o) { el.textContent = "↩ Original message was deleted"; return; }
+  const a = document.createElement("span"); a.textContent = "↩";
+  const b = document.createElement("b"); b.textContent = o.name; b.style.color = nameColor(o.uid);
+  const t = document.createElement("span"); t.textContent = maskBad(previewOf(o)) || "…";
+  el.append(a, b, t);
+}
+function replyRef(id) {
+  const key = msgPath() + "/" + id;
+  const d = document.createElement("button"); d.type = "button"; d.className = "replyref"; d.dataset.rid = id;
+  const known = msgData.get(id) || replyCache[key];
+  if (known !== undefined) fillRef(d, known || null);
+  else {
+    d.textContent = "↩ Loading…";
+    db.ref(key).once("value").then(s => { replyCache[key] = s.val() || false; fillRef(d, s.val()); }).catch(() => { d.textContent = "↩ Original message unavailable"; });
+  }
+  d.onclick = () => {
+    const el = msgEls.get(id);
+    if (!el) { toast(d.classList.contains("gone") ? "That message was deleted." : "That message is further back than what’s loaded."); return; }
+    el.scrollIntoView({ block: "center" }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1500);
+  };
+  return d;
+}
+function onChanged(snap) {
+  const m = snap.val(), id = snap.key, old = msgEls.get(id);
+  if (!m || !old) return;
+  const near = nearBottom();
+  msgData.set(id, m);
+  const n = buildMessage(id, m); n.dataset.day = old.dataset.day;
+  old.replaceWith(n); msgEls.set(id, n);
+  document.querySelectorAll('.replyref[data-rid="' + id + '"]').forEach(r => fillRef(r, m));
+  if (near) scrollBottom();
+}
+function beginEdit(id) {
+  const m = msgData.get(id), el = msgEls.get(id);
+  if (!m || !el || m.uid !== me.uid || (m.type || "text") !== "text" || el.querySelector(".editbox")) return;
+  const path = msgPath(), row = el.querySelector(".brow");
+  const box = document.createElement("div"); box.className = "editbox";
+  const ta = document.createElement("textarea"); ta.maxLength = 1000; ta.rows = 2; ta.value = m.text || "";
+  const bar = document.createElement("div"); bar.className = "row";
+  const hint = document.createElement("span"); hint.textContent = "Enter to save · Esc to cancel";
+  const cx = document.createElement("button"); cx.type = "button"; cx.textContent = "Cancel";
+  const sv = document.createElement("button"); sv.type = "button"; sv.className = "primary"; sv.textContent = "Save";
+  bar.append(hint, cx, sv); box.append(ta, bar);
+  const close = () => { box.remove(); row.hidden = false; input.focus(); };
+  const save = async () => {
+    const t = ta.value.trim();
+    if (!t && !m.img) { toast("A message can’t be empty. Delete it instead."); return; }
+    if (t === (m.text || "")) { close(); return; }
+    if (myMute > now()) { toast("You’re muted for another " + Math.ceil((myMute - now()) / 60000) + " min."); return; }
+    sv.disabled = true;
+    try { await db.ref(path + "/" + id).update({ text: t || null, edited: TS() }); close(); }
+    catch (e) { sv.disabled = false; toast(e.code === "PERMISSION_DENIED" ? "That edit was blocked. You may be muted, or the updated database rules aren’t published yet." : "Couldn’t save the edit."); }
+  };
+  sv.onclick = save; cx.onclick = close;
+  ta.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); save(); }
+    else if (e.key === "Escape") { e.stopPropagation(); close(); }
+  });
+  row.hidden = true; row.after(box); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+}
+
+/* ───────── suggestions (anyone can send one; owners read them) ───────── */
+let sugs = {}, sugWatching = false, lastSuggest = 0;
+const SUG_CAT = { feature: "Feature idea", bug: "Bug or problem", other: "Something else" };
+$("#sugFab").onclick = () => openSuggest();
+$("#sugListBtn").onclick = () => openSugs();
+function openSuggest() {
+  modal(`<h2>💡 Suggest an update</h2><p class="sub" style="margin:4px 0 14px">Got an idea, or found something broken? Tell the owners. Only owners can read suggestions.</p>
+    <div class="field"><label for="sgCat">Type</label><select id="sgCat">${Object.entries(SUG_CAT).map(([k, v]) => `<option value="${k}">${v}</option>`).join("")}</select></div>
+    <div class="field"><label for="sgText">Your suggestion</label><textarea id="sgText" maxlength="600" rows="5" placeholder="What would make this chat better?"></textarea></div>
+    <div class="err" id="sgErr"></div><button class="btn" id="sgSend">Send suggestion</button><button class="btn ghost" id="sgX">Cancel</button>`);
+  $("#sgX").onclick = closeModal; $("#sgText").focus();
+  $("#sgSend").onclick = async () => {
+    const text = $("#sgText").value.trim(), err = $("#sgErr");
+    if (text.length < 5) { err.textContent = "Write a little more so the owners know what you mean."; return; }
+    if (now() - lastSuggest < 30000) { err.textContent = "You just sent one. Wait a few seconds before sending another."; return; }
+    $("#sgSend").disabled = true;
+    try {
+      await db.ref("suggestions").push({ uid: me.uid, name: me.name, cat: $("#sgCat").value, text, ts: TS() });
+      lastSuggest = now(); closeModal(); toast("Thanks! Your suggestion was sent to the owners.");
+    } catch (e) { $("#sgSend").disabled = false; err.textContent = "Couldn’t send it. The owner needs to publish the updated database rules."; }
+  };
+}
+const sugSeenKey = () => "nebulaSugSeen:" + me.uid;
+function paintSugBtn() {
+  const b = $("#sugListBtn"); if (!b || !me) return;
+  let seen = 0; try { seen = +localStorage.getItem(sugSeenKey()) || 0; } catch (e) {}
+  const fresh = Object.values(sugs).filter(s => (s.ts || 0) > seen).length, total = Object.keys(sugs).length;
+  b.title = total ? `Suggestions (${total})` : "Suggestions";
+  if (fresh) b.dataset.n = fresh > 9 ? "9+" : String(fresh); else delete b.dataset.n;
+}
+function watchSuggestions() {
+  if (sugWatching || !db || !me || myRank() !== "owner") return; sugWatching = true;
+  watch(db.ref("suggestions"), "value", s => { sugs = s.val() || {}; paintSugBtn(); drawSugs(); });
+}
+function drawSugs() {
+  const box = $("#sgList"); if (!box) return; box.innerHTML = "";
+  const list = Object.entries(sugs).sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
+  if (!list.length) { box.textContent = "No suggestions yet."; return; }
+  list.forEach(([id, s]) => {
+    const d = document.createElement("div"); d.style.cssText = "padding:10px 4px;border-bottom:1px solid var(--line)";
+    const h = document.createElement("div"); h.style.cssText = "color:var(--mute);font-size:12.5px;margin-bottom:4px";
+    h.textContent = `${s.name} · ${SUG_CAT[s.cat] || "Something else"} · ${new Date(s.ts || 0).toLocaleString()}`;
+    const t = document.createElement("div"); t.style.cssText = "white-space:pre-wrap;word-break:break-word"; t.textContent = s.text;
+    const x = document.createElement("button"); x.type = "button"; x.className = "btn ghost"; x.textContent = "Delete"; x.style.cssText = "width:auto;margin-top:6px;padding:4px 14px";
+    x.onclick = () => db.ref("suggestions/" + id).remove().catch(() => toast("Couldn’t delete that one."));
+    d.append(h, t, x); box.appendChild(d);
+  });
+}
+function openSugs() {
+  if (myRank() !== "owner") return;
+  modal(`<h2>💡 Suggestions</h2><p class="sub" style="margin:4px 0 12px">Ideas and bug reports from members. Only owners can see these.</p><div class="dir" id="sgList" style="font-size:14px"></div><button class="btn ghost" id="sgX">Close</button>`, true);
+  $("#sgX").onclick = closeModal; drawSugs();
+  try { localStorage.setItem(sugSeenKey(), String(Math.max(0, ...Object.values(sugs).map(s => s.ts || 0)))); } catch (e) {}
+  paintSugBtn();
+}
+
+/* ───────── XP & levels ─────────
+   XP is earned by chatting. The database rules enforce the limits (a small gain per write, one write every
+   25 seconds, and a daily cap), so the top levels take months. Levels are cosmetic; they never grant staff powers. */
+const LEVELS = [
+  { n: "Stardust",  xp: 0,      icon: "✨" },
+  { n: "Meteoroid", xp: 200,    icon: "☄️" },
+  { n: "Comet",     xp: 800,    icon: "🌠" },
+  { n: "Moon",      xp: 2500,   icon: "🌕" },
+  { n: "Planet",    xp: 6000,   icon: "🪐" },
+  { n: "Star",      xp: 14000,  icon: "⭐" },
+  { n: "Pulsar",    xp: 30000,  icon: "💫" },
+  { n: "Quasar",    xp: 70000,  icon: "🌀" },
+  { n: "Galaxy",    xp: 150000, icon: "🌌" }
+];
+const XP_DAILY = 500, XP_GAP = 30000, XP_MAXGAIN = 12, DAY_MS = 86400000;
+const xpOf = uid => ((xpData[uid] || {}).v) || 0;
+const lvIdx = uid => { const x = xpOf(uid); let i = 0; LEVELS.forEach((l, k) => { if (x >= l.xp) i = k; }); return i; };
+function lvBadge(uid) {
+  const i = lvIdx(uid), b = document.createElement("span");
+  b.className = "lv t" + (i + 1); b.dataset.uid = uid;
+  b.textContent = `${LEVELS[i].icon} Lv ${i + 1}`;
+  b.title = `Level ${i + 1} · ${LEVELS[i].n} · ${xpOf(uid).toLocaleString()} XP`;
+  return b;
+}
+function paintLevels() {
+  document.querySelectorAll(".lv[data-uid]").forEach(el => { const n = lvBadge(el.dataset.uid); el.className = n.className; el.textContent = n.textContent; el.title = n.title; });
+}
+function paintMeXp() {
+  if (!me) return;
+  const x = xpOf(me.uid), i = lvIdx(me.uid), cur = LEVELS[i], nx = LEVELS[i + 1];
+  $("#meLv").textContent = `${cur.icon} Lv ${i + 1} · ${cur.n}`;
+  $("#xpFill").style.width = (nx ? Math.max(0, Math.min(100, (x - cur.xp) / (nx.xp - cur.xp) * 100)) : 100) + "%";
+  $("#xpBar").title = nx ? `${x.toLocaleString()} / ${nx.xp.toLocaleString()} XP` : `${x.toLocaleString()} XP · max level`;
+}
+function onXpChange() {
+  if (!me) return;
+  paintLevels(); paintMeXp();
+  const i = lvIdx(me.uid);
+  if (prevLvIdx !== null && i > prevLvIdx) {
+    const th = Object.values(THEMES).filter(t => t.lv === i).map(t => t.name);
+    toast(`${LEVELS[i].icon} Level up! You’re now level ${i + 1}, ${LEVELS[i].n}.` + (th.length ? ` Unlocked the ${th.join(", ")} theme.` : ""));
+    ping();
+  }
+  prevLvIdx = i;
+  if ($("#xpBody") && !$("#modal").hidden) drawXP();
+}
+async function awardXP(base) {
+  if (!db || !me || !xpLoaded || xpBusy) return;
+  const t = now(); if (t - lastXpAt < XP_GAP) return;
+  const cur = xpData[me.uid] || {}, day = Math.floor(t / DAY_MS);
+  const dv = cur.d === day ? (cur.dv || 0) : 0;
+  const gain = Math.min(base, XP_MAXGAIN, XP_DAILY - dv);
+  if (gain <= 0) return;
+  lastXpAt = t; xpBusy = true;
+  try { await db.ref("xp/" + me.uid).set({ v: (cur.v || 0) + gain, t: TS(), d: day, dv: dv + gain }); }
+  catch (e) {} finally { xpBusy = false; }
+}
+function xpFromMessage(raw) {
+  const text = (raw || "").trim();
+  if (text.replace(/\s+/g, "").length < 4 || text === lastXpText) return;   // short or repeated messages earn nothing
+  lastXpText = text;
+  awardXP(4 + Math.min(6, Math.floor(text.length / 25)));
+}
+function drawXP() {
+  const body = $("#xpBody"); if (!body || !me) return;
+  const x = xpOf(me.uid), i = lvIdx(me.uid), cur = LEVELS[i], nx = LEVELS[i + 1];
+  const pct = nx ? Math.max(0, Math.min(100, (x - cur.xp) / (nx.xp - cur.xp) * 100)) : 100;
+  const e = xpData[me.uid] || {}, today = e.d === Math.floor(now() / DAY_MS) ? (e.dv || 0) : 0;
+  const rows = LEVELS.map((l, k) => {
+    const th = Object.values(THEMES).filter(t => t.lv === k).map(t => t.name).join(", ");
+    return `<div class="lv-row${k <= i ? " got" : ""}"><span>${l.icon}</span><b>Lv ${k + 1} · ${esc(l.n)}</b><small>${l.xp.toLocaleString()} XP${th ? " · unlocks the " + esc(th) + " theme" : ""}</small><em>${k <= i ? "✓" : ""}</em></div>`;
+  }).join("");
+  body.innerHTML = `<h2>${cur.icon} Level ${i + 1} · ${esc(cur.n)}</h2>
+    <p class="sub" style="margin:4px 0 12px">${x.toLocaleString()} XP${nx ? ` · ${(nx.xp - x).toLocaleString()} XP to ${esc(nx.n)}` : " · You’ve reached the top. You’re a Galaxy."}</p>
+    <div class="xpbar big"><i style="width:${pct}%"></i></div>
+    <p class="sub" style="margin:10px 0 4px">Today: ${today} / ${XP_DAILY} XP</p>
+    <p class="sub" style="margin:0 0 12px;font-size:13px">Earn XP by chatting: 4 to 10 XP per message, at most once every 30 seconds. Short or repeated messages don’t count. Starting a poll gives +5 and voting in one gives +3. You can earn up to ${XP_DAILY} XP a day, so the top levels take months.</p>
+    <div class="dir" style="max-height:36dvh">${rows}</div>
+    <button class="btn" id="xpTh">Themes</button><button class="btn ghost" id="xpTop">Leaderboard</button><button class="btn ghost" id="xpX">Close</button>`;
+  $("#xpTh").onclick = openThemes; $("#xpTop").onclick = openTop; $("#xpX").onclick = closeModal;
+}
+function openXP() { if (!me) return; modal('<div id="xpBody"></div>', true); drawXP(); }
+function openTop() {
+  const list = Object.entries(xpData).filter(([uid, x]) => usersMap[uid] && x && x.v > 0).sort((a, b) => b[1].v - a[1].v).slice(0, 10);
+  modal(`<h2>🏆 XP leaderboard</h2><p class="sub" style="margin:4px 0 12px">The ten highest levels in the chat.</p><div class="dir" id="topList"></div><button class="btn ghost" id="topX">Close</button>`);
+  $("#topX").onclick = closeModal;
+  const box = $("#topList");
+  if (!list.length) { box.textContent = "Nobody has earned XP yet. Start chatting!"; return; }
+  list.forEach(([uid, x], n) => {
+    const b = document.createElement("button"); b.className = "mem"; b.appendChild(makeAvatar(usersMap[uid].name, uid, true));
+    const w = document.createElement("span"); w.className = "nm"; w.style.color = nameColor(uid);
+    w.textContent = `${n + 1}. ${usersMap[uid].name}${uid === me.uid ? " (you)" : ""}`;
+    const sm = document.createElement("small"); sm.style.cssText = "display:block;color:var(--mute);font-size:12px"; sm.textContent = `${LEVELS[lvIdx(uid)].icon} Lv ${lvIdx(uid) + 1} ${LEVELS[lvIdx(uid)].n} · ${x.v.toLocaleString()} XP`;
+    w.appendChild(sm); b.appendChild(w); b.onclick = () => openProfile(uid); box.appendChild(b);
+  });
+}
+$("#meWho").onclick = () => openXP();
+
+/* ───────── Aurora themes (unlocked by level; owners and admins can use them all) ───────── */
+const THEMES = {
+  nebula:    { name: "Nebula",      lv: 0, sw: "linear-gradient(135deg,#4f8cff,#8b5cf6)", fx: { shift: 0,    cst: "159,180,255" } },
+  aurora:    { name: "Aurora",      lv: 1, sw: "linear-gradient(135deg,#0fa57d,#2f86ff,#8a5cf6)", fx: { shift: -80,  cst: "120,255,210" } },
+  supernova: { name: "Supernova",   lv: 2, sw: "linear-gradient(135deg,#d9480f,#d6204f,#a21caf)", fx: { shift: -205, cst: "255,190,150" } },
+  glacier:   { name: "Glacier",     lv: 3, sw: "linear-gradient(135deg,#0b78c4,#4f74e8)", fx: { shift: -30,  cst: "170,225,255" } },
+  void:      { name: "Void",        lv: 5, sw: "linear-gradient(135deg,#a8842c,#5b4a1f,#2f2f3d)", fx: { shift: -240, cst: "240,220,150" } },
+  cosmic:    { name: "Galaxy Core", lv: 8, sw: "linear-gradient(135deg,#d62fb0,#6a4cf0,#1c9fd6)", fx: { shift: 0, cst: "255,255,255", rainbow: true } }
+};
+const themeOK = id => { const t = THEMES[id]; return !!t && (t.lv === 0 || (!!me && (lvl(me.uid) >= 2 || lvIdx(me.uid) >= t.lv))); };
+function applyTheme(id, save) {
+  if (!THEMES[id]) id = "nebula";
+  curTheme = id; fxTheme = THEMES[id].fx;
+  if (id === "nebula") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", id);
+  if (save && me) { try { localStorage.setItem("nebulaTheme:" + me.uid, id); } catch (e) {} }
+  if (window.redrawStars) window.redrawStars();
+}
+function loadTheme() { let t = "nebula"; try { t = localStorage.getItem("nebulaTheme:" + me.uid) || "nebula"; } catch (e) {} applyTheme(t); }
+function openThemes() {
+  if (!me) return;
+  modal(`<h2>🪐 Themes</h2><p class="sub" style="margin:4px 0 12px">Level up to unlock new looks. Your theme is saved on this device.</p><div class="th-grid" id="thGrid"></div><button class="btn ghost" id="thXp" style="margin-top:12px">Levels &amp; XP</button><button class="btn ghost" id="thX">Close</button>`);
+  $("#thX").onclick = closeModal; $("#thXp").onclick = openXP;
+  const draw = () => {
+    const g = $("#thGrid"); g.innerHTML = "";
+    Object.entries(THEMES).forEach(([id, t]) => {
+      const ok = themeOK(id), b = document.createElement("button"); b.type = "button";
+      b.className = "th-card" + (id === curTheme ? " on" : "") + (ok ? "" : " locked");
+      const sw = document.createElement("div"); sw.className = "th-sw"; sw.style.background = t.sw;
+      const nm = document.createElement("b"); nm.textContent = t.name;
+      const sm = document.createElement("small"); sm.textContent = ok ? (id === curTheme ? "In use" : "Unlocked") : `🔒 Level ${t.lv + 1} · ${LEVELS[t.lv].n}`;
+      b.append(sw, nm, sm);
+      b.onclick = () => { if (!themeOK(id)) { toast(`Reach level ${t.lv + 1} (${LEVELS[t.lv].n}) to unlock ${t.name}.`); return; } applyTheme(id, true); draw(); };
+      g.appendChild(b);
+    });
+  };
+  draw();
+}
+$("#themeBtn").onclick = () => openThemes();
+
+/* ───────── polls ───────── */
+function startVotes() {
+  votesData = {};
+  if (votesRef) { votesRef.off(); votesRef = null; }
+  if (!currentChan) return;
+  votesRef = db.ref("votes/" + currentChan);
+  votesRef.on("value", s => { votesData = s.val() || {}; updatePolls(); }, () => {});
+}
+function updatePolls() {
+  msgEls.forEach((el, id) => { const m = msgData.get(id); if (m && m.type === "poll") { const b = el.querySelector(".bubble"); if (b) paintPoll(b, id, m); } });
+}
+function paintPoll(bub, id, m) {
+  const opts = String(m.opts || "").split("|").filter(Boolean).slice(0, 5);
+  const votes = votesData[id] || {}, tally = opts.map(() => []);
+  Object.entries(votes).forEach(([uid, i]) => { if (Number.isInteger(i) && tally[i]) tally[i].push(uid); });
+  const total = tally.reduce((a, t) => a + t.length, 0), mineIdx = me ? votes[me.uid] : undefined;
+  bub.replaceChildren();
+  const hd = document.createElement("div"); hd.className = "pl-hd"; hd.textContent = "📊 POLL"; bub.appendChild(hd);
+  const q = document.createElement("div"); q.className = "pl-q"; q.innerHTML = fmt(m.text || ""); bub.appendChild(q);
+  opts.forEach((o, i) => {
+    const n = tally[i].length, pct = total ? Math.round(n / total * 100) : 0;
+    const b = document.createElement("button"); b.type = "button"; b.className = "pl-opt" + (mineIdx === i ? " mine" : "");
+    const fill = document.createElement("span"); fill.className = "pl-fill"; fill.style.width = pct + "%";
+    const lb = document.createElement("span"); lb.className = "pl-lbl"; lb.textContent = (mineIdx === i ? "✓ " : "") + maskBad(o);
+    const pc = document.createElement("span"); pc.className = "pl-pct"; pc.textContent = `${pct}% · ${n}`;
+    b.append(fill, lb, pc);
+    const names = tally[i].slice(0, 12).map(u => nameOf(u)); b.title = n ? names.join(", ") + (n > 12 ? ` and ${n - 12} more` : "") : "No votes yet";
+    b.onclick = ev => { ev.stopPropagation(); castVote(id, i); };
+    bub.appendChild(b);
+  });
+  const ft = document.createElement("div"); ft.className = "pl-ft"; ft.textContent = `${total} vote${total === 1 ? "" : "s"} · tap your choice again to remove your vote`; bub.appendChild(ft);
+}
+async function castVote(mid, idx) {
+  if (!currentChan || !me) return;
+  const path = `votes/${currentChan}/${mid}/${me.uid}`, cur = (votesData[mid] || {})[me.uid];
+  try {
+    if (cur === idx) await db.ref(path).remove();
+    else { await db.ref(path).set(idx); if (cur === undefined) awardXP(3); }
+  } catch (e) { toast("Couldn’t record your vote. The updated database rules need to be published."); }
+}
+
+/* ───────── pinned messages (moderators, admins and owners) ───────── */
+const canPin = () => isStaff() && !!currentChan && !currentDM && !currentRoom;
+const pinPreview = m => (m.type === "poll" ? "📊 " : "") + (previewOf(m) || "…");
+function startPins() {
+  pins = {}; pinMsgs = {};
+  if (pinRef) { pinRef.off(); pinRef = null; }
+  renderPins();
+  if (!currentChan) return;
+  pinRef = db.ref("pins/" + currentChan);
+  pinRef.on("value", s => { pins = s.val() || {}; msgEls.forEach((el, id) => el.classList.toggle("pinned", !!pins[id])); renderPins(); }, () => {});
+}
+function pinMsg(mid) {
+  const m = msgData.get(mid); if (m) return m;
+  if (mid in pinMsgs) return pinMsgs[mid];
+  pinMsgs[mid] = undefined;
+  const chan = currentChan;
+  db.ref("messages/" + chan + "/" + mid).once("value").then(s => { if (currentChan !== chan) return; pinMsgs[mid] = s.val() || false; renderPins(); drawPins(); }).catch(() => { pinMsgs[mid] = false; });
+  return undefined;
+}
+function renderPins() {
+  const bar = $("#pinBar"), ids = Object.keys(pins).sort((a, b) => (pins[b].ts || 0) - (pins[a].ts || 0));
+  if (!currentChan || !ids.length) { bar.hidden = true; pinTop = null; return; }
+  pinTop = ids[0]; const m = pinMsg(pinTop);
+  bar.hidden = false;
+  $("#pinTxt").textContent = m === undefined ? "Loading…" : m === false ? "The pinned message was deleted." : `${m.name}: ${maskBad(pinPreview(m))}`;
+  $("#pinMore").textContent = ids.length > 1 ? `${ids.length} pinned` : "View";
+  if (m === false && canPin()) db.ref("pins/" + currentChan + "/" + pinTop).remove().catch(() => {});
+}
+function jumpTo(id) {
+  const el = msgEls.get(id);
+  if (!el) { toast("That message is further back than what’s loaded."); return false; }
+  el.scrollIntoView({ block: "center" }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1500); return true;
+}
+$("#pinTxt").onclick = () => { if (pinTop && msgEls.get(pinTop)) jumpTo(pinTop); else openPins(); };
+$("#pinMore").onclick = () => openPins();
+async function togglePin(id) {
+  if (!canPin()) return;
+  const path = "pins/" + currentChan + "/" + id;
+  try {
+    if (pins[id]) { await db.ref(path).remove(); toast("Message unpinned."); }
+    else {
+      if (Object.keys(pins).length >= 10) { toast("This channel already has 10 pinned messages. Unpin one first."); return; }
+      await db.ref(path).set({ by: me.uid, byName: me.name, ts: TS() });
+      await sys(`${me.name} pinned a message.`);
+    }
+  } catch (e) { toast("Couldn’t change that pin. The updated database rules need to be published."); }
+}
+function openPins() {
+  if (!currentChan) { toast("Pins live in channels."); return; }
+  modal(`<h2>📌 Pinned messages</h2><p class="sub" style="margin:4px 0 12px">#${esc(currentChan)}</p><div class="dir" id="pnList" style="max-height:55dvh"></div><button class="btn ghost" id="pnX">Close</button>`, true);
+  $("#pnX").onclick = closeModal; drawPins();
+}
+function drawPins() {
+  const box = $("#pnList"); if (!box || $("#modal").hidden) return;
+  box.innerHTML = "";
+  const ids = Object.keys(pins).sort((a, b) => (pins[b].ts || 0) - (pins[a].ts || 0));
+  if (!ids.length) { box.textContent = "Nothing is pinned in this channel yet." + (canPin() ? " Hover over a message and press 📌 to pin it." : ""); return; }
+  ids.forEach(id => {
+    const p = pins[id], m = pinMsg(id);
+    const d = document.createElement("div"); d.style.cssText = "padding:10px 4px;border-bottom:1px solid var(--line)";
+    const h = document.createElement("div"); h.style.cssText = "color:var(--mute);font-size:12.5px;margin-bottom:4px";
+    h.textContent = `${m ? m.name : "…"} · pinned by ${p.byName || "staff"} · ${new Date(p.ts || 0).toLocaleDateString()}`;
+    const t = document.createElement("div"); t.style.cssText = "white-space:pre-wrap;word-break:break-word";
+    t.textContent = m === undefined ? "Loading…" : m === false ? "(This message was deleted.)" : maskBad(pinPreview(m));
+    d.append(h, t);
+    const row = document.createElement("div"); row.style.cssText = "display:flex;gap:8px;margin-top:6px";
+    const add = (label, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = "btn ghost"; b.textContent = label; b.style.cssText = "width:auto;margin:0;padding:4px 14px"; b.onclick = fn; row.appendChild(b); };
+    if (msgEls.get(id)) add("Jump to message", () => { closeModal(); jumpTo(id); });
+    if (canPin()) add("Unpin", () => togglePin(id));
+    if (row.children.length) d.appendChild(row);
+    box.appendChild(d);
+  });
 }
 
 init();
