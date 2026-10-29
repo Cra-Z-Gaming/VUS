@@ -74,7 +74,7 @@ details{position:relative}summary{list-style:none}summary::-webkit-details-marke
 <body>
 <header>
 <a class="mark" href="#/" title="Home"><svg width="32" height="32" viewBox="0 0 16 16"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg></a>
-<input id="q" placeholder="Search or jump to… (user, owner/repo, or link)" autocomplete="off" spellcheck="false">
+<input id="q" placeholder="Search users & repos, or jump to owner/repo or a link" autocomplete="off" spellcheck="false">
 <span class="sp"></span><span id="rl" class="mu" style="font-size:12px" title="Remaining GitHub API requests this hour"></span><button id="lw"></button><button id="th"></button><button id="tok" title="Optional token: raises the rate limit and loads last-commit info per file">Token</button>
 </header>
 <div id="app"></div>
@@ -118,7 +118,11 @@ async function api(path,accept){
 function fail(e){app.innerHTML='<div class="wrap"><div class="err">'+esc(e.nf?'Not found. Check the name (private repos need a token).':e.message)+'</div></div>'}
 function parse(v){v=v.trim().replace(/^https?:\/\/(www\.)?github\.com\//i,'').replace(/\.git$/,'').replace(/\/+$/,'');var p=v.split('/').filter(Boolean);
  if(!p.length)return'';if(p.length<3||(p[2]!='tree'&&p[2]!='blob'))return p.slice(0,2).join('/');return p.join('/')}
-$('#q').onkeydown=function(e){if(e.key=='Enter'){var t=parse(this.value);if(t){location.hash='#/'+t;this.blur()}}};
+function go(v){v=v.trim();if(!v)return false;var t=parse(v);
+ if(/^https?:\/\//i.test(v)||/github\.com\//i.test(v)||t.indexOf('/')>-1)location.hash='#/'+t;
+ else location.hash='#/?q='+encodeURIComponent(v);
+ return true}
+$('#q').onkeydown=function(e){if(e.key=='Enter'){if(go(this.value))this.blur()}};
 $('#tok').onclick=function(){var v=prompt('GitHub personal access token (optional, stored only in this browser). Leave empty to clear.',token);if(v===null)return;token=v.trim();try{token?localStorage.setItem('rb_token',token):localStorage.removeItem('rb_token')}catch(e){}cache={};repos={};route()};
 function askLink(u){
  var host='';try{host=new URL(u).host}catch(e){}
@@ -130,6 +134,7 @@ document.addEventListener('click',function(e){var a=e.target.closest&&e.target.c
 document.addEventListener('click',function(e){document.querySelectorAll('details[open]').forEach(function(d){if(!d.contains(e.target))d.open=false})});
 document.addEventListener('keydown',function(e){if(e.key=='t'&&!/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)&&window.goFile){e.preventDefault();window.goFile()}if(e.key=='Escape'){var f=$('.fo');if(f)f.remove()}});
 function route(){
+ if(location.hash.indexOf('#/?q=')==0){window.goFile=null;++rt;cpage=1;searchPage(decodeURIComponent(location.hash.slice(5)));window.scrollTo(0,0);return}
  var h=decodeURIComponent(location.hash.slice(1)||'/'),ln='',m=h.match(/#(L\d+(?:-L\d+)?)$/);if(m){ln=m[1];h=h.slice(0,m.index)}
  var p=h.split('/').filter(Boolean);window.goFile=null;++rt;if(p[2]!='commits')cpage=1;
  if(!p.length)home();else if(p.length==1)user(p[0]);else repoPage(p[0],p[1],p[2],p.slice(3),ln);
@@ -138,9 +143,44 @@ function route(){
 window.onhashchange=route;
 function remember(k){recent=[k].concat(recent.filter(function(x){return x!=k})).slice(0,8);try{localStorage.setItem('rb_recent',JSON.stringify(recent))}catch(e){}}
 function home(){
- app.innerHTML='<div class="home"><h1>Browse GitHub</h1><p class="mu">Enter a username, <b>owner/repo</b>, or a github.com link.</p><input class="in" id="hq" placeholder="e.g. torvalds or facebook/react" autocomplete="off" spellcheck="false"><div style="margin-top:32px">'+
+ app.innerHTML='<div class="home"><h1>Browse GitHub</h1><p class="mu">Search for users and repositories, or enter <b>owner/repo</b> or a github.com link.</p><input class="in" id="hq" placeholder="e.g. react, torvalds or facebook/react" autocomplete="off" spellcheck="false"><div style="margin-top:32px">'+
  (recent.length?'<p class="mu">Recent</p>'+recent.map(function(r){return'<div><a href="#/'+esc(r)+'">'+esc(r)+'</a></div>'}).join(''):'')+'</div></div>';
- $('#hq').onkeydown=function(e){if(e.key=='Enter'){var t=parse(this.value);if(t)location.hash='#/'+t}};$('#hq').focus();
+ $('#hq').onkeydown=function(e){if(e.key=='Enter')go(this.value)};$('#hq').focus();
+}
+/* ---------- search ---------- */
+function userCard(u){
+ return'<div class="rr" style="display:flex;gap:16px;align-items:center"><img src="'+esc(u.avatar_url)+'" alt="" style="width:48px;height:48px;border-radius:50%;border:1px solid var(--bd)"><div style="min-width:0"><h3 style="margin:0"><a href="#/'+esc(u.login)+'">'+esc(u.name?u.name+' ('+u.login+')':u.login)+'</a><span class="badge">'+esc(u.type=='Organization'?'Organization':'User')+'</span></h3>'+
+ (u.bio?'<p class="mu" style="margin:4px 0 0">'+esc(u.bio)+'</p>':'')+'</div></div>';
+}
+function repoCard(r){
+ return'<div class="rr"><h3><a href="#/'+esc(r.full_name)+'">'+esc(r.full_name)+'</a>'+(r.archived?'<span class="badge">Archived</span>':'')+'</h3>'+
+ (r.description?'<p class="mu" style="margin:4px 0">'+esc(r.description)+'</p>':'')+
+ ((r.topics||[]).slice(0,6).map(function(t){return'<span class="topic">'+esc(t)+'</span>'}).join(''))+
+ '<div class="mt">'+(r.language?'<span><span class="dot" style="background:'+lc(r.language)+'"></span>'+esc(r.language)+'</span>':'')+(r.stargazers_count?'<span>'+ic('star',16)+' '+num(r.stargazers_count)+'</span>':'')+(r.forks_count?'<span>'+ic('fork')+' '+num(r.forks_count)+'</span>':'')+(r.pushed_at?'<span>Updated '+ago(r.pushed_at)+'</span>':'')+'</div></div>';
+}
+async function searchPage(q){
+ var tk=rt,qi=$('#q');if(qi)qi.value=q;
+ app.innerHTML='<div class="wrap mu">Searching for '+esc(q)+'…</div>';
+ var enc=encodeURIComponent(q),err=null,note=function(e){if(!err)err=e;return null};
+ var a=await Promise.all([
+  api('/users/'+enc).catch(function(){return null}),
+  api('/search/users?q='+enc+'&per_page=10').catch(note),
+  api('/search/repositories?q='+enc+'+in:name,description&per_page=30').catch(note)]);
+ if(tk!=rt)return;
+ var exact=a[0]&&a[0].login?a[0]:null,users=(a[1]&&a[1].items)||[],reps=(a[2]&&a[2].items)||[];
+ if(!exact&&!a[1]&&!a[2]&&err){fail(err);return}
+ var lq=q.toLowerCase();
+ if(exact)users=[exact].concat(users.filter(function(u){return u.login.toLowerCase()!=exact.login.toLowerCase()}));
+ else users.sort(function(x,y){return(y.login.toLowerCase()==lq)-(x.login.toLowerCase()==lq)});
+ reps=reps.slice().sort(function(x,y){return(y.name.toLowerCase()==lq)-(x.name.toLowerCase()==lq)});
+ var h='<div class="wrap"><h2 style="margin:0 0 4px;font-weight:600">Results for “'+esc(q)+'”</h2>';
+ h+='<div class="tabs"><a class="on">'+ic('repo')+' Users <span class="badge">'+users.length+'</span></a></div>';
+ h+=users.length?users.slice(0,10).map(userCard).join(''):'<p class="mu">No users found.</p>';
+ h+='<div class="tabs" style="margin-top:32px"><a class="on">'+ic('repo')+' Repositories <span class="badge">'+(a[2]&&a[2].total_count!=null?num(a[2].total_count):reps.length)+'</span></a></div>';
+ h+=reps.length?reps.map(repoCard).join(''):'<p class="mu">No repositories found.</p>';
+ if(a[2]&&a[2].total_count>reps.length)h+='<p class="mu" style="margin-top:16px">Showing the top '+reps.length+' repositories.</p>';
+ if(err&&(!a[1]||!a[2]))h+='<div class="err">Part of the search failed ('+esc(err.message)+'). Search is limited to 10 requests/min without a token.</div>';
+ app.innerHTML=h+'</div>';
 }
 /* ---------- user ---------- */
 async function user(u){
