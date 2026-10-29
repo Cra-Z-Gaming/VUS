@@ -126,8 +126,8 @@ function fail(e){app.innerHTML='<div class="wrap"><div class="err">'+esc(e.nf?'N
 function parse(v){v=v.trim().replace(/^https?:\/\/(www\.)?github\.com\//i,'').replace(/\.git$/,'').replace(/\/+$/,'');var p=v.split('/').filter(Boolean);
  if(!p.length)return'';if(p.length<3||(p[2]!='tree'&&p[2]!='blob'))return p.slice(0,2).join('/');return p.join('/')}
 function go(v){v=v.trim();if(!v)return false;var t=parse(v);
- if(/^https?:\/\//i.test(v)||/github\.com\//i.test(v)||t.indexOf('/')>-1)location.hash='#/'+t;
- else location.hash='#/?q='+encodeURIComponent(v);
+ if(/^https?:\/\//i.test(v)||/github\.com\//i.test(v)||t.indexOf('/')>-1)nav('#/'+t);
+ else nav('#/?q='+encodeURIComponent(v));
  return true}
 $('#q').onkeydown=function(e){if(e.key=='Enter'){if(go(this.value))this.blur()}};
 function askLink(u){
@@ -175,15 +175,17 @@ function openSettings(focus){
  $('#cls',o).onclick=function(){o.remove()};upd();if(focus=='token')$('#tkv',o).focus();
 }
 $('#st').onclick=function(){openSettings()};
+var cur='#/';
+function nav(h){cur=h;route()}
+document.addEventListener('click',function(e){if(e.defaultPrevented||e.button||e.ctrlKey||e.metaKey||e.shiftKey)return;var a=e.target.closest&&e.target.closest('a');if(!a)return;var h=a.getAttribute('href');if(h==null||h.charAt(0)!='#')return;e.preventDefault();if(h.length>1&&!a.dataset.anc)nav(h)},true);
 function dec(s){try{return decodeURIComponent(s)}catch(e){return s}}
 function route(k){if(k!==true){pg=net;var u0=$('#us');if(u0)u0.textContent=''}
- if(location.hash.indexOf('#/?q=')==0){window.goFile=null;++rt;cpage=1;searchPage(dec(location.hash.slice(5)));window.scrollTo(0,0);return}
- var h=dec(location.hash.slice(1)||'/'),ln='',m=h.match(/#(L\d+(?:-L\d+)?)$/);if(m){ln=m[1];h=h.slice(0,m.index)}
+ if(cur.indexOf('#/?q=')==0){window.goFile=null;++rt;cpage=1;searchPage(dec(cur.slice(5)));window.scrollTo(0,0);return}
+ var h=dec(cur.slice(1)||'/'),ln='',m=h.match(/#(L\d+(?:-L\d+)?)$/);if(m){ln=m[1];h=h.slice(0,m.index)}
  var p=h.split('/').filter(Boolean);window.goFile=null;++rt;if(p[2]!='commits')cpage=1;
  if(!p.length)home();else if(p.length==1)user(p[0]);else repoPage(p[0],p[1],p[2],p.slice(3),ln);
  window.scrollTo(0,0);
 }
-window.onhashchange=route;
 function remember(k){recent=[k].concat(recent.filter(function(x){return x!=k})).slice(0,8);try{localStorage.setItem('rb_recent',JSON.stringify(recent))}catch(e){}}
 function home(){
  app.innerHTML='<div class="home"><h1>Browse GitHub</h1><p class="mu">Search for users and repositories, or enter <b>owner/repo</b> or a github.com link.</p><input class="in" id="hq" placeholder="e.g. react, torvalds or facebook/react" autocomplete="off" spellcheck="false"><div style="margin-top:32px">'+
@@ -403,7 +405,7 @@ async function fileView(R,ref,path,T,ln,tk){
     more();var anchor=a&&$('#LC'+a);if(anchor)anchor.scrollIntoView({block:'center'});
     $('#cb').onclick=function(e){var n=e.target.dataset&&e.target.dataset.n;if(!n)return;n=+n;if(e.shiftKey&&a){var s=Math.min(a,n);b=Math.max(a,n);a=s}else a=b=n;
      document.querySelectorAll('#cb tr.hl').forEach(function(r){r.classList.remove('hl')});for(var i=a;i<=b;i++){var r=$('#LC'+i);if(r)r.classList.add('hl')}
-     history.replaceState(null,'',location.hash.replace(/#L[\d-L]+$/,'')+'#L'+a+(b>a?'-L'+b:''))};
+     cur=cur.replace(/#L[\d-L]+$/,'')+'#L'+a+(b>a?'-L'+b:'')};
    };
    showCode();ld.textContent='Loaded';
    if(isMd){var vp=$('#vp'),vc=$('#vc');vc.disabled=true;vp.disabled=false;vc.onclick=function(){vc.disabled=true;vp.disabled=false;showCode()};
