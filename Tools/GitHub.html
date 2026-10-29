@@ -11,9 +11,9 @@
 body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans",Helvetica,Arial,sans-serif}
 a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}
 svg{fill:currentColor;vertical-align:text-bottom}
-header{background:var(--hd);border-bottom:1px solid var(--bd);padding:12px 24px;display:flex;gap:14px;align-items:center}
+header{background:var(--hd);border-bottom:1px solid var(--bd);padding:12px 24px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
 header .mark{color:var(--fg);display:flex}
-#q{width:320px;max-width:50vw;background:var(--bg);border:1px solid var(--bd);color:var(--fg);border-radius:6px;padding:5px 12px;font:inherit}
+#q{width:320px;max-width:100%;flex:0 1 320px;background:var(--bg);border:1px solid var(--bd);color:var(--fg);border-radius:6px;padding:5px 12px;font:inherit}
 #q:focus,.in:focus{outline:2px solid var(--ac);outline-offset:-1px}
 .sp{flex:1}
 button,.btn{font:inherit;font-size:12px;font-weight:500;background:var(--btn);color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:3px 12px;cursor:pointer;display:inline-flex;gap:6px;align-items:center;line-height:20px;white-space:nowrap}
@@ -69,13 +69,18 @@ details{position:relative}summary{list-style:none}summary::-webkit-details-marke
 .home{text-align:center;padding:96px 16px}.home h1{font-size:32px;font-weight:600}.home .in{width:min(520px,90vw);padding:10px 16px;font-size:16px}
 .fo{position:fixed;inset:0;background:#010409b3;z-index:50;display:flex;justify-content:center;padding-top:10vh}.fo>div{width:min(560px,92vw);background:var(--sub);border:1px solid var(--bd);border-radius:12px;padding:12px;align-self:flex-start;max-height:70vh;overflow:auto}.fo .in{width:100%;margin-bottom:8px}
 .fo code{background:var(--btn);padding:2px 6px;border-radius:6px;word-break:break-all}.fo a{display:block;padding:6px 10px;border-radius:6px;color:var(--fg);word-break:break-all}.fo a:hover{background:var(--sel);text-decoration:none}
+.sk{display:block;max-width:100%;border-radius:6px;background:linear-gradient(90deg,var(--sub) 25%,var(--hov) 50%,var(--sub) 75%);background-size:200% 100%;animation:sh 1.2s infinite}@keyframes sh{to{background-position:-200% 0}}
+.ph{border:1px dashed var(--bd);border-radius:6px;padding:10px 12px;color:var(--mu);display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:space-between}
+.tg{appearance:none;-webkit-appearance:none;flex:none;width:34px;height:20px;border-radius:20px;background:var(--btn);border:1px solid var(--bd);position:relative;cursor:pointer;margin:0}.tg::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--mu);transition:left .15s}.tg:checked{background:var(--gr)}.tg:checked::after{left:16px;background:#fff}
+.sr{display:flex;gap:12px;align-items:center;padding:8px 4px;border-bottom:1px solid var(--bd);cursor:pointer}.sr>span:first-child{flex:1}.cc{font-size:12px;color:var(--mu);border:1px solid var(--bd);border-radius:2em;padding:0 8px;white-space:nowrap}
+.sh{margin:16px 4px 4px;font-size:12px;text-transform:uppercase;color:var(--mu);letter-spacing:.04em}.tt{margin:12px 4px;padding:10px 12px;background:var(--btn);border-radius:6px}
 </style>
 </head>
 <body>
 <header>
 <a class="mark" href="#/" title="Home"><svg width="32" height="32" viewBox="0 0 16 16"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg></a>
 <input id="q" placeholder="Search users & repos, or jump to owner/repo or a link" autocomplete="off" spellcheck="false">
-<span class="sp"></span><span id="rl" class="mu" style="font-size:12px" title="Remaining GitHub API requests this hour"></span><button id="lw"></button><button id="th"></button><button id="tok" title="Optional token: raises the rate limit and loads last-commit info per file">Token</button>
+<span class="sp"></span><span id="rl" class="mu" style="font-size:12px" title="Remaining GitHub API requests this hour"></span><span id="us" class="mu" style="font-size:12px" title="Requests made by this page so far"></span><button id="st">Settings</button>
 </header>
 <div id="app"></div>
 <script>
@@ -83,9 +88,10 @@ details{position:relative}summary{list-style:none}summary::-webkit-details-marke
 var $=function(s,e){return(e||document).querySelector(s)},app=$('#app'),token='',recent=[],cache={},repos={},raws={},rt=0,cpage=1,warn=true,theme='dark';
 try{token=localStorage.getItem('rb_token')||'';recent=JSON.parse(localStorage.getItem('rb_recent')||'[]');warn=localStorage.getItem('rb_warn')!='0';theme=localStorage.getItem('rb_theme')=='light'?'light':'dark'}catch(e){}
 function save(k,v){try{localStorage.setItem(k,v)}catch(e){}}
-function applySet(){document.documentElement.dataset.t=theme;$('#th').textContent=theme=='dark'?'Light theme':'Dark theme';$('#lw').textContent='Link warnings: '+(warn?'on':'off')}
-$('#th').onclick=function(){theme=theme=='dark'?'light':'dark';save('rb_theme',theme);applySet()};
-$('#lw').onclick=function(){warn=!warn;save('rb_warn',warn?'1':'0');applySet()};applySet();
+var DEF={branches:1,langs:1,rel:1,commit:1,readme:1,fc:1,sizes:1,sexact:1,suser:1,srepo:1},S=Object.assign({},DEF),net=0,pg=0,COST={branches:1,langs:1,rel:1,commit:1,readme:1,fc:60,sizes:0,sexact:1,suser:1,srepo:1};
+try{Object.assign(S,JSON.parse(localStorage.getItem('rb_fetch')||'{}'))}catch(e){}
+function applySet(){document.documentElement.dataset.t=theme}
+applySet();
 var P={dir:'M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z',
 file:'M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z',
 repo:'M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8ZM5 12.25a.25.25 0 0 1 .25-.25h3.5a.25.25 0 0 1 .25.25v3.25a.25.25 0 0 1-.4.2l-1.45-1.087a.249.249 0 0 0-.3 0L5.4 15.7a.25.25 0 0 1-.4-.2Z',
@@ -108,9 +114,10 @@ var LC={JavaScript:'#f1e05a',TypeScript:'#3178c6',Python:'#3572A5',HTML:'#e34c26
 function lc(l){return LC[l]||'#8b949e'}
 async function api(path,accept){
  var k=path+'|'+(accept||'');if(cache[k])return cache[k];
- var h={Accept:accept||'application/vnd.github+json'};if(token)h.Authorization='Bearer '+token;
+ net++;var us=$('#us');if(us)us.textContent='this page: '+(net-pg)+' req';var h={Accept:accept||'application/vnd.github+json'};if(token)h.Authorization='Bearer '+token;
  var r=await fetch('https://api.github.com'+path,{headers:h}),rem=r.headers.get('x-ratelimit-remaining');if(rem!=null)$('#rl').textContent='API '+rem+'/'+r.headers.get('x-ratelimit-limit');
- if(r.status==403||r.status==429)throw new Error('GitHub rate limit reached (60 requests/hour without a token). Add a token with the Token button to raise it.');
+ if(r.status==429||(r.status==403&&(rem==='0'||r.headers.get('retry-after'))))throw new Error('GitHub rate limit reached (60 requests/hour without a token, 10 searches/minute). Wait a bit, or add a token with the Token button to raise it.');
+ if(r.status==403)throw new Error('GitHub refused this request (403). The repo may be blocked or need a token.');
  if(r.status==404){var e=new Error('Not found');e.nf=1;throw e}
  if(!r.ok)throw new Error('GitHub returned '+r.status);
  return cache[k]=/html/.test(accept||'')?await r.text():await r.json();
@@ -123,7 +130,6 @@ function go(v){v=v.trim();if(!v)return false;var t=parse(v);
  else location.hash='#/?q='+encodeURIComponent(v);
  return true}
 $('#q').onkeydown=function(e){if(e.key=='Enter'){if(go(this.value))this.blur()}};
-$('#tok').onclick=function(){var v=prompt('GitHub personal access token (optional, stored only in this browser). Leave empty to clear.',token);if(v===null)return;token=v.trim();try{token?localStorage.setItem('rb_token',token):localStorage.removeItem('rb_token')}catch(e){}cache={};repos={};route()};
 function askLink(u){
  var host='';try{host=new URL(u).host}catch(e){}
  var o=document.createElement('div');o.className='fo';o.innerHTML='<div><h3 style="margin:4px 4px 8px">Leave this page?</h3><p style="margin:4px">This link opens <b>'+esc(host)+'</b> in a new tab:</p><p style="margin:8px 4px"><code>'+esc(u)+'</code></p><label class="mu" style="display:block;margin:8px 4px"><input type="checkbox" id="nw"> Don\'t ask me again</label><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button id="no">Cancel</button><button class="green" id="yes">Open link</button></div></div>';
@@ -133,9 +139,46 @@ function askLink(u){
 document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[target=_blank]');if(!a||a.dataset.nw||!warn||e.defaultPrevented||e.button)return;e.preventDefault();askLink(a.href)},true);
 document.addEventListener('click',function(e){document.querySelectorAll('details[open]').forEach(function(d){if(!d.contains(e.target))d.open=false})});
 document.addEventListener('keydown',function(e){if(e.key=='t'&&!/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)&&window.goFile){e.preventDefault();window.goFile()}if(e.key=='Escape'){var f=$('.fo');if(f)f.remove()}});
-function route(){
- if(location.hash.indexOf('#/?q=')==0){window.goFile=null;++rt;cpage=1;searchPage(decodeURIComponent(location.hash.slice(5)));window.scrollTo(0,0);return}
- var h=decodeURIComponent(location.hash.slice(1)||'/'),ln='',m=h.match(/#(L\d+(?:-L\d+)?)$/);if(m){ln=m[1];h=h.slice(0,m.index)}
+function sk(w,h,m){return'<span class="sk" style="width:'+w+';height:'+(h||14)+'px;margin-bottom:'+(m==null?8:m)+'px"></span>'}
+function skCards(n){var h='';for(var i=0;i<n;i++)h+='<div class="rr">'+sk('40%',20,10)+sk('75%',12,8)+sk('25%',12,0)+'</div>';return h}
+function skRepo(){return'<div class="wrap">'+sk('35%',26,16)+'<div class="cols"><div class="main">'+sk('100%',40,12)+sk('100%',220,12)+sk('100%',160,0)+'</div><div class="side">'+sk('100%',18,10)+sk('80%',14,10)+sk('60%',14,24)+sk('100%',18,10)+sk('70%',14,0)+'</div></div></div>'}
+function skUser(){return'<div class="wrap"><div class="cols" style="margin-top:0"><div class="side"><span class="sk" style="width:100%;aspect-ratio:1;border-radius:50%;margin-bottom:16px"></span>'+sk('70%',24,8)+sk('50%',16,0)+'</div><div class="main">'+skCards(4)+'</div></div></div>'}
+function phBox(k,t){return'<div class="ph"><span>'+t+'</span><button class="ld" data-k="'+k+'">Load · 1 request</button></div>'}
+var LZ={
+ branches:function(R){return api('/repos/'+R.info.full_name+'/branches?per_page=100').then(function(b){if(b.length)R.branches=b.map(function(x){return x.name})})},
+ langs:function(R){return api('/repos/'+R.info.full_name+'/languages').then(function(l){R.langs=l})},
+ rel:function(R){return api('/repos/'+R.info.full_name+'/releases/latest').catch(function(){return null}).then(function(x){R.rel=x})}};
+function ensure(R){return Promise.all(['branches','langs','rel'].filter(function(k){return S[k]&&!R.done[k]}).map(function(k){return LZ[k](R).then(function(){R.done[k]=1}).catch(function(){})}))}
+document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('.ld[data-k]'),R=window.curR;if(!b||!R)return;b.disabled=true;b.textContent='Loading…';var k=b.dataset.k,y=window.scrollY;
+ LZ[k](R).then(function(){R.done[k]=1}).catch(function(){}).then(function(){route(true);setTimeout(function(){window.scrollTo(0,y)},60)})});
+function openSettings(focus){
+ var old=$('.fo');if(old)old.remove();
+ var o=document.createElement('div');o.className='fo';
+ var eff=function(k){return S[k]&&!(k=='fc'&&!token)?COST[k]:0},sum=function(a){return a.reduce(function(n,k){return n+eff(k)},0)};
+ var row=function(k,t,d){var c=COST[k];return'<label class="sr"><span><b>'+t+'</b><span class="mu" style="display:block;font-size:12px">'+d+'</span></span><span class="cc">'+(c===0?'free':k=='fc'?'up to 60 req':c+' req')+'</span><input type="checkbox" class="tg" data-k="'+k+'"'+(S[k]?' checked':'')+'></label>'};
+ var sw=function(id,t,d,on){return'<label class="sr"><span><b>'+t+'</b>'+(d?'<span class="mu" style="display:block;font-size:12px">'+d+'</span>':'')+'</span><input type="checkbox" class="tg" id="'+id+'"'+(on?' checked':'')+'></label>'};
+ o.innerHTML='<div><h3 style="margin:4px 4px 8px">Settings</h3><p class="mu" style="margin:4px;font-size:12px">GitHub allows 60 requests per hour without a token and 5,000 with one. Each switch shows its cost. Anything switched off shows a Load button instead. Things already loaded are cached and cost nothing again.</p>'+
+ '<div class="sh">Account</div><div style="display:flex;gap:6px;margin:0 0 4px"><input class="in" id="tkv" type="password" placeholder="GitHub token (optional)" style="flex:1;margin:0" value="'+esc(token)+'"><button id="tks">Save</button></div>'+
+ sw('thm','Light theme','',theme=='light')+sw('lkw','Link warnings','Ask before opening external links',warn)+
+ '<div class="sh">Repository page</div><div class="sr" style="cursor:default"><span><b>Repo info + file tree</b><span class="mu" style="display:block;font-size:12px">Always loaded. Includes description, stars, topics, license and main language.</span></span><span class="cc">2 req</span></div>'+
+ row('branches','Branches','Branch list and count')+row('langs','Languages','Full language breakdown')+row('rel','Latest release','Release in the sidebar')+row('commit','Latest commit','Author, message and time above the files')+row('readme','README','Rendered README under the files')+
+ row('fc','File commit info','Last commit per file. Needs a token')+row('sizes','File sizes','Shown in the file list, comes with the tree')+
+ '<div class="sh">Search</div>'+row('sexact','Exact username lookup','Checks if the text is a user and gets their name and bio')+row('suser','User search','Finds users matching the text')+row('srepo','Repository search','Finds repos matching the text')+
+ '<div class="tt" id="tot"></div><div style="display:flex;gap:8px;justify-content:flex-end"><button id="rst">Reset</button><button class="green" id="cls">Done</button></div></div>';
+ document.body.appendChild(o);o.onclick=function(e){if(e.target==o)o.remove()};
+ var upd=function(){var r=2+sum(['branches','langs','rel','commit','readme','fc']),q=sum(['sexact','suser','srepo']);$('#tot',o).innerHTML='Opening a repo: <b>'+r+'</b> request'+(r==1?'':'s')+(S.fc&&!token?' <span class="mu">(file commit info needs a token)</span>':'')+'<br>One search: <b>'+q+'</b> request'+(q==1?'':'s')};
+ o.querySelectorAll('input.tg[data-k]').forEach(function(i){i.onchange=function(){S[i.dataset.k]=i.checked?1:0;save('rb_fetch',JSON.stringify(S));upd()}});
+ $('#thm',o).onchange=function(){theme=this.checked?'light':'dark';save('rb_theme',theme);applySet()};
+ $('#lkw',o).onchange=function(){warn=this.checked;save('rb_warn',warn?'1':'0')};
+ $('#tks',o).onclick=function(){token=$('#tkv',o).value.trim();try{token?localStorage.setItem('rb_token',token):localStorage.removeItem('rb_token')}catch(e){}cache={};repos={};this.textContent='Saved';upd();route()};
+ $('#rst',o).onclick=function(){Object.assign(S,DEF);save('rb_fetch',JSON.stringify(S));openSettings()};
+ $('#cls',o).onclick=function(){o.remove()};upd();if(focus=='token')$('#tkv',o).focus();
+}
+$('#st').onclick=function(){openSettings()};
+function dec(s){try{return decodeURIComponent(s)}catch(e){return s}}
+function route(k){if(k!==true){pg=net;var u0=$('#us');if(u0)u0.textContent=''}
+ if(location.hash.indexOf('#/?q=')==0){window.goFile=null;++rt;cpage=1;searchPage(dec(location.hash.slice(5)));window.scrollTo(0,0);return}
+ var h=dec(location.hash.slice(1)||'/'),ln='',m=h.match(/#(L\d+(?:-L\d+)?)$/);if(m){ln=m[1];h=h.slice(0,m.index)}
  var p=h.split('/').filter(Boolean);window.goFile=null;++rt;if(p[2]!='commits')cpage=1;
  if(!p.length)home();else if(p.length==1)user(p[0]);else repoPage(p[0],p[1],p[2],p.slice(3),ln);
  window.scrollTo(0,0);
@@ -159,32 +202,34 @@ function repoCard(r){
  '<div class="mt">'+(r.language?'<span><span class="dot" style="background:'+lc(r.language)+'"></span>'+esc(r.language)+'</span>':'')+(r.stargazers_count?'<span>'+ic('star',16)+' '+num(r.stargazers_count)+'</span>':'')+(r.forks_count?'<span>'+ic('fork')+' '+num(r.forks_count)+'</span>':'')+(r.pushed_at?'<span>Updated '+ago(r.pushed_at)+'</span>':'')+'</div></div>';
 }
 async function searchPage(q){
- var tk=rt,qi=$('#q');if(qi)qi.value=q;
- app.innerHTML='<div class="wrap mu">Searching for '+esc(q)+'…</div>';
- var enc=encodeURIComponent(q),err=null,note=function(e){if(!err)err=e;return null};
- var a=await Promise.all([
-  api('/users/'+enc).catch(function(){return null}),
-  api('/search/users?q='+enc+'&per_page=10').catch(note),
-  api('/search/repositories?q='+enc+'+in:name,description&per_page=30').catch(note)]);
- if(tk!=rt)return;
- var exact=a[0]&&a[0].login?a[0]:null,users=(a[1]&&a[1].items)||[],reps=(a[2]&&a[2].items)||[];
- if(!exact&&!a[1]&&!a[2]&&err){fail(err);return}
- var lq=q.toLowerCase();
- if(exact)users=[exact].concat(users.filter(function(u){return u.login.toLowerCase()!=exact.login.toLowerCase()}));
- else users.sort(function(x,y){return(y.login.toLowerCase()==lq)-(x.login.toLowerCase()==lq)});
- reps=reps.slice().sort(function(x,y){return(y.name.toLowerCase()==lq)-(x.name.toLowerCase()==lq)});
- var h='<div class="wrap"><h2 style="margin:0 0 4px;font-weight:600">Results for “'+esc(q)+'”</h2>';
- h+='<div class="tabs"><a class="on">'+ic('repo')+' Users <span class="badge">'+users.length+'</span></a></div>';
- h+=users.length?users.slice(0,10).map(userCard).join(''):'<p class="mu">No users found.</p>';
- h+='<div class="tabs" style="margin-top:32px"><a class="on">'+ic('repo')+' Repositories <span class="badge">'+(a[2]&&a[2].total_count!=null?num(a[2].total_count):reps.length)+'</span></a></div>';
- h+=reps.length?reps.map(repoCard).join(''):'<p class="mu">No repositories found.</p>';
- if(a[2]&&a[2].total_count>reps.length)h+='<p class="mu" style="margin-top:16px">Showing the top '+reps.length+' repositories.</p>';
- if(err&&(!a[1]||!a[2]))h+='<div class="err">Part of the search failed ('+esc(err.message)+'). Search is limited to 10 requests/min without a token.</div>';
- app.innerHTML=h+'</div>';
+ var tk=rt,qi=$('#q');if(qi)qi.value=q;var lq=q.toLowerCase(),enc=encodeURIComponent(q),U={},Rp={},busy={},errs={};
+ var key={ex:'sexact',us:'suser',rp:'srepo'},est=(S.sexact?1:0)+(S.suser?1:0)+(S.srepo?1:0);
+ var F={
+  ex:['Look up exact username',function(){return api('/users/'+enc).then(function(u){U.ex=u&&u.login?u:null},function(e){if(e.nf)U.ex=null;else throw e})}],
+  us:['Search users',function(){return api('/search/users?q='+enc+'&per_page=10').then(function(d){U.it=d.items||[]})}],
+  rp:['Search repositories',function(){return api('/search/repositories?q='+enc+'+in:name,description&per_page=30').then(function(d){Rp.it=d.items||[];Rp.n=d.total_count})}]};
+ app.innerHTML='<div class="wrap"><h2 style="margin:0 0 4px;font-weight:600">Results for “'+esc(q)+'”</h2><div class="mu" style="font-size:12px">Estimated cost: '+est+' request'+(est==1?'':'s')+' · <a href="#" id="os">change in Settings</a></div>'+
+  '<div class="tabs"><a class="on">'+ic('repo')+' Users <span class="badge" id="nu">0</span></a></div><div id="su"></div><div class="tabs" style="margin-top:32px"><a class="on">'+ic('repo')+' Repositories <span class="badge" id="nr">0</span></a></div><div id="sr"></div></div>';
+ $('#os').onclick=function(e){e.preventDefault();openSettings()};
+ var phb=function(k){return'<div class="ph" style="margin:12px 0"><span>'+F[k][0]+'</span><button class="ld" data-s="'+k+'">Load · 1 request</button></div>'};
+ var draw=function(){
+  if(tk!=rt)return;
+  var it=[];if(U.ex)it.push(U.ex);(U.it||[]).forEach(function(u){if(!U.ex||u.login.toLowerCase()!=U.ex.login.toLowerCase())it.push(u)});
+  if(!U.ex)it.sort(function(x,y){return(y.login.toLowerCase()==lq)-(x.login.toLowerCase()==lq)});
+  var h=it.map(userCard).join('');
+  ['ex','us'].forEach(function(k){if(busy[k])h+=skCards(1);else if(errs[k])h+='<div class="err">'+esc(errs[k])+'</div>';else if(k=='ex'?U.ex===undefined:U.it===undefined)h+=phb(k)});
+  $('#su').innerHTML=h||'<p class="mu">No users found.</p>';$('#nu').textContent=it.length;
+  var rr=(Rp.it||[]).slice().sort(function(x,y){return(y.name.toLowerCase()==lq)-(x.name.toLowerCase()==lq)}),r='';
+  if(busy.rp)r=skCards(4);else if(errs.rp)r='<div class="err">'+esc(errs.rp)+'</div>';else if(Rp.it===undefined)r=phb('rp');else if(!rr.length)r='<p class="mu">No repositories found.</p>';else{r=rr.map(repoCard).join('');if(Rp.n>rr.length)r+='<p class="mu" style="margin-top:16px">Showing the top '+rr.length+' repositories.</p>'}
+  $('#sr').innerHTML=r;$('#nr').textContent=Rp.n!=null?num(Rp.n):rr.length;
+  app.querySelectorAll('.ld[data-s]').forEach(function(b){b.onclick=function(){run(b.dataset.s)}});
+ };
+ var run=function(k){busy[k]=1;errs[k]=0;draw();F[k][1]().catch(function(e){errs[k]=e.message}).then(function(){busy[k]=0;draw()})};
+ draw();['ex','us','rp'].forEach(function(k){if(S[key[k]])run(k)});
 }
 /* ---------- user ---------- */
 async function user(u){
- var tk=rt;app.innerHTML='<div class="wrap mu">Loading '+esc(u)+'…</div>';
+ var tk=rt;app.innerHTML=skUser();
  try{
   var info=await api('/users/'+encodeURIComponent(u)),all=[],base=info.type=='Organization'?'/orgs/':'/users/';
   for(var pg=1;pg<=3;pg++){var c=await api(base+encodeURIComponent(u)+'/repos?per_page=100&sort=updated&page='+pg);all=all.concat(c);if(c.length<100)break}
@@ -195,12 +240,12 @@ async function user(u){
    [info.company,info.location,info.blog&&'<a href="'+esc(/^http/.test(info.blog)?info.blog:'https://'+info.blog)+'" target="_blank" rel="noopener">'+esc(info.blog)+'</a>',info.twitter_username&&'@'+esc(info.twitter_username)].filter(Boolean).map(function(x){return'<p class="mu" style="margin:4px 0">'+(/^</.test(x)?x:esc(x))+'</p>'}).join('')+
    '<p><a class="btn" style="width:100%;justify-content:center" href="https://github.com/'+esc(info.login)+'" target="_blank" rel="noopener">View on github.com</a></p></div>';
   app.innerHTML='<div class="wrap"><div class="cols" style="margin-top:0">'+side+'<div class="main"><div class="tabs" style="margin-top:0"><a class="on">'+ic('repo')+' Repositories <span class="badge">'+all.length+'</span></a></div>'+
-   '<div class="bar" style="margin-top:16px"><input class="in" id="rf" placeholder="Find a repository…" style="flex:1;min-width:160px"><select class="in" id="rty"><option value="all">Type: All</option><option value="src">Sources</option><option value="fork">Forks</option></select><select class="in" id="rso"><option value="updated">Last updated</option><option value="name">Name</option><option value="stars">Stars</option></select></div><div id="rl"></div><div class="pg" id="rp"></div></div></div></div>';
+   '<div class="bar" style="margin-top:16px"><input class="in" id="rf" placeholder="Find a repository…" style="flex:1;min-width:160px"><select class="in" id="rty"><option value="all">Type: All</option><option value="src">Sources</option><option value="fork">Forks</option></select><select class="in" id="rso"><option value="updated">Last updated</option><option value="name">Name</option><option value="stars">Stars</option></select></div><div id="rlist"></div><div class="pg" id="rp"></div></div></div></div>';
   var draw=function(){
    var q=st.q.toLowerCase(),l=all.filter(function(r){return(!q||r.name.toLowerCase().indexOf(q)>-1||(r.description||'').toLowerCase().indexOf(q)>-1)&&(st.type=='all'||(st.type=='fork')==r.fork)});
    l.sort(function(a,b){return st.sort=='name'?a.name.localeCompare(b.name):st.sort=='stars'?b.stargazers_count-a.stargazers_count:new Date(b.pushed_at)-new Date(a.pushed_at)});
    var per=30,pages=Math.max(1,Math.ceil(l.length/per));st.page=Math.min(st.page,pages);
-   $('#rl').innerHTML=l.slice((st.page-1)*per,st.page*per).map(function(r){return'<div class="rr"><h3><a href="#/'+esc(r.full_name)+'">'+esc(r.name)+'</a><span class="badge">'+(r.private?'Private':'Public')+(r.archived?' archive':'')+'</span></h3>'+(r.fork?'<span class="mu" style="font-size:12px">Forked repository</span>':'')+
+   $('#rlist').innerHTML=l.slice((st.page-1)*per,st.page*per).map(function(r){return'<div class="rr"><h3><a href="#/'+esc(r.full_name)+'">'+esc(r.name)+'</a><span class="badge">'+(r.private?'Private':'Public')+(r.archived?' archive':'')+'</span></h3>'+(r.fork?'<span class="mu" style="font-size:12px">Forked repository</span>':'')+
     (r.description?'<p class="mu" style="margin:4px 0">'+esc(r.description)+'</p>':'')+((r.topics||[]).map(function(t){return'<span class="topic">'+esc(t)+'</span>'}).join(''))+
     '<div class="mt">'+(r.language?'<span><span class="dot" style="background:'+lc(r.language)+'"></span>'+esc(r.language)+'</span>':'')+(r.stargazers_count?'<span>'+ic('star',16)+' '+num(r.stargazers_count)+'</span>':'')+(r.forks_count?'<span>'+ic('fork')+' '+num(r.forks_count)+'</span>':'')+(r.license?'<span>'+esc(r.license.spdx_id||r.license.name)+'</span>':'')+'<span>Updated '+ago(r.pushed_at||r.updated_at)+'</span></div></div>'}).join('')||'<p class="mu" style="padding:24px 0">No repositories match.</p>';
    var b='';if(pages>1){b='<button id="pv"'+(st.page==1?' disabled':'')+'>Previous</button>';for(var i=1;i<=pages;i++)b+='<button data-p="'+i+'"'+(i==st.page?' class="on"':'')+'>'+i+'</button>';b+='<button id="nx"'+(st.page==pages?' disabled':'')+'>Next</button>'}
@@ -210,9 +255,8 @@ async function user(u){
 }
 /* ---------- repo ---------- */
 async function loadRepo(o,r){
- var info=await api('/repos/'+o+'/'+r),k=info.full_name,R={o:info.owner.login,r:info.name,info:info,trees:{},branches:[info.default_branch],langs:{},rel:null};
- var a=await Promise.all([api('/repos/'+k+'/branches?per_page=100').catch(function(){return[]}),api('/repos/'+k+'/languages').catch(function(){return{}}),api('/repos/'+k+'/releases/latest').catch(function(){return null})]);
- if(a[0].length)R.branches=a[0].map(function(b){return b.name});R.langs=a[1];R.rel=a[2];return R;
+ var info=await api('/repos/'+o+'/'+r);
+ return{o:info.owner.login,r:info.name,info:info,trees:{},branches:[info.default_branch],langs:{},rel:null,done:{}};
 }
 async function getTree(R,ref){
  if(R.trees[ref])return R.trees[ref];
@@ -236,7 +280,7 @@ function crumbs(R,ref,path,blob){
  return'<span style="font-size:16px">'+h+'</span>';
 }
 function branchMenu(R,ref,path,T){
- return'<details><summary class="btn">'+ic('branch')+' '+esc(ref)+' '+ic('caret')+'</summary><div class="pop"><input class="in bf" placeholder="Find a branch…">'+R.branches.map(function(b){return'<a class="bi'+(b==ref?' on':'')+'" href="'+lnk(R,'tree',b,'')+'">'+esc(b)+'</a>'}).join('')+'</div></details>';
+ return'<details><summary class="btn">'+ic('branch')+' '+esc(ref)+' '+ic('caret')+'</summary><div class="pop"><input class="in bf" placeholder="Find a branch…">'+(R.done.branches?'':'<button class="ld" data-k="branches" style="margin:0 0 6px">Load all branches · 1 request</button>')+R.branches.map(function(b){return'<a class="bi'+(b==ref?' on':'')+'" href="'+lnk(R,'tree',b,'')+'">'+esc(b)+'</a>'}).join('')+'</div></details>';
 }
 function sidebar(R,ref){
  var i=R.info,tot=0,L=R.langs;Object.keys(L).forEach(function(k){tot+=L[k]});
@@ -245,8 +289,8 @@ function sidebar(R,ref){
   (i.homepage?'<div style="margin-bottom:8px">'+ic('link')+' <a href="'+esc(/^http/.test(i.homepage)?i.homepage:'https://'+i.homepage)+'" target="_blank" rel="noopener"><b>'+esc(i.homepage.replace(/^https?:\/\//,''))+'</b></a></div>':'')+
   (i.topics||[]).map(function(t){return'<a class="topic" href="https://github.com/topics/'+esc(t)+'" target="_blank" rel="noopener">'+esc(t)+'</a>'}).join('')+
   (i.license?'<div class="st">'+esc(i.license.name)+'</div>':'')+'<div class="st">'+ic('star')+' <b>'+num(i.stargazers_count)+'</b> stars</div><div class="st">'+ic('eye')+' <b>'+num(i.subscribers_count||0)+'</b> watching</div><div class="st">'+ic('fork')+' <b>'+num(i.forks_count)+'</b> forks</div></div>'+
-  '<div class="sec"><h3>Releases</h3>'+(R.rel?'<a href="'+esc(R.rel.html_url)+'" target="_blank" rel="noopener"><b>'+esc(R.rel.name||R.rel.tag_name)+'</b></a> <span class="badge" style="color:var(--ok);border-color:var(--ok)">Latest</span><div class="mu" style="font-size:12px">'+ago(R.rel.published_at)+'</div>':'<span class="mu">No releases published</span>')+'</div>'+
-  (tot?'<div class="sec"><h3>Languages</h3><div class="lbar">'+ks.map(function(k){return'<span style="width:'+(L[k]/tot*100)+'%;background:'+lc(k)+'"></span>'}).join('')+'</div>'+ks.slice(0,8).map(function(k){return'<span class="lg"><span class="dot" style="background:'+lc(k)+'"></span><b>'+esc(k)+'</b> <span class="mu">'+(L[k]/tot*100).toFixed(1)+'%</span></span>'}).join('')+'</div>':'')+'</div>';
+  '<div class="sec"><h3>Releases</h3>'+(!R.done.rel?phBox('rel','Latest release'):R.rel?'<a href="'+esc(R.rel.html_url)+'" target="_blank" rel="noopener"><b>'+esc(R.rel.name||R.rel.tag_name)+'</b></a> <span class="badge" style="color:var(--ok);border-color:var(--ok)">Latest</span><div class="mu" style="font-size:12px">'+ago(R.rel.published_at)+'</div>':'<span class="mu">No releases published</span>')+'</div>'+
+  (!R.done.langs?'<div class="sec"><h3>Languages</h3>'+(i.language?'<div style="margin-bottom:8px"><span class="dot" style="background:'+lc(i.language)+'"></span><b>'+esc(i.language)+'</b> <span class="mu">main language</span></div>':'')+phBox('langs','Full language breakdown')+'</div>':tot?'<div class="sec"><h3>Languages</h3><div class="lbar">'+ks.map(function(k){return'<span style="width:'+(L[k]/tot*100)+'%;background:'+lc(k)+'"></span>'}).join('')+'</div>'+ks.slice(0,8).map(function(k){return'<span class="lg"><span class="dot" style="background:'+lc(k)+'"></span><b>'+esc(k)+'</b> <span class="mu">'+(L[k]/tot*100).toFixed(1)+'%</span></span>'}).join('')+'</div>':'')+'</div>';
 }
 function wireMenus(){
  document.querySelectorAll('.bf').forEach(function(f){f.oninput=function(){var q=f.value.toLowerCase();document.querySelectorAll('.bi').forEach(function(a){a.style.display=a.textContent.toLowerCase().indexOf(q)>-1?'':'none'})}});
@@ -261,8 +305,8 @@ function goToFile(R,ref,T){
 async function repoPage(o,r,type,rest,ln){
  var tk=rt,key=(o+'/'+r).toLowerCase();
  try{
-  var R=repos[key];if(!R){app.innerHTML='<div class="wrap mu">Loading '+esc(o+'/'+r)+'…</div>';R=await loadRepo(o,r);repos[key]=R}
-  if(tk!=rt)return;remember(R.info.full_name);
+  var R=repos[key];if(!R){app.innerHTML=skRepo();R=await loadRepo(o,r);repos[key]=R}
+  if(tk!=rt)return;remember(R.info.full_name);await ensure(R);if(tk!=rt)return;window.curR=R;
   var ref=R.info.default_branch,path='',joined=rest.join('/');
   if(type=='tree'||type=='blob'||type=='commits'){
    var best=''; R.branches.forEach(function(b){if((joined==b||joined.indexOf(b+'/')==0)&&b.length>best.length)best=b});
@@ -282,20 +326,26 @@ async function dirView(R,ref,path,T,tk){
  var ents=node.d.slice().sort(function(a,b){return a.toLowerCase()<b.toLowerCase()?-1:1}).map(function(d){var full=base+d,lab=d;
   while(T.k[full]&&T.k[full].d.length==1&&!T.k[full].f.length){var n=T.k[full].d[0];lab+='/'+n;full+='/'+n}return{n:lab,p:full,dir:1}})
   .concat(node.f.slice().sort(function(a,b){return a.toLowerCase()<b.toLowerCase()?-1:1}).map(function(f){return{n:f,p:base+f}}));
- ents.forEach(function(e,i){rows+='<div class="ro" data-i="'+i+'"><div class="n"><span class="'+(e.dir?'dir':'file')+'">'+ic(e.dir?'dir':'file')+'</span><a href="'+lnk(R,e.dir?'tree':'blob',ref,e.p)+'">'+esc(e.n)+'</a></div><div class="m"></div><div class="t"></div></div>'});
+ ents.forEach(function(e,i){rows+='<div class="ro" data-i="'+i+'"><div class="n"><span class="'+(e.dir?'dir':'file')+'">'+ic(e.dir?'dir':'file')+'</span><a href="'+lnk(R,e.dir?'tree':'blob',ref,e.p)+'">'+esc(e.n)+'</a></div><div class="m"></div><div class="t">'+(S.sizes&&!e.dir&&T.size[e.p]!=null?size(T.size[e.p]):'')+'</div></div>'});
  if(!ents.length)rows+='<div class="ro mu">This directory is empty.</div>';
  var clone='https://github.com/'+R.info.full_name+'.git',rd=node.f.filter(function(f){return/^readme(\.(md|markdown|txt|rst))?$/i.test(f)})[0];
- var inner='<div class="cols"><div class="main"><div class="bar">'+branchMenu(R,ref,path,T)+'<span class="mu"><b style="color:var(--fg)">'+R.branches.length+'</b> branch'+(R.branches.length>1?'es':'')+'</span><span class="sp"></span><button id="gf">'+ic('search')+' Go to file</button>'+
+ var inner='<div class="cols"><div class="main"><div class="bar">'+branchMenu(R,ref,path,T)+(R.done.branches?'<span class="mu"><b style="color:var(--fg)">'+R.branches.length+'</b> branch'+(R.branches.length>1?'es':'')+'</span>':'')+(S.fc&&token?'':'<button id="fcb" title="Needs a token">Load file commit info · up to '+Math.min(60,node.d.length+node.f.length)+' requests</button>')+'<span class="sp"></span><button id="gf">'+ic('search')+' Go to file</button>'+
   '<details><summary class="btn green">Code '+ic('caret')+'</summary><div class="pop r"><b>Clone</b><div style="display:flex;gap:6px;margin:8px 0"><input class="in" readonly value="'+clone+'" style="flex:1"><button class="cp" data-t="'+clone+'">'+ic('copy')+'</button></div><a href="https://github.com/'+R.info.full_name+'/archive/refs/heads/'+esc(ref)+'.zip">Download ZIP</a><a href="https://github.com/'+R.info.full_name+'/tree/'+esc(ref)+(path?'/'+esc(path):'')+'" target="_blank" rel="noopener">Open on github.com</a></div></details></div>'+
   (T.trunc?'<div class="err">This repo is very large; GitHub truncated the file list, so some files are missing.</div>':'')+
-  '<div style="margin-bottom:12px">'+crumbs(R,ref,path)+'</div><div class="box"><div class="bh cm" id="lc"><span class="mu">Loading latest commit…</span></div>'+rows+'</div>'+
-  (rd?'<div class="box" id="rdb"><div class="bh">'+ic('book')+' <b>'+esc(rd)+'</b></div><div class="md mu">Loading…</div></div>':'')+'</div>'+sidebar(R,ref)+'</div>';
+  '<div style="margin-bottom:12px">'+crumbs(R,ref,path)+'</div><div class="box"><div class="bh cm" id="lc">'+sk('55%',16,0)+'</div>'+rows+'</div>'+
+  (rd?'<div class="box" id="rdb"><div class="bh">'+ic('book')+' <b>'+esc(rd)+'</b></div><div class="md">'+sk('90%',16)+sk('70%',16)+sk('80%',16,0)+'</div></div>':'')+'</div>'+sidebar(R,ref)+'</div>';
  app.innerHTML=shell(R,ref,inner,'code');wireMenus();$('#gf').onclick=window.goFile;
  var q='/repos/'+R.info.full_name+'/commits?sha='+encodeURIComponent(ref)+'&per_page=1';
- api(q+(path?'&path='+encodeURIComponent(path):'')).then(function(c){if(tk!=rt||!c[0])return;c=c[0];var a=c.author;
-  $('#lc').innerHTML=(a?'<img class="av" src="'+esc(a.avatar_url)+'&s=40" alt="">':'')+'<b>'+esc(c.commit.author.name)+'</b><span class="msg"><a class="mu" href="'+esc(c.html_url)+'" target="_blank" rel="noopener">'+esc(c.commit.message.split('\n')[0])+'</a></span><span class="mu" style="font-family:ui-monospace,monospace;font-size:12px">'+c.sha.slice(0,7)+'</span><span class="mu">· '+ago(c.commit.author.date)+'</span><a class="btn" href="'+lnk(R,'commits',ref,path)+'">'+ic('hist')+' History</a>'}).catch(function(){var l=$('#lc');if(l)l.innerHTML='<span class="mu">Latest commit unavailable (rate limit?)</span><span class="sp"></span><a class="btn" href="'+lnk(R,'commits',ref,path)+'">'+ic('hist')+' History</a>'});
- if(token)(async function(){var rs=document.querySelectorAll('.ro[data-i]');for(var i=0;i<rs.length&&i<60;i+=6){if(tk!=rt)return;await Promise.all([].slice.call(rs,i,i+6).map(function(row){var e=ents[+row.dataset.i];return api(q+'&path='+encodeURIComponent(e.p)).then(function(c){if(c[0]){$('.m',row).textContent=c[0].commit.message.split('\n')[0];$('.t',row).textContent=ago(c[0].commit.author.date)}}).catch(function(){})}))}})();
- if(rd)api('/repos/'+R.info.full_name+'/contents/'+encodeURI(base+rd)+'?ref='+encodeURIComponent(ref),'application/vnd.github.html+json').then(function(h){if(tk!=rt)return;var m=$('#rdb .md');m.className='md';m.innerHTML=clean(h,R,ref,path,T);wireMd(m)}).catch(function(){var m=$('#rdb .md');if(m)m.textContent='README could not be loaded.'});
+ var lcRun=function(){api(q+(path?'&path='+encodeURIComponent(path):'')).then(function(c){if(tk!=rt||!c[0])return;c=c[0];var a=c.author;
+  $('#lc').innerHTML=(a?'<img class="av" src="'+esc(a.avatar_url)+'&s=40" alt="">':'')+'<b>'+esc(c.commit.author.name)+'</b><span class="msg"><a class="mu" href="'+esc(c.html_url)+'" target="_blank" rel="noopener">'+esc(c.commit.message.split('\n')[0])+'</a></span><span class="mu" style="font-family:ui-monospace,monospace;font-size:12px">'+c.sha.slice(0,7)+'</span><span class="mu">· '+ago(c.commit.author.date)+'</span><a class="btn" href="'+lnk(R,'commits',ref,path)+'">'+ic('hist')+' History</a>'}).catch(function(){var l=$('#lc');if(l)l.innerHTML='<span class="mu">Latest commit unavailable (rate limit?)</span><span class="sp"></span><a class="btn" href="'+lnk(R,'commits',ref,path)+'">'+ic('hist')+' History</a>'});};
+ var fcRun=async function(){var rs=document.querySelectorAll('.ro[data-i]');for(var i=0;i<rs.length&&i<60;i+=6){if(tk!=rt)return;await Promise.all([].slice.call(rs,i,i+6).map(function(row){var e=ents[+row.dataset.i];return api(q+'&path='+encodeURIComponent(e.p)).then(function(c){if(c[0]){$('.m',row).textContent=c[0].commit.message.split('\n')[0];$('.t',row).textContent=ago(c[0].commit.author.date)}}).catch(function(){})}))}};
+ var rdRun=function(){api('/repos/'+R.info.full_name+'/contents/'+encodeURI(base+rd)+'?ref='+encodeURIComponent(ref),'application/vnd.github.html+json').then(function(h){if(tk!=rt)return;var m=$('#rdb .md');m.className='md';m.innerHTML=clean(h,R,ref,path,T);wireMd(m)}).catch(function(){var m=$('#rdb .md');if(m)m.textContent='README could not be loaded.'});};
+ var l0=$('#lc');
+ if(S.commit)lcRun();else{l0.innerHTML='<span class="mu">Latest commit not loaded</span><span class="sp"></span><button class="ld" id="lcb">Load · 1 request</button>';$('#lcb').onclick=function(){l0.innerHTML=sk('55%',16,0);lcRun()}}
+ if($('#fcb'))$('#fcb').onclick=function(){if(!token){openSettings('token');return}this.remove();fcRun()};
+ if(S.fc&&token)fcRun();
+ if(rd&&!S.readme){var rb=$('#rdb .md');rb.innerHTML='<div class="ph"><span>README not loaded</span><button class="ld" id="rdl">Load · 1 request</button></div>';$('#rdl').onclick=function(){rb.innerHTML=sk('90%',16)+sk('70%',16)+sk('80%',16,0);rdRun()}}
+ else if(rd)rdRun();
 }
 function norm(dir,s){s=s.split(/[?#]/)[0];var b=s[0]=='/'?[]:(dir?dir.split('/'):[]);s.split('/').forEach(function(x){if(x=='..')b.pop();else if(x&&x!='.')b.push(x)});return b.join('/')}
 function clean(html,R,ref,dir,T){
