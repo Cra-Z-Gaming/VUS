@@ -3602,7 +3602,7 @@ function profileGone(name) {
   setTimeout(() => { if (t === profileGoneToken && $chatUserProfileOverlay.style.display === "flex") closeChatUserProfile(); }, 2500);
 }
 $chatUserProfileCloseBtn.addEventListener("click", closeChatUserProfile);
-$chatUserProfileOverlay.addEventListener("click", (e) => { if (e.target === $chatUserProfileOverlay) closeChatUserProfile(); });
+$chatUserProfileOverlay.addEventListener("click", (e) => { if (e.target === $chatUserProfileOverlay || e.target.classList.contains("pc-wrap")) closeChatUserProfile(); });
 
 // Rank pills (Owner, Admin, ...) for an account ID. The ranks live in the chat
 // database, so ask chat.js; if it isn't ready there's simply nothing to show.
@@ -3624,7 +3624,8 @@ function resetProfileCard() {
   $chatUserProfileAddBtn.style.display = "none";
   $chatUserProfileMsgBtn.style.display = "none";
   $chatUserProfileMuteBtn.style.display = "none";
-  { const sb = document.getElementById("chatUserProfileStaff"); if (sb) { sb.replaceChildren(); sb.style.display = "none"; } }
+  { const sb = document.getElementById("chatUserProfileStaff"); if (sb) { sb.replaceChildren(); sb.style.display = ""; } const sc = document.getElementById("chatUserProfileStaffCard"); if (sc) sc.style.display = "none"; }
+  staffRenderToken++;
   $chatUserProfileRoles.replaceChildren();
   $chatUserProfileBioWrap.style.display = "none";
   { const j = document.getElementById("chatUserProfileJoined"); if (j) { j.textContent = ""; j.style.display = "none"; } const sn = document.getElementById("chatUserProfileSeen"); if (sn) { sn.textContent = ""; sn.style.display = "none"; } }
@@ -3644,29 +3645,49 @@ function setupProfileMute(prof) {
   paint();
 }
 
-// Mute / Ban / Kick for people whose rank allows it against this person (rules live in chat.js).
-function renderStaffActions(prof) {
+// Mute / Unmute / Ban / Unban / Kick and rank changes live in their own little card beside the profile, so the profile
+// itself stays exactly as the person set it up. Works for offline people too (everything is keyed by account ID).
+let staffRenderToken = 0;
+async function renderStaffActions(prof) {
   const box = document.getElementById("chatUserProfileStaff");
+  const card = document.getElementById("chatUserProfileStaffCard");
   const chat = window.VUS_CHAT;
-  if (!box || !chat || !chat.staffActionsFor || !prof.id) return;
-  const acts = chat.staffActionsFor(prof.id, prof.username);
-  box.replaceChildren();
-  if (!acts.length) { box.style.display = "none"; return; }
-  box.style.display = "block";
-  box.appendChild(h("div", { className: "pc-h" }, "Staff actions"));
-  const row = h("div", { className: "pc-staff-row" });
-  acts.forEach(a => row.appendChild(h("button", { type: "button", className: "pc-staff-btn" + (a.id === "mute" ? "" : " danger"),
-    onclick: () => { $chatUserProfileCloseBtn.click(); chat.runStaffAction(a.id, prof.id, prof.username); } }, a.label)));
-  box.appendChild(row);
-  // Rank changes: a drop-down that starts on the next rank up, plus how long it lasts.
+  if (!box || !card || !chat || !chat.staffActionsFor || !prof.id) return;
+  const token = ++staffRenderToken;
+  box.replaceChildren(); card.style.display = "none";
+  let state = null;
+  try { state = chat.staffStateFor ? await chat.staffStateFor(prof.id) : null; } catch (e) {}
+  if (token !== staffRenderToken || $chatUserProfileOverlay.style.display !== "flex") return;   // the card moved on to someone else
+  const acts = chat.staffActionsFor(prof.id, prof.username, state);
   const ra = chat.roleActionsFor ? chat.roleActionsFor(prof.id) : [];
+  if (!acts.length && !ra.length) return;
+  card.style.display = "block";
+  box.appendChild(h("div", { className: "pcs-title" }, "Staff tools"));
+  box.appendChild(h("div", { className: "pcs-for" }, prof.username));
+  if (state && (state.muteMs > 0 || state.banned)) {
+    const chips = h("div", { className: "pcs-chips" });
+    if (state.banned) chips.appendChild(h("span", { className: "pcs-chip bad" }, "Banned"));
+    if (state.muteMs > 0) chips.appendChild(h("span", { className: "pcs-chip warn" }, "Muted"));
+    box.appendChild(chips);
+  }
+  if (acts.length) {
+    box.appendChild(h("div", { className: "pc-h" }, "Actions"));
+    const grid = h("div", { className: "pcs-grid" });
+    acts.forEach(a => {
+      const kind = (a.id === "unmute" || a.id === "unban") ? " good" : a.id === "mute" ? "" : " danger";
+      grid.appendChild(h("button", { type: "button", className: "pc-staff-btn" + kind,
+        onclick: () => { $chatUserProfileCloseBtn.click(); chat.runStaffAction(a.id, prof.id, prof.username); } }, a.label));
+    });
+    box.appendChild(grid);
+  }
+  // Rank changes: a drop-down that starts on the next rank up, plus how long it lasts.
   if (ra.length) {
-    box.appendChild(h("div", { className: "pc-h", style: "margin-top:10px" }, "Ranks"));
+    box.appendChild(h("div", { className: "pc-h" }, "Rank"));
     const sel = h("select", { className: "pc-role-select" });
     ra.forEach((a, i) => sel.appendChild(h("option", { value: String(i) }, a.label)));
     const dur = h("select", { className: "pc-role-select pc-role-dur" });
     [["0", "Permanent"], ["3600000", "1 hour"], ["86400000", "1 day"], ["604800000", "1 week"], ["2592000000", "30 days"]].forEach(([v, t]) => dur.appendChild(h("option", { value: v }, t)));
-    const go = h("button", { type: "button", className: "pc-staff-btn", onclick: async () => {
+    const go = h("button", { type: "button", className: "pc-staff-btn pcs-apply", onclick: async () => {
       const act = ra[Number(sel.value)];
       go.disabled = true;
       const done = await chat.runRoleAction(act.kind, act.roleId, prof.id, prof.username, act.kind === "grant" ? Number(dur.value) : 0);
@@ -3675,7 +3696,7 @@ function renderStaffActions(prof) {
     } }, "Apply");
     const syncDur = () => { dur.style.display = ra[Number(sel.value)].kind === "grant" ? "" : "none"; };
     sel.addEventListener("change", syncDur); syncDur();
-    box.appendChild(h("div", { className: "pc-staff-row" }, sel, dur, go));
+    box.appendChild(h("div", { className: "pcs-rank" }, sel, dur, go));
   }
 }
 

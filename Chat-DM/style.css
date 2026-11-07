@@ -1831,6 +1831,12 @@ body.hide-joinleave .msg.system.sys-joinleave { display: none; }
 #messages { overflow-anchor: auto; }
 #globalClearPanel { max-height: min(70vh, 560px); overflow-y: auto; }
 .chat-settings .cs-title { color: #f1f5f9; font-weight: 600; margin-bottom: 6px; }
+/* Settings tabs (General / Look / Tools / Rank) */
+.cs-tabbar { display: flex; gap: 4px; padding: 4px; margin: 0 0 4px; background: #0b1220; border: 1px solid #263248; border-radius: 12px; position: sticky; top: 0; z-index: 5; }
+.cs-tabbar button { flex: 1 1 0; padding: 7px 4px; border: none; border-radius: 9px; background: transparent; color: #94a3b8; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.cs-tabbar button:hover { color: #e2e8f0; }
+.cs-tabbar button.on { background: #1e293b; color: #f1f5f9; box-shadow: 0 1px 0 rgba(255,255,255,.05) inset; }
+.cs-tab-hidden { display: none !important; }
 .cs-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 7px 2px; background: none; border: none; color: #e2e8f0; font-size: 13.5px; text-align: left; cursor: pointer; }
 .cs-row small { display: block; color: #64748b; font-size: 11px; margin-top: 1px; }
 .cs-switch { position: relative; flex: 0 0 34px; height: 19px; border-radius: 10px; background: #334155; transition: background .15s; }
@@ -2097,6 +2103,13 @@ body.has-radius .msg:not(.system) .msg-bubble, body.has-radius .chat-msg-bubble 
 .cs-bg-row button { background: #1e293b; border: 1px solid #334155; color: #e2e8f0; border-radius: 8px; padding: 6px 12px; font-size: 12.5px; cursor: pointer; }
 .cs-bg-note { font-size: 12px; color: #64748b; min-height: 14px; } .cs-bg-note.bad { color: #f87171; }
 body.bg-on #messages, body.bg-on #chatMessages { background-color: var(--chat-bg-color); background-image: var(--chat-bg-img, none); background-size: cover; background-position: center; }
+/* video backgrounds: a muted looping <video> sits behind the message list (client-side only) */
+.bg-video-el { position: absolute; z-index: 0; object-fit: cover; pointer-events: none; filter: brightness(.55); }
+body.bg-video #messages, body.bg-video #chatMessages { z-index: 1; }
+@media (prefers-reduced-motion: reduce) { .bg-video-el { display: none; } }
+/* fonted names */
+.fonted-name { letter-spacing: .01em; line-height: 1.25; }
+.fontprev { font-size: 20px; color: #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; display: inline-block; }
 body.bg-light .msg-bubble:not([style*="background"]), body.bg-light .chat-msg-bubble:not([style*="background"]) { color: #0f172a; }
 body.bg-light .msg-meta, body.bg-light .chat-msg-meta, body.bg-light .chat-msg-author, body.bg-light .msg-time { color: #334155 !important; }
 body.bg-light .msg-meta-name:not([style*="color"]) { color: #0f172a; }
@@ -2279,16 +2292,54 @@ body.hide-verified .verified-tag { display: none !important; }
 .cs-colors > :not(.cs-card-head) { }
 .cs-colors .msg-bubble { margin-top: 2px; }
 
-/* ── Full profile view: bigger and centred ── */
-.chat-modal.profile-card { transition: max-width .15s; }
-.chat-modal.profile-card.pc-full { max-width: 540px; width: min(540px, 94vw); }
-.pc-full .pc-banner { height: 120px; }
-.pc-full .pc-av { width: 128px; height: 128px; margin: -64px auto 0; font-size: 44px; border-width: 7px; }
-.pc-full .pc-body { text-align: center; padding: 10px 28px 24px; }
+/* ═══ Profile card v2: scrolls when it doesn't fit, staff tools in their own mini card beside it ═══ */
+#chatUserProfileOverlay { overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; align-items: flex-start; justify-content: center; padding: 16px; box-sizing: border-box; }
+.pc-wrap { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; justify-content: center; margin: auto; max-width: 100%; }   /* margin:auto centres it when it fits and lets the overlay scroll from the top when it doesn't */
+.chat-modal.profile-card { position: relative; width: 340px; flex: 0 1 340px; max-width: 100%; max-height: none; overflow: hidden; transition: width .18s, flex-basis .18s; }
+.chat-modal.profile-card.pc-full { width: 660px; flex-basis: 660px; }
+.pc-close { position: absolute; top: 8px; right: 8px; z-index: 3; width: 30px; height: 30px; border-radius: 50%; border: none; background: rgba(15,23,42,.65); color: #e2e8f0; font-size: 20px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+.pc-close:hover { background: rgba(15,23,42,.92); }
+/* buttons: one tidy row, no stretching, no matter how many are showing */
+.pc-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.pc-actions-main { display: flex; gap: 8px; }
+.pc-actions-main:not(:has(button:not([style*="display: none"]):not([style*="display:none"]))) { display: none; }
+.pc-actions-main button { flex: 1 1 0; padding: 9px 12px; border: none; border-radius: 9px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.pc-actions-sub { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.pc-link-btn { background: none; border: none; padding: 2px 0; color: #94a3b8; font-size: 12.5px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.pc-link-btn:hover { color: #e2e8f0; }
+/* "View full profile": a wider, two-column layout (who they are | about them) instead of the same card stretched sideways */
+.pc-full .pc-banner { height: 130px; }
+.pc-full .pc-av { width: 120px; height: 120px; margin: -60px 0 0 28px; font-size: 42px; border-width: 7px; }
+.pc-full .pc-body { padding: 10px 28px 22px; }
 .pc-full .pc-body h3 { font-size: 26px; }
-.pc-full .pc-roles { justify-content: center; }
-.pc-full #chatUserProfileBio { font-size: 15.5px; }
-.pc-full .pc-staff-row, .pc-full .chat-modal-row { justify-content: center; }
+.pc-full .pc-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 4px 26px; align-items: start; }
+.pc-full .pc-col-about { border-left: 1px solid #334155; padding-left: 24px; margin-top: 6px; }
+.pc-full #chatUserProfileBio { font-size: 15px; }
+.pc-full .pc-cols:not(:has(#chatUserProfileBioWrap:not([style*="display: none"]):not([style*="display:none"]), #chatUserProfileSong:not([style*="display: none"]):not([style*="display:none"]))) { grid-template-columns: minmax(0, 1fr); }
+.pc-full .pc-cols:not(:has(#chatUserProfileBioWrap:not([style*="display: none"]):not([style*="display:none"]), #chatUserProfileSong:not([style*="display: none"]):not([style*="display:none"]))) .pc-col-about { display: none; }
+.pc-full .pc-actions { flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.pc-full .pc-actions-main { flex: 1 1 260px; max-width: 360px; }
+/* staff + rank tools: a small card to the side (below it on narrow screens) */
+.chat-modal.pc-staff-card { width: 232px; flex: 0 1 232px; max-width: 100%; max-height: none; overflow: visible; padding: 14px; box-sizing: border-box; }
+.pcs-title { font-size: 11.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; }
+.pcs-for { font-size: 15px; font-weight: 700; color: #f1f5f9; margin: 2px 0 8px; word-break: break-word; }
+.pcs-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.pcs-chip { font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px; border: 1px solid; }
+.pcs-chip.bad { color: #fca5a5; border-color: #7f1d1d; background: rgba(239,68,68,.1); }
+.pcs-chip.warn { color: #fcd34d; border-color: #78580d; background: rgba(251,191,36,.08); }
+.pcs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+.pcs-grid .pc-staff-btn { padding: 8px 6px; text-align: center; }
+.pc-staff-btn.good { color: #86efac; border-color: #166534; }
+.pc-staff-btn.good:hover { background: rgba(34,197,94,.12); }
+.pcs-rank { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.pcs-rank .pc-role-select { width: 100%; }
+.pcs-apply { width: 100%; text-align: center; }
+@media (max-width: 720px) {
+  .chat-modal.profile-card, .chat-modal.pc-staff-card { width: 100%; flex-basis: 100%; }
+  .pc-full .pc-cols { grid-template-columns: minmax(0, 1fr); }
+  .pc-full .pc-col-about { border-left: 0; padding-left: 0; }
+  .pc-full .pc-av { margin-left: 18px; }
+}
 
 /* ── Global pop-ups (updates, announcements): above everything ── */
 #vusPopups { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 2147483000; display: flex; flex-direction: column; align-items: center; gap: 10px; width: min(460px, calc(100vw - 24px)); pointer-events: none; }
