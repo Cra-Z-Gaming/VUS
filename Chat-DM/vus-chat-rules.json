@@ -139,6 +139,9 @@
           "fx": {
             ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]{1,24}$/)"
           },
+          "font": {
+            ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]{1,24}$/)"
+          },
           "$x": {
             ".validate": false
           }
@@ -300,6 +303,9 @@
               ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]{1,24}$/)"
             },
             "fx": {
+              ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]{1,24}$/)"
+            },
+            "font": {
               ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]{1,24}$/)"
             },
             "gif": {
@@ -632,7 +638,7 @@
           ".validate": "newData.val() === now"
         },
         "s": {
-          ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9]{2,8}$/) && root.child('crateSeasons/' + newData.val() + '/start').val() <= now && root.child('crateSeasons/' + newData.val() + '/end').val() > now"
+          ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9]{2,8}$/) && ((root.child('crateSeasons/' + newData.val() + '/start').val() <= now && root.child('crateSeasons/' + newData.val() + '/end').val() > now) || (newData.val() === 'w26' && now >= 1793491200000 && now < 1803859200000))"
         },
         "$x": {
           ".validate": false
@@ -662,7 +668,7 @@
     "deviceLinks": {
       "$h": {
         ".read": true,
-        ".validate": "$h.matches(/^[a-f0-9]{32}$/) && newData.numChildren() <= 60",
+        ".validate": "$h.matches(/^[a-f0-9]{32}$/)",
         "$id": {
           ".write": true,
           ".validate": "$id.matches(/^[0-9]{4,12}$/) && newData.val() === now"
@@ -672,7 +678,7 @@
     "accountDevices": {
       "$id": {
         ".read": true,
-        ".validate": "$id.matches(/^[0-9]{4,12}$/) && newData.numChildren() <= 40",
+        ".validate": "$id.matches(/^[0-9]{4,12}$/)",
         "$h": {
           ".write": true,
           ".validate": "$h.matches(/^[a-f0-9]{32}$/) && newData.val() === now"
