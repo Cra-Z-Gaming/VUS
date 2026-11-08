@@ -3798,6 +3798,7 @@ function resetProfileCard() {
   $chatUserProfileMuteBtn.style.display = "none";
   { const sb = document.getElementById("chatUserProfileStaff"); if (sb) { sb.replaceChildren(); sb.style.display = ""; } const sc = document.getElementById("chatUserProfileStaffCard"); if (sc) sc.style.display = "none"; }
   staffRenderToken++;
+  { const ib = document.getElementById("chatUserProfileInvBtn"); if (ib) { ib.style.display = "none"; ib.onclick = null; } }
   $chatUserProfileRoles.replaceChildren();
   $chatUserProfileBioWrap.style.display = "none";
   { const j = document.getElementById("chatUserProfileJoined"); if (j) { j.textContent = ""; j.style.display = "none"; } const sn = document.getElementById("chatUserProfileSeen"); if (sn) { sn.textContent = ""; sn.style.display = "none"; } }
@@ -3980,6 +3981,14 @@ function fillProfileCard(prof, accountKey) {
   if (prof.bio) { renderBioInto($chatUserProfileBio, prof.bio); $chatUserProfileBioWrap.style.display = "block"; }
   paintBanNotice(prof);
   paintActiveTime(prof);
+  {   // "Inventory": look at their items and collection (public information)
+    const invBtn = document.getElementById("chatUserProfileInvBtn");
+    if (invBtn) {
+      const can = !!(prof.id && window.VUS_CHAT && window.VUS_CHAT.openInventoryOf);
+      invBtn.style.display = can ? "" : "none";
+      invBtn.onclick = can ? () => { $chatUserProfileCloseBtn.click(); window.VUS_CHAT.openInventoryOf(prof.id, prof.username); } : null;
+    }
+  }
   if (mzkSourceOf(prof) && $chatUserProfileOverlay.style.display === "flex") profileSongUnsub = mountSong($chatUserProfileSong, mzkSourceOf(prof));
 
   if (accountKey !== currentSession.accountKey) {

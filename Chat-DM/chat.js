@@ -1921,14 +1921,14 @@ function scrollToBottom() {
   requestAnimationFrame(() => { snapToBottom(); requestAnimationFrame(snapToBottom); });
   $jumpToBottomBtn.style.display = "none";
 }
-// Auto scroll: while it is on and the view is pinned, growth of the chat (new rows, images loading, the composer
-// resizing) keeps the newest message in view -- EXCEPT while you are moving the pointer over messages (about to click
-// Reply / React): then the view holds still and catches up a moment after you stop.
-// When the view is NOT following the bottom (auto scroll off, or you scrolled up), whatever is on screen is kept exactly
-// where it is: the first visible message is remembered and put back if anything above or around it changes size.
-let pointerHoldUntil = 0, holdTimer = null, anchorEl = null, anchorOff = 0;
-function holdActive() { return Date.now() < pointerHoldUntil; }
-function freeMode() { return !(autoScroll && stickToBottom) || holdActive(); }
+// Auto scroll, two gears:
+//  1. Normally (auto scroll on, and you're at the bottom): ANY growth of the chat (new rows, images loading, the composer
+//     resizing) keeps the newest message in view.
+//  2. If you scroll up by more than about one screen to read older messages, the chat stops moving: the first message on screen
+//     is remembered and put back if anything above or around it changes size, so what you're reading stays exactly where it is.
+//     (Scroll back down, or press the jump button, and gear 1 takes over again.)
+let anchorEl = null, anchorOff = 0;
+function farFromBottom() { return $messages.scrollHeight - $messages.scrollTop - $messages.clientHeight > $messages.clientHeight; }
 function captureAnchor() {
   const kids = $messages.children, n = kids.length;
   if (!n) { anchorEl = null; return; }
@@ -1944,28 +1944,13 @@ function restoreAnchor() {
   const d = cur - anchorOff;
   if (Math.abs(d) > 0.5) { programmaticScrollUntil = Date.now() + 80; $messages.scrollTop += d; }
 }
-function followIfPinned() {
-  if (!(autoScroll && stickToBottom)) return;
-  if (holdActive()) {
-    clearTimeout(holdTimer);
-    holdTimer = setTimeout(followIfPinned, Math.max(60, pointerHoldUntil - Date.now() + 30));
-    if (!isNearBottom()) $jumpToBottomBtn.style.display = "block";
-    return;
-  }
-  scrollToBottom();
-}
+function followIfPinned() { if (autoScroll && stickToBottom) scrollToBottom(); }
 function keepPinned() {
-  if (freeMode()) { restoreAnchor(); if (autoScroll && stickToBottom) followIfPinned(); }
-  else snapToBottom();
+  if (autoScroll && stickToBottom) snapToBottom();     // gear 1
+  else if (farFromBottom()) restoreAnchor();            // gear 2
 }
-$messages.addEventListener("pointermove", e => {
-  if (e.pointerType === "touch" || !(e.target.closest && e.target.closest(".msg"))) return;
-  if (!holdActive()) captureAnchor();
-  pointerHoldUntil = Date.now() + 1500;
-}, { passive: true });
-$messages.addEventListener("pointerdown", () => { if (!holdActive()) captureAnchor(); pointerHoldUntil = Date.now() + 2500; }, { passive: true });
 // Your own scrolling always wins, even in the instant after the app scrolled.
-$messages.addEventListener("wheel", e => { programmaticScrollUntil = 0; if (e.deltaY < 0) stickToBottom = false; captureAnchor(); }, { passive: true });
+$messages.addEventListener("wheel", e => { programmaticScrollUntil = 0; if (e.deltaY < 0) stickToBottom = false; }, { passive: true });
 $messages.addEventListener("touchstart", () => { programmaticScrollUntil = 0; }, { passive: true });
 new MutationObserver(keepPinned).observe($messages, { childList: true, subtree: true });
 if (window.ResizeObserver) new ResizeObserver(keepPinned).observe($messages);
@@ -8538,12 +8523,11 @@ function renderMembersPane() {
     const textEl = document.createElement("div");
     textEl.className = "member-text";
     textEl.appendChild(nameEl);
-    {   // the same cosmetics people see in chat: ring around the avatar, tag, text effect and font on the name
+    {   // the same cosmetics people see in chat: ring around the avatar, text effect and font on the name (tags stay out of this list)
       const cos = (isMe ? cosmFields(myCosm) : memberCosm(p.id)) || {};
       applyRingTo(av, cos.ring, cos.rfx);
       if (cos.font) applyNameFont(nameEl, cos.font);
       if (cos.fx) { nameEl.dataset.fx = cos.fx; wrapFx(nameEl); }
-      if (cos.tag) { const te = tagEl(cos.tag); if (te) { te.classList.add("member-tag"); textEl.appendChild(te); } }
     }
     if (p.online && p.id && window.VUS_DM && window.VUS_DM.watchSongByLoginId) {
       const songEl = document.createElement("div");
@@ -9243,7 +9227,7 @@ const CRATE_ITEMS = [
   { id: "fnt-typewriter",  type: "font", rar: "rare",      name: "Typewriter",     family: "Special Elite" },
   { id: "fnt-orbitron",    type: "font", rar: "rare",      name: "Orbitron",       family: "Orbitron" },
   { id: "fnt-pacifico",    type: "font", rar: "epic",      name: "Pacifico",       family: "Pacifico" },
-  { id: "fnt-pixel",       type: "font", rar: "epic",      name: "Pixel Arcade",   family: "Press Start 2P" },
+  { id: "fnt-pixel",       type: "font", rar: "epic",      name: "Pixel Arcade",   family: "Press Start 2P", scale: 0.72 },
   { id: "fnt-bungee",      type: "font", rar: "epic",      name: "Bungee",         family: "Bungee" },
   { id: "fnt-marker",      type: "font", rar: "epic",      name: "Marker",         family: "Permanent Marker" },
   { id: "fnt-silkscreen",  type: "font", rar: "epic",      name: "Silkscreen",     family: "Silkscreen" },
@@ -9423,6 +9407,7 @@ function applyNameFont(node, id) {
   if (!node || !it) return;
   loadItemFont(it);
   node.style.fontFamily = '"' + it.family + '", system-ui, sans-serif';
+  if (it.scale) node.style.zoom = String(it.scale);   // very wide fonts (Pixel Arcade) are shrunk so they match the others
   node.classList.add("fonted-name");
 }
 // The font for a message's TEXT (separate from the username font): any font the sender owns.
@@ -9431,6 +9416,7 @@ function applyTextFont(node, id) {
   if (!node || !it) return;
   loadItemFont(it);
   node.style.fontFamily = '"' + it.family + '", system-ui, sans-serif';
+  if (it.scale) node.style.zoom = String(it.scale);
   node.classList.add("fonted-text");
 }
 // Bubble effects: preset fades / animations, or the owner's own colours for the Custom ones.
@@ -9462,9 +9448,9 @@ function applyRingTo(node, ringHex, rfx) {
   if (it && !it.color) { node.classList.add("has-ring", "rfx", "rfx-" + it.id); }
 }
 function itemPreview(item) {
-  if (item.type === "ring") { const a = el("div", "cr-av", (myName || "?").slice(0, 1).toUpperCase()); applyRingTo(a, item.color, item.color ? "" : item.id); return a; }
+  if (item.type === "ring") { const a = el("div", "cr-av", (pvName() || "?").slice(0, 1).toUpperCase()); applyRingTo(a, item.color, item.color ? "" : item.id); return a; }
   if (item.type === "tag") return tagEl(item.id);
-  if (item.type === "font") { const s = el("span", "fontprev", myName || "Your name"); applyNameFont(s, item.id); return s; }
+  if (item.type === "font") { const s = el("span", "fontprev", pvName() || "Your name"); applyNameFont(s, item.id); return s; }
   if (item.type === "bub") { const d = el("div", "cr-bubprev", "Hello there!"); applyBubFx(d, item); return d; }
   const s = el("span", "fxtext fxt-" + item.id, "Hello there!"); return s;
 }
@@ -9909,6 +9895,80 @@ async function activeMsFor(id) {
   return base + (myLoginId && id === String(myLoginId) ? Math.round(activePending) : 0);
 }
 
+/* ══════════ Look at someone else's inventory + collection (this data is public) ══════════ */
+let previewNameOverride = "", userInvOverlay = null;
+function pvName() { return previewNameOverride || myName; }   // item previews show THEIR name while looking at their collection
+async function openInventoryOf(loginId, name) {
+  loginId = String(loginId || "");
+  if (!/^\d{4,12}$/.test(loginId) || !ChatBackend._db) return;
+  if (myLoginId && loginId === String(myLoginId)) { renderInventory(); $inventoryOverlay.style.display = "flex"; return; }   // your own: the normal screen
+  if (!userInvOverlay) {
+    userInvOverlay = el("div", "chat-modal-overlay");
+    userInvOverlay.addEventListener("click", e => { if (e.target === userInvOverlay) userInvOverlay.style.display = "none"; });
+    document.body.appendChild(userInvOverlay);
+  }
+  const box = el("div", "chat-modal uinv-modal");
+  const head = el("div", "uinv-head");
+  const x = el("button", "uinv-x", "\u00D7"); x.type = "button"; x.title = "Close";
+  x.addEventListener("click", () => { userInvOverlay.style.display = "none"; });
+  head.append(el("h3", "", (name || "Player") + "'s inventory"), x);
+  const body = el("div", "uinv-body", "Loading\u2026");
+  box.append(head, body);
+  userInvOverlay.replaceChildren(box);
+  userInvOverlay.style.display = "flex";
+  let inv, items, claim, prof;
+  try {
+    [inv, items, claim, prof] = await Promise.all([
+      ChatBackend._db.ref("inventory/" + loginId).get().then(s => s.val() || {}),
+      ChatBackend._db.ref("crateInv/" + loginId + "/items").get().then(s => s.val() || {}),
+      ChatBackend._db.ref("crateClaims/" + loginId).get().then(s => s.val() || {}),
+      ChatBackend.getProfile(loginId).catch(() => null)
+    ]);
+  } catch (e) { body.textContent = "Couldn't load this player's inventory."; return; }
+  if (userInvOverlay.firstChild !== box) return;   // closed or replaced while loading
+  body.replaceChildren();
+  const cos = (prof && prof.cosm) || {};
+  // 1. inventory: unopened crates, then items
+  body.appendChild(el("div", "uinv-sec", "\uD83C\uDF92 Inventory"));
+  const stock = Math.max(0, (Number(claim.n) || 0) - (Number(claim.o) || 0));
+  const rows = Object.entries(inv).filter(([, q]) => Number(q) > 0);
+  if (stock > 0) { const r = el("div", "room-member-row"); r.append(el("span", "room-member-name", "\uD83D\uDCE6 Crates"), el("span", "", "\u00D7" + stock)); body.appendChild(r); }
+  rows.forEach(([id, qty]) => {
+    const def = INVENTORY_ITEMS[id] || { emoji: "\uD83D\uDCE6", label: id, desc: "" };
+    const r = el("div", "room-member-row");
+    r.append(el("span", "room-member-name", def.emoji + " " + def.label + (def.desc ? " \u2014 " + def.desc : "")), el("span", "", "\u00D7" + Number(qty)));
+    body.appendChild(r);
+  });
+  if (!stock && !rows.length) body.appendChild(el("div", "rooms-empty", "No items"));
+  // 2. collection: everything they own, grouped by kind, with what they have equipped marked
+  const owned = new Set(Object.keys(items).filter(k => itemOf(k)));
+  const count = CRATE_ITEMS.filter(i => !i.season || owned.has(i.id)).length;
+  body.appendChild(el("div", "uinv-sec", "\uD83D\uDDC2\uFE0F Collection \u00B7 " + owned.size + " / " + count));
+  previewNameOverride = name || "";
+  try {
+    const order = { legendary: 0, epic: 1, rare: 2, common: 3 };
+    let any = false;
+    [["ring", "Rings"], ["tag", "Tags"], ["fx", "Text effects"], ["font", "Fonts"], ["bub", "Bubbles"]].forEach(([k, title]) => {
+      const list = CRATE_ITEMS.filter(i => i.type === k && owned.has(i.id)).sort((a, b) => (a.season ? 1 : 0) - (b.season ? 1 : 0) || order[a.rar] - order[b.rar]);
+      if (!list.length) return;
+      any = true;
+      body.appendChild(el("div", "uinv-sub", title + " " + list.length + "/" + CRATE_ITEMS.filter(i => i.type === k && (!i.season || owned.has(i.id))).length));
+      const grid = el("div", "cr-grid");
+      list.forEach(it => {
+        const isFont = it.type === "font", onName = cos.font === it.id, onText = cos.tfont === it.id;
+        const on = isFont ? (onName || onText) : cos[it.type] === it.id;
+        const eq = isFont ? (onName && onText ? " \u00B7 name + text" : onName ? " \u00B7 name" : onText ? " \u00B7 text" : "") : (on ? " \u00B7 equipped" : "");
+        const c = el("div", "cr-item r-" + it.rar + (on ? " equipped" : ""));
+        c.style.cursor = "default";
+        c.append(itemPreview(it), el("b", "", it.name), el("small", "", RARITY[it.rar].label + (it.season ? " \u00B7 " + seasonName(it.season) : "") + eq));
+        grid.appendChild(c);
+      });
+      body.appendChild(grid);
+    });
+    if (!any) body.appendChild(el("div", "rooms-empty", "No collection items yet"));
+  } finally { previewNameOverride = ""; }
+}
+
 /* ══════════ Show / hide the online list (right side) ══════════ */
 (function wireMembersToggle() {
   const b = document.getElementById("membersToggleBtn");
@@ -10311,7 +10371,7 @@ window.VUS_CHAT = {
   _crateProg(m, ms) { const p = progFor(); p.msgs = m; p.ms = ms; saveProg(); crateTick(true); },
   cosmFor: async id => { try { const p = await ChatBackend.getProfile(id); const c = cosmFields(p && p.cosm); if (!c.ring && p && p.color && p.color.ring) c.ring = p.color.ring; return c; } catch (e) { return {}; } },
   tagEl, applyRingTo,
-  activeMsFor, formatActiveTime,
+  activeMsFor, formatActiveTime, openInventoryOf,
   banInfoFor: async id => {
     try {
       const b = await ChatBackend.getBan(String(id || ""));
