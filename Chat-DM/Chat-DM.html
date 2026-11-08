@@ -93,6 +93,7 @@
   </div>
   <div class="hdr-title" id="hdrTitle"><span class="ch-hash">#</span> <span id="hdrTitleText">VUS Chat</span></div>
   <div class="hdr-right">
+    <button id="membersToggleBtn" type="button" title="Show / hide the online list" aria-label="Show or hide the online list">👥</button>
     <button id="notifBtn" type="button" title="Notifications" aria-label="Notifications">🔔<span id="notifBadge"></span></button>
     <button id="roomsToggleBtn" type="button" tabindex="-1">🚪 Rooms<span class="rooms-badge-dot" id="roomsBadgeDot"></span></button>
     <button id="inventoryBtn">🎒 Inventory</button>
@@ -412,8 +413,8 @@
         <button id="cancelPendingImageBtn">Cancel</button>
       </div>
       <div id="chatComposer">
-        <input id="imageFileInput" type="file" accept="image/*" style="display:none">
-        <button id="uploadImageBtn" title="Send an image">📎</button>
+        <input id="imageFileInput" type="file" accept="image/*,video/*,audio/*" style="display:none">
+        <button id="uploadImageBtn" title="Send an image, GIF, video or audio clip">📎</button>
         <button id="emojiPickerBtn" title="Insert emoji">🙂</button>
         <div id="emojiPickerPopover"></div>
         <textarea id="chatMsgInput" rows="1" placeholder="Message…" maxlength="2000"></textarea>

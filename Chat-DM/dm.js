@@ -808,10 +808,10 @@ function unwatchOwnAccount(accountKey) {
 
 function threadIdFor(accountKeyA, accountKeyB) { return [accountKeyA, accountKeyB].sort().join("_"); }
 
-async function sendDirectMessage(otherAccountKey, text, imageData, replyTo) {
+async function sendDirectMessage(otherAccountKey, text, imageData, replyTo, media) {
   if (!currentSession) return { ok: false, error: "Not logged in." };
   const clean = (text || "").trim();
-  if (!clean && !imageData) return { ok: false, error: "Message is empty." };
+  if (!clean && !imageData && !media) return { ok: false, error: "Message is empty." };
   const threadId = threadIdFor(currentSession.accountKey, otherAccountKey);
   try {
     const pushRef = dmsRef.child(threadId).child("messages").push();
@@ -819,6 +819,7 @@ async function sendDirectMessage(otherAccountKey, text, imageData, replyTo) {
       fromAccountKey: currentSession.accountKey,
       ...(clean ? { text: clean } : {}),
       ...(imageData ? { imageData: imageData } : {}),
+      ...(media ? { mediaId: media.id, mediaKind: media.kind, mediaMime: media.mime, mediaDur: media.dur, mediaN: media.n, mediaSize: media.size } : {}),
       ...(replyTo ? { replyTo: replyTo.id, replyToLabel: replyTo.fromLabel, replyToSnippet: replyTo.snippet } : {}),
       ts: firebase.database.ServerValue.TIMESTAMP
     });
@@ -844,7 +845,7 @@ async function editDirectMessage(threadId, messageId, newText) {
 }
 async function deleteDirectMessage(threadId, messageId) {
   try {
-    await dmsRef.child(threadId).child("messages").child(messageId).update({ deleted: true, text: null, imageData: null });
+    await dmsRef.child(threadId).child("messages").child(messageId).update({ deleted: true, text: null, imageData: null, mediaId: null, mediaKind: null, mediaMime: null, mediaDur: null, mediaN: null, mediaSize: null });
     return { ok: true };
   } catch (e) { return { ok: false, error: "Couldn't delete — try again." }; }
 }
@@ -1009,14 +1010,15 @@ async function leaveGroupChat(gcId) {
     return { ok: true };
   } catch (e) { return { ok: false, error: "Couldn't leave the group — try again." }; }
 }
-async function sendGroupMessage(gcId, text, imageData, replyTo) {
+async function sendGroupMessage(gcId, text, imageData, replyTo, media) {
   if (!currentSession) return { ok: false, error: "Not logged in." };
   const clean = (text || "").trim();
-  if (!clean && !imageData) return { ok: false, error: "Message is empty." };
+  if (!clean && !imageData && !media) return { ok: false, error: "Message is empty." };
   try {
     await groupChatsRef.child(gcId).child("messages").push({
       fromAccountKey: currentSession.accountKey, fromUsername: currentSession.username,
       ...(clean ? { text: clean } : {}), ...(imageData ? { imageData: imageData } : {}),
+      ...(media ? { mediaId: media.id, mediaKind: media.kind, mediaMime: media.mime, mediaDur: media.dur, mediaN: media.n, mediaSize: media.size } : {}),
       ...(replyTo ? { replyTo: replyTo.id, replyToLabel: replyTo.fromLabel, replyToSnippet: replyTo.snippet } : {}),
       ts: firebase.database.ServerValue.TIMESTAMP
     });
@@ -1033,7 +1035,7 @@ async function editGroupMessage(gcId, messageId, newText) {
 }
 async function deleteGroupMessage(gcId, messageId) {
   try {
-    await groupChatsRef.child(gcId).child("messages").child(messageId).update({ deleted: true, text: null, imageData: null });
+    await groupChatsRef.child(gcId).child("messages").child(messageId).update({ deleted: true, text: null, imageData: null, mediaId: null, mediaKind: null, mediaMime: null, mediaDur: null, mediaN: null, mediaSize: null });
     return { ok: true };
   } catch (e) { return { ok: false, error: "Couldn't delete — try again." }; }
 }
@@ -1121,12 +1123,15 @@ function esc(s = "") {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-const URL_RE = /(https?:\/\/[^\s<]+)/g;
+const URL_RE = /(?<![@\w.\/-])((?:https?:\/\/)[^\s<]+|www\.[^\s<]+|(?:[a-z0-9-]+\.)+(?:com|net|org|io|gg|co|me|tv|app|dev|xyz|link|ly|be|us|uk|ca|de|fr|ru|jp|cc|ai|gl|sh|to|fm|info|biz|online|site|store|tech|fun|wtf|lol|cloud|page|so|ws|vc|ee|nl|se|no|fi|it|es|pl|br|au|in|kr|cn)(?:\/[^\s<]*)?(?![a-z0-9-]))/gi;
 function linkify(escapedText) {
+  // Every link opens in a new tab. Addresses typed without http(s):// (example.com, www.example.com) are links too.
   return escapedText.replace(URL_RE, url => {
-    const trimmed = url.replace(/[),.]+$/, "");
+    const trimmed = url.replace(/[),.!?;:]+$/, "");
     const trailing = url.slice(trimmed.length);
-    return `<a href="${trimmed}" target="_blank" rel="noopener noreferrer">${trimmed}</a>${trailing}`;
+    if (trimmed.length < 4) return url;
+    const href = /^https?:\/\//i.test(trimmed) ? trimmed : "https://" + trimmed;
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer nofollow">${trimmed}</a>${trailing}`;
   });
 }
 
@@ -1164,8 +1169,8 @@ function formatLastSeen(ts) {
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return "Last seen " + hrs + "h ago";
   const days = Math.floor(hrs / 24);
-  if (days < 7) return "Last seen " + days + "d ago";
-  return "Last seen " + new Date(ts).toLocaleDateString([], { month: "short", day: "numeric" });
+  if (days <= 30) return "Last seen " + days + "d ago";
+  return "Last seen 30+ days";
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -1804,8 +1809,9 @@ $profileAvatarFileInput.addEventListener("change", async () => {
   if (!file) return;
   if (!file.type.startsWith("image/")) { $profilePopoverError.textContent = "That file isn't an image."; return; }
   try {
-    pendingAvatarDataUrl = await compressAvatarFile(file);
-    renderProfileAvatarButton(pendingAvatarDataUrl);
+    // profile pictures get the same move-and-zoom editor as banners (the circle shows how it will look)
+    const url = await openBannerCropper(file, { w: AVATAR_EDIT_SIZE, h: AVATAR_EDIT_SIZE, square: true, title: "Position your profile picture", apply: "Use this picture", max: 100000 });
+    if (url) { pendingAvatarDataUrl = url; renderProfileAvatarButton(url); }
   } catch (e) { $profilePopoverError.textContent = e.message || "Couldn't process that image."; }
 });
 /* ── Banner editor: colour picker, or a picture you move and zoom before it's saved ── */
@@ -1821,7 +1827,10 @@ function paintBannerEditor() {
   const ci = document.getElementById("bannerColorInput");
   if (ci) ci.value = st.bannerColor || "#16a34a";
 }
-function openBannerCropper(file) {
+const AVATAR_EDIT_SIZE = 128;   // profile pictures made with the editor are saved at 128 x 128
+// One cropper for banners AND profile pictures: drag to move, slider / scroll to zoom, then it's cut to the exact size.
+function openBannerCropper(file, opts) {
+  opts = Object.assign({ w: BANNER_W, h: BANNER_H, square: false, title: "Position your banner", apply: "Use this banner", max: 280000 }, opts || {});
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error("Couldn't read that file."));
@@ -1831,13 +1840,13 @@ function openBannerCropper(file) {
       img.onload = () => {
         const ov = h("div", { className: "bn-overlay" });
         const box = h("div", { className: "bn-box" });
-        const view = h("div", { className: "bn-view" });
+        const view = h("div", { className: "bn-view" + (opts.square ? " bn-square" : "") });
         const pic = h("img", { className: "bn-img", draggable: "false" }); pic.src = reader.result;
         view.appendChild(pic);
         const zoom = h("input", { type: "range", min: "1", max: "4", step: "0.01", value: "1", className: "bn-zoom" });
         const cancel = h("button", { type: "button", className: "bn-cancel" }, "Cancel");
-        const apply = h("button", { type: "button", className: "bn-apply" }, "Use this banner");
-        box.append(h("div", { className: "bn-title" }, "Position your banner"), h("div", { className: "bn-hint" }, "Drag to move · slider or scroll to zoom"), view, h("div", { className: "bn-row" }, h("span", {}, "Zoom"), zoom), h("div", { className: "bn-row bn-btns" }, cancel, apply));
+        const apply = h("button", { type: "button", className: "bn-apply" }, opts.apply);
+        box.append(h("div", { className: "bn-title" }, opts.title), h("div", { className: "bn-hint" }, "Drag to move · slider or scroll to zoom"), view, h("div", { className: "bn-row" }, h("span", {}, "Zoom"), zoom), h("div", { className: "bn-row bn-btns" }, cancel, apply));
         ov.appendChild(box); document.body.appendChild(ov);
         let vw = 0, vh = 0, base = 1, z = 1, x = 0, y = 0;
         const clamp = () => {
@@ -1871,13 +1880,13 @@ function openBannerCropper(file) {
         apply.addEventListener("click", () => {
           try {
             const s = base * z;
-            const c = document.createElement("canvas"); c.width = BANNER_W; c.height = BANNER_H;
+            const c = document.createElement("canvas"); c.width = opts.w; c.height = opts.h;
             const ctx = c.getContext("2d");
-            ctx.fillStyle = "#0f172a"; ctx.fillRect(0, 0, BANNER_W, BANNER_H);
-            ctx.drawImage(img, -x / s, -y / s, vw / s, vh / s, 0, 0, BANNER_W, BANNER_H);
+            ctx.fillStyle = "#0f172a"; ctx.fillRect(0, 0, opts.w, opts.h);
+            ctx.drawImage(img, -x / s, -y / s, vw / s, vh / s, 0, 0, opts.w, opts.h);
             let q = 0.85, out = c.toDataURL("image/jpeg", q);
-            while (out.length > 280000 && q > 0.3) { q -= 0.1; out = c.toDataURL("image/jpeg", q); }
-            if (out.length > 280000) throw new Error("big");
+            while (out.length > opts.max - 20000 && q > 0.3) { q -= 0.1; out = c.toDataURL("image/jpeg", q); }
+            if (out.length > opts.max - 20000) throw new Error("big");
             close(); resolve(out);
           } catch (e) { close(); reject(new Error("Couldn't process that image.")); }
         });
@@ -2133,7 +2142,7 @@ function ensureUnreadWatch(key, isGroup) {
   threadMsgs[key] = [];
   ref.on("child_added", snap => {
     const v = snap.val() || {};
-    threadMsgs[key].push({ ts: v.ts || 0, from: v.fromAccountKey, text: v.text ? String(v.text).slice(0, 80) : (v.imageData ? "\uD83D\uDCF7 Photo" : "") });
+    threadMsgs[key].push({ ts: v.ts || 0, from: v.fromAccountKey, text: v.text ? String(v.text).slice(0, 80) : (v.imageData ? "\uD83D\uDCF7 Photo" : (v.mediaId ? (v.mediaKind === "audio" ? "\uD83C\uDFB5 Audio" : "\uD83C\uDFAC Video") : "")) });
     scheduleUnread();
   });
   unreadRefs[key] = ref;
@@ -2774,7 +2783,7 @@ function renderDmProfile() {
       paintBanner(dmpBanner, prof);
       if (prof.bio) {
         bioBox.appendChild(h("div", { className: "dmp-h" }, "About me"));
-        bioBox.appendChild(h("div", { className: "dmp-t dmp-bio" }, prof.bio));
+        { const bioText = h("div", { className: "dmp-t dmp-bio" }); renderBioInto(bioText, prof.bio); bioBox.appendChild(bioText); }
       }
       if (mzkSourceOf(prof)) dmpSongUnsub = mountSong(songBox, mzkSourceOf(prof));
     });
@@ -2914,6 +2923,9 @@ function renderChatMessage(msg) {
     bubble.style.fontStyle = "italic";
     bubble.style.opacity = "0.6";
     bubble.textContent = "This message was deleted";
+  } else if (msg.mediaId) {
+    renderDmMedia(bubble, msg);
+    if (msg.text) bubble.appendChild(h("div", { style: "margin-top:6px;white-space:pre-wrap", html: linkify(esc(msg.text)) }));
   } else if (msg.imageData) {
     const img = h("img", { className: "chat-msg-image", alt: "Image", onclick: () => openImageLightbox(msg.imageData) });
     img.src = msg.imageData;
@@ -2928,11 +2940,12 @@ function renderChatMessage(msg) {
   const replyBtn = h("button", { title: "Reply", onclick: () => startReply(msg) }, "↩");
   hoverActions.appendChild(reactBtn);
   hoverActions.appendChild(replyBtn);
-  if (mine && !msg.deleted && !msg.imageData) {
+  if (mine && !msg.deleted && !msg.imageData && !msg.mediaId) {
     hoverActions.appendChild(h("button", { title: "Edit", onclick: () => startEditing(msg) }, "✎"));
   }
   if (mine && !msg.deleted) {
     hoverActions.appendChild(h("button", { title: "Delete", onclick: () => {
+      if (msg.mediaId) { try { mediaBaseRef().child(msg.mediaId).remove().catch(() => {}); } catch (e) {} }
       const fn = openChatGcId ? deleteGroupMessage(openChatGcId, msg.id) : deleteDirectMessage(openThreadId, msg.id);
       Promise.resolve(fn).then(res => { if (res && !res.ok) showComposerNotice(res.error); });
     }}, "🗑") );
@@ -2969,7 +2982,7 @@ function updateRenderedMessage(msg) {
     bubble.textContent = "This message was deleted";
     const editBtn = el.querySelector('button[title="Edit"]');
     if (editBtn) editBtn.remove();
-  } else if (!msg.imageData) {
+  } else if (!msg.imageData && !msg.mediaId) {
     bubble.innerHTML = linkify(esc(msg.text || ""));
   }
   if (msg.editedAt && !el.querySelector(".chat-msg-edited-tag")) {
@@ -3101,23 +3114,154 @@ function exitMobileChatView() {
 }
 $chatBackBtn.addEventListener("click", closeOpenChat);
 
+// ── Videos, audio clips and GIFs in DMs (same limits as the main chat) ──
+// Clips are stored in the database in chunks under <thread>/media/<id> and disappear 4 minutes after they're posted (anyone who
+// sees the time pass removes them). Small GIFs (up to 480 KB) go through as animated images and stay.
+const DM_VIDEO_MAX_SECONDS = 180;
+const DM_MEDIA_MAX_BYTES = 48 * 1024 * 1024;
+const DM_MEDIA_TTL_MS = 4 * 60 * 1000;
+const DM_MEDIA_UPLOAD_WINDOW_MS = 15 * 60 * 1000;
+const DM_MEDIA_CHUNK = 786432;           // 768 KB -> about 1 MB of base64 per database value
+const DM_GIF_INLINE_MAX = 480 * 1024;
+const dmLocalMedia = new Map();           // clip id -> blob URL (the sender's own copy, or one already downloaded)
+const PENDING_LABEL_DEFAULT = "Image ready \u2014 click Send to post it";
+let pendingMedia = null, uploadingMedia = false;
+function dmNow() { return Date.now() + serverOffset; }
+function mediaBaseRef() { return openChatGcId ? groupChatsRef.child(openChatGcId).child("media") : dmsRef.child(openThreadId).child("media"); }
+function dmBlobToB64(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(",")[1] || "");
+    r.onerror = () => reject(r.error || new Error("read failed"));
+    r.readAsDataURL(blob);
+  });
+}
+function probeMedia(file, kind) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file), m = document.createElement(kind === "audio" ? "audio" : "video");
+    m.preload = "metadata";
+    m.onloadedmetadata = () => { const d = m.duration; URL.revokeObjectURL(url); resolve({ dur: d }); };
+    m.onerror = () => { URL.revokeObjectURL(url); reject(new Error("This browser can't play that file.")); };
+    m.src = url;
+  });
+}
+function setPendingLabel(text) { const l = $pendingImageBar.querySelector(".pending-image-label"); if (l) l.textContent = text; }
+function pendingBarShow(src, label) { $pendingImagePreview.src = src; setPendingLabel(label); $pendingImageBar.style.display = "flex"; }
+function mediaIcon(kind) { return "data:image/svg+xml;charset=utf-8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" rx="10" fill="#1e293b"/><text x="32" y="44" font-size="32" text-anchor="middle">' + (kind === "audio" ? "\uD83C\uDFB5" : "\uD83C\uDFAC") + "</text></svg>"); }
+function fmtCd(ms) { const s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+async function stageMediaFile(file) {
+  const kind = file.type.startsWith("audio/") ? "audio" : "video";
+  if (file.size > DM_MEDIA_MAX_BYTES) { showComposerNotice("That file is " + Math.round(file.size / 1048576) + " MB. Clips can be up to " + Math.round(DM_MEDIA_MAX_BYTES / 1048576) + " MB."); $imageFileInput.value = ""; return; }
+  $uploadImageBtn.disabled = true;
+  try {
+    const info = await probeMedia(file, kind);
+    if (!(info.dur > 0)) throw new Error("Couldn't read that clip.");
+    if (info.dur > DM_VIDEO_MAX_SECONDS + 0.5) { showComposerNotice("Clips can be at most " + DM_VIDEO_MAX_SECONDS + " seconds. This one is " + Math.round(info.dur) + "s."); return; }
+    pendingImageDataUrl = null;
+    pendingMedia = { file, kind, dur: info.dur };
+    pendingBarShow(mediaIcon(kind), (kind === "audio" ? "Audio" : "Video") + " ready (" + Math.round(info.dur) + "s, " + (file.size / 1048576).toFixed(1) + " MB) \u2014 click Send. It disappears " + Math.round(DM_MEDIA_TTL_MS / 60000) + " minutes after it's posted.");
+  } catch (e) { showComposerNotice(e.message || "Couldn't use that file."); }
+  finally { $uploadImageBtn.disabled = false; $imageFileInput.value = ""; }
+}
+async function stageGifFile(file) {
+  if (file.size > DM_GIF_INLINE_MAX) { showComposerNotice("GIFs over " + Math.round(DM_GIF_INLINE_MAX / 1024) + " KB are too big to send here. Try a smaller GIF, or a short video clip."); $imageFileInput.value = ""; return; }
+  const dataUrl = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = () => reject(new Error("Couldn't read that GIF.")); r.readAsDataURL(file); });
+  pendingMedia = null; pendingImageDataUrl = dataUrl;
+  pendingBarShow(dataUrl, "GIF ready \u2014 click Send to post it");
+  $imageFileInput.value = "";
+}
+async function uploadDmMedia(m, base, onProgress) {
+  const file = m.file, id = base.push().key, n = Math.ceil(file.size / DM_MEDIA_CHUNK), me = currentSession.accountKey;
+  // the expiry goes up FIRST (generous upload window) so an upload that dies halfway still gets swept away
+  await base.child(id).update({ by: me, exp: dmNow() + DM_MEDIA_UPLOAD_WINDOW_MS });
+  let next = 0, done = 0;
+  const worker = async () => {
+    for (;;) {
+      const i = next++; if (i >= n) return;
+      const b64 = await dmBlobToB64(file.slice(i * DM_MEDIA_CHUNK, (i + 1) * DM_MEDIA_CHUNK));
+      await base.child(id).child("d").child(String(i)).set(b64);
+      done++; if (onProgress) onProgress(done / n);
+    }
+  };
+  try { await Promise.all([worker(), worker(), worker()]); }
+  catch (e) { try { await base.child(id).remove(); } catch (x) {} throw e; }
+  await base.child(id).child("exp").set(dmNow() + DM_MEDIA_TTL_MS);
+  dmLocalMedia.set(id, URL.createObjectURL(file));
+  return { id, kind: m.kind, mime: file.type || (m.kind === "audio" ? "audio/mpeg" : "video/mp4"), dur: Math.round(m.dur * 10) / 10, n, size: file.size };
+}
+async function fetchDmMedia(base, id, n, mime, onProgress) {
+  const parts = new Array(n); let next = 0, done = 0;
+  const worker = async () => {
+    for (;;) {
+      const i = next++; if (i >= n) return;
+      const snap = await base.child(id).child("d").child(String(i)).get();
+      const b64 = snap.val(); if (typeof b64 !== "string") throw new Error("gone");
+      const bin = atob(b64), u8 = new Uint8Array(bin.length);
+      for (let k = 0; k < bin.length; k++) u8[k] = bin.charCodeAt(k);
+      parts[i] = u8; done++; if (onProgress) onProgress(done / n);
+    }
+  };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  return new Blob(parts, { type: mime });
+}
+// Draws a clip inside a message bubble: downloads it, counts down to its expiry, and cleans it up once the time is up.
+function renderDmMedia(bubble, msg) {
+  const base = mediaBaseRef();     // the conversation this message belongs to, captured now
+  const isAudio = msg.mediaKind === "audio";
+  const wrap = h("div", { className: "dm-media" });
+  const status = h("div", { className: "dm-media-status" }, "Loading\u2026");
+  wrap.appendChild(status);
+  bubble.appendChild(wrap);
+  let timer = null;
+  const expire = () => {
+    clearInterval(timer);
+    wrap.replaceChildren(h("div", { className: "dm-media-gone" }, "This " + (isAudio ? "audio clip" : "video") + " has disappeared"));
+    const u = dmLocalMedia.get(msg.mediaId); if (u) { try { URL.revokeObjectURL(u); } catch (e) {} dmLocalMedia.delete(msg.mediaId); }
+    base.child(msg.mediaId).remove().catch(() => {});
+  };
+  const play = (url, exp) => {
+    const m = document.createElement(isAudio ? "audio" : "video");
+    m.controls = true; m.preload = "metadata"; m.src = url;
+    if (!isAudio) { m.playsInline = true; m.className = "dm-media-video"; }
+    const cd = h("div", { className: "dm-media-cd" });
+    wrap.replaceChildren(m, cd);
+    const tick = () => { const left = exp - dmNow(); if (left <= 0) expire(); else cd.textContent = "disappears in " + fmtCd(left); };
+    tick(); clearInterval(timer); timer = setInterval(tick, 1000);
+  };
+  base.child(msg.mediaId).child("exp").get().then(async snap => {
+    const exp = snap.val();
+    if (typeof exp !== "number" || exp <= dmNow()) { expire(); return; }
+    let url = dmLocalMedia.get(msg.mediaId);
+    if (!url) {
+      try {
+        const blob = await fetchDmMedia(base, msg.mediaId, Number(msg.mediaN) || 1, msg.mediaMime || (isAudio ? "audio/mpeg" : "video/mp4"), p => { status.textContent = "Loading " + Math.round(p * 100) + "%"; });
+        url = URL.createObjectURL(blob); dmLocalMedia.set(msg.mediaId, url);
+      } catch (e) { expire(); return; }
+    }
+    play(url, exp);
+  }).catch(() => expire());
+}
+
 let pendingImageDataUrl = null;
 async function stageImageFile(file) {
   if (!file) return;
   if (!openChatAccountKey && !openChatGcId) return;
+  if (file.type.startsWith("video/") || file.type.startsWith("audio/")) return stageMediaFile(file);
+  if (file.type === "image/gif") { try { await stageGifFile(file); } catch (e) { showComposerNotice(e.message || "Couldn't use that GIF."); $imageFileInput.value = ""; } return; }
   if (!file.type.startsWith("image/")) { showComposerNotice("That file isn't an image."); $imageFileInput.value = ""; return; }
   if (file.size > MAX_IMAGE_SOURCE_BYTES) { showComposerNotice("Image is too large (max 15 MB)."); $imageFileInput.value = ""; return; }
   $uploadImageBtn.disabled = true;
   try {
     const dataUrl = await compressImageFile(file);
-    pendingImageDataUrl = dataUrl;
-    $pendingImagePreview.src = dataUrl;
-    $pendingImageBar.style.display = "flex";
+    pendingMedia = null; pendingImageDataUrl = dataUrl;
+    pendingBarShow(dataUrl, PENDING_LABEL_DEFAULT);
   } catch (e) { showComposerNotice(e.message || "Couldn't process that image."); }
   finally { $uploadImageBtn.disabled = false; $imageFileInput.value = ""; }
 }
 function clearPendingImage() {
   pendingImageDataUrl = null;
+  pendingMedia = null;
+  setPendingLabel(PENDING_LABEL_DEFAULT);
   $pendingImagePreview.src = "";
   $pendingImageBar.style.display = "none";
   $imageFileInput.value = "";
@@ -3125,6 +3269,14 @@ function clearPendingImage() {
 $uploadImageBtn.addEventListener("click", () => $imageFileInput.click());
 $imageFileInput.addEventListener("change", () => stageImageFile($imageFileInput.files[0]));
 $cancelPendingImageBtn.addEventListener("click", clearPendingImage);
+// Pasting a picture (a screenshot, a copied image) into the message box attaches it, same as the upload button.
+$chatMsgInput.addEventListener("paste", e => {
+  const files = e.clipboardData && e.clipboardData.files ? [...e.clipboardData.files] : [];
+  const img = files.find(f => f.type.startsWith("image/"));
+  if (!img) return;     // plain text pastes as normal
+  e.preventDefault();
+  stageImageFile(img);
+});
 
 /* ══════════════════════════════════════════════════════════
    EMOJI PICKER — one shared picker for chat + DMs (search, categories, recent).
@@ -3400,6 +3552,8 @@ function sendChatMessage() {
   if (!openChatAccountKey && !openChatGcId) return;
   const text = $chatMsgInput.value;
   const imageToSend = pendingImageDataUrl;
+  const mediaToSend = pendingMedia;
+  if (uploadingMedia && !editingMessageId) { showComposerNotice("Still uploading your clip\u2026"); return; }
 
   if (editingMessageId) {
     if (!text.trim()) return;
@@ -3415,7 +3569,7 @@ function sendChatMessage() {
     return;
   }
 
-  if (!text.trim() && !imageToSend) return;
+  if (!text.trim() && !imageToSend && !mediaToSend) return;
   if (sendCooldownActive) return;
 
   const REPLY_SNIPPET_MAX = 20;
@@ -3429,12 +3583,24 @@ function sendChatMessage() {
 
   $chatMsgInput.value = "";
   autosizeChatInput();
-  clearPendingImage();
+  if (!mediaToSend) clearPendingImage();
   beginSendCooldown();
 
-  const sendOne = (msgText, withImage, replyTo) => openChatGcId
-    ? sendGroupMessage(openChatGcId, msgText, withImage, replyTo)
-    : sendDirectMessage(openChatAccountKey, msgText, withImage, replyTo);
+  const sendOne = (msgText, withImage, replyTo, media) => openChatGcId
+    ? sendGroupMessage(openChatGcId, msgText, withImage, replyTo, media)
+    : sendDirectMessage(openChatAccountKey, msgText, withImage, replyTo, media);
+
+  if (mediaToSend) {   // video / audio clip: upload it in chunks first, then post the message that points at it
+    uploadingMedia = true;
+    const base = mediaBaseRef();
+    setPendingLabel("Uploading\u2026 0%");
+    uploadDmMedia(mediaToSend, base, p => setPendingLabel("Uploading\u2026 " + Math.round(p * 100) + "%"))
+      .then(meta => sendOne(text.trim() ? text : null, null, replySnapshot, meta))
+      .then(result => { if (result && !result.ok) showComposerNotice(result.error); })
+      .catch(() => showComposerNotice("The clip didn't upload \u2014 try again."))
+      .then(() => { uploadingMedia = false; clearPendingImage(); });
+    return;
+  }
 
   if (imageToSend) {
     sendOne(null, imageToSend, replySnapshot).then(result => {
@@ -3700,6 +3866,52 @@ async function renderStaffActions(prof) {
   }
 }
 
+// One link per person in the bio: the first web address in it becomes a clickable link (opens in a new tab). It works with or without
+// http(s)://, e.g. "example.com/me". Only the first one is linked, so a bio can't turn into a wall of links.
+const BIO_LINK_RE = /(?<![@\w.\/-])((?:https?:\/\/)[^\s<>"']+|www\.[^\s<>"']+|(?:[a-z0-9-]+\.)+(?:com|net|org|io|gg|co|me|tv|app|dev|xyz|link|ly|be|us|uk|ca|de|fr|ru|jp|cc|ai|gl|sh|to|fm|info|biz|online|site|store|tech|fun|wtf|lol|cloud|page|so|ws|vc|ee|nl|se|no|fi|it|es|pl|br|au|in|kr|cn)(?:\/[^\s<>"']*)?(?![a-z0-9-]))/i;
+function renderBioInto(node, text) {
+  node.replaceChildren();
+  text = String(text || "");
+  const m = BIO_LINK_RE.exec(text);
+  if (!m) { node.textContent = text; return; }
+  let url = m[0], trail = "";
+  const tm = url.match(/[.,!?;:)\]}]+$/);
+  if (tm) { trail = tm[0]; url = url.slice(0, -trail.length); }
+  const href = /^https?:\/\//i.test(url) ? url : "https://" + url;
+  let ok = false;
+  try { const u = new URL(href); ok = (u.protocol === "https:" || u.protocol === "http:") && u.hostname.includes("."); } catch (e) {}
+  if (!ok) { node.textContent = text; return; }
+  if (m.index > 0) node.appendChild(document.createTextNode(text.slice(0, m.index)));
+  const a = document.createElement("a");
+  a.href = href; a.target = "_blank"; a.rel = "noopener noreferrer nofollow"; a.className = "bio-link"; a.textContent = url;
+  node.appendChild(a);
+  const rest = trail + text.slice(m.index + m[0].length);
+  if (rest) node.appendChild(document.createTextNode(rest));
+}
+// Time active: how long this person has had the chat open (rules for how it's shown live in chat.js, formatActiveTime).
+function paintActiveTime(prof) {
+  const old = document.getElementById("chatUserProfileActive"); if (old) old.remove();
+  if (!(window.VUS_CHAT && window.VUS_CHAT.activeMsFor) || !prof.id) return;
+  window.VUS_CHAT.activeMsFor(prof.id).then(ms => {
+    if (!(ms > 0) || $chatUserProfileName.textContent !== prof.username) return;
+    const again = document.getElementById("chatUserProfileActive"); if (again) again.remove();
+    const d = h("div", { id: "chatUserProfileActive", className: "pc-joined" }, "Time active: " + window.VUS_CHAT.formatActiveTime(ms));
+    const anchor = document.getElementById("chatUserProfileJoined") || document.getElementById("chatUserProfileSeen");
+    if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(d, anchor.nextSibling); else $chatUserProfileRoles.parentNode.appendChild(d);
+  }).catch(() => {});
+}
+// If the person is banned, the profile card says so and how long is left.
+function paintBanNotice(prof) {
+  const old = document.getElementById("chatUserProfileBan"); if (old) old.remove();
+  if (!(window.VUS_CHAT && window.VUS_CHAT.banInfoFor) || !prof.id) return;
+  window.VUS_CHAT.banInfoFor(prof.id).then(info => {
+    if (!info || $chatUserProfileName.textContent !== prof.username) return;
+    const again = document.getElementById("chatUserProfileBan"); if (again) again.remove();
+    const d = h("div", { id: "chatUserProfileBan", className: "pc-ban" }, info.permanent ? "\uD83D\uDEAB Permanently banned from VUS Chat" : "\uD83D\uDEAB Banned from VUS Chat \u00B7 " + info.label);
+    const anchor = document.getElementById("chatUserProfileSeen");
+    if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(d, anchor.nextSibling); else $chatUserProfileRoles.parentNode.appendChild(d);
+  }).catch(() => {});
+}
 function fillProfileCard(prof, accountKey) {
   $chatUserProfileName.textContent = prof.username;
   $chatUserProfileId.textContent = "#" + prof.id;
@@ -3748,8 +3960,8 @@ function fillProfileCard(prof, accountKey) {
         const ts = Number(prof.lastSeen) || 0;
         let txt = "";
         if (on) txt = latestAfkKeys.has(key) ? "Last seen: online now (away)" : "Last seen: online now";
-        else if (ts > 86400000) txt = "Last seen: " + ago(ts);
-        else txt = "Last seen: a long time ago";
+        else if (ts > 86400000) txt = (Date.now() - ts > 30 * 86400000) ? "Last seen: 30+ days" : "Last seen: " + ago(ts);
+        else txt = "Last seen: 30+ days";
         sn.textContent = txt;
         sn.title = ts > 86400000 ? new Date(ts).toLocaleString() : "";
         sn.classList.toggle("on", on);
@@ -3759,7 +3971,9 @@ function fillProfileCard(prof, accountKey) {
       usersRef.child(key).child("lastSeen").get().then(snap => { if (snap.exists()) { prof.lastSeen = snap.val(); if ($chatUserProfileName.textContent === prof.username) paint(); } }).catch(() => {});
     }
   }
-  if (prof.bio) { $chatUserProfileBio.textContent = prof.bio; $chatUserProfileBioWrap.style.display = "block"; }
+  if (prof.bio) { renderBioInto($chatUserProfileBio, prof.bio); $chatUserProfileBioWrap.style.display = "block"; }
+  paintBanNotice(prof);
+  paintActiveTime(prof);
   if (mzkSourceOf(prof) && $chatUserProfileOverlay.style.display === "flex") profileSongUnsub = mountSong($chatUserProfileSong, mzkSourceOf(prof));
 
   if (accountKey !== currentSession.accountKey) {

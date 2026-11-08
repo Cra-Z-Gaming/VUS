@@ -107,6 +107,9 @@
         "updatedAt": {
           ".validate": "newData.isNumber()"
         },
+        "activeMs": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 157680000000 && ((!data.exists() && newData.val() <= 7200000) || (data.exists() && newData.val() >= data.val() && newData.val() - data.val() <= 7200000))"
+        },
         "color": {
           ".validate": "newData.hasChildren(['bubble','text'])",
           "bubble": {
@@ -141,6 +144,15 @@
           },
           "font": {
             ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]{1,24}$/)"
+          },
+          "tfont": {
+            ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]{1,24}$/)"
+          },
+          "bub": {
+            ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]{1,24}$/)"
+          },
+          "bubc": {
+            ".validate": "newData.isString() && newData.val().matches(/^#[0-9a-fA-F]{6}(,#[0-9a-fA-F]{6}){1,2}$/)"
           },
           "$x": {
             ".validate": false
@@ -307,6 +319,15 @@
             },
             "font": {
               ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]{1,24}$/)"
+            },
+            "tfont": {
+              ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]{1,24}$/)"
+            },
+            "bub": {
+              ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]{1,24}$/)"
+            },
+            "bc": {
+              ".validate": "newData.isString() && newData.val().matches(/^#[0-9a-fA-F]{6}(,#[0-9a-fA-F]{6}){1,2}$/)"
             },
             "gif": {
               ".validate": "newData.isString() && newData.val().length <= 300 && newData.val().matches(/^https:\\/\\/media[0-9]*\\.giphy\\.com\\/[A-Za-z0-9_\\/.?=&%-]{5,280}$/)"

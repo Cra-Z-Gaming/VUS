@@ -1,0 +1,424 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "users": {
+      "$key": {
+        ".read": true,
+        ".write": "!data.exists()",
+        ".validate": "$key.matches(/^[A-Za-z0-9_-]{6,60}$/) && newData.hasChildren(['username','usernameLower','id','password','createdAt'])",
+        "username": {
+          ".validate": "newData.isString() && newData.val().matches(/^[a-zA-Z0-9_]{3,24}$/)",
+          ".write": "auth != null && root.child('users/' + $key + '/ownerUid').val() === auth.uid"
+        },
+        "usernameLower": {
+          ".validate": "newData.isString() && newData.val() === newData.parent().child('username').val().toLowerCase()",
+          ".write": "auth != null && root.child('users/' + $key + '/ownerUid').val() === auth.uid"
+        },
+        "id": {
+          ".validate": "newData.isString() && newData.val().matches(/^[0-9]{6}$/)"
+        },
+        "password": {
+          ".write": "(data.exists() && !data.val().beginsWith('pbkdf2$') && newData.val().beginsWith('pbkdf2$')) || (auth != null && root.child('users/' + $key + '/ownerUid').val() === auth.uid)",
+          ".validate": "newData.isString() && newData.val().beginsWith('pbkdf2$') && newData.val().length <= 100"
+        },
+        "createdAt": {
+          ".validate": "newData.val() === now"
+        },
+        "avatar": {
+          ".write": true,
+          ".validate": "newData.isString() && newData.val().length <= 600000"
+        },
+        "banner": {
+          ".write": true,
+          ".validate": "newData.isString() && newData.val().length <= 300000 && newData.val().matches(/^data:image\\/jpeg;base64,/)"
+        },
+        "bannerColor": {
+          ".write": true,
+          ".validate": "newData.isString() && newData.val().matches(/^#[0-9a-fA-F]{6}$/)"
+        },
+        "bio": {
+          ".write": true,
+          ".validate": "newData.isString() && newData.val().length <= 100"
+        },
+        "mzk": {
+          ".write": true,
+          ".validate": "newData.isString() && newData.val().matches(/^[A-Z2-9]{5}-[A-Z2-9]{5}$/)"
+        },
+        "mzkUid": {
+          ".write": true,
+          ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9]{20,40}$/)"
+        },
+        "friends": {
+          "$f": {
+            ".write": true,
+            ".validate": "$f.matches(/^[A-Za-z0-9_-]{6,60}$/) && newData.hasChildren([\"username\", \"since\"])",
+            "username": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 24"
+            },
+            "since": {
+              ".validate": "newData.isNumber()"
+            },
+            "$x": {
+              ".validate": false
+            }
+          }
+        },
+        "friendRequestsIncoming": {
+          "$f": {
+            ".write": true,
+            ".validate": "$f.matches(/^[A-Za-z0-9_-]{6,60}$/) && newData.hasChildren([\"fromUsername\", \"sentAt\"])",
+            "fromUsername": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 24"
+            },
+            "sentAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "hidden": {
+              ".validate": "newData.isBoolean()"
+            },
+            "$x": {
+              ".validate": false
+            }
+          }
+        },
+        "friendRequestsOutgoing": {
+          "$f": {
+            ".write": true,
+            ".validate": "$f.matches(/^[A-Za-z0-9_-]{6,60}$/) && newData.hasChildren([\"toUsername\", \"sentAt\"])",
+            "toUsername": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 24"
+            },
+            "sentAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "$x": {
+              ".validate": false
+            }
+          }
+        },
+        "blockedUsers": {
+          "$f": {
+            ".write": true,
+            ".validate": "$f.matches(/^[A-Za-z0-9_-]{6,60}$/) && newData.hasChildren([\"username\", \"blockedAt\"])",
+            "username": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 24"
+            },
+            "blockedAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "$x": {
+              ".validate": false
+            }
+          }
+        },
+        "pinnedFriends": {
+          "$f": {
+            ".write": true,
+            ".validate": "$f.matches(/^[A-Za-z0-9_-]{6,60}$/) && (newData.val() === true || newData.isNumber())"
+          }
+        },
+        "pinnedGroups": {
+          "$f": {
+            ".write": true,
+            ".validate": "$f.matches(/^[A-Za-z0-9_-]{6,60}$/) && (newData.val() === true || newData.isNumber())"
+          }
+        },
+        "lastRead": {
+          "$t": {
+            ".write": true,
+            ".validate": "$t.length >= 1 && $t.length <= 100 && newData.isNumber()"
+          }
+        },
+        "groups": {
+          "$g": {
+            ".write": true,
+            ".validate": "$g.matches(/^[A-Za-z0-9_-]{6,60}$/) && newData.val() === true"
+          }
+        },
+        "groupsIndexed": {
+          ".write": true,
+          ".validate": "newData.isBoolean()"
+        },
+        "$other": {
+          ".validate": false
+        },
+        "ownerUid": {
+          ".write": "auth != null",
+          ".validate": "newData.isString() && newData.val().length >= 20 && newData.val().length <= 40"
+        },
+        "lastSeen": {
+          ".write": true,
+          ".validate": "newData.isNumber()"
+        }
+      }
+    },
+    "usernameIndex": {
+      ".read": "query.orderByKey === true && query.limitToFirst <= 20",
+      "$name": {
+        ".read": true,
+        ".write": "!data.exists() || (!newData.exists() && auth != null && root.child('users/' + data.val() + '/ownerUid').val() === auth.uid)",
+        ".validate": "$name.matches(/^[a-z0-9_]{3,24}$/) && newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{6,60}$/)"
+      }
+    },
+    "idIndex": {
+      "$id": {
+        ".read": true,
+        ".write": "!data.exists()",
+        ".validate": "$id.matches(/^[0-9]{6}$/) && newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{6,60}$/)"
+      }
+    },
+    "presence": {
+      ".read": true,
+      "$key": {
+        ".write": true,
+        ".validate": "$key.matches(/^[A-Za-z0-9_-]{6,60}$/) && newData.hasChildren(['username','joinedAt'])",
+        "username": {
+          ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 24"
+        },
+        "joinedAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "$x": {
+          ".validate": false
+        },
+        "afk": {
+          ".validate": "newData.isBoolean()"
+        }
+      }
+    },
+    "dms": {
+      "$thread": {
+        ".validate": "$thread.length >= 3 && $thread.length <= 90",
+        "messages": {
+          ".read": true,
+          "$msg": {
+            ".write": "!data.exists() || newData.child('fromAccountKey').val() === data.child('fromAccountKey').val()",
+            ".validate": "newData.hasChildren(['fromAccountKey','ts']) && (newData.child('text').exists() || newData.child('imageData').exists() || newData.child('mediaId').exists() || newData.child('deleted').val() === true) && $thread.contains(newData.child('fromAccountKey').val())",
+            "fromAccountKey": {
+              ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{6,60}$/)"
+            },
+            "text": {
+              ".validate": "newData.isString() && newData.val().length <= 2000"
+            },
+            "imageData": {
+              ".validate": "newData.isString() && newData.val().beginsWith('data:image/') && newData.val().length <= 900000"
+            },
+            "mediaId": {
+              ".validate": "newData.isString() && newData.val().length >= 6 && newData.val().length <= 40"
+            },
+            "mediaKind": {
+              ".validate": "newData.val() === 'video' || newData.val() === 'audio'"
+            },
+            "mediaMime": {
+              ".validate": "newData.isString() && newData.val().length <= 80"
+            },
+            "mediaDur": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 3600"
+            },
+            "mediaN": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 80"
+            },
+            "mediaSize": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 52428800"
+            },
+            "ts": {
+              ".validate": "newData.val() === now"
+            },
+            "$x": {
+              ".validate": false
+            },
+            "editedAt": {
+              ".validate": "newData.val() === now"
+            },
+            "deleted": {
+              ".validate": "newData.val() === true"
+            },
+            "replyTo": {
+              ".validate": "newData.isString() && newData.val().length <= 40"
+            },
+            "replyToLabel": {
+              ".validate": "newData.isString() && newData.val().length <= 40"
+            },
+            "replyToSnippet": {
+              ".validate": "newData.isString() && newData.val().length <= 100"
+            },
+            "reactions": {
+              "$emoji": {
+                ".validate": "$emoji.length >= 1 && $emoji.length <= 32",
+                "$uid": {
+                  ".validate": "$uid.matches(/^[A-Za-z0-9_-]{6,60}$/) && newData.val() === true"
+                }
+              }
+            }
+          }
+        },
+        "media": {
+          ".read": true,
+          "$id": {
+            ".write": "!newData.exists() || (!data.exists() && $thread.contains(newData.child('by').val())) || (data.exists() && data.child('by').val() === newData.child('by').val())",
+            ".validate": "$id.length >= 6 && $id.length <= 40 && newData.hasChildren(['by','exp'])",
+            "by": {
+              ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{6,60}$/)"
+            },
+            "exp": {
+              ".validate": "newData.isNumber() && newData.val() <= now + 1200000"
+            },
+            "d": {
+              "$n": {
+                ".validate": "$n.matches(/^[0-9]{1,3}$/) && newData.isString() && newData.val().length <= 1100000"
+              }
+            },
+            "$x": {
+              ".validate": false
+            }
+          }
+        },
+        "typing": {
+          ".read": true,
+          "$uid": {
+            ".write": true,
+            ".validate": "$uid.matches(/^[A-Za-z0-9_-]{6,60}$/) && newData.isNumber()"
+          }
+        },
+        "reads": {
+          ".read": true,
+          "$uid": {
+            ".write": true,
+            ".validate": "$uid.matches(/^[A-Za-z0-9_-]{6,60}$/) && newData.isString() && newData.val().length <= 40"
+          }
+        },
+        "$x": {
+          ".validate": false
+        }
+      }
+    },
+    "groupChats": {
+      ".read": true,
+      "$gc": {
+        ".write": "!data.exists() || !newData.exists()",
+        ".validate": "$gc.matches(/^[A-Za-z0-9_-]{6,60}$/) && newData.hasChildren(['name','ownerAccountKey','createdAt','members'])",
+        "name": {
+          ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40"
+        },
+        "createdAt": {
+          ".validate": "newData.val() === now"
+        },
+        "ownerAccountKey": {
+          ".write": true,
+          ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{6,60}$/) && newData.parent().child('members').child(newData.val()).exists()"
+        },
+        "members": {
+          "$m": {
+            ".write": true,
+            ".validate": "$m.matches(/^[A-Za-z0-9_-]{6,60}$/) && newData.hasChildren(['username','joinedAt'])",
+            "username": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 24"
+            },
+            "joinedAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "$x": {
+              ".validate": false
+            }
+          }
+        },
+        "messages": {
+          "$msg": {
+            ".write": "!data.exists() || newData.child('fromAccountKey').val() === data.child('fromAccountKey').val()",
+            ".validate": "newData.hasChildren(['fromAccountKey','fromUsername','ts']) && (newData.child('text').exists() || newData.child('imageData').exists() || newData.child('mediaId').exists() || newData.child('deleted').val() === true) && root.child('groupChats/' + $gc + '/members/' + newData.child('fromAccountKey').val()).exists()",
+            "fromAccountKey": {
+              ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{6,60}$/)"
+            },
+            "text": {
+              ".validate": "newData.isString() && newData.val().length <= 2000"
+            },
+            "imageData": {
+              ".validate": "newData.isString() && newData.val().beginsWith('data:image/') && newData.val().length <= 900000"
+            },
+            "mediaId": {
+              ".validate": "newData.isString() && newData.val().length >= 6 && newData.val().length <= 40"
+            },
+            "mediaKind": {
+              ".validate": "newData.val() === 'video' || newData.val() === 'audio'"
+            },
+            "mediaMime": {
+              ".validate": "newData.isString() && newData.val().length <= 80"
+            },
+            "mediaDur": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 3600"
+            },
+            "mediaN": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 80"
+            },
+            "mediaSize": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 52428800"
+            },
+            "ts": {
+              ".validate": "newData.val() === now"
+            },
+            "fromUsername": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 24"
+            },
+            "$x": {
+              ".validate": false
+            },
+            "editedAt": {
+              ".validate": "newData.val() === now"
+            },
+            "deleted": {
+              ".validate": "newData.val() === true"
+            },
+            "replyTo": {
+              ".validate": "newData.isString() && newData.val().length <= 40"
+            },
+            "replyToLabel": {
+              ".validate": "newData.isString() && newData.val().length <= 40"
+            },
+            "replyToSnippet": {
+              ".validate": "newData.isString() && newData.val().length <= 100"
+            },
+            "reactions": {
+              "$emoji": {
+                ".validate": "$emoji.length >= 1 && $emoji.length <= 32",
+                "$uid": {
+                  ".validate": "$uid.matches(/^[A-Za-z0-9_-]{6,60}$/) && newData.val() === true"
+                }
+              }
+            }
+          }
+        },
+        "media": {
+          "$id": {
+            ".write": "!newData.exists() || (!data.exists() && root.child('groupChats/' + $gc + '/members/' + newData.child('by').val()).exists()) || (data.exists() && data.child('by').val() === newData.child('by').val())",
+            ".validate": "$id.length >= 6 && $id.length <= 40 && newData.hasChildren(['by','exp'])",
+            "by": {
+              ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{6,60}$/)"
+            },
+            "exp": {
+              ".validate": "newData.isNumber() && newData.val() <= now + 1200000"
+            },
+            "d": {
+              "$n": {
+                ".validate": "$n.matches(/^[0-9]{1,3}$/) && newData.isString() && newData.val().length <= 1100000"
+              }
+            },
+            "$x": {
+              ".validate": false
+            }
+          }
+        },
+        "$other": {
+          ".validate": false
+        },
+        "typing": {
+          ".read": true,
+          "$uid": {
+            ".write": true,
+            ".validate": "$uid.matches(/^[A-Za-z0-9_-]{6,60}$/) && newData.isNumber()"
+          }
+        }
+      }
+    }
+  }
+}

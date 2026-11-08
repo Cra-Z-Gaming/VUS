@@ -1739,10 +1739,14 @@ document.body.classList.toggle("hide-joinleave", chatPrefs.showJoinLeave === fal
 // Looks: text size, bubble size and bold text. Client-side only, remembered on this device.
 function applyAppearance() {
   const b = document.body;
-  ["s", "m", "l", "xl"].forEach(k => b.classList.toggle("fs-" + k, chatPrefs.textSize === k));
+  const px = Number(chatPrefs.textPx), customSize = px >= 6 && px <= 120;
+  ["s", "m", "l", "xl"].forEach(k => b.classList.toggle("fs-" + k, !customSize && chatPrefs.textSize === k));
+  b.classList.toggle("fs-custom", customSize);
+  if (customSize) b.style.setProperty("--msg-fs", px + "px"); else b.style.removeProperty("--msg-fs");
   ["compact", "normal", "roomy"].forEach(k => b.classList.toggle("bs-" + k, chatPrefs.bubbleSize === k));
   b.classList.toggle("bold-text", !!chatPrefs.bold);
   b.classList.toggle("hide-verified", chatPrefs.showVerified === false);
+  b.classList.toggle("hide-members", chatPrefs.hideMembers === true);
   b.classList.add("has-radius");
   const r = Number(chatPrefs.radius);
   b.style.setProperty("--bubble-radius", (r >= 0 && r <= 40 ? r : 12) + "px");
@@ -1917,9 +1921,52 @@ function scrollToBottom() {
   requestAnimationFrame(() => { snapToBottom(); requestAnimationFrame(snapToBottom); });
   $jumpToBottomBtn.style.display = "none";
 }
-// Strict auto scroll: while it is on and the view is pinned, ANY growth of the chat
-// (new rows, images loading, the composer resizing) keeps the newest message in view.
-function keepPinned() { if (autoScroll && stickToBottom) snapToBottom(); }
+// Auto scroll: while it is on and the view is pinned, growth of the chat (new rows, images loading, the composer
+// resizing) keeps the newest message in view -- EXCEPT while you are moving the pointer over messages (about to click
+// Reply / React): then the view holds still and catches up a moment after you stop.
+// When the view is NOT following the bottom (auto scroll off, or you scrolled up), whatever is on screen is kept exactly
+// where it is: the first visible message is remembered and put back if anything above or around it changes size.
+let pointerHoldUntil = 0, holdTimer = null, anchorEl = null, anchorOff = 0;
+function holdActive() { return Date.now() < pointerHoldUntil; }
+function freeMode() { return !(autoScroll && stickToBottom) || holdActive(); }
+function captureAnchor() {
+  const kids = $messages.children, n = kids.length;
+  if (!n) { anchorEl = null; return; }
+  const top = $messages.getBoundingClientRect().top;
+  let lo = 0, hi = n - 1;   // children are in order, so binary-search for the first one that reaches into view
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (kids[mid].getBoundingClientRect().bottom > top + 1) hi = mid; else lo = mid + 1; }
+  anchorEl = kids[lo];
+  anchorOff = anchorEl.getBoundingClientRect().top - top;
+}
+function restoreAnchor() {
+  if (!anchorEl || !anchorEl.isConnected || anchorEl.parentNode !== $messages) { captureAnchor(); return; }
+  const cur = anchorEl.getBoundingClientRect().top - $messages.getBoundingClientRect().top;
+  const d = cur - anchorOff;
+  if (Math.abs(d) > 0.5) { programmaticScrollUntil = Date.now() + 80; $messages.scrollTop += d; }
+}
+function followIfPinned() {
+  if (!(autoScroll && stickToBottom)) return;
+  if (holdActive()) {
+    clearTimeout(holdTimer);
+    holdTimer = setTimeout(followIfPinned, Math.max(60, pointerHoldUntil - Date.now() + 30));
+    if (!isNearBottom()) $jumpToBottomBtn.style.display = "block";
+    return;
+  }
+  scrollToBottom();
+}
+function keepPinned() {
+  if (freeMode()) { restoreAnchor(); if (autoScroll && stickToBottom) followIfPinned(); }
+  else snapToBottom();
+}
+$messages.addEventListener("pointermove", e => {
+  if (e.pointerType === "touch" || !(e.target.closest && e.target.closest(".msg"))) return;
+  if (!holdActive()) captureAnchor();
+  pointerHoldUntil = Date.now() + 1500;
+}, { passive: true });
+$messages.addEventListener("pointerdown", () => { if (!holdActive()) captureAnchor(); pointerHoldUntil = Date.now() + 2500; }, { passive: true });
+// Your own scrolling always wins, even in the instant after the app scrolled.
+$messages.addEventListener("wheel", e => { programmaticScrollUntil = 0; if (e.deltaY < 0) stickToBottom = false; captureAnchor(); }, { passive: true });
+$messages.addEventListener("touchstart", () => { programmaticScrollUntil = 0; }, { passive: true });
 new MutationObserver(keepPinned).observe($messages, { childList: true, subtree: true });
 if (window.ResizeObserver) new ResizeObserver(keepPinned).observe($messages);
 $messages.addEventListener("load", keepPinned, true);
@@ -2111,6 +2158,27 @@ function mentionChip(name, extraClass) {
   });
   return chip;
 }
+// Links in messages are clickable and ALWAYS open in a new tab (http/https only).
+const LINK_RE = /(?<![@\w.\/-])((?:https?:\/\/)[^\s<>"']+|www\.[^\s<>"']+|(?:[a-z0-9-]+\.)+(?:com|net|org|io|gg|co|me|tv|app|dev|xyz|link|ly|be|us|uk|ca|de|fr|ru|jp|cc|ai|gl|sh|to|fm|info|biz|online|site|store|tech|fun|wtf|lol|cloud|page|so|ws|vc|ee|nl|se|no|fi|it|es|pl|br|au|in|kr|cn)(?:\/[^\s<>"']*)?(?![a-z0-9-]))/gi;
+function appendLinkedText(parent, str) {
+  str = String(str || "");
+  let pos = 0, m;
+  LINK_RE.lastIndex = 0;
+  while ((m = LINK_RE.exec(str))) {
+    let url = m[0], trail = "";
+    const tm = url.match(/[.,!?;:)\]}]+$/);   // punctuation at the end belongs to the sentence, not the link
+    if (tm) { trail = tm[0]; url = url.slice(0, -trail.length); }
+    if (url.length < 4) continue;
+    if (m.index > pos) parent.appendChild(document.createTextNode(str.slice(pos, m.index)));
+    const a = document.createElement("a");
+    a.href = /^https?:\/\//i.test(url) ? url : "https://" + url; a.target = "_blank"; a.rel = "noopener noreferrer nofollow"; a.className = "msg-link"; a.textContent = url;
+    a.addEventListener("click", e => e.stopPropagation());
+    parent.appendChild(a);
+    pos = m.index + url.length;
+    LINK_RE.lastIndex = pos;
+  }
+  if (pos < str.length) parent.appendChild(document.createTextNode(str.slice(pos)));
+}
 function fillBubbleText(bubble, text, legacy) {
   fillBubbleTextRaw(bubble, text, legacy);
   if (bubble.dataset && bubble.dataset.fx) wrapFx(bubble);
@@ -2121,17 +2189,17 @@ function fillBubbleTextRaw(bubble, text, legacy) {
   if (!toks.length) {
     if (legacy) {
       bubble.appendChild(mentionChip(mentionTargetOf(legacy)));
-      if (text) bubble.appendChild(document.createTextNode(" " + text));
-    } else bubble.appendChild(document.createTextNode(text));
+      if (text) appendLinkedText(bubble, " " + text);
+    } else appendLinkedText(bubble, text);
     return;
   }
   let pos = 0;
   toks.forEach(t => {
-    if (t.start > pos) bubble.appendChild(document.createTextNode(text.slice(pos, t.start)));
+    if (t.start > pos) appendLinkedText(bubble, text.slice(pos, t.start));
     bubble.appendChild(mentionChip(t.name, t.name === myName ? "mention-me" : ""));
     pos = t.end;
   });
-  if (pos < text.length) bubble.appendChild(document.createTextNode(text.slice(pos)));
+  if (pos < text.length) appendLinkedText(bubble, text.slice(pos));
 }
 function mentionInfoFor(msg) {
   if (!myName || ((msg.imageData || msg.video || msg.gif) && !msg.text)) return { me: false, ping: false };
@@ -2905,7 +2973,7 @@ function renderMessage(msg) {
     sysEl.appendChild(sysBubble);
     $messages.appendChild(sysEl);
     messageCount++;
-    if (autoScroll && stickToBottom) scrollToBottom();
+    followIfPinned();
     return;
   }
 
@@ -2951,7 +3019,7 @@ function renderMessage(msg) {
   meta.className = "msg-meta";
   const nameLink = document.createElement("span");
   nameLink.className = "msg-meta-name";
-  nameLink.textContent = mine ? "You" : msg.name;
+  nameLink.textContent = msg.name || (mine ? "You" : "");   // your own messages show your username ("You" stays in the online list)
   if (msg.font) applyNameFont(nameLink, msg.font);
   if (msg.loginId) {
     nameLink.title = "View profile";
@@ -3008,10 +3076,12 @@ function renderMessage(msg) {
     if (msg.id) { pollEls.set(String(msg.id), { el, msg, mine }); paintAnnGate(String(msg.id)); }
   } else {
     if (msg.fx && itemOf(msg.fx, "fx")) bubble.dataset.fx = msg.fx;
+    if (msg.tfont) applyTextFont(bubble, msg.tfont);
+    { const bubIt = msg.bub ? itemOf(msg.bub, "bub") : null; if (bubIt) applyBubFx(bubble, bubIt, msg.bc); }
     fillBubbleText(bubble, msg.text, msg.mention);
   }
 
-  if (!msg.imageData && !msg.video && !msg.gif && !msg.poll) {
+  if (!msg.imageData && !msg.video && !msg.gif && !msg.poll && !bubble.classList.contains("bubfx")) {   // a bubble effect replaces the solid colour
     if (msg.bubble) bubble.style.background = msg.bubble;
     if (msg.textColor) bubble.style.color = msg.textColor;
   }
@@ -3057,9 +3127,9 @@ function renderMessage(msg) {
     messageCount--;
   }
 
-  if (mine || (autoScroll && stickToBottom)) {
-    scrollToBottom();
-  } else if (!isNearBottom()) {
+  if (mine) scrollToBottom();
+  else if (autoScroll && stickToBottom) followIfPinned();
+  else if (!isNearBottom()) {
     $jumpToBottomBtn.style.display = "block";
   }
 
@@ -4709,7 +4779,7 @@ $autoScrollBtn.addEventListener("click", () => setAutoScroll(!autoScroll));
 
 $messages.addEventListener("scroll", () => {
   const away = $messages.scrollHeight - $messages.scrollTop - $messages.clientHeight;
-  if (Date.now() > programmaticScrollUntil) stickToBottom = away < 40;   // only the person's own scrolling unpins
+  if (Date.now() > programmaticScrollUntil) { stickToBottom = away < 40; captureAnchor(); }   // only the person's own scrolling unpins
   if (away < 40) $jumpToBottomBtn.style.display = "none";
 });
 
@@ -4873,7 +4943,35 @@ function renderChatSettings(container) {
   });
   { const r = document.createElement("button"); r.type = "button"; r.className = "cs-row"; r.innerHTML = '<span class="cs-label">Open Verification panel<small>See who is verified and what was approved or rejected</small></span>'; r.addEventListener("click", e => { e.stopPropagation(); openFromSettings(openVerifyPanel); }); host.appendChild(r); }
   const persCard = card("\uD83C\uDFA8", "Personalization", "Looks and background, saved on this device only");
-  choice("Text size", [["s", "Small"], ["m", "Medium"], ["l", "Large"], ["xl", "Huge"]], () => chatPrefs.textSize, v => { chatPrefs.textSize = v; saveChatPrefs(); applyAppearance(); keepPinned(); });
+  { // Text size: drag the slider, or type any size in the box (the box takes sizes beyond the slider's range)
+    const SIZE_PX = { s: 15, m: 17, l: 19, xl: 22 };
+    const cur = () => { const p = Number(chatPrefs.textPx); return p >= 6 && p <= 120 ? p : (SIZE_PX[chatPrefs.textSize] || 19); };
+    const row = document.createElement("div");
+    row.className = "cs-choice cs-size";
+    const lab = document.createElement("span"); lab.className = "cs-label"; lab.textContent = "Text size";
+    const ctl = document.createElement("span"); ctl.className = "cs-size-ctl";
+    const slider = document.createElement("input"); slider.type = "range"; slider.min = "12"; slider.max = "32"; slider.step = "1"; slider.className = "cs-range";
+    const num = document.createElement("input"); num.type = "number"; num.min = "6"; num.max = "120"; num.step = "1"; num.inputMode = "numeric"; num.className = "cs-num";
+    const unit = document.createElement("span"); unit.className = "cs-unit"; unit.textContent = "px";
+    const reset = document.createElement("button"); reset.type = "button"; reset.className = "cs-mini"; reset.textContent = "Reset";
+    const clampSlider = px => String(Math.min(32, Math.max(12, px)));
+    const apply = (px, from) => {
+      px = Math.round(Math.min(120, Math.max(6, px)));
+      chatPrefs.textPx = px; saveChatPrefs(); applyAppearance(); keepPinned();
+      if (from !== slider) slider.value = clampSlider(px);
+      if (from !== num) num.value = String(px);
+    };
+    slider.value = clampSlider(cur()); num.value = String(cur());
+    slider.addEventListener("input", e => { e.stopPropagation(); apply(Number(slider.value), slider); });
+    slider.addEventListener("click", e => e.stopPropagation());
+    num.addEventListener("input", e => { e.stopPropagation(); const v = Number(num.value); if (num.value !== "" && v >= 6) apply(v, num); });
+    num.addEventListener("change", e => { e.stopPropagation(); const v = Number(num.value); apply(num.value === "" || isNaN(v) ? cur() : v); });
+    num.addEventListener("click", e => e.stopPropagation());
+    reset.addEventListener("click", e => { e.stopPropagation(); delete chatPrefs.textPx; chatPrefs.textSize = "l"; saveChatPrefs(); applyAppearance(); keepPinned(); slider.value = clampSlider(19); num.value = "19"; });
+    ctl.append(slider, num, unit, reset);
+    row.append(lab, ctl);
+    host.appendChild(row);
+  }
   choice("Bubble size", [["compact", "Compact"], ["normal", "Normal"], ["roomy", "Roomy"]], () => chatPrefs.bubbleSize, v => { chatPrefs.bubbleSize = v; saveChatPrefs(); applyAppearance(); keepPinned(); });
   toggle("Bold text", "Easier to read", () => !!chatPrefs.bold, v => { chatPrefs.bold = v; saveChatPrefs(); applyAppearance(); keepPinned(); });
   {
@@ -5056,6 +5154,12 @@ async function renderModMenu() {
   previewWrap.appendChild(previewLabel);
   previewWrap.appendChild(previewBubble);
   colorHost.appendChild(previewWrap);
+  if (myCosm && myCosm.bub) {
+    const n = document.createElement("div");
+    n.style.cssText = "color:#fbbf24;font-size:12.5px;margin-bottom:8px";
+    n.textContent = "A bubble effect from your crates is equipped, so it's shown instead of this solid colour. Take it off in the crate collection (Bubbles tab) to use the solid colour.";
+    colorHost.appendChild(n);
+  }
 
   const makeColorRow = (labelText, currentValue, onChange) => {
     const wrap = document.createElement("div");
@@ -8322,6 +8426,25 @@ const memberNameLoading = new Set();
 let memberSongUnsubs = [];   // live "now playing" listeners for the rows currently drawn
 
 let showOfflineRanks = false;   // offline rank-holders are tucked away until you expand the list
+// Cosmetics (ring, tag, text effect, font) of the people in the online list: read from their profile once, then re-read now and then.
+const memberCosmCache = {}, memberCosmLoading = new Set();
+let membersRenderTimer = null;
+function scheduleMembersRender() { clearTimeout(membersRenderTimer); membersRenderTimer = setTimeout(() => renderMembersPane(), 250); }
+function memberCosm(id) {
+  id = String(id || "");
+  if (!/^\d{4,12}$/.test(id)) return null;
+  const c = memberCosmCache[id];
+  if ((!c || Date.now() - c.at > 180000) && !memberCosmLoading.has(id)) {
+    memberCosmLoading.add(id);
+    ChatBackend.getProfile(id).then(p => {
+      const next = cosmFields((p && p.cosm) || {});
+      const changed = JSON.stringify(next) !== JSON.stringify(c ? c.cos : null);
+      memberCosmCache[id] = { cos: next, at: Date.now() };
+      if (changed) scheduleMembersRender();
+    }).catch(() => { memberCosmCache[id] = { cos: c ? c.cos : {}, at: Date.now() }; }).then(() => memberCosmLoading.delete(id));
+  }
+  return c ? c.cos : null;
+}
 function renderMembersPane() {
   if (typeof renderChannelList === "function") renderChannelList();
   if (!$membersList) return;
@@ -8415,6 +8538,13 @@ function renderMembersPane() {
     const textEl = document.createElement("div");
     textEl.className = "member-text";
     textEl.appendChild(nameEl);
+    {   // the same cosmetics people see in chat: ring around the avatar, tag, text effect and font on the name
+      const cos = (isMe ? cosmFields(myCosm) : memberCosm(p.id)) || {};
+      applyRingTo(av, cos.ring, cos.rfx);
+      if (cos.font) applyNameFont(nameEl, cos.font);
+      if (cos.fx) { nameEl.dataset.fx = cos.fx; wrapFx(nameEl); }
+      if (cos.tag) { const te = tagEl(cos.tag); if (te) { te.classList.add("member-tag"); textEl.appendChild(te); } }
+    }
     if (p.online && p.id && window.VUS_DM && window.VUS_DM.watchSongByLoginId) {
       const songEl = document.createElement("div");
       songEl.className = "member-song";
@@ -8460,7 +8590,9 @@ function renderMembersPane() {
       frag.appendChild(row);
     });
   }
+  const keepScroll = $membersList.scrollTop;   // a refresh must never throw you back to the top
   $membersList.replaceChildren(frag);
+  $membersList.scrollTop = keepScroll;
 }
 
 function attachRoomListeners() {
@@ -9085,6 +9217,23 @@ const CRATE_ITEMS = [
   { id: "fx-rainbow", type: "fx", rar: "legendary", name: "Rainbow Flow (animated)" },
   { id: "fx-void",    type: "fx", rar: "legendary", name: "Void Shimmer (animated)" },
   { id: "fx-prism",   type: "fx", rar: "legendary", name: "Prism (animated)" },
+  // ── bubble effects: faded and animated message bubbles (the Custom ones let the owner pick their own colours) ──
+  { id: "bub-sunset",     type: "bub", rar: "common",    name: "Sunset Fade",   colors: ["#f97316", "#ec4899"] },
+  { id: "bub-ocean",      type: "bub", rar: "common",    name: "Ocean Fade",    colors: ["#0ea5e9", "#6366f1"] },
+  { id: "bub-mint",       type: "bub", rar: "common",    name: "Mint Fade",     colors: ["#10b981", "#06b6d4"] },
+  { id: "bub-grape",      type: "bub", rar: "common",    name: "Grape Fade",    colors: ["#8b5cf6", "#d946ef"] },
+  { id: "bub-ember",      type: "bub", rar: "rare",      name: "Ember Fade",    colors: ["#ef4444", "#f59e0b"] },
+  { id: "bub-candy",      type: "bub", rar: "rare",      name: "Candy Fade",    colors: ["#f472b6", "#60a5fa"] },
+  { id: "bub-midnight",   type: "bub", rar: "rare",      name: "Midnight Fade", colors: ["#1e293b", "#4338ca"] },
+  { id: "bub-aurora",     type: "bub", rar: "rare",      name: "Aurora Fade",   colors: ["#22c55e", "#3b82f6", "#a855f7"] },
+  { id: "bub-flow",       type: "bub", rar: "epic",      name: "Drift (animated)",      anim: "flow",    colors: ["#f43f5e", "#f59e0b", "#8b5cf6"] },
+  { id: "bub-pulse",      type: "bub", rar: "epic",      name: "Heartbeat (animated)",  anim: "pulse",   colors: ["#ef4444", "#9f1239"] },
+  { id: "bub-neon",       type: "bub", rar: "epic",      name: "Neon Edge (animated)",  anim: "neon",    colors: ["#22d3ee", "#a855f7"] },
+  { id: "bub-shimmer",    type: "bub", rar: "epic",      name: "Shimmer (animated)",    anim: "shimmer", colors: ["#1d4ed8", "#7c3aed"] },
+  { id: "bub-custom2",    type: "bub", rar: "epic",      name: "Custom Fade",           custom: 2, colors: ["#3b82f6", "#ec4899"] },
+  { id: "bub-rainbow",    type: "bub", rar: "legendary", name: "Rainbow (animated)",    anim: "rainbow", colors: ["#ef4444", "#eab308", "#3b82f6"] },
+  { id: "bub-custom3",    type: "bub", rar: "legendary", name: "Custom Triple Fade",    custom: 3, colors: ["#f97316", "#ec4899", "#8b5cf6"] },
+  { id: "bub-customflow", type: "bub", rar: "legendary", name: "Custom Flow (animated)", anim: "flow", custom: 3, colors: ["#22d3ee", "#a855f7", "#f43f5e"] },
   // ── fonted names: a font for your display name (loaded from Google Fonts only when someone's name uses it) ──
   { id: "fnt-fredoka",     type: "font", rar: "common",    name: "Fredoka",        family: "Fredoka" },
   { id: "fnt-righteous",   type: "font", rar: "common",    name: "Righteous",      family: "Righteous" },
@@ -9121,7 +9270,8 @@ const CRATE_TYPES = [
   { id: "ring",  label: "Ring crate",        icon: "⭕", blurb: "A profile ring" },
   { id: "tag",   label: "Tag crate",         icon: "🏷️", blurb: "A tag by your name" },
   { id: "fx",    label: "Text effect crate", icon: "✨", blurb: "Fades and animated text" },
-  { id: "font",  label: "Fonted name crate", icon: "千ㄖ几ㄒ", blurb: "A font for your name" },
+  { id: "font",  label: "Fonted name crate", icon: "千ㄖ几ㄒ", blurb: "A font for your name or your text" },
+  { id: "bub",   label: "Bubble crate", icon: "💬", blurb: "Faded and animated bubbles" },
   { id: "mixed", label: "Mixed crate",       icon: "🎁", blurb: "Any of the above" },
   { id: "season", label: "Seasonal crate",    icon: "❄️", blurb: "Limited-time items" }
 ];
@@ -9156,6 +9306,9 @@ function cosmFields(c) {
   const t = itemOf(c.tag, "tag"); if (t) out.tag = t.id;
   const f = itemOf(c.fx, "fx"); if (f) out.fx = f.id;
   const fo = itemOf(c.font, "font"); if (fo) out.font = fo.id;
+  const tf = itemOf(c.tfont, "font"); if (tf) out.tfont = tf.id;   // message text can use a different (owned) font than the username
+  const bu = itemOf(c.bub, "bub");
+  if (bu) { out.bub = bu.id; if (bu.custom && c.bubc) out.bc = bubColorsFor(bu, c.bubc).join(","); }
   return out;
 }
 function crateWindow(now) { return Math.floor((now - CRATE_OFFSET_MS) / CRATE_WINDOW_MS); }
@@ -9272,6 +9425,37 @@ function applyNameFont(node, id) {
   node.style.fontFamily = '"' + it.family + '", system-ui, sans-serif';
   node.classList.add("fonted-name");
 }
+// The font for a message's TEXT (separate from the username font): any font the sender owns.
+function applyTextFont(node, id) {
+  const it = itemOf(id, "font");
+  if (!node || !it) return;
+  loadItemFont(it);
+  node.style.fontFamily = '"' + it.family + '", system-ui, sans-serif';
+  node.classList.add("fonted-text");
+}
+// Bubble effects: preset fades / animations, or the owner's own colours for the Custom ones.
+function bubColorsFor(it, bc) {
+  const got = String(bc || "").split(",").filter(h => /^#[0-9a-fA-F]{6}$/.test(h));
+  return got.length >= it.custom ? got.slice(0, it.custom) : it.colors.slice(0, it.custom || it.colors.length);
+}
+function bubTextColor(hexes) {   // light backgrounds get dark text so it stays readable
+  let r = 0, g = 0, b = 0;
+  hexes.forEach(h => { r += parseInt(h.slice(1, 3), 16); g += parseInt(h.slice(3, 5), 16); b += parseInt(h.slice(5, 7), 16); });
+  const n = hexes.length || 1;
+  return (0.299 * r + 0.587 * g + 0.114 * b) / n / 255 > 0.62 ? "#0f172a" : "#ffffff";
+}
+function applyBubFx(node, it, bc) {
+  if (!node || !it) return;
+  [...node.classList].filter(c => c.startsWith("bub-")).forEach(c => node.classList.remove(c));
+  const cols = it.custom ? bubColorsFor(it, bc) : it.colors;
+  node.classList.add("bubfx", "bub-" + (it.anim || "fade"));
+  node.style.setProperty("--b1", cols[0]);
+  node.style.setProperty("--b2", cols[1] || cols[0]);
+  node.style.setProperty("--b3", cols[2] || cols[1] || cols[0]);
+  const tc = (it.anim === "neon" || it.anim === "rainbow") ? "#ffffff" : bubTextColor(cols);
+  node.style.setProperty("--bt", tc);
+  node.style.setProperty("--bts", tc === "#ffffff" ? "0 1px 2px rgba(0,0,0,.45)" : "none");
+}
 function applyRingTo(node, ringHex, rfx) {
   const it = itemOf(rfx, "ring");
   if (/^#[0-9a-fA-F]{6}$/.test(String(ringHex || ""))) { node.classList.add("has-ring"); node.style.setProperty("--ring", ringHex); }
@@ -9281,6 +9465,7 @@ function itemPreview(item) {
   if (item.type === "ring") { const a = el("div", "cr-av", (myName || "?").slice(0, 1).toUpperCase()); applyRingTo(a, item.color, item.color ? "" : item.id); return a; }
   if (item.type === "tag") return tagEl(item.id);
   if (item.type === "font") { const s = el("span", "fontprev", myName || "Your name"); applyNameFont(s, item.id); return s; }
+  if (item.type === "bub") { const d = el("div", "cr-bubprev", "Hello there!"); applyBubFx(d, item); return d; }
   const s = el("span", "fxtext fxt-" + item.id, "Hello there!"); return s;
 }
 // A text effect wraps the message text in its own span, so the bubble keeps its colour behind it.
@@ -9384,6 +9569,7 @@ function paintOpen(box) {
     grid.appendChild(b);
   });
   box.appendChild(grid);
+  { const sea = activeSeason(); box.appendChild(el("div", "cr-note", sea ? "\u2744\uFE0F The " + sea.name + " season runs until " + new Date(sea.end).toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" }) + "." : "No seasonal crate is running right now.")); }
   box.appendChild(el("div", "cr-odds", "Rarity odds: Common " + RARITY.common.weight + "% · Rare " + RARITY.rare.weight + "% · Epic " + RARITY.epic.weight + "% · Legendary " + RARITY.legendary.weight + "%, split evenly between the items of that rarity. The wheel's slices are the real chances. Landing on something you own: 50% another spin, 50% nothing."));
 }
 
@@ -9595,7 +9781,7 @@ function paintCollection(box) {
   const act = activeSeason();
   // a seasonal item shows up while its season runs, or once you own it (past seasons you missed stay hidden)
   const shown = i => !i.season || crateOwned.has(i.id) || (act && act.id === i.season);
-  [["ring", "Rings"], ["tag", "Tags"], ["fx", "Text effects"], ["font", "Fonts"]].forEach(([k, t]) => {
+  [["ring", "Rings"], ["tag", "Tags"], ["fx", "Text effects"], ["font", "Fonts"], ["bub", "Bubbles"]].forEach(([k, t]) => {
     const own = CRATE_ITEMS.filter(i => i.type === k && shown(i) && crateOwned.has(i.id)).length, all = CRATE_ITEMS.filter(i => i.type === k && shown(i)).length;
     const b = el("button", "cr-subtab" + (collectionType === k ? " on" : ""), t + " " + own + "/" + all); b.type = "button";
     b.addEventListener("click", () => { collectionType = k; paintCrateModal(); });
@@ -9605,16 +9791,61 @@ function paintCollection(box) {
   const grid = el("div", "cr-grid");
   const order = { legendary: 0, epic: 1, rare: 2, common: 3 };
   CRATE_ITEMS.filter(i => i.type === collectionType && shown(i)).sort((a, b) => (a.season ? 1 : 0) - (b.season ? 1 : 0) || order[a.rar] - order[b.rar]).forEach(it => {
-    const own = crateOwned.has(it.id), on = myCosm && myCosm[it.type] === it.id;
-    const c = el("button", "cr-item r-" + it.rar + (own ? "" : " locked") + (on ? " equipped" : "")); c.type = "button";
-    c.append(own ? itemPreview(it) : el("div", "cr-q", "?"), el("b", "", own ? it.name : "???"), el("small", "", RARITY[it.rar].label + (it.season ? " · " + seasonName(it.season) : "") + (on ? " · equipped" : "")));
-    if (own) c.addEventListener("click", () => equipItem(it, !on));
+    const own = crateOwned.has(it.id), isFont = it.type === "font";
+    const onName = !!(myCosm && myCosm.font === it.id), onText = !!(myCosm && myCosm.tfont === it.id);
+    const on = isFont ? (onName || onText) : !!(myCosm && myCosm[it.type] === it.id);
+    const c = el(isFont ? "div" : "button", "cr-item r-" + it.rar + (own ? "" : " locked") + (on ? " equipped" : "")); if (!isFont) c.type = "button";
+    const eqText = isFont ? (onName && onText ? " \u00B7 name + text" : onName ? " \u00B7 name" : onText ? " \u00B7 text" : "") : (on ? " \u00B7 equipped" : "");
+    c.append(own ? itemPreview(it) : el("div", "cr-q", "?"), el("b", "", own ? it.name : "???"), el("small", "", RARITY[it.rar].label + (it.season ? " \u00B7 " + seasonName(it.season) : "") + eqText));
+    if (isFont && own) {   // fonts go on your name, your message text, or both: pick each separately
+      const row = el("div", "cr-slots");
+      [["Name", onName, "font"], ["Text", onText, "tfont"]].forEach(([lab, isOn, slot]) => {
+        const sb = el("button", "cr-slot" + (isOn ? " on" : ""), lab); sb.type = "button";
+        sb.addEventListener("click", e => { e.stopPropagation(); equipSlot(slot, isOn ? null : it.id); });
+        row.appendChild(sb);
+      });
+      c.appendChild(row);
+    } else if (own) c.addEventListener("click", () => equipItem(it, !on));
     grid.appendChild(c);
   });
   box.appendChild(grid);
-  box.appendChild(el("div", "cr-note", "Click an item you own to equip it (click again to take it off). Everyone sees what you equip."));
+  { const bi = itemOf(myCosm && myCosm.bub, "bub"); if (collectionType === "bub" && bi && bi.custom) box.appendChild(buildBubEditor(bi)); }
+  box.appendChild(el("div", "cr-note", collectionType === "font" ? "For each font you own, pick Name (your username), Text (your messages), or both. They can be different fonts. Everyone sees what you equip." : "Click an item you own to equip it (click again to take it off). Everyone sees what you equip." + (collectionType === "bub" ? " A bubble effect replaces your solid bubble colour; take it off to use the solid colour again." : "")));
 }
-async function equipItem(it, on) {
+// Your own colours for the Custom bubble items.
+function buildBubEditor(it) {
+  const wrap = el("div", "cr-bubedit");
+  wrap.appendChild(el("div", "cr-bubedit-h", "Your colours"));
+  const cols = bubColorsFor(it, myCosm && myCosm.bubc);
+  const prev = el("div", "cr-bubprev cr-bubprev-big", "Example message text");
+  applyBubFx(prev, it, cols.join(","));
+  const row = el("div", "cr-bubedit-row");
+  cols.forEach((c, i) => {
+    const inp = document.createElement("input"); inp.type = "color"; inp.value = c; inp.title = "Colour " + (i + 1);
+    inp.addEventListener("input", () => { cols[i] = inp.value; applyBubFx(prev, it, cols.join(",")); });
+    inp.addEventListener("change", () => saveBubColors(cols));
+    row.appendChild(inp);
+  });
+  wrap.append(prev, row);
+  return wrap;
+}
+async function saveBubColors(cols) {
+  const next = Object.assign({}, myCosm, { bubc: cols.join(",") });
+  try { await ChatBackend.updateProfile(myLoginId, { cosm: next }); myCosm = next; }
+  catch (e) { showComposerNotice(isPermissionDenied(e) ? "Saving colours needs the updated database rules." : "Couldn't save those colours."); }
+}
+async function equipItem(it, on) { return equipSlot(it.type, on ? it.id : null); }
+// slot: ring / tag / fx / font (username) / tfont (message text font) / bub; id null = take it off
+async function equipSlot(slot, id) {
+  const next = Object.assign({}, myCosm);
+  if (id) next[slot] = id; else delete next[slot];
+  if (slot === "bub") { if (!id) delete next.bubc; }
+  try {
+    await ChatBackend.updateProfile(myLoginId, { cosm: Object.keys(next).length ? next : null });
+    myCosm = next; paintCrateModal();
+  } catch (e) { showComposerNotice(isPermissionDenied(e) ? "Equipping needs the updated database rules." : "Couldn't equip that."); }
+}
+async function equipItemLegacyUnused(it, on) {
   const next = Object.assign({}, myCosm);
   if (on) next[it.type] = it.id; else delete next[it.type];
   try {
@@ -9625,6 +9856,87 @@ async function equipItem(it, on) {
 (function wireCrateRail() {
   const b = document.getElementById("navCrate");
   if (b) b.addEventListener("click", () => { if (crateModal) closeCrateModal(); else openCrateModal(); });
+})();
+
+/* ══════════ Time active (shown on profiles) ══════════
+   Counts the time this tab is open and showing the chat while you're not AFK. It is kept exactly (down to the second), saved to the
+   database about once a minute, and anything not saved yet is remembered on this device and added next time, so 50 minutes today and
+   10 minutes tomorrow make 1 hour. */
+let activePending = 0, activeLoadedFor = "", activeLastTick = Date.now(), activeFlushing = false;
+const activeKey = id => "vus_active_pending_v1_" + id;
+function activeIsCounting() { return !document.hidden && !!myLoginId && !!myName && $chatScreen.style.display !== "none" && !myAfk; }
+function activeTick() {
+  const now = Date.now(), dt = Math.min(Math.max(0, now - activeLastTick), 10000);   // a sleeping laptop doesn't count
+  activeLastTick = now;
+  if (!myLoginId) return;
+  const id = String(myLoginId);
+  if (activeLoadedFor !== id) { activeLoadedFor = id; try { activePending = Math.max(0, Number(localStorage.getItem(activeKey(id))) || 0); } catch (e) { activePending = 0; } }
+  if (!activeIsCounting()) return;
+  activePending += dt;
+  try { localStorage.setItem(activeKey(id), String(Math.round(activePending))); } catch (e) {}
+}
+async function activeFlush(force) {
+  if (!myLoginId || activeFlushing || !ChatBackend._profilesRef || activeLoadedFor !== String(myLoginId)) return;
+  if (activePending < (force ? 1000 : 55000)) return;
+  activeFlushing = true;
+  const id = String(myLoginId), add = Math.floor(Math.min(activePending, 3600000));   // the database accepts at most 2 hours per save
+  try {
+    await ChatBackend._profilesRef.child(ChatBackend._pid(id)).child("activeMs").transaction(cur => (Number(cur) || 0) + add);
+    activePending = Math.max(0, activePending - add);
+    try { if (activePending > 0) localStorage.setItem(activeKey(id), String(Math.round(activePending))); else localStorage.removeItem(activeKey(id)); } catch (e) {}
+  } catch (e) { /* keeps what wasn't saved and tries again in a minute */ }
+  activeFlushing = false;
+}
+setInterval(activeTick, 5000);
+setInterval(() => activeFlush(false), 60000);
+document.addEventListener("visibilitychange", () => { if (document.hidden) { activeTick(); activeFlush(true); } else activeLastTick = Date.now(); });
+window.addEventListener("pagehide", () => { activeTick(); activeFlush(true); });
+// First 3 days: days, hours and minutes ("2d 5h 12m"). After that: months, days and hours ("1mo 2d 3h"). A month is 30 days.
+function formatActiveTime(ms) {
+  ms = Math.max(0, Number(ms) || 0);
+  const MIN = 60000, H = 3600000, D = 86400000, MO = 30 * D;
+  if (ms < MIN) return "under 1m";
+  let parts;
+  if (ms < 3 * D) parts = [Math.floor(ms / D) && Math.floor(ms / D) + "d", Math.floor(ms % D / H) && Math.floor(ms % D / H) + "h", Math.floor(ms % H / MIN) && Math.floor(ms % H / MIN) + "m"];
+  else { const mo = Math.floor(ms / MO), rest = ms % MO; parts = [mo && mo + "mo", Math.floor(rest / D) && Math.floor(rest / D) + "d", Math.floor(rest % D / H) && Math.floor(rest % D / H) + "h"]; }
+  return parts.filter(Boolean).join(" ") || "under 1m";
+}
+async function activeMsFor(id) {
+  id = String(id || "");
+  if (!id) return 0;
+  let base = 0;
+  try { const p = await ChatBackend.getProfile(id); base = Number(p && p.activeMs) || 0; } catch (e) {}
+  return base + (myLoginId && id === String(myLoginId) ? Math.round(activePending) : 0);
+}
+
+/* ══════════ Show / hide the online list (right side) ══════════ */
+(function wireMembersToggle() {
+  const b = document.getElementById("membersToggleBtn");
+  if (!b) return;
+  b.addEventListener("click", () => { chatPrefs.hideMembers = !(chatPrefs.hideMembers === true); saveChatPrefs(); applyAppearance(); });
+})();
+
+/* ══════════ Type anywhere: start typing without clicking the box first ══════════
+   Printable keys pressed while nothing is focused go to the box that makes sense: the open pop-up's text box if there is
+   one, otherwise the DM box or the chat box, whichever is on screen. Shortcuts (Ctrl/Cmd/Alt) and Space are left alone. */
+(function typeAnywhere() {
+  const typingInto = n => !!(n && n.matches && n.matches("input, textarea, select, [contenteditable]:not([contenteditable='false'])"));
+  const shown = n => !!n && getComputedStyle(n).display !== "none";
+  const usable = n => !!n && !n.disabled && !n.readOnly && n.getClientRects().length > 0;
+  document.addEventListener("keydown", e => {
+    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+    if (e.key.length !== 1 || e.key === " ") return;
+    if (typingInto(document.activeElement)) return;
+    const overlays = [...document.querySelectorAll(".chat-modal-overlay, .poll-overlay, .crate-overlay, #settingsOverlay, #modalOverlay")].filter(shown);
+    let target = null;
+    if (overlays.length) {
+      target = [...overlays[overlays.length - 1].querySelectorAll("input:not([type]), input[type=text], input[type=search], textarea")].find(usable);
+      if (!target) return;     // a pop-up with nothing to type into: leave the keys alone
+    } else {
+      target = [document.getElementById("chatMsgInput"), document.getElementById("msgInput")].find(usable);
+    }
+    if (target) target.focus();   // the key that was pressed then lands in the box
+  });
 })();
 
 /* ══════════ Menus close with a double click outside (one stray click on the edge doesn't close them) ══════════ */
@@ -9999,6 +10311,15 @@ window.VUS_CHAT = {
   _crateProg(m, ms) { const p = progFor(); p.msgs = m; p.ms = ms; saveProg(); crateTick(true); },
   cosmFor: async id => { try { const p = await ChatBackend.getProfile(id); const c = cosmFields(p && p.cosm); if (!c.ring && p && p.color && p.color.ring) c.ring = p.color.ring; return c; } catch (e) { return {}; } },
   tagEl, applyRingTo,
+  activeMsFor, formatActiveTime,
+  banInfoFor: async id => {
+    try {
+      const b = await ChatBackend.getBan(String(id || ""));
+      if (!b) return null;
+      const left = b.expiresAt ? Math.max(1000, Number(b.expiresAt) - srvNow()) : 0;
+      return { permanent: !b.expiresAt, left, label: b.expiresAt ? formatDurationShort(left) + " left" : "permanent" };
+    } catch (e) { return null; }
+  },
   staffStateFor, staffActionsFor, runStaffAction, roleActionsFor, runRoleAction,
   ringFor: async id => { try { const col = await ChatBackend.getNameColor(id); return (col && col.ring) || ""; } catch (e) { return ""; } }, timeoutLimitsForRank, banLimitsForRank,
   isMuted, toggleMute,
