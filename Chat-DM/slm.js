@@ -6,7 +6,7 @@
   "use strict";
   var CFG = { apiKey: "AIzaSyBlfI1YDXg8hdoEAqcFKIdzmYJy-EZ8C8", authDomain: "large-code.firebaseapp.com", databaseURL: "https://large-code-default-rtdb.firebaseio.com/", projectId: "large-code", appId: "1:394088772356:web:a829fc27fb5ee57fae1651" };
   var DURATION = 3 * 60 * 60 * 1000, MAX_LEN = 200000, PBKDF2_ITER = 150000;
-  var VIEWER = window.SLM_VIEWER_URL || new URL("SLM.html", location.href).href;   // override with window.SLM_VIEWER_URL if the viewer lives elsewhere
+  var VIEWER_UNUSED = 0;   // the viewer is now written into a blank window (see openViewer)
 
   var app = firebase.apps.find(function (a) { return a.name === "slm"; }) || firebase.initializeApp(CFG, "slm");
   var db = app.database();
@@ -84,10 +84,52 @@
     var f = el("div", "slm-f", gone ? "Expired" : "Click to open in a new tab"); c.appendChild(f);
     if (gone) c.classList.add("slm-gone");
     else {
-      c.addEventListener("click", function () { window.open(VIEWER + "?id=" + encodeURIComponent(slm.id), "_blank", "noopener"); });
+      c.addEventListener("click", function () { openViewer(slm.id); });
       var t = setInterval(function () { if (!c.isConnected) return clearInterval(t); if (Date.now() >= Number(slm.exp)) { c.classList.add("slm-gone"); f.textContent = "Expired"; clearInterval(t); } }, 30000);
     }
     return c;
+  }
+
+  // The viewer is written into a blank window, so it works from about:blank and needs no hosted page.
+  var VIEW_HTML = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shared Message</title><style>*{box-sizing:border-box}body{font-family:Arial,sans-serif;max-width:900px;margin:30px auto;padding:0 15px;background:#111;color:#eee}textarea,input{width:100%;background:#1b1b1b;color:#eee;border:1px solid #444;border-radius:6px;padding:10px;margin:5px 0}textarea{min-height:400px;font:14px monospace;resize:vertical}button{padding:10px 14px;margin:5px 6px 5px 0;border-radius:5px;border:1px solid #444;background:#333;color:#fff;cursor:pointer}button:hover{background:#444}.hidden{display:none!important}.status{min-height:20px;margin-top:8px;color:#aaa}.status.error{color:#ff6b6b}.status.success{color:#6bcb77}.meta{font-size:12px;color:#888;margin:6px 0}.countdown{font-family:monospace;color:#ffb347}details{margin-top:28px;border-top:1px solid #333;padding-top:12px}summary{cursor:pointer;color:#aaa}</style></head><body><h1>Shared Message</h1><div id="status" class="status"></div><div id="pwRow" class="hidden"><p>This message is locked.</p><input id="pwInput" type="password" inputmode="numeric" maxlength="4" placeholder="4-digit code"><button id="unlockBtn">Unlock</button></div><div id="result" class="hidden"><div class="meta">Expires in: <span id="countdown" class="countdown"></span></div><textarea id="text" readonly></textarea><button id="copyBtn">Copy</button><button id="dlBtn">Download</button><details><summary>Delete this share</summary><p class="meta">Only people with the delete code can delete it.</p><input id="delInput" placeholder="Delete code (XXXXX-XXXXX)" maxlength="11"><button id="delBtn">Delete</button></details></div></body></html>`;
+
+  function openViewer(id) {
+    var w = window.open("", "_blank");   // no "noopener": the viewer's logic runs from this page
+    if (!w) { alert("Allow pop-ups to open shared messages."); return; }
+    w.document.open(); w.document.write(VIEW_HTML); w.document.close();
+    var d = w.document, $ = function (i) { return d.getElementById(i); }, cur = null, timer = null;
+    var status = function (m, t) { $("status").textContent = m; $("status").className = "status " + (t || ""); };
+    d.title = "Shared message " + id;
+    function show(text, expiresAt) {
+      $("pwRow").classList.add("hidden"); $("result").classList.remove("hidden");
+      $("text").value = text; status("Loaded.", "success");
+      clearInterval(timer);
+      var tick = function () {
+        var ms = expiresAt - Date.now();
+        if (w.closed) return clearInterval(timer);
+        if (ms <= 0) { clearInterval(timer); $("countdown").textContent = "expired"; $("text").value = ""; return status("This share just expired.", "error"); }
+        var s = Math.floor(ms / 1000); $("countdown").textContent = Math.floor(s / 3600) + "h " + Math.floor(s % 3600 / 60) + "m " + s % 60 + "s";
+      };
+      tick(); timer = setInterval(tick, 1000);
+    }
+    $("pwInput").oninput = function (e) { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); };
+    $("unlockBtn").onclick = async function () {
+      try { show(await unlock(cur.code, $("pwInput").value), cur.expiresAt); } catch (e) { status("Incorrect code.", "error"); }
+    };
+    $("pwInput").onkeydown = function (e) { if (e.key === "Enter") $("unlockBtn").click(); };
+    $("copyBtn").onclick = function () { w.navigator.clipboard.writeText($("text").value).then(function () { $("copyBtn").textContent = "Copied!"; setTimeout(function () { $("copyBtn").textContent = "Copy"; }, 1500); }, function () { $("text").select(); }); };
+    $("dlBtn").onclick = function () { var a = d.createElement("a"); a.href = URL.createObjectURL(new Blob([$("text").value], { type: "text/plain" })); a.download = id + ".txt"; a.click(); };
+    $("delBtn").onclick = async function () {
+      if (!w.confirm("Delete this share permanently?")) return;
+      try { await destroy(id, $("delInput").value); clearInterval(timer); $("text").value = ""; $("result").classList.add("hidden"); status("Share deleted.", "success"); }
+      catch (e) { status("Wrong delete code.", "error"); }
+    };
+    status("Loading\u2026");
+    fetchShare(id).then(function (s) {
+      if (!s) return status("Share not found, expired, or deleted.", "error");
+      cur = s;
+      if (s.protected) { $("pwRow").classList.remove("hidden"); status(""); $("pwInput").focus(); } else show(s.code, s.expiresAt);
+    });
   }
 
   var busy = false;
