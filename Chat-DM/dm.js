@@ -1150,6 +1150,19 @@ function formatDateSeparator(ts) {
   if (isYesterday) return "Yesterday";
   return d.toLocaleDateString([], { month: "short", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
 }
+// "Last seen" has no upper limit: minutes, hours, days, months, then years (years is the largest unit, so 13 years stays "13 years ago").
+function lastSeenAgo(ts, short) {
+  const mins = Math.floor((Date.now() - ts) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return short ? mins + "m ago" : mins + (mins === 1 ? " minute ago" : " minutes ago");
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return short ? hrs + "h ago" : hrs + (hrs === 1 ? " hour ago" : " hours ago");
+  const days = Math.floor(hrs / 24);
+  const years = Math.floor(days / 365.25), months = Math.floor(days / 30.4375);
+  if (years >= 1) return short ? years + "y ago" : years + (years === 1 ? " year ago" : " years ago");
+  if (months >= 1) return short ? months + "mo ago" : months + (months === 1 ? " month ago" : " months ago");
+  return short ? days + "d ago" : days + (days === 1 ? " day ago" : " days ago");
+}
 function ago(ts) {
   const mins = Math.floor((Date.now() - ts) / 60000);
   if (mins < 1) return "just now";
@@ -1163,14 +1176,7 @@ function ago(ts) {
 function formatLastSeen(ts) {
   if (!ts) return "Offline";
   const diffMs = Date.now() - ts;
-  const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return "Last seen just now";
-  if (mins < 60) return "Last seen " + mins + "m ago";
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return "Last seen " + hrs + "h ago";
-  const days = Math.floor(hrs / 24);
-  if (days <= 30) return "Last seen " + days + "d ago";
-  return "Last seen 30+ days";
+  return "Last seen " + lastSeenAgo(ts, true);
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -3960,8 +3966,8 @@ function fillProfileCard(prof, accountKey) {
         const ts = Number(prof.lastSeen) || 0;
         let txt = "";
         if (on) txt = latestAfkKeys.has(key) ? "Last seen: online now (away)" : "Last seen: online now";
-        else if (ts > 86400000) txt = (Date.now() - ts > 30 * 86400000) ? "Last seen: 30+ days" : "Last seen: " + ago(ts);
-        else txt = "Last seen: 30+ days";
+        else if (ts > 86400000) txt = "Last seen: " + lastSeenAgo(ts);
+        else txt = "Last seen: unknown";
         sn.textContent = txt;
         sn.title = ts > 86400000 ? new Date(ts).toLocaleString() : "";
         sn.classList.toggle("on", on);
