@@ -808,7 +808,7 @@ function unwatchOwnAccount(accountKey) {
 
 function threadIdFor(accountKeyA, accountKeyB) { return [accountKeyA, accountKeyB].sort().join("_"); }
 
-async function sendDirectMessage(otherAccountKey, text, imageData, replyTo, media) {
+async function sendDirectMessage(otherAccountKey, text, imageData, replyTo, media, slm) {
   if (!currentSession) return { ok: false, error: "Not logged in." };
   const clean = (text || "").trim();
   if (!clean && !imageData && !media) return { ok: false, error: "Message is empty." };
@@ -816,6 +816,7 @@ async function sendDirectMessage(otherAccountKey, text, imageData, replyTo, medi
   try {
     const pushRef = dmsRef.child(threadId).child("messages").push();
     await pushRef.set({
+      ...(slm ? { slm: slm } : {}),
       fromAccountKey: currentSession.accountKey,
       ...(clean ? { text: clean } : {}),
       ...(imageData ? { imageData: imageData } : {}),
@@ -1010,12 +1011,13 @@ async function leaveGroupChat(gcId) {
     return { ok: true };
   } catch (e) { return { ok: false, error: "Couldn't leave the group — try again." }; }
 }
-async function sendGroupMessage(gcId, text, imageData, replyTo, media) {
+async function sendGroupMessage(gcId, text, imageData, replyTo, media, slm) {
   if (!currentSession) return { ok: false, error: "Not logged in." };
   const clean = (text || "").trim();
   if (!clean && !imageData && !media) return { ok: false, error: "Message is empty." };
   try {
     await groupChatsRef.child(gcId).child("messages").push({
+      ...(slm ? { slm: slm } : {}),
       fromAccountKey: currentSession.accountKey, fromUsername: currentSession.username,
       ...(clean ? { text: clean } : {}), ...(imageData ? { imageData: imageData } : {}),
       ...(media ? { mediaId: media.id, mediaKind: media.kind, mediaMime: media.mime, mediaDur: media.dur, mediaN: media.n, mediaSize: media.size } : {}),
@@ -1226,6 +1228,8 @@ const $cancelReplyBtn = document.getElementById("cancelReplyBtn");
 const $editingBar = document.getElementById("editingBar");
 const $cancelEditBtn = document.getElementById("cancelEditBtn");
 const $chatMsgInput = document.getElementById("chatMsgInput");
+const DM_SLM_LIMIT = 2000;   // DMs / groups already allow 2000; anything longer is offered as a shared large message (SLM)
+$chatMsgInput.removeAttribute("maxlength");
 const $chatSendBtn = document.getElementById("chatSendBtn");
 const $uploadImageBtn = document.getElementById("uploadImageBtn");
 const $imageFileInput = document.getElementById("imageFileInput");
@@ -2937,6 +2941,8 @@ function renderChatMessage(msg) {
     img.src = msg.imageData;
     bubble.appendChild(img);
     if (msg.text) bubble.appendChild(h("div", { style: "margin-top:6px;white-space:pre-wrap", html: linkify(esc(msg.text)) }));
+  } else if (msg.slm && typeof msg.slm === "object" && window.VUS_SLM) {
+    bubble.appendChild(window.VUS_SLM.card(msg.slm, msg.text));
   } else {
     bubble.innerHTML = linkify(esc(msg.text || ""));
   }
@@ -2946,7 +2952,7 @@ function renderChatMessage(msg) {
   const replyBtn = h("button", { title: "Reply", onclick: () => startReply(msg) }, "↩");
   hoverActions.appendChild(reactBtn);
   hoverActions.appendChild(replyBtn);
-  if (mine && !msg.deleted && !msg.imageData && !msg.mediaId) {
+  if (mine && !msg.deleted && !msg.imageData && !msg.mediaId && !msg.slm) {
     hoverActions.appendChild(h("button", { title: "Edit", onclick: () => startEditing(msg) }, "✎"));
   }
   if (mine && !msg.deleted) {
@@ -2988,7 +2994,7 @@ function updateRenderedMessage(msg) {
     bubble.textContent = "This message was deleted";
     const editBtn = el.querySelector('button[title="Edit"]');
     if (editBtn) editBtn.remove();
-  } else if (!msg.imageData && !msg.mediaId) {
+  } else if (!msg.imageData && !msg.mediaId && !msg.slm) {
     bubble.innerHTML = linkify(esc(msg.text || ""));
   }
   if (msg.editedAt && !el.querySelector(".chat-msg-edited-tag")) {
@@ -3577,6 +3583,18 @@ function sendChatMessage() {
 
   if (!text.trim() && !imageToSend && !mediaToSend) return;
   if (sendCooldownActive) return;
+
+  if (text.length > DM_SLM_LIMIT) {   // too long for a DM: offer a shared large message (SLM)
+    if (imageToSend || mediaToSend || !window.VUS_SLM) { showComposerNotice("Over the " + DM_SLM_LIMIT + "-character limit. Long text can't be used as a caption."); return; }
+    const slmGc = openChatGcId, slmKey = openChatAccountKey;
+    window.VUS_SLM.offer(text, { limit: DM_SLM_LIMIT }).then(r => {
+      if (!r) return;
+      $chatMsgInput.value = ""; autosizeChatInput(); beginSendCooldown();
+      Promise.resolve(slmGc ? sendGroupMessage(slmGc, r.previewText, null, null, null, r.slm) : sendDirectMessage(slmKey, r.previewText, null, null, null, r.slm))
+        .then(res => { if (res && !res.ok) showComposerNotice(res.error); });
+    });
+    return;
+  }
 
   const REPLY_SNIPPET_MAX = 20;
   const replySnapshot = replyingTo ? {

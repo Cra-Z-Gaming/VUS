@@ -698,7 +698,7 @@ const ChatBackend = {
     }
   },
 
-  async send(name, text, mention, loginId, replyTo) {
+  async send(name, text, mention, loginId, replyTo, slm) {
     const prof = await this.getProfile(loginId);
     const color = prof && prof.color ? prof.color : null, cos = cosmFields(prof && prof.cosm);
     const data = {
@@ -707,6 +707,7 @@ const ChatBackend = {
       text: text,
       ts: firebase.database.ServerValue.TIMESTAMP,
       ...(mention ? { mention: mention.name + (mention.silent ? SILENT_MENTION_MARK : "") } : {}),
+      ...(slm ? { slm } : {}),
       ...(color ? { bubble: color.bubble, textColor: color.text, ...(color.ring ? { ring: color.ring } : {}) } : {}),
       ...cos,
       ...(replyTo ? { replyTo } : {})
@@ -1674,6 +1675,7 @@ const $chatScreen  = document.getElementById("chatScreen");
 const $messages    = document.getElementById("messages");
 const $emptyState  = document.getElementById("emptyState");
 const $msgInput    = document.getElementById("msgInput");
+$msgInput.removeAttribute("maxlength");   // SLM: text over the limit is offered as a shared large message instead of being cut off
 const $sendBtn     = document.getElementById("sendBtn");
 const $onlineDot   = document.getElementById("onlineDot");
 const $onlineCount = document.getElementById("onlineCount");
@@ -2810,7 +2812,7 @@ function buildMessageActions(msg, mine) {
   };
   add("\uD83D\uDE0A", "Add reaction", (b) => { if (window.VUS_UI && window.VUS_UI.openEmojiPicker) window.VUS_UI.openEmojiPicker(b, e => reactTo(String(msg.id), e)); });
   add("\u21A9", "Reply", () => startReply(String(msg.id)));
-  if (mine && msg.text && !msg.imageData && !msg.gif) add("\u270F\uFE0F", "Edit", () => startEdit(String(msg.id)));
+  if (mine && msg.text && !msg.slm && !msg.imageData && !msg.gif) add("\u270F\uFE0F", "Edit", () => startEdit(String(msg.id)));
   return bar;
 }
 
@@ -3063,7 +3065,8 @@ function renderMessage(msg) {
     if (msg.fx && itemOf(msg.fx, "fx")) bubble.dataset.fx = msg.fx;
     if (msg.tfont) applyTextFont(bubble, msg.tfont);
     { const bubIt = msg.bub ? itemOf(msg.bub, "bub") : null; if (bubIt) applyBubFx(bubble, bubIt, msg.bc); }
-    fillBubbleText(bubble, msg.text, msg.mention);
+    if (msg.slm && typeof msg.slm === "object" && window.VUS_SLM) bubble.appendChild(window.VUS_SLM.card(msg.slm, typeof maskFiltered === "function" ? maskFiltered(String(msg.text || "")) : msg.text));
+    else fillBubbleText(bubble, msg.text, msg.mention);
   }
 
   if (!msg.imageData && !msg.video && !msg.gif && !msg.poll && !bubble.classList.contains("bubfx")) {   // a bubble effect replaces the solid colour
@@ -4348,6 +4351,7 @@ async function sendMessage() {
   // Chatting but missing from the online list? Put them back.
   if (myLoginId && !latestPresenceList.some(e => String(e.loginId || "") === String(myLoginId))) ChatBackend.ensurePresence();
   if (!channelAllowedFor(activeChannel(), myLoginId)) { showComposerNotice("You can't post in this channel."); return; }
+  if (text.length > MAX_CHARS && activeChannelId !== "ai" && (activeChannelId === "announce" || editingMsgId || pendingImageDataUrl || pendingVideo || !window.VUS_SLM)) { showComposerNotice("Over the " + MAX_CHARS + "-character limit. Long text can't be used for announcements, edits or captions."); return; }
   if (myTimeoutRemainingMs > 0) {
     showComposerNotice(mutedNotice());
     return;
@@ -4425,6 +4429,11 @@ async function sendMessage() {
   }
 
   if (!text) return;
+  if (text.length > MAX_CHARS && activeChannelId !== "ai") {   // too long for a normal message: offer a shared large message (SLM)
+    const slmRes = await window.VUS_SLM.offer(text, { limit: MAX_CHARS });
+    if (slmRes) finalizeSend(slmRes.previewText, null, slmRes.slm);
+    return;
+  }
   if (!segs.length) { finalizeSend(text, null); return; }
 
   // Pings with sound keep the 30s-per-person limit; anything that can't ping goes out as a silent mention.
@@ -4451,12 +4460,12 @@ async function sendMessage() {
 function currentReplyPayload() {
   return replyingTo ? { id: String(replyingTo.id).slice(0, 40), name: String(replyingTo.name || "").slice(0, 40), text: String(replyingTo.text || "").slice(0, 100) } : null;
 }
-function finalizeSend(text, mention) {
+function finalizeSend(text, mention, slm) {
   lastSentAt = Date.now();
   updateSendButtonState();
   stopTyping();
 
-  ChatBackend.send(myName, text, mention, myLoginId, currentReplyPayload())
+  ChatBackend.send(myName, text, mention, myLoginId, currentReplyPayload(), slm)
     .then(() => {
       if (activeChannelId !== "announce") crateCountMessage();
       cancelReply();

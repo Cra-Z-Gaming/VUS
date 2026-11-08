@@ -1,0 +1,46 @@
+{
+  "rules": {
+    "shares": {
+      "$shareId": {
+        ".write": "!data.exists() || (!newData.exists() && (data.child('del').exists() || data.child('pub/expiresAt').val() <= now))",
+        ".validate": "$shareId.matches(/^[A-Z0-9]{6}$/) && newData.hasChildren(['pub', 'delHash'])",
+
+        "pub": {
+          ".read": "data.child('expiresAt').val() > now && !data.parent().child('del').exists()",
+          ".validate": "newData.hasChildren(['code', 'protected', 'createdAt', 'expiresAt'])",
+          "code": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 300000"
+          },
+          "protected": {
+            ".validate": "newData.isBoolean()"
+          },
+          "createdAt": {
+            ".validate": "newData.isNumber() && newData.val() <= now && newData.val() > (now - 60000)"
+          },
+          "expiresAt": {
+            ".validate": "newData.isNumber() && newData.val() == newData.parent().child('createdAt').val() + 10800000"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+
+        "delHash": {
+          ".validate": "newData.isString() && newData.val().matches(/^[a-f0-9]{64}$/)"
+        },
+
+        "del": {
+          ".read": true,
+          "$h": {
+            ".write": "!data.exists() && $h === root.child('shares/' + $shareId + '/delHash').val()",
+            ".validate": "newData.val() === true"
+          }
+        },
+
+        "$other": {
+          ".validate": false
+        }
+      }
+    }
+  }
+}

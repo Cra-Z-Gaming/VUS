@@ -225,6 +225,14 @@
             "ts": {
               ".validate": "newData.val() === now"
             },
+            "slm": {
+              ".validate": "newData.hasChildren(['id','l','n','exp'])",
+              "id": { ".validate": "newData.isString() && newData.val().matches(/^[A-Z0-9]{6}$/)" },
+              "l": { ".validate": "newData.isBoolean()" },
+              "n": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 300000" },
+              "exp": { ".validate": "newData.isNumber()" },
+              "$x": { ".validate": false }
+            },
             "$x": {
               ".validate": false
             },
@@ -356,6 +364,14 @@
             },
             "ts": {
               ".validate": "newData.val() === now"
+            },
+            "slm": {
+              ".validate": "newData.hasChildren(['id','l','n','exp'])",
+              "id": { ".validate": "newData.isString() && newData.val().matches(/^[A-Z0-9]{6}$/)" },
+              "l": { ".validate": "newData.isBoolean()" },
+              "n": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 300000" },
+              "exp": { ".validate": "newData.isNumber()" },
+              "$x": { ".validate": false }
             },
             "fromUsername": {
               ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 24"
