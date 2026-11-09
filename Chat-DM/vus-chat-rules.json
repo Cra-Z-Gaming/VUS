@@ -1,5 +1,17 @@
 {
   "rules": {
+    "tickets": {
+      ".read": false,
+      "$uid": {
+        "$nonce": {
+          ".write": "data.exists() && !newData.exists()"
+        }
+      }
+    },
+    "config": {
+      ".read": true,
+      ".write": false
+    },
     "botTokens": {
       ".read": true,
       ".write": false
@@ -214,7 +226,7 @@
           ".read": true,
           "$msg": {
             ".write": "!data.exists() && ($room !== 'vus-hub-main' || root.child('chatState/closed').val() !== true)",
-            ".validate": "(newData.child('system').val() === true && newData.hasChildren(['text','ts']) && newData.child('text').isString() && newData.child('text').val().matches(/^.{1,300}( joined| left)$/)) || (newData.hasChildren(['name','ts']) && (newData.child('text').exists() || newData.child('imageData').exists() || newData.child('video').exists() || newData.child('gif').exists()))",
+            ".validate": "(newData.child('system').val() === true && newData.hasChildren(['text','ts']) && newData.child('text').isString() && newData.child('text').val().matches(/^.{1,300}( joined| left)$/)) || (newData.hasChildren(['name','ts']) && (newData.child('text').exists() || newData.child('imageData').exists() || newData.child('video').exists() || newData.child('gif').exists()) && ((newData.child('loginId').val() === '299816' && $room === 'ch-ai') || (newData.child('loginId').exists() && newData.child('ticket').isString() && root.child('tickets/' + newData.child('loginId').val() + '/' + newData.child('ticket').val()).val() > now - 120000)))",
             "name": {
               ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40 && newData.val().matches(/[^\\\\s\u200b\u200c\u200d\ufeff]/) && !newData.val().matches(/[\u00ad\u200b\u200c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2060\u2066\u2067\u2068\u2069\ufeff]/)"
             },
@@ -311,6 +323,9 @@
               "$x": {
                 ".validate": false
               }
+            },
+            "ticket": {
+              ".validate": "newData.isString() && newData.val().length >= 12 && newData.val().length <= 64"
             },
             "slm": {
               ".validate": "newData.hasChildren(['id','l','n','exp'])",
