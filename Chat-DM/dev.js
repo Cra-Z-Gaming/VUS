@@ -5,40 +5,6 @@
   "use strict";
   var API = window.VUS_API_BASE || "https://vus-orcin.vercel.app";
   var CHAT_DB = "https://vus-chat-default-rtdb.firebaseio.com";
-
-  // ── Login tokens + one-time message tickets. chat.js asks for a ticket for every message it sends. ──
-  var TKEY = "vus_chat_token_v1", tbuf = [], refilling = false;
-  function readTokens() { try { return JSON.parse(localStorage.getItem(TKEY) || "{}") || {}; } catch (e) { return {}; } }
-  function getToken(id) { return readTokens()[String(id)] || ""; }
-  function setToken(id, t) { var o = readTokens(); if (t) o[String(id)] = t; else delete o[String(id)]; try { localStorage.setItem(TKEY, JSON.stringify(o)); } catch (e) {} }
-  async function obtain(id, password) {   // called by dm.js right after a successful login
-    var r = await fetch(API + "/api/auth/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: String(id), password: password }) });
-    var j = {}; try { j = await r.json(); } catch (e) {}
-    if (!r.ok || !j.ok) throw new Error(j.error || "Couldn't get a login token (" + r.status + ").");
-    setToken(id, j.token); tbuf = []; return true;
-  }
-  async function fetchTicket(id) {
-    var tok = getToken(id);
-    if (!tok) throw new Error("NO_TOKEN");
-    var r;
-    try { r = await fetch(API + "/api/chat/ticket", { method: "POST", headers: { Authorization: "Bearer " + tok } }); } catch (e) { throw new Error("OFFLINE"); }
-    var j = {}; try { j = await r.json(); } catch (e) {}
-    if (r.status === 401) { setToken(id, ""); throw new Error("NO_TOKEN"); }
-    if (!r.ok || !j.ok) throw new Error(j.error || "Couldn't get permission to send.");
-    return { t: j.ticket, at: Date.now() };
-  }
-  function refill(id) {   // keep two tickets ready so sending feels instant
-    if (refilling) return; refilling = true;
-    (async function () { try { while (tbuf.length < 2) tbuf.push(await fetchTicket(id)); } catch (e) {} refilling = false; })();
-  }
-  async function ticket(id) {
-    var now = Date.now(); tbuf = tbuf.filter(function (x) { return now - x.at < 80000; });
-    var x = tbuf.shift() || await fetchTicket(id);
-    refill(id);
-    return x.t;
-  }
-  window.VUS_AUTH = { obtain: obtain, ticket: ticket, hasToken: function (id) { return !!getToken(id); } };
-  window.addEventListener("vus:logout", function () { try { localStorage.removeItem(TKEY); } catch (e) {} tbuf = []; });
   var pane = document.getElementById("paneDev");
   if (!pane) return;
 
@@ -102,7 +68,7 @@
     var docs = el("div", "dev-card"); docs.appendChild(el("h4", "", "Send a message"));
     docs.appendChild(el("pre", "", "curl -X POST " + API + "/api/bot/send \\\n  -H \"Authorization: Bearer YOUR_TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"text\":\"Hello from my bot\"}'"));
     var ul = document.createElement("ul");
-    ["Messages are 1\u2013500 characters, one every 2 seconds, in the main chat. Bots can send text and shared large messages (SLM) only: no images, GIFs or videos.", "A wrong or old token is refused. Keep your token secret and rotate it if it leaks.", "If your account is muted or banned, your bot is muted too."].forEach(function (t) { ul.appendChild(el("li", "", t)); });
+    ["Messages are 1\u2013500 characters, one every 2 seconds, in the main chat.", "A wrong or old token is refused. Keep your token secret and rotate it if it leaks.", "If your account is muted or banned, your bot is muted too."].forEach(function (t) { ul.appendChild(el("li", "", t)); });
     docs.appendChild(ul); pane.appendChild(docs);
 
     var mutes = window.VUS_CHAT && window.VUS_CHAT.botMutedList ? window.VUS_CHAT.botMutedList() : {}, ids = Object.keys(mutes);

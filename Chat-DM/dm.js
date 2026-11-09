@@ -2656,7 +2656,6 @@ $authForm.addEventListener("submit", async (e) => {
     if (mode === "login") {
       const result = await login($loginIdentifier.value, $loginPassword.value);
       if (!result.ok) { $authError.textContent = result.error; return; }
-      try { if (window.VUS_AUTH) await window.VUS_AUTH.obtain(result.id, $loginPassword.value); } catch (e) { console.warn("Login token:", e); }   // the chat needs this token to send messages
       saveSession(result.accountKey, result.username, result.id);
       currentSession = result;
       claimOwnership(result.accountKey);
