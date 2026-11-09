@@ -1712,10 +1712,11 @@ function mzkSubIsOpen() { return $settingsModalEl.classList.contains("sub-open")
 document.getElementById("mzkOpenRow").addEventListener("click", () => showMzkSub(true));
 document.getElementById("mzkBackBtn").addEventListener("click", () => showMzkSub(false));
 function showSettingsTab(tab) {
-  settingsTab = tab === "chat" ? "chat" : "account";
+  settingsTab = tab === "chat" ? "chat" : tab === "dev" ? "dev" : "account";
   document.querySelectorAll("#settingsTabs .settings-tab").forEach(b => b.classList.toggle("active", b.dataset.tab === settingsTab));
   document.getElementById("paneAccount").classList.toggle("active", settingsTab === "account");
   document.getElementById("paneChat").classList.toggle("active", settingsTab === "chat");
+  const paneDevEl = document.getElementById("paneDev"); if (paneDevEl) paneDevEl.classList.toggle("active", settingsTab === "dev");
   if (settingsTab === "account") prepareAccountPane();
   else { stopProfileMzkSong(); }
   window.dispatchEvent(new CustomEvent("vus:settings-tab", { detail: { tab: settingsTab } }));

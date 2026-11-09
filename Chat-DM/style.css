@@ -2252,6 +2252,8 @@ body.hide-textfx .msg-bubble .fxtext, body.hide-textfx .member-name .fxtext { ba
 body:not(.hide-bubcolors) .msg-bubble.ubg { background: var(--user-background) !important; }
 body:not(.hide-textcolors) .msg-bubble.utc { color: var(--user-text-color) !important; }
 body.hide-bubcolors .msg-bubble.bubfx { animation: none !important; box-shadow: none !important; filter: none !important; }
+/* (Bot) tag: always shown, not affected by the Tags switch */
+.bot-tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 700; background: #312e81; border: 1px solid #6366f1; color: #e0e7ff; vertical-align: middle; }
 .msg.chan-hidden { display: none !important; }
 @media (max-width: 700px) { #appShell.mode-chat #channelsCol { position: absolute; left: 0; top: 0; bottom: 0; z-index: 40; box-shadow: 4px 0 16px rgba(0,0,0,.4); } }
 

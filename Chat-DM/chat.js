@@ -2242,10 +2242,24 @@ let mutedMap = {};                     // loginId -> { name }   (saved)
 let autoMuted = {};                    // loginId -> { name }   (this session only)
 try { mutedMap = JSON.parse(localStorage.getItem(MUTE_KEY) || "{}") || {}; } catch (e) { mutedMap = {}; }
 function saveMutes() { try { localStorage.setItem(MUTE_KEY, JSON.stringify(mutedMap)); } catch (e) {} }
+// Bots: hide only the (Bot) messages of one account on this browser. Muting the account itself hides its bot too
+// (same ID), and rotating the token keeps the ID, so the mute survives.
+const BOTMUTE_KEY = "vus_chat_botmuted_v1";
+let botMutedMap = {};                  // loginId -> { name }   (saved)
+try { botMutedMap = JSON.parse(localStorage.getItem(BOTMUTE_KEY) || "{}") || {}; } catch (e) { botMutedMap = {}; }
+function isBotMuted(loginId) { return !!botMutedMap[String(loginId || "")]; }
+function toggleBotMute(loginId, name) {
+  const id = String(loginId || "");
+  if (!id || id === String(myLoginId)) return false;
+  if (botMutedMap[id]) delete botMutedMap[id]; else botMutedMap[id] = { name: name || "Someone" };
+  try { localStorage.setItem(BOTMUTE_KEY, JSON.stringify(botMutedMap)); } catch (e) {}
+  applyMutesToDom();
+  return isBotMuted(id);
+}
 function isMuted(loginId) { const id = String(loginId || ""); return !!(id && (mutedMap[id] || autoMuted[id])); }
 function applyMutesToDom() {
   document.querySelectorAll(".msg[data-sender-id]").forEach(el => {
-    el.classList.toggle("muted-hidden", !el.classList.contains("mine") && isMuted(el.dataset.senderId));
+    el.classList.toggle("muted-hidden", !el.classList.contains("mine") && (isMuted(el.dataset.senderId) || (el.dataset.bot === "1" && isBotMuted(el.dataset.senderId))));
   });
   if (autoScroll && stickToBottom) scrollToBottom();
 }
@@ -2819,6 +2833,7 @@ function buildMessageActions(msg, mine) {
   };
   add("\uD83D\uDE0A", "Add reaction", (b) => { if (window.VUS_UI && window.VUS_UI.openEmojiPicker) window.VUS_UI.openEmojiPicker(b, e => reactTo(String(msg.id), e)); });
   add("\u21A9", "Reply", () => startReply(String(msg.id)));
+  if (!mine && msg.bot === true && msg.loginId) add("\uD83E\uDD16", "Mute or unmute this bot", () => { const on = toggleBotMute(msg.loginId, msg.name); showComposerNotice(on ? (msg.name || "That") + "'s bot is muted. Undo it in Settings > DEV." : "Bot unmuted."); });
   if (mine && msg.text && !msg.slm && !msg.imageData && !msg.gif) add("\u270F\uFE0F", "Edit", () => startEdit(String(msg.id)));
   return bar;
 }
@@ -2979,6 +2994,7 @@ function renderMessage(msg) {
   const el = document.createElement("div");
   el.className = "msg has-av" + (mine ? " mine" : "") + (aiPost ? " ai-post" : "");
   if (msg.loginId) el.dataset.senderId = String(msg.loginId);
+  if (msg.bot === true) el.dataset.bot = "1";
   if (msg.id) el.dataset.msgId = String(msg.id);
   if (msg.ts) el.dataset.ts = String(msg.ts);
   // Hidden (not removed) so unmuting brings a muted person's messages back; spam stays hidden for good.
@@ -2986,7 +3002,7 @@ function renderMessage(msg) {
   if (!mine) {
     if (msg.loginId && msg.ts >= liveSince && isSilenced(msg.loginId)) { el.classList.add("silenced-hidden"); hiddenForMe = true; }   // muted/banned: a modified client's posts stay invisible here
     else if (!isAiSender(msg.loginId) && (isSpamDuplicate(msg) || violatesRateLimit(msg))) { el.classList.add("spam-hidden"); hiddenForMe = true; }
-    else if (msg.loginId && isMuted(msg.loginId)) { el.classList.add("muted-hidden"); hiddenForMe = true; }
+    else if (msg.loginId && (isMuted(msg.loginId) || (msg.bot === true && isBotMuted(msg.loginId)))) { el.classList.add("muted-hidden"); hiddenForMe = true; }
     if (activeChannelId !== "announce" && !isAiSender(msg.loginId)) trackNewAccountBurst(msg);
     if (!hiddenForMe && msg.loginId && isMuted(msg.loginId)) hiddenForMe = true;
     // No real login id or no name = not a real account (forged client): hidden for everyone else.
@@ -3020,6 +3036,7 @@ function renderMessage(msg) {
     nameLink.addEventListener("click", () => openProfileFor(msg.loginId, msg.name));
   }
   meta.appendChild(nameLink);
+  if (msg.bot === true) { const bt = document.createElement("span"); bt.className = "bot-tag"; bt.textContent = "(Bot)"; meta.appendChild(bt); }   // only the server can set bot:true, so this always means a token-sent message
   if (msg.tag) { const te = tagEl(msg.tag); if (te) meta.appendChild(te); }
   if (msg.loginId) { const vt = document.createElement("span"); vt.className = "verified-tag"; vt.dataset.vid = String(msg.loginId); vt.textContent = "\u2713 Verified"; meta.appendChild(vt); paintVerifiedTag(vt); }
   if (msg.ts) meta.appendChild(document.createTextNode(" · " + formatTime(msg.ts)));
@@ -10406,6 +10423,7 @@ window.VUS_CHAT = {
   _crateProg(m, ms) { const p = progFor(); p.msgs = m; p.ms = ms; saveProg(); crateTick(true); },
   cosmFor: async id => { try { const p = await ChatBackend.getProfile(id); const c = cosmFields(p && p.cosm); if (!c.ring && p && p.color && p.color.ring) c.ring = p.color.ring; return c; } catch (e) { return {}; } },
   tagEl, applyRingTo,
+  toggleBotMute, botMutedList: () => botMutedMap,
   activeMsFor, formatActiveTime, openInventoryOf,
   banInfoFor: async id => {
     try {

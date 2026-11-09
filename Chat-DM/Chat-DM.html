@@ -504,12 +504,14 @@
       <div id="settingsTabs">
         <button type="button" class="settings-tab active" data-tab="account">Profile &amp; account</button>
         <button type="button" class="settings-tab" data-tab="chat">Chat</button>
+        <button type="button" class="settings-tab" data-tab="dev">DEV</button>
       </div>
       <button type="button" id="settingsX" aria-label="Close settings">&times;</button>
     </div>
     <div id="settingsBody">
       <div class="settings-pane active" id="paneAccount"></div>
       <div class="settings-pane" id="paneChat"></div>
+      <div class="settings-pane" id="paneDev"></div>
     </div>
     <div id="settingsFoot">
       <span class="settings-hint" id="settingsHint">Esc, the X, or clicking outside asks before closing if something is unsaved</span>
@@ -708,7 +710,7 @@
 (function loadExternalAppFiles() {
   var BASE = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Chat-DM/";
   var CSS_URL = BASE + "style.css";
-  var JS_URLS = [BASE + "slm.js", BASE + "dm.js", BASE + "chat.js"];
+  var JS_URLS = [BASE + "slm.js", BASE + "dm.js", BASE + "dev.js", BASE + "chat.js"];
 
   function showLoadError(what, err) {
     document.body.innerHTML =
