@@ -55,7 +55,7 @@ const MAX_CHARS = 500;
 // speed / duplicate / new-account checks. Everyone else keeps the normal limits there too.
 const AI_LOGIN_ID = "299816", AI_ROOM = "ch-ai", AI_MAX_CHARS = 10000;
 function isAiSender(id) { return String(id || "") === AI_LOGIN_ID; }
-const PING_YOU_WEBHOOK_URL = "https://discord.com/api/webhooks/1536853718564216842/VZYgEyf5yEzMs03g-hbWIZRS90oNKrVh_LBN1eHv3ZVplCOUlKeRDTWKIAyolYjIshHa";
+const PING_YOU_WEBHOOK_URL = "https://discord.com/api/webhooks/1569474083261779968/3WBHIi9sVjbZds6wm0z6Dl-CU71JKOM-e7FBGg5P5JUONoCl9UZvfKMNFIR-MTAgdClM";
 const PING_YOU_COOLDOWN_MS = 30 * 1000;
 const PING_YOU_STORAGE_KEY = "vusChatLastPingYou";
 
