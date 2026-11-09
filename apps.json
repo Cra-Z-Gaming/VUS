@@ -38,6 +38,7 @@
 {"name":"","url":"","desc":"","icon":"","color":""}
 ],
 "hubs":[
+{"name":"achroma","url":"https://d19411ec78tn7n.cloudfront.net","desc":"very nice proxy","icon":"","color":""},
 {"name":"KBH Games","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUSL/refs/heads/main/Other/KBH-Games.html","desc":"not sure if it works, but its more games","icon":"KBH","color":"blue"},
 {"name":"REIDS GAMES","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUSL/refs/heads/main/Other/REIDS-GAMES","desc":"found another site that works similar to mine but its for games and some movies","icon":"REID","color":"red"},
 {"name":"Greeni","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUSL/refs/heads/main/Other/Greeni","desc":"movies and games","icon":"","color":"green"},
@@ -64,7 +65,6 @@
 {"name":"Ghost Hub Cinema","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/other/Ghost-Cinema","desc":"collection of movies","icon":"GHC","color":"white"},
 {"name":"Nexus","url":"https://car-meow.github.io/toothbrush","desc":"","icon":"","color":""},
 {"name":"Nova","url":"https://6hvyy6vz52-cyber.github.io/nova-hub-links/","desc":"","icon":"Nova","color":""},
-{"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
