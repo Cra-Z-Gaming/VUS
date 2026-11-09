@@ -50,4 +50,20 @@ function verifyPassword(password, stored) {
   return safeEq(bits.toString("base64"), p[3]);
 }
 
-module.exports = { admin, crypto, MAIN_ROOM, chatDb, dmDb, sha256, safeEq, cors, readBody, accountById, verifyPassword };
+// Checks a 6-digit ID + password, with a lockout after 5 wrong tries (10 minutes). Used by token creation.
+// Returns { ok:true } or { ok:false, status, error }.
+async function passwordGate(db, id, password) {
+  if (!/^\d{6}$/.test(id) || !password) return { ok: false, status: 400, error: "Send your 6-digit ID and your password." };
+  const now = Date.now(), triesRef = db.ref("botAttempts/" + id), tries = (await triesRef.get()).val() || {};
+  if (tries.until && tries.until > now) return { ok: false, status: 429, error: "Too many wrong passwords. Try again in a few minutes." };
+  const found = await accountById(id);
+  if (!found || !verifyPassword(password, found.account.password)) {
+    const fails = (tries.fails || 0) + 1;
+    await triesRef.set(fails >= 5 ? { fails: 0, until: now + 10 * 60 * 1000 } : { fails, until: 0 });
+    return { ok: false, status: 401, error: "Incorrect ID or password." };
+  }
+  await triesRef.remove();
+  return { ok: true, found };
+}
+
+module.exports = { admin, crypto, MAIN_ROOM, chatDb, dmDb, sha256, safeEq, cors, readBody, accountById, verifyPassword, passwordGate };
