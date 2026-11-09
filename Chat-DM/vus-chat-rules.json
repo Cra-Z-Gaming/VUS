@@ -312,8 +312,10 @@
               ".validate": "newData.hasChildren(['id','l','n','exp'])",
               "id": { ".validate": "newData.isString() && newData.val().matches(/^[A-Z0-9]{6}$/)" },
               "l": { ".validate": "newData.isBoolean()" },
-              "n": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 300000" },
+              "n": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 3000000" },
               "exp": { ".validate": "newData.isNumber()" },
+              "name": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 100" },
+              "ext": { ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9]{1,12}$/)" },
               "$x": { ".validate": false }
             },
             "rfx": {

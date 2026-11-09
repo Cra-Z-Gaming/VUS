@@ -2148,18 +2148,18 @@ body.bg-video #messages, body.bg-video #chatMessages { z-index: 1; }
 .cr-slot:hover { color: #e2e8f0; border-color: #64748b; }
 .cr-slot.on { background: #166534; border-color: #22c55e; color: #dcfce7; }
 /* bubble effects (fades, animations, custom colours) */
-.msg-bubble.bubfx, .cr-bubprev.bubfx { background: linear-gradient(135deg, var(--b1), var(--b2), var(--b3)) !important; color: var(--bt, #fff) !important; text-shadow: var(--bts, none); border-color: transparent !important; }
+body:not(.hide-bubcolors) .msg-bubble.bubfx, .cr-bubprev.bubfx { background: linear-gradient(135deg, var(--b1), var(--b2), var(--b3)) !important; color: var(--bt, #fff) !important; text-shadow: var(--bts, none); border-color: transparent !important; }
 .cr-bubprev { padding: 8px 12px; border-radius: 12px; font-size: 14px; display: inline-block; max-width: 100%; }
 .cr-bubprev-big { font-size: 16px; padding: 10px 14px; }
 .bubfx.bub-flow { background-size: 300% 300% !important; animation: bubFlow 6s ease infinite; }
 @keyframes bubFlow { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
 .bubfx.bub-pulse { animation: bubPulse 2.4s ease-in-out infinite; }
 @keyframes bubPulse { 0%, 100% { box-shadow: 0 0 0 0 transparent; filter: brightness(1); } 50% { box-shadow: 0 0 14px 2px var(--b1); filter: brightness(1.18); } }
-.msg-bubble.bubfx.bub-neon, .cr-bubprev.bubfx.bub-neon { background: #0b1220 !important; border: 2px solid var(--b1) !important; box-shadow: 0 0 10px var(--b1), inset 0 0 8px var(--b2); animation: bubNeon 5s linear infinite; }
+body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-neon, .cr-bubprev.bubfx.bub-neon { background: #0b1220 !important; border: 2px solid var(--b1) !important; box-shadow: 0 0 10px var(--b1), inset 0 0 8px var(--b2); animation: bubNeon 5s linear infinite; }
 @keyframes bubNeon { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(360deg); } }
-.msg-bubble.bubfx.bub-shimmer, .cr-bubprev.bubfx.bub-shimmer { background: linear-gradient(110deg, transparent 35%, rgba(255,255,255,.38) 50%, transparent 65%), linear-gradient(135deg, var(--b1), var(--b2)) !important; background-size: 250% 100%, 100% 100% !important; animation: bubShimmer 3.2s linear infinite; }
+body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-shimmer, .cr-bubprev.bubfx.bub-shimmer { background: linear-gradient(110deg, transparent 35%, rgba(255,255,255,.38) 50%, transparent 65%), linear-gradient(135deg, var(--b1), var(--b2)) !important; background-size: 250% 100%, 100% 100% !important; animation: bubShimmer 3.2s linear infinite; }
 @keyframes bubShimmer { 0% { background-position: 150% 0, 0 0; } 100% { background-position: -50% 0, 0 0; } }
-.msg-bubble.bubfx.bub-rainbow, .cr-bubprev.bubfx.bub-rainbow { background: linear-gradient(90deg, #ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ef4444) !important; background-size: 400% 100% !important; animation: bubRainbow 8s linear infinite; --bt: #fff; --bts: 0 1px 2px rgba(0,0,0,.5); }
+body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-rainbow, .cr-bubprev.bubfx.bub-rainbow { background: linear-gradient(90deg, #ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ef4444) !important; background-size: 400% 100% !important; animation: bubRainbow 8s linear infinite; --bt: #fff; --bts: 0 1px 2px rgba(0,0,0,.5); }
 @keyframes bubRainbow { 0% { background-position: 0% 50%; } 100% { background-position: 400% 50%; } }
 .cr-bubedit { margin-top: 12px; padding: 10px; border: 1px solid #334155; border-radius: 12px; background: rgba(15,23,42,.5); }
 .cr-bubedit-h { font-size: 12px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: #94a3b8; margin-bottom: 8px; }
@@ -2244,6 +2244,14 @@ body.hide-members #appShell.mode-chat #membersPane { display: none !important; }
 .verified-tag { display: none; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: rgba(34,197,94,.16); color: #4ade80; border: 1px solid rgba(34,197,94,.45); font-size: 11px; font-weight: 700; vertical-align: middle; }
 .verified-tag.on, .verified-tag.in-card { display: inline-block; }
 body.hide-verified .verified-tag { display: none !important; }
+/* Personalization > effects switches: hide fonts, tags, colours and effects on what other people (and you) have equipped */
+body.hide-fonts .fonted-name:not(.fontprev), body.hide-fonts .fonted-text { font-family: inherit !important; zoom: 1 !important; letter-spacing: normal !important; }
+body.hide-tags .msg-meta .msg-tag { display: none !important; }
+body.hide-rings .msg-av.has-ring, body.hide-rings .member-av.has-ring { box-shadow: none !important; animation: none !important; }
+body.hide-textfx .msg-bubble .fxtext, body.hide-textfx .member-name .fxtext { background: none !important; color: inherit !important; -webkit-text-fill-color: currentColor !important; text-shadow: none !important; filter: none !important; animation: none !important; }
+body:not(.hide-bubcolors) .msg-bubble.ubg { background: var(--user-background) !important; }
+body:not(.hide-textcolors) .msg-bubble.utc { color: var(--user-text-color) !important; }
+body.hide-bubcolors .msg-bubble.bubfx { animation: none !important; box-shadow: none !important; filter: none !important; }
 .msg.chan-hidden { display: none !important; }
 @media (max-width: 700px) { #appShell.mode-chat #channelsCol { position: absolute; left: 0; top: 0; bottom: 0; z-index: 40; box-shadow: 4px 0 16px rgba(0,0,0,.4); } }
 

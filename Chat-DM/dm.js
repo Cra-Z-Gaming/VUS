@@ -3255,12 +3255,23 @@ function renderDmMedia(bubble, msg) {
 }
 
 let pendingImageDataUrl = null;
+// A picked file that isn't a picture/video/audio: offer it as a shared file (SLM).
+async function sendFileAsSlmDm(file) {
+  if (!openChatAccountKey && !openChatGcId) return;
+  if (sendCooldownActive) { showComposerNotice("Slow down \u2014 wait a moment before sending again."); return; }
+  const slmGc = openChatGcId, slmKey = openChatAccountKey;
+  const r = await window.VUS_SLM.offerFile(file);
+  if (!r) return;
+  beginSendCooldown();
+  const res = await (slmGc ? sendGroupMessage(slmGc, r.previewText, null, null, null, r.slm) : sendDirectMessage(slmKey, r.previewText, null, null, null, r.slm));
+  if (res && !res.ok) showComposerNotice(res.error);
+}
 async function stageImageFile(file) {
   if (!file) return;
   if (!openChatAccountKey && !openChatGcId) return;
   if (file.type.startsWith("video/") || file.type.startsWith("audio/")) return stageMediaFile(file);
   if (file.type === "image/gif") { try { await stageGifFile(file); } catch (e) { showComposerNotice(e.message || "Couldn't use that GIF."); $imageFileInput.value = ""; } return; }
-  if (!file.type.startsWith("image/")) { showComposerNotice("That file isn't an image."); $imageFileInput.value = ""; return; }
+  if (!file.type.startsWith("image/")) { $imageFileInput.value = ""; if (window.VUS_SLM) sendFileAsSlmDm(file); else showComposerNotice("That file isn't an image."); return; }
   if (file.size > MAX_IMAGE_SOURCE_BYTES) { showComposerNotice("Image is too large (max 15 MB)."); $imageFileInput.value = ""; return; }
   $uploadImageBtn.disabled = true;
   try {

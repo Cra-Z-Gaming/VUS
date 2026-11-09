@@ -9,7 +9,19 @@
           ".read": "data.child('expiresAt').val() > now && !data.parent().child('del').exists()",
           ".validate": "newData.hasChildren(['code', 'protected', 'createdAt', 'expiresAt'])",
           "code": {
-            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 300000"
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 3000000"
+          },
+          "name": {
+            ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 100"
+          },
+          "ext": {
+            ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9]{1,12}$/)"
+          },
+          "mime": {
+            ".validate": "newData.isString() && newData.val().length <= 100"
+          },
+          "b64": {
+            ".validate": "newData.isBoolean()"
           },
           "protected": {
             ".validate": "newData.isBoolean()"

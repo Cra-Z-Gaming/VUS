@@ -1749,6 +1749,13 @@ function applyAppearance() {
   b.classList.toggle("bold-text", !!chatPrefs.bold);
   b.classList.toggle("hide-verified", chatPrefs.showVerified === false);
   b.classList.toggle("hide-members", chatPrefs.hideMembers === true);
+  // effects switches (Personalization): each hides what people have equipped, instantly, through CSS
+  b.classList.toggle("hide-fonts", chatPrefs.showFonts === false);
+  b.classList.toggle("hide-tags", chatPrefs.showTags === false);
+  b.classList.toggle("hide-bubcolors", chatPrefs.showBubbleColors === false);
+  b.classList.toggle("hide-textcolors", chatPrefs.showTextColors === false);
+  b.classList.toggle("hide-textfx", chatPrefs.showTextFx === false);
+  b.classList.toggle("hide-rings", chatPrefs.showRings === false);
   b.classList.add("has-radius");
   const r = Number(chatPrefs.radius);
   b.style.setProperty("--bubble-radius", (r >= 0 && r <= 40 ? r : 12) + "px");
@@ -3070,8 +3077,8 @@ function renderMessage(msg) {
   }
 
   if (!msg.imageData && !msg.video && !msg.gif && !msg.poll && !bubble.classList.contains("bubfx")) {   // a bubble effect replaces the solid colour
-    if (msg.bubble) bubble.style.background = msg.bubble;
-    if (msg.textColor) bubble.style.color = msg.textColor;
+    if (msg.bubble) { bubble.style.setProperty("--user-background", msg.bubble); bubble.classList.add("ubg"); }   // class + variable, so the Personalization switch can turn it off
+    if (msg.textColor) { bubble.style.setProperty("--user-text-color", msg.textColor); bubble.classList.add("utc"); }
   }
 
   if (msg.replyTo && typeof msg.replyTo === "object") {
@@ -4607,6 +4614,17 @@ async function stageVideoFile(file0) {
   finally { resetUploadBtn(); }
 }
 
+// A picked or dropped file that isn't a picture/video/audio: offer it as a shared file (SLM).
+async function sendFileAsSlm(file) {
+  if (activeChannelId === "announce" || activeChannelId === "ai") { showComposerNotice("Files can't be sent in this channel."); return; }
+  if (myTimeoutRemainingMs > 0) { showComposerNotice(mutedNotice()); return; }
+  const wait = currentImageCooldownMs() - (Date.now() - lastImageSentAt);
+  if (wait > 0) { showComposerNotice("Files have a " + Math.round(currentImageCooldownMs() / 1000) + "s delay for your rank \u2014 wait " + Math.ceil(wait / 1000) + "s."); return; }
+  const r = await window.VUS_SLM.offerFile(file);
+  if (!r) return;
+  lastImageSentAt = Date.now();
+  finalizeSend(r.previewText, null, r.slm);
+}
 function stageImageFile(file) {
   if (!canPostImages()) return;
 
@@ -4614,6 +4632,7 @@ function stageImageFile(file) {
   const mime = guessMime(file);
   if (/^video\//.test(mime) || /^audio\//.test(mime)) { stageVideoFile(file); return; }
   if (!mime.startsWith("image/")) {
+    if (window.VUS_SLM) { $imageFileInput.value = ""; sendFileAsSlm(file); return; }
     $connError.textContent = "That file isn't an image, GIF, video or audio file.";
     $connError.style.display = "block";
     return;
@@ -4733,7 +4752,7 @@ async function sendGifFromPicker(url) {
   const hasFiles = e => e.dataTransfer && [...(e.dataTransfer.types || [])].includes("Files");
   const chatVisible = () => $chatScreen && $chatScreen.style.display !== "none" && !!myLoginId;
   const showHint = on => {
-    if (on && !hint) { hint = document.createElement("div"); hint.className = "drop-hint"; hint.textContent = "Drop a picture, GIF, video or audio file to attach it"; document.body.appendChild(hint); }
+    if (on && !hint) { hint = document.createElement("div"); hint.className = "drop-hint"; hint.textContent = "Drop a file to attach it (pictures, GIFs, video, audio, or any file up to 1.5 MB)"; document.body.appendChild(hint); }
     if (!on && hint) { hint.remove(); hint = null; }
   };
   window.addEventListener("dragenter", e => { if (!hasFiles(e) || !chatVisible()) return; e.preventDefault(); depth++; showHint(true); });
@@ -4982,6 +5001,13 @@ function renderChatSettings(container) {
     host.appendChild(row);
   }
   renderBackgroundControls(host, choice);
+    [["Fonts", "Custom fonts on names and messages (chat and online list)", "showFonts"],
+   ["Tags", "Tags next to names", "showTags"],
+   ["Bubble colours", "Custom bubble colours and bubble effects", "showBubbleColors"],
+   ["Text colours", "Custom message text colours", "showTextColors"],
+   ["Text effects", "Animated and gradient text effects", "showTextFx"],
+   ["Avatar rings", "Rings around profile pictures", "showRings"]
+  ].forEach(([lbl, hint, key]) => toggle("Show " + lbl.toLowerCase(), hint + ". Turn off to see plain names and bubbles.", () => chatPrefs[key] !== false, v => { chatPrefs[key] = v; saveChatPrefs(); applyAppearance(); }));
   card("\uD83E\uDDF0", "Tools", "Quick actions");
 
   const action = (label, onClick, danger) => {
