@@ -22,8 +22,8 @@ module.exports = async (req, res) => {
     const keys = Object.keys(all).sort((a, c) => (all[a].createdAt || 0) - (all[c].createdAt || 0));
     for (const k of keys.slice(0, Math.max(0, keys.length - 5))) await ref.child(k).remove();
 
-    // The first token ever issued fixes the cutover: chat messages written after it must carry a ticket.
-    await db.ref("config/tokenCutover").transaction((v) => v || Date.now());
+    // Enforcement is switched on separately, in the chat database: set config/tokensRequiredSince (see the setup notes).
+    
     return res.json({ ok: true, token });
   } catch (e) {
     console.error(e);
