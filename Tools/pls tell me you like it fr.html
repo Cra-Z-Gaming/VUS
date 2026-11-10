@@ -1,0 +1,204 @@
+<!DOCTYPE html> 
+<html lang="en"> 
+<head> 
+<meta charset="UTF-8"> 
+<meta name="viewport" content="width=device-width, initial-scale=1.0"> 
+<title>Calendar</title> 
+<style> 
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; transition: all 0.3s ease; } 
+body { background: linear-gradient(135deg, #151324, #44385a); color: #fff; min-height: 100vh; padding: 20px; display: flex; flex-direction: column; align-items: center; overflow: hidden; } 
+.glass { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); backdrop-filter: blur(20px); border-radius: 20px; } 
+.controls { display: flex; gap: 15px; margin-bottom: 15px; } 
+select, button { padding: 10px 20px; color: #fff; cursor: pointer; outline: none; font-size: 15px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.12); } 
+select { appearance: none; padding-right: 35px; background: rgba(255,255,255,0.04) url("data:image/svg+xml;utf8,<svg xmlns='http://w3.org' width='10' height='6' fill='none'><path d='M1 1l4 4 4-4' stroke='%23fff' stroke-width='1.5' stroke-linecap='round'/></svg>") no-repeat right 15px center; } 
+select option { background: #231c33; } 
+select:hover, button:hover { background: rgba(255,255,255,0.15); transform: translateY(-2px); } 
+.calendar-card { width: 100%; flex: 1; padding: 20px; display: flex; flex-direction: column; box-shadow: 0 30px 60px rgba(0,0,0,0.4); max-width: 1400px; } 
+.weekdays, .days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; text-align: center; } 
+.weekdays { margin-bottom: 10px; } 
+.weekdays div { font-weight: 600; opacity: 0.5; font-size: 12px; text-transform: uppercase; } 
+.days { flex: 1; } 
+.day { border-radius: 14px; padding: 10px; display: flex; flex-direction: column; cursor: pointer; background: rgba(255,255,255,0.02); position: relative; } 
+.day:hover { background: rgba(255,255,255,0.08); transform: scale(1.02); } 
+.day.empty { background: transparent; border: none; pointer-events: none; } 
+.day-header { display: flex; justify-content: space-between; align-items: center; } 
+.date-num { font-size: 16px; font-weight: 700; opacity: 0.8; } 
+.add-inline-btn { width: 22px; height: 22px; border-radius: 50%; border: none; background: rgba(255,255,255,0.1); color: #fff; font-size: 14px; display: flex; align-items: center; justify-content: center; opacity: 0; } 
+.day:hover .add-inline-btn { opacity: 1; } 
+.add-inline-btn:hover { background: #b388ff; color: #151324; transform: scale(1.1); } 
+.events { font-size: 10px; display: flex; flex-direction: column; gap: 4px; overflow: hidden; margin-top: 5px; flex: 1; } 
+.event-tag { background: rgba(255,255,255,0.15); padding: 2px 6px; border-radius: 6px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; border-left: 3px solid #b388ff; } 
+.modal { position: fixed; inset: 0; background: rgba(15,12,26,0.8); z-index: 100; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; backdrop-filter: blur(0px); } 
+.modal.active { opacity: 1; pointer-events: auto; backdrop-filter: blur(25px); } 
+.modal-content { width: 90%; max-width: 500px; padding: 30px; transform: scale(0.9); display: flex; flex-direction: column; gap: 15px; } 
+.modal.active .modal-content { transform: scale(1); } 
+.modal.fullscreen .modal-content { max-width: 90%; height: 80vh; } 
+input { width: 100%; padding: 12px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #fff; outline: none; } 
+input:focus { border-color: #b388ff; } 
+.modal-events { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin: 10px 0; max-height: 300px; } 
+.modal.fullscreen .modal-events { max-height: none; } 
+.modal-event-item { background: rgba(255,255,255,0.06); padding: 10px 12px; border-radius: 8px; border-left: 4px solid #b388ff; display: flex; justify-content: space-between; align-items: center; font-size: 13px; } 
+.modal-event-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 10px; } 
+.modal-event-item button { padding: 4px 8px; font-size: 11px; border-radius: 6px; margin-left: 4px; } 
+.modal-btns { display: flex; justify-content: flex-end; gap: 10px; } 
+.dashboard { margin-top: 15px; padding: 10px 30px; display: flex; gap: 30px; font-size: 14px; opacity: 0.8; width: 100%; max-width: 1400px; } 
+.author { margin-right: auto; font-weight: 700; color: #b388ff; } 
+</style> 
+</head> 
+<body> 
+<div class="controls"> 
+  <select id="monthSelect" class="glass"></select> 
+  <select id="yearSelect" class="glass"></select> 
+  <button id="downloadBtn" class="glass">Download HTML</button>
+</div> 
+<div class="calendar-card glass"> 
+  <div class="weekdays"> 
+    <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div> 
+  </div> 
+  <div class="days" id="daysContainer"></div> 
+</div> 
+<div class="dashboard glass"> 
+  <span class="author">made by ricky</span> 
+  <span id="clock">00:00:00 AM</span> 
+  <span id="battery">Battery: --%</span> 
+</div> 
+<div class="modal" id="eventModal"> 
+  <div class="modal-content glass"> 
+    <h2 id="modalTitle">Date Details</h2> 
+    <div class="modal-events" id="modalEvents"></div> 
+    <input type="text" id="eventInput" placeholder="Write new plan..."> 
+    <div class="modal-btns"> 
+      <button class="glass" onclick="closeModal()">Close</button> 
+      <button class="glass" id="saveEventBtn" style="background:rgba(179,136,255,0.25);">Save</button> 
+    </div> 
+  </div> 
+</div> 
+<script> 
+const mSel = document.getElementById('monthSelect'), 
+      ySel = document.getElementById('yearSelect'), 
+      dCont = document.getElementById('daysContainer'), 
+      modal = document.getElementById('eventModal'), 
+      mTitle = document.getElementById('modalTitle'), 
+      mEvs = document.getElementById('modalEvents'), 
+      evIn = document.getElementById('eventInput'), 
+      saveBtn = document.getElementById('saveEventBtn'), 
+      downloadBtn = document.getElementById('downloadBtn'),
+      months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]; 
+
+let curM = 10, curY = 2026, actKey = null, editIdx = null, storage = JSON.parse(localStorage.getItem('glass_cal_events')) || {}; 
+
+function init() { 
+  [2026, 2027].forEach(y => ySel.add(new Option(y, y))); 
+  ySel.onchange = () => { 
+    mSel.innerHTML = ''; 
+    months.forEach((m, i) => { 
+      if (parseInt(ySel.value) === 2026 && i < 10) return; 
+      mSel.add(new Option(m, i)); 
+    }); 
+    render(); 
+  }; 
+  mSel.onchange = render; 
+  ySel.dispatchEvent(new Event('change')); 
+  setInterval(() => document.getElementById('clock').innerText = new Date().toLocaleTimeString(), 1000); 
+  
+  if (navigator.getBattery) { 
+    navigator.getBattery().then(b => { 
+      const u = () => document.getElementById('battery').innerText = `Battery: ${Math.round(b.level * 100)}%${b.charging ? ' ⚡' : ''}`; 
+      u(); 
+      b.onlevelchange = b.onchargingchange = u; 
+    }); 
+  } 
+
+  downloadBtn.onclick = () => {
+    const htmlContent = document.documentElement.outerHTML;
+    const blob = new Blob(['<!DOCTYPE html>\n' + htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'calendar.html';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+} 
+
+function render() { 
+  curM = parseInt(mSel.value); 
+  curY = parseInt(ySel.value); 
+  dCont.innerHTML = ''; 
+  let fDay = new Date(curY, curM, 1).getDay(), 
+      tDays = new Date(curY, curM + 1, 0).getDate(); 
+  for (let i = 0; i < fDay; i++) dCont.appendChild(Object.assign(document.createElement('div'), {className: 'day empty'})); 
+  for (let d = 1; d <= tDays; d++) { 
+    let c = document.createElement('div'), k = `${curY}-${curM}-${d}`, lbl = `${months[curM]} ${d}, ${curY}`; 
+    c.className = 'day glass'; 
+    c.innerHTML = `<div class="day-header"><button class="add-inline-btn">+</button><div class="date-num">${d}</div></div><div class="events"></div>`; 
+    let eD = c.querySelector('.events'); 
+    if (storage[k]) storage[k].forEach(e => eD.innerHTML += `<div class="event-tag">${e}</div>`); 
+    c.onclick = (e) => { 
+      if (e.target.classList.contains('add-inline-btn')) { 
+        openModal(k, lbl, false); 
+      } else { 
+        openModal(k, lbl, true); 
+      } 
+    }; 
+    dCont.appendChild(c); 
+  } 
+} 
+
+function openModal(k, l, full) { 
+  actKey = k; 
+  editIdx = null; 
+  mTitle.innerText = l; 
+  refreshModalList(); 
+  evIn.value = ''; 
+  modal.classList.toggle('fullscreen', full); 
+  modal.classList.add('active'); 
+  evIn.focus(); 
+} 
+
+function refreshModalList() { 
+  mEvs.innerHTML = ''; 
+  (storage[actKey] || []).forEach((e, i) => { 
+    mEvs.innerHTML += `<div class="modal-event-item"><span>${e}</span><div><button class="glass" onclick="editEvent(${i})">Edit</button><button class="glass" onclick="delEvent(${i})">X</button></div></div>`; 
+  }); 
+} 
+
+window.editEvent = (i) => { 
+  evIn.value = storage[actKey][i]; 
+  editIdx = i; 
+  evIn.focus(); 
+}; 
+
+window.delEvent = (i) => { 
+  storage[actKey].splice(i, 1); 
+  if (!storage[actKey].length) delete storage[actKey]; 
+  localStorage.setItem('glass_cal_events', JSON.stringify(storage)); 
+  refreshModalList(); 
+  render(); 
+}; 
+
+function closeModal() { 
+  modal.classList.remove('active'); 
+} 
+
+saveBtn.onclick = () => { 
+  if (!evIn.value.trim()) return; 
+  if (!storage[actKey]) storage[actKey] = []; 
+  if (editIdx !== null) { 
+    storage[actKey][editIdx] = evIn.value.trim(); 
+    editIdx = null; 
+  } else { 
+    storage[actKey].push(evIn.value.trim()); 
+  } 
+  localStorage.setItem('glass_cal_events', JSON.stringify(storage)); 
+  evIn.value = ''; 
+  refreshModalList(); 
+  render(); 
+}; 
+
+init(); 
+</script> 
+</body> 
+</html>
