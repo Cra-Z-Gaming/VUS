@@ -78,7 +78,7 @@
 "tools":[
 {"name":"AI Code Editor","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/AI-HTML-Studio","desc":"Code editor with AI — replace, add, and delete specific lines","icon":"CE","color":"violet"},
 {"name":"Code Editor","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/HTML%20Editor","desc":"Live HTML code editor with preview","icon":"CE","color":"blue"},
-{"name":"about:blank Opener","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/about%3Ablank-opener","desc":"Opens files and sites as about:blank - many sites block cloaking","icon":"AB","color":"amber"},
+{"name":"about:blank Opener","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/aboutblank-opener","desc":"Opens files and sites as about:blank - many sites block cloaking","icon":"AB","color":"amber"},
 {"name":"GitHub","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Tools/GitHub.html","desc":"Git api to replicate github","icon":"Git","color":"purple"},
 {"name":"Timer","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Timer","desc":"Stopwatch + countdown timer","icon":"⏰","color":"orange"},
 {"name":"Local Music Player","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/vus-music-player.html","desc":"Play your own music files locally","icon":"LMP","color":"rose"},
