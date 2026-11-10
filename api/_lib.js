@@ -77,4 +77,15 @@ async function passwordGate(db, id, password) {
   return { ok: true, found };
 }
 
-module.exports = { admin, crypto, MAIN_ROOM, chatDb, dmDb, sha256, safeEq, cors, readBody, fail, accountById, verifyPassword, passwordGate };
+// Checks a login token (vss_...) from the Authorization header. Returns { id } or { fail: [status, code, error, extra] }.
+async function verifyLogin(req, db) {
+  const auth = String(req.headers.authorization || "").trim();
+  if (!auth) return { fail: [401, "MISSING_TOKEN", "No login token was sent.", { hint: "Confirm your password when asked; the chat then sends a token for you." }] };
+  const m = /^Bearer\s+(vss_(\d{6})_([0-9a-f]{8})_[A-Za-z0-9_-]{43})$/.exec(auth);
+  if (!m) return { fail: [401, "BAD_TOKEN_FORMAT", "That is not a login token."] };
+  const rec = (await db.ref("sessTokens/" + m[2] + "/" + m[3]).get()).val();
+  if (!rec || !rec.salt || !safeEq(sha256(rec.salt + m[1]), rec.hash)) return { fail: [401, "INVALID_TOKEN", "This login token is not valid any more.", { hint: "Confirm your password again." }] };
+  return { id: m[2] };
+}
+
+module.exports = { admin, crypto, MAIN_ROOM, chatDb, dmDb, sha256, safeEq, cors, readBody, fail, accountById, verifyPassword, passwordGate, verifyLogin };
