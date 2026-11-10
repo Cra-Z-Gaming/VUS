@@ -27,6 +27,6 @@ module.exports = async (req, res) => {
     return res.json({ ok: true, token });
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ ok: false, error: "Server error." });
+    return res.status(500).json({ ok: false, error: e && e.config ? e.message : "Server error." });
   }
 };

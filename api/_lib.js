@@ -8,7 +8,11 @@ const MAIN_ROOM = "vus-hub-main";
 function app(name, envVar, databaseURL) {
   const existing = admin.apps.find((a) => a && a.name === name);
   if (existing) return existing;
-  return admin.initializeApp({ credential: admin.credential.cert(JSON.parse(process.env[envVar])), databaseURL }, name);
+  if (!process.env[envVar]) throw Object.assign(new Error("The server is missing the " + envVar + " environment variable (add it in Vercel, then redeploy)."), { config: true });
+  let key;
+  try { key = JSON.parse(process.env[envVar]); } catch (e) { throw Object.assign(new Error(envVar + " is not valid JSON (paste the whole service-account file)."), { config: true }); }
+  try { return admin.initializeApp({ credential: admin.credential.cert(key), databaseURL }, name); }
+  catch (e) { throw Object.assign(new Error(envVar + " is not a valid service-account key."), { config: true }); }
 }
 const chatDb = () => app("chat", "FIREBASE_CHAT_SA", "https://vus-chat-default-rtdb.firebaseio.com").database();
 const dmDb = () => app("dm", "FIREBASE_DM_SA", "https://vus-dm-default-rtdb.firebaseio.com").database();
