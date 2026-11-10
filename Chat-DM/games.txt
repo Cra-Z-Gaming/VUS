@@ -7,6 +7,8 @@ Add games below as [Title](raw github link). Any number per line, any spacing. L
 [VUSxICH](https://raw.githubusercontent.com/v-x-i/x/refs/heads/main/VUSxICH-Launcher.html
 [Notes](https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Notes)
 [HTML Editor](https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/HTML%20Editor)
+[Jetpack Joyride](https://raw.githubusercontent.com/Cra-Z-Gaming/VUSL/refs/heads/main/HTML_Games/jetpackjoyride.html)
+
 
 
 [Title](Link) [Title](Link) [Title](Link) [Title](Link) [Title](Link) [Title](Link)
