@@ -10465,6 +10465,7 @@ window.VUS_CHAT = {
   cosmFor: async id => { try { const p = await ChatBackend.getProfile(id); const c = cosmFields(p && p.cosm); if (!c.ring && p && p.color && p.color.ring) c.ring = p.color.ring; return c; } catch (e) { return {}; } },
   tagEl, applyRingTo,
   toggleBotMute, botMutedList: () => botMutedMap,
+  myId: () => myLoginId, myName: () => myName, crateStock, srvNow, db: () => ChatBackend._db,
   activeMsFor, formatActiveTime, openInventoryOf,
   banInfoFor: async id => {
     try {

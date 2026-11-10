@@ -12,6 +12,10 @@
       ".read": true,
       ".write": false
     },
+    "games": {
+      ".read": true,
+      ".write": false
+    },
     "botTokens": {
       ".read": true,
       ".write": false

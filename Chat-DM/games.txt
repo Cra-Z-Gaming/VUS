@@ -10,7 +10,6 @@ Add games below as [Title](raw github link). Any number per line, any spacing. L
 [Jetpack Joyride](https://raw.githubusercontent.com/Cra-Z-Gaming/VUSL/refs/heads/main/HTML_Games/jetpackjoyride.html)
 
 
-
 [Title](Link) [Title](Link) [Title](Link) [Title](Link) [Title](Link) [Title](Link)
 [Title](Link) [Title](Link) [Title](Link) [Title](Link) [Title](Link) [Title](Link)
 [Title](Link) [Title](Link) [Title](Link) [Title](Link) [Title](Link) [Title](Link)

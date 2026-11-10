@@ -710,7 +710,7 @@
 (function loadExternalAppFiles() {
   var BASE = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Chat-DM/";
   var CSS_URL = BASE + "style.css";
-  var JS_URLS = [BASE + "slm.js", BASE + "dm.js", BASE + "dev.js", BASE + "chat.js"];
+  var JS_URLS = [BASE + "slm.js", BASE + "dm.js", BASE + "dev.js", BASE + "chat.js", BASE + "games.js"];
 
   function showLoadError(what, err) {
     document.body.innerHTML =
@@ -747,7 +747,7 @@
   }
   loadCss()
     .catch(function (err) { showLoadError("styles (style.css)", err); throw err; })
-    .then(function () { return JS_URLS.reduce(function (p, u) { return p.then(function () { return loadJs(u); }); }, Promise.resolve()); })
+    .then(function () { return JS_URLS.reduce(function (p, u) { return p.then(function () { return loadJs(u).catch(function (e) { if (/\/(slm|dev|games)\.js$/.test(u)) { console.warn("Optional script not loaded:", u, e); return; } throw e; }); }); }, Promise.resolve()); })
     .catch(function (err) { if (!document.body.querySelector("h2")) showLoadError("app code", err); });
 })();
 </script>

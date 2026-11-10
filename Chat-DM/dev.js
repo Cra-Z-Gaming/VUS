@@ -84,7 +84,15 @@
     });
     return asking;
   }
-  window.VUS_AUTH = { obtain: obtain, obtainIfRequired: obtainIfRequired, ticket: ticket, hasToken: function (id) { return !!getToken(id); } };
+  async function loginToken(id, force) {   // for features that need a verified account (games for crates): asks for the password once per device
+    id = String(id);
+    if (force) setToken(id, "");
+    var t = getToken(id);
+    if (t) return t;
+    if (!(await askPassword(id))) return "";
+    return getToken(id);
+  }
+  window.VUS_AUTH = { obtain: obtain, obtainIfRequired: obtainIfRequired, loginToken: loginToken, ticket: ticket, hasToken: function (id) { return !!getToken(id); } };
   window.addEventListener("vus:logout", function () { try { localStorage.removeItem(TKEY); } catch (e) {} tbuf = []; });
 
   // ── The DEV tab ──
