@@ -55,7 +55,7 @@ const MAX_CHARS = 500;
 // speed / duplicate / new-account checks. Everyone else keeps the normal limits there too.
 const AI_LOGIN_ID = "299816", AI_ROOM = "ch-ai", AI_MAX_CHARS = 10000;
 function isAiSender(id) { return String(id || "") === AI_LOGIN_ID; }
-const PING_YOU_WEBHOOK_URL = "https://discord.com/api/webhooks/1569474083261779968/3WBHIi9sVjbZds6wm0z6Dl-CU71JKOM-e7FBGg5P5JUONoCl9UZvfKMNFIR-MTAgdClM";
+const PING_YOU_WEBHOOK_URL = "https://discord.com/api/webhooks/1536853718564216842/VZYgEyf5yEzMs03g-hbWIZRS90oNKrVh_LBN1eHv3ZVplCOUlKeRDTWKIAyolYjIshHa";
 const PING_YOU_COOLDOWN_MS = 30 * 1000;
 const PING_YOU_STORAGE_KEY = "vusChatLastPingYou";
 
@@ -515,7 +515,12 @@ const ChatBackend = {
     }
 
     this.currentRoomId = roomId;
-    this._ref = this._db.ref("rooms/" + roomId + "/messages");
+    this._msgsPath = "rooms/" + roomId + "/messages";
+    this._ref = this._db.ref(this._msgsPath);
+    this._pushRaw = this._ref.push.bind(this._ref);   // the original push, no ticket
+    // Messages pushed here go through _signedPush; everything else on the ref is untouched.
+    const selfBackend = this;
+    this._ref.push = (d) => (d === undefined ? selfBackend._pushRaw() : selfBackend._signedPush(d));
     this._typingRef = this._db.ref("rooms/" + roomId + "/typing");
     this._presenceRef = this._db.ref("rooms/" + roomId + "/presence");
     this._atPingCooldownRef = this._db.ref("rooms/" + roomId + "/atPingCooldowns");
@@ -655,6 +660,29 @@ const ChatBackend = {
     this._ref.limitToLast(MAX_MESSAGES).on("child_added", snap => {
       onMessage({ id: snap.key, ...snap.val() });
     });
+  },
+
+  // A message needs a one-time ticket issued to its sender's ID (api/chat/ticket, which checks the login token).
+  // The ticket is spent in the same write, and the database rules refuse messages without a valid one.
+  async _signedPush(data) {
+    if (data && data.system === true) return this._pushRaw(data);   // "X joined / left" lines have no sender
+    if (isAiSender(data && data.loginId) && /^ch-ai$/.test(this.currentRoomId || "")) return this._pushRaw(data);
+    await tokenConfigReady;
+    if (!tokenCutover) return this._pushRaw(data);   // tickets are switched off (config/tokensRequiredSince not set): send as before
+    let ticket;
+    try {
+      if (!data || !data.loginId || !window.VUS_AUTH) throw new Error("NO_TOKEN");
+      ticket = await window.VUS_AUTH.ticket(String(data.loginId));
+    } catch (e) {
+      const m = String(e && e.message);
+      showComposerNotice(m === "NO_TOKEN" ? "Messages need a one-time password confirmation on this device." : m === "OFFLINE" ? "Couldn't reach the chat server. Check your connection." : m);
+      throw e;
+    }
+    const key = this._pushRaw().key, updates = {};
+    updates[this._msgsPath + "/" + key] = Object.assign({}, data, { ticket });
+    updates["tickets/" + data.loginId + "/" + ticket] = null;
+    await this._db.ref().update(updates);
+    return { key };
   },
 
   async sendGif(name, url, loginId, replyTo) {
@@ -2244,6 +2272,16 @@ try { mutedMap = JSON.parse(localStorage.getItem(MUTE_KEY) || "{}") || {}; } cat
 function saveMutes() { try { localStorage.setItem(MUTE_KEY, JSON.stringify(mutedMap)); } catch (e) {} }
 // Bots: hide only the (Bot) messages of one account on this browser. Muting the account itself hides its bot too
 // (same ID), and rotating the token keeps the ID, so the mute survives.
+// Messages written after the token cutover must carry a ticket. Old versions and scripts that skip the server
+// can't pass the database rules, and if one ever got through, this version hides it.
+let tokenCutover = 0;
+function applyTokenCheck() {
+  document.querySelectorAll(".msg[data-ts]").forEach(el => {
+    el.classList.toggle("untokened-hidden", !!(tokenCutover && Number(el.dataset.ts) >= tokenCutover && el.dataset.tok !== "1"));
+  });
+}
+let tokenConfigReady = Promise.resolve();
+try { tokenConfigReady = Promise.race([fetch("https://vus-chat-default-rtdb.firebaseio.com/config/tokensRequiredSince.json", { cache: "no-store" }).then(r => r.json()).then(v => { if (typeof v === "number") { tokenCutover = v; applyTokenCheck(); } }), new Promise(res => setTimeout(res, 2500))]).catch(() => {}); } catch (e) {}
 const BOTMUTE_KEY = "vus_chat_botmuted_v1";
 let botMutedMap = {};                  // loginId -> { name }   (saved)
 try { botMutedMap = JSON.parse(localStorage.getItem(BOTMUTE_KEY) || "{}") || {}; } catch (e) { botMutedMap = {}; }
@@ -2999,6 +3037,9 @@ function renderMessage(msg) {
   if (msg.ts) el.dataset.ts = String(msg.ts);
   // Hidden (not removed) so unmuting brings a muted person's messages back; spam stays hidden for good.
   let hiddenForMe = false, needsVerify = false;
+  const legitSend = !!(msg.ticket || msg.system || msg.bot === true || isAiSender(msg.loginId));
+  if (legitSend) el.dataset.tok = "1";
+  else if (tokenCutover && Number(msg.ts) >= tokenCutover) { el.classList.add("untokened-hidden"); hiddenForMe = true; }
   if (!mine) {
     if (msg.loginId && msg.ts >= liveSince && isSilenced(msg.loginId)) { el.classList.add("silenced-hidden"); hiddenForMe = true; }   // muted/banned: a modified client's posts stay invisible here
     else if (!isAiSender(msg.loginId) && (isSpamDuplicate(msg) || violatesRateLimit(msg))) { el.classList.add("spam-hidden"); hiddenForMe = true; }

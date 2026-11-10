@@ -2060,6 +2060,7 @@ body.bs-compact .msg { padding-top: 2px; padding-bottom: 2px; }
 #emojiBtn:hover { opacity: 1; }
 
 .msg.silenced-hidden { display: none !important; }
+.msg.untokened-hidden { display: none !important; }
 
 .vp-modal { max-width: 560px; width: 94vw; max-height: 84vh; overflow: auto; }
 .vp-modal h4 { margin: 14px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }

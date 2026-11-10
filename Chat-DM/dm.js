@@ -2656,6 +2656,7 @@ $authForm.addEventListener("submit", async (e) => {
     if (mode === "login") {
       const result = await login($loginIdentifier.value, $loginPassword.value);
       if (!result.ok) { $authError.textContent = result.error; return; }
+      try { if (window.VUS_AUTH) window.VUS_AUTH.obtainIfRequired(result.id, $loginPassword.value); } catch (e) {}   // not awaited, and does nothing unless tokens are required
       saveSession(result.accountKey, result.username, result.id);
       currentSession = result;
       claimOwnership(result.accountKey);
