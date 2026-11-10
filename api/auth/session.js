@@ -10,7 +10,7 @@ module.exports = async (req, res) => {
     const b = readBody(req), id = String(b.id || "").trim(), password = String(b.password || "");
     const db = chatDb();
     const gate = await passwordGate(db, id, password);
-    if (!gate.ok) return res.status(gate.status).json({ ok: false, error: gate.error });
+    if (!gate.ok) return res.status(gate.status).json({ ok: false, code: gate.code, error: gate.error });
 
     const tid = crypto.randomBytes(4).toString("hex");
     const token = "vss_" + id + "_" + tid + "_" + crypto.randomBytes(32).toString("base64url");

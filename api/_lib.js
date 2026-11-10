@@ -32,8 +32,15 @@ function cors(req, res) {
 }
 function readBody(req) {
   let b = req.body;
-  if (typeof b === "string") { try { b = JSON.parse(b); } catch (e) { b = {}; } }
+  if (Buffer.isBuffer(b)) b = b.toString("utf8");
+  if (typeof b === "string") { try { b = JSON.parse(b); } catch (e) { return { __badJson: true }; } }
   return b && typeof b === "object" ? b : {};
+}
+
+// One shape for every error: { ok:false, code, error, hint?, ... }. "code" is stable, so scripts can switch on it.
+function fail(res, status, code, error, extra) {
+  if (extra && extra.retryAfterMs) res.setHeader("Retry-After", String(Math.ceil(extra.retryAfterMs / 1000)));
+  return res.status(status).json(Object.assign({ ok: false, code, error }, extra || {}));
 }
 
 // Looks the account up by its 6-digit ID: { key, account } or null.
@@ -57,17 +64,17 @@ function verifyPassword(password, stored) {
 // Checks a 6-digit ID + password, with a lockout after 5 wrong tries (10 minutes). Used by token creation.
 // Returns { ok:true } or { ok:false, status, error }.
 async function passwordGate(db, id, password) {
-  if (!/^\d{6}$/.test(id) || !password) return { ok: false, status: 400, error: "Send your 6-digit ID and your password." };
+  if (!/^\d{6}$/.test(id) || !password) return { ok: false, status: 400, code: "BAD_REQUEST", error: "Send your 6-digit ID and your password." };
   const now = Date.now(), triesRef = db.ref("botAttempts/" + id), tries = (await triesRef.get()).val() || {};
-  if (tries.until && tries.until > now) return { ok: false, status: 429, error: "Too many wrong passwords. Try again in a few minutes." };
+  if (tries.until && tries.until > now) return { ok: false, status: 429, code: "LOCKED_OUT", error: "Too many wrong passwords. Try again in a few minutes.", retryAfterMs: tries.until - now };
   const found = await accountById(id);
   if (!found || !verifyPassword(password, found.account.password)) {
     const fails = (tries.fails || 0) + 1;
     await triesRef.set(fails >= 5 ? { fails: 0, until: now + 10 * 60 * 1000 } : { fails, until: 0 });
-    return { ok: false, status: 401, error: "Incorrect ID or password." };
+    return { ok: false, status: 401, code: "WRONG_CREDENTIALS", error: "Incorrect ID or password.", attemptsLeft: Math.max(0, 5 - fails) };
   }
   await triesRef.remove();
   return { ok: true, found };
 }
 
-module.exports = { admin, crypto, MAIN_ROOM, chatDb, dmDb, sha256, safeEq, cors, readBody, accountById, verifyPassword, passwordGate };
+module.exports = { admin, crypto, MAIN_ROOM, chatDb, dmDb, sha256, safeEq, cors, readBody, fail, accountById, verifyPassword, passwordGate };
