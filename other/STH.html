@@ -87,6 +87,15 @@
   .brand { display: flex; align-items: center; gap: 10px; padding: 16px 16px 12px; font-weight: 700; font-size: 17px; }
   .brand .logo { width: 34px; height: 34px; border-radius: 11px; margin: 0; box-shadow: none; }
   .brand .logo svg { width: 18px; height: 18px; }
+  .dm-toggle { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; }
+  .dm-toggle:hover { color: var(--text); }
+  .dm-toggle .chev { display: inline-block; font-size: 10px; transition: transform .15s ease; }
+  .dm-toggle.shut .chev { transform: rotate(-90deg); }
+  #dmList .dm-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: #5b6390; }
+  #dmList .dm-dot.on { background: #5fe3b0; }
+  #dmList .dm-dot.afk { background: var(--gold); }
+  #dmList .dm-dot.busy { background: var(--danger); }
+  #dmList .dm-empty { padding: 6px 10px; color: var(--mute); font-size: 13px; }
   .side-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px 6px; color: var(--mute); font-size: 13px; font-weight: 600; }
   .icon-btn { background: transparent; border: 1px solid transparent; border-radius: 9px; width: 30px; height: 30px; display: inline-grid; place-items: center; color: var(--mute); }
   .icon-btn:hover { background: var(--panel2); color: var(--text); }
@@ -120,18 +129,18 @@
   #empty { margin: auto; text-align: center; color: var(--mute); max-width: 280px; }
   #empty b { display: block; color: var(--text); font-size: 17px; margin-bottom: 4px; }
 
-  .msg { display: flex; gap: 10px; max-width: min(78%, 640px); align-items: flex-end; position: relative; }
+  .msg { display: flex; gap: 10px; max-width: min(88%, 960px); align-items: flex-end; position: relative; }
   .msg.mine { align-self: flex-end; flex-direction: row-reverse; }
   .msg .col { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   .msg.mine .col { align-items: flex-end; }
-  .meta { display: flex; align-items: center; gap: 7px; font-size: 13px; padding: 0 4px; flex-wrap: wrap; }
+  .meta { display: flex; align-items: center; gap: 7px; font-size: 16px; padding: 0 4px; flex-wrap: wrap; }
   .msg.mine .meta { flex-direction: row-reverse; }
   .meta .nm { font-weight: 700; }
-  .meta .tm { color: var(--mute); font-size: 12px; }
+  .meta .tm { color: var(--mute); font-size: 13px; }
   .badge { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; font-weight: 700; padding: 1px 8px; border-radius: 999px; }
   .badge.owner { background: rgba(255,207,107,.14); color: var(--gold); border: 1px solid rgba(255,207,107,.4); }
   .badge.admin { background: rgba(var(--violet-rgb),.18); color: #c4adff; border: 1px solid rgba(var(--violet-rgb),.5); }
-  .bubble { background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); border-bottom-left-radius: 5px; padding: 10px 14px; word-break: break-word; white-space: pre-wrap; max-width: 100%; }
+  .bubble { background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); border-bottom-left-radius: 5px; padding: 14px 20px; font-size: 21px; line-height: 1.55; word-break: break-word; white-space: pre-wrap; max-width: 100%; }
   .msg.mine .bubble { background: var(--grad); border-color: transparent; border-bottom-left-radius: var(--radius); border-bottom-right-radius: 5px; color: #fff; box-shadow: 0 8px 26px rgba(var(--glow-rgb),.28); }
   .bubble a { color: var(--accent3); }
   .msg.mine .bubble a { color: #fff; text-decoration: underline; }
@@ -170,7 +179,7 @@
   #stage button { position: absolute; top: -8px; right: -8px; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--text); }
   .composer { display: flex; align-items: flex-end; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 10px 12px; }
   .composer:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(var(--blue-rgb),.16); }
-  #input { flex: 1; resize: none; border: none; outline: none; background: transparent; padding: 12px 8px; max-height: 240px; min-height: 48px; font-size: 16.5px; line-height: 1.45; }
+  #input { flex: 1; resize: none; border: none; outline: none; background: transparent; padding: 12px 8px; max-height: 240px; min-height: 48px; font-size: 18px; line-height: 1.45; }
   .send { width: 46px; height: 46px; border-radius: 14px; border: none; background: var(--grad); color: #fff; display: grid; place-items: center; flex-shrink: 0; box-shadow: 0 6px 18px rgba(var(--glow-rgb),.4); }
   .send:hover { filter: brightness(1.1); }
   .send svg { width: 19px; height: 19px; }
@@ -187,6 +196,15 @@
   .mem .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mem .on-dot { width: 8px; height: 8px; border-radius: 50%; background: #5fe3b0; flex-shrink: 0; }
   .mem .off-dot { width: 8px; height: 8px; border-radius: 50%; background: #5b6390; flex-shrink: 0; }
+  .mem .on-dot.afk { background: var(--gold); }
+  .mem .on-dot.busy { background: var(--danger); }
+  .mem .st { font-size: 11px; color: var(--mute); flex-shrink: 0; }
+  .st-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .st-opt { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel2); color: var(--text); font-size: 14px; cursor: pointer; }
+  .st-opt i { width: 9px; height: 9px; border-radius: 50%; background: #5fe3b0; display: inline-block; }
+  .st-opt[data-k="afk"] i { background: var(--gold); }
+  .st-opt[data-k="busy"] i { background: var(--danger); }
+  .st-opt.on { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(var(--blue-rgb),.25); }
   .mem.off { opacity: .62; }
   .mem.off:hover { opacity: 1; }
   .sec { padding: 14px 8px 2px; color: var(--text); font-size: 12px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
@@ -239,6 +257,7 @@
     body.nav-open #scrim, body.members-open #scrim { display: block; position: fixed; inset: 0; z-index: 35; background: rgba(5,7,20,.6); }
     #menuBtn { display: inline-grid; }
     .msg { max-width: 94%; }
+    .bubble { font-size: 19px; padding: 12px 17px; }
     #messages { padding: 14px 12px; }
     .composer-wrap { padding-left: 10px; padding-right: 10px; }
   }
@@ -369,6 +388,86 @@
   #pinBar .pin-more:hover { color: var(--text); }
   .msg.pinned .meta::after { content: "📌"; font-size: 11px; }
   @media (max-width: 720px) { #themeBtn { display: none; } }   /* on phones, open themes from your level in the sidebar or with /theme */
+
+  /* ---------- Blackjack ---------- */
+  #bjFab, #rulesFab { position: fixed; right: 14px; bottom: 58px; z-index: 30; width: 42px; height: 42px; display: grid; place-items: center; font-size: 20px; line-height: 1; border-radius: 50%; border: 1px solid var(--line); background: color-mix(in srgb, var(--panel2) 92%, transparent); backdrop-filter: blur(6px); box-shadow: 0 8px 26px rgba(5,8,25,.5); opacity: .9; transition: transform .15s ease, border-color .15s ease; }
+  #bjFab:hover, #rulesFab:hover { opacity: 1; border-color: var(--blue); transform: translateY(-2px); }
+  #memberList { padding-bottom: 112px; }
+  body.hide-members #bjFab, body.hide-members #rulesFab { bottom: calc(148px + env(safe-area-inset-bottom, 0px)); }
+  @media (max-width: 1000px) { #bjFab, #rulesFab { bottom: calc(148px + env(safe-area-inset-bottom, 0px)); } }
+  @media (max-width: 720px) { #bjFab { right: 10px; } }
+  #rulesFab { right: 64px; }
+  @media (max-width: 720px) { #rulesFab { right: 60px; } }
+  #rlBody h3 { margin: 14px 0 4px; font-size: 15px; }
+  #rlBody p { margin: 0 0 8px; line-height: 1.5; overflow-wrap: anywhere; }
+  #rlBody .li { margin: 0 0 4px; padding-left: 16px; text-indent: -12px; line-height: 1.5; overflow-wrap: anywhere; }
+  #rlBody .none { color: var(--mute); }
+  #rlText { width: 100%; min-height: 260px; resize: vertical; }
+
+  #bj { position: fixed; inset: 0; z-index: 75; display: flex; align-items: center; justify-content: center; padding: 14px; background: rgba(5,7,20,.8); backdrop-filter: blur(4px); }
+  .bj-table { width: 100%; max-width: 780px; max-height: calc(100dvh - 28px); overflow-y: auto; border-radius: 24px; border: 1px solid var(--line); padding: 16px 18px 18px; box-shadow: 0 30px 90px rgba(0,0,0,.65);
+    background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--panel2) 45%, #0f6b47) 0%, color-mix(in srgb, var(--panel) 55%, #07301f) 70%); }
+  .bj-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .bj-head h3 { font-size: 18px; margin-right: auto; }
+  .bj-bal { padding: 4px 12px; border-radius: 999px; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.14); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .bj-x { width: 32px; height: 32px; border-radius: 50%; border: 1px solid rgba(255,255,255,.18); background: rgba(0,0,0,.3); }
+  .bj-x:hover { background: rgba(0,0,0,.5); }
+  .bj-rank { margin: 8px 0 2px; font-size: 12.5px; color: rgba(255,255,255,.72); }
+  .bj-rank b { color: var(--gold); }
+  .bj-felt { display: flex; flex-direction: column; gap: 14px; padding: 12px 0 6px; min-height: 270px; }
+  .bj-row { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .bj-lab { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,.7); display: flex; gap: 8px; align-items: center; }
+  .bj-tot { background: rgba(0,0,0,.45); color: #fff; border-radius: 999px; padding: 0 9px; font-weight: 700; font-size: 12.5px; letter-spacing: 0; text-transform: none; line-height: 20px; }
+  .bj-tot.bust { background: #b3243f; }
+  .bj-hands { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+  .bj-hand { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 12px 10px; border-radius: 16px; border: 2px solid transparent; }
+  .bj-hand.on { border-color: var(--gold); background: rgba(255,207,107,.08); }
+  .bj-cards { display: flex; min-height: 88px; padding-left: 26px; }
+  .bj-card { flex: none; width: 62px; height: 88px; margin-left: -26px; position: relative; border-radius: 9px; background: #fafaff; color: #15182e; font-weight: 700; box-shadow: 0 6px 16px rgba(0,0,0,.45); }
+  .bj-card.deal { animation: bjDeal .3s ease-out both; }
+  .bj-card.red { color: #d6204f; }
+  .bj-card .c1 { position: absolute; top: 5px; left: 7px; line-height: 1; font-size: 16px; text-align: center; }
+  .bj-card .c1 i { display: block; font-style: normal; font-size: 14px; }
+  .bj-card .mid { position: absolute; inset: 0; display: grid; place-items: center; font-size: 30px; }
+  .bj-card.back { background: repeating-linear-gradient(45deg, var(--violet) 0 6px, var(--blue) 6px 12px); border: 3px solid #fafaff; }
+  @keyframes bjDeal { from { transform: translate(40px,-40px) rotate(8deg); opacity: 0; } to { transform: none; opacity: 1; } }
+  .bj-meta { display: flex; gap: 6px; align-items: center; font-size: 12.5px; flex-wrap: wrap; justify-content: center; }
+  .bj-bet { color: var(--gold); font-weight: 700; }
+  .bj-tag { padding: 1px 9px; border-radius: 999px; font-weight: 700; font-size: 12px; background: rgba(255,255,255,.14); }
+  .bj-tag.win { background: #1f9d6a; color: #fff; }
+  .bj-tag.lose { background: #b3243f; color: #fff; }
+  .bj-msg { text-align: center; min-height: 22px; color: rgba(255,255,255,.88); font-size: 14px; }
+  .bj-result { text-align: center; font-size: 22px; font-weight: 800; padding: 6px 0; }
+  .bj-result.win { color: #5fe3b0; } .bj-result.lose { color: #ff8aa4; } .bj-result.push { color: var(--gold); }
+  .bj-note { text-align: center; color: #ffd0a8; font-size: 13px; margin-top: 4px; }
+  .bj-warn { text-align: center; color: #ffb3c1; font-size: 13px; min-height: 18px; }
+  .bj-ctl { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 6px; }
+  .bj-btn { border: 1px solid rgba(255,255,255,.2); background: rgba(0,0,0,.35); color: #fff; border-radius: 12px; padding: 10px 16px; font-weight: 700; min-width: 84px; }
+  .bj-btn:hover:not(:disabled) { background: rgba(0,0,0,.55); border-color: rgba(255,255,255,.4); }
+  .bj-btn.go { background: var(--grad); border-color: transparent; }
+  .bj-btn:disabled { opacity: .35; cursor: not-allowed; }
+  .bj-btn kbd { font: inherit; font-size: 10px; opacity: .6; margin-left: 5px; }
+  .bj-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 4px; }
+  .bj-chip { width: 52px; height: 52px; border-radius: 50%; border: 4px dashed rgba(255,255,255,.75); font-weight: 800; font-size: 13px; color: #15182e; box-shadow: 0 4px 10px rgba(0,0,0,.4); }
+  .bj-chip:hover:not(:disabled) { transform: translateY(-3px); }
+  .bj-chip:disabled { opacity: .3; cursor: not-allowed; }
+  .bj-big { text-align: center; font-size: 26px; font-weight: 800; margin: 6px 0 2px; font-variant-numeric: tabular-nums; }
+  .bj-big small { font-size: 12px; font-weight: 600; opacity: .7; display: block; }
+  .bj-rules { margin-top: 10px; text-align: center; font-size: 11.5px; color: rgba(255,255,255,.55); }
+  .bj-leave { margin-top: 8px; text-align: center; padding: 10px; border-radius: 12px; background: rgba(179,36,63,.25); border: 1px solid rgba(255,138,164,.5); }
+  @media (max-width: 560px) {
+    .bj-table { padding: 12px; border-radius: 18px; }
+    .bj-card { width: 50px; height: 72px; margin-left: -22px; }
+    .bj-cards { min-height: 72px; padding-left: 22px; }
+    .bj-card .c1 { font-size: 13px; left: 5px; top: 4px; } .bj-card .c1 i { font-size: 12px; } .bj-card .mid { font-size: 24px; }
+    .bj-btn { padding: 9px 12px; min-width: 70px; }
+    .bj-chip { width: 46px; height: 46px; }
+  }
+
+  .bj-mode { display: inline-flex; padding: 3px; border-radius: 999px; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.14); }
+  .bj-mode button { border: none; background: transparent; color: rgba(255,255,255,.7); padding: 4px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 700; }
+  .bj-mode button.on { background: var(--grad); color: #fff; }
+  .bj-mode button:disabled:not(.on) { opacity: .4; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -428,8 +527,8 @@
     </div>
     <div class="side-head"><span>Channels</span><button class="icon-btn" id="addChan" title="New channel" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button></div>
     <nav id="channelList"></nav>
-    <div class="side-head"><span>Direct messages</span><button class="icon-btn" id="addDM" title="Find people"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button></div>
-    <nav id="dmList" style="max-height:30%;overflow-y:auto;padding:0 8px 6px"></nav>
+    <div class="side-head"><button type="button" class="dm-toggle" id="dmToggle" aria-expanded="false" title="Show or hide direct messages"><span class="chev">▼</span><span>Direct messages</span><span class="unread" id="dmUnread" hidden></span></button><button class="icon-btn" id="addDM" title="Message anyone, online or offline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button></div>
+    <nav id="dmList" style="max-height:30%;overflow-y:auto;padding:0 8px 6px" hidden></nav>
     <div class="side-head"><span>Temporary rooms</span><button class="icon-btn" id="addRoom" title="Create or join a room"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button></div>
     <nav id="roomList" style="max-height:25%;overflow-y:auto;padding:0 8px 6px"></nav>
     <div class="me-card">
@@ -478,12 +577,15 @@
     <div id="memberList"></div>
   </aside>
   <button type="button" id="sugFab" title="Suggest an update">💡 <span>Suggest</span></button>
+  <button type="button" id="bjFab" title="Play blackjack (bet your XP)" aria-label="Play blackjack">🃏</button>
+  <button type="button" id="rulesFab" title="Chat rules" aria-label="Chat rules">📜</button>
 </div>
 <div class="center-screen" id="modal" hidden><div class="card" id="modalCard"></div></div>
 <div id="scrim"></div>
 <div id="userMenu" hidden></div>
 <div id="lightbox" hidden><img alt=""></div>
 <div id="toast" hidden></div>
+<div id="bj" hidden role="dialog" aria-modal="true" aria-label="Blackjack"></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -647,7 +749,7 @@ function watchDMs() {
       if (!m || m.uid === me.uid || m.type === "system" || (m.ts || 0) <= sessionStart || currentDM === o) return;   // the open DM handles its own
       ping(); toast(m.name + " sent you a message"); dmNotify(m); bumpTitle();
     };
-    r.on("child_added", cb, () => {}); listeners.push([r, "child_added", cb]);
+    watch(r, "child_added", cb, () => {});
   });
 }
 function watchPings() {
@@ -675,7 +777,7 @@ function watchRoomPings() {
       const nm = (myRooms[code] || {}).name || "a room";
       ping(); toast(m.name + " mentioned you in " + nm); mentionNotify(m, nm, () => selectRoom(code)); bumpTitle();
     };
-    r.on("child_added", cb, () => {}); listeners.push([r, "child_added", cb]);
+    watch(r, "child_added", cb, () => {});
   });
 }
 function fmt(text) {
@@ -694,6 +796,15 @@ let roles = {}, owners = {}, usersMap = {}, currentDM = null, dmIdx = {}, dmRead
 let channels = {};
 let presence = {};
 let presenceReady = false;
+// Status lives inside your presence entry, which is deleted when you leave, so it always resets to Online next time.
+const STATUS = { online: { label: "Online" }, afk: { label: "AFK" }, busy: { label: "Busy" } };
+let myStatus = "online";
+const statusOf = uid => { const s = (presence[uid] || {}).status; return STATUS[s] ? s : "online"; };
+async function setMyStatus(k) {
+  if (!STATUS[k] || !db || !me) return;
+  myStatus = k;   // if we're mid-reconnect, this is applied as soon as presence is written again
+  if (presence[me.uid]) { try { await db.ref("presence/" + me.uid + "/status").set(k); } catch (e) { toast("Couldn’t change your status."); } }
+}
 let currentChan = null;
 let chanRef = null;
 let typingRef = null;
@@ -702,7 +813,7 @@ let sessionStart = 0;
 let listeners = [];
 let signingUp = false;
 let attachTs = 0;
-let xpData = {}, xpLoaded = false, prevLvIdx = null, lastXpAt = 0, xpBusy = false, lastXpText = "", curTheme = "nebula";
+let xpData = {}, giftData = {}, giftLoaded = false, rulesData = null, rulesEditing = false, xpLoaded = false, prevLvIdx = null, lastXpAt = 0, xpBusy = false, lastXpText = "", curTheme = "nebula";
 let pins = {}, pinRef = null, pinMsgs = {}, pinTop = null, votesData = {}, votesRef = null;
 let fxTheme = { shift: 0, cst: "159,180,255" };
 let stagedImg = null;
@@ -729,7 +840,13 @@ function badgeEl(rank) {
   b.textContent = LABEL[rank];
   return b;
 }
-function watch(ref, evt, cb) { ref.on(evt, cb); listeners.push([ref, evt, cb]); }
+function listRow(head, text) {   // one bordered row: muted header line + body text
+  const d = document.createElement("div"); d.style.cssText = "padding:10px 4px;border-bottom:1px solid var(--line)";
+  const h = document.createElement("div"); h.style.cssText = "color:var(--mute);font-size:12.5px;margin-bottom:4px"; h.textContent = head;
+  const t = document.createElement("div"); t.style.cssText = "white-space:pre-wrap;word-break:break-word"; t.textContent = text;
+  return [d, h, t];
+}
+function watch(ref, evt, cb, onErr) { ref.on(evt, cb, onErr); listeners.push([ref, evt, cb]); }
 function show(id, on) { $(id).hidden = !on; }
 
 /* ───────── boot ───────── */
@@ -842,13 +959,24 @@ async function startSession(user) {
   const av = $("#meAv"); av.dataset.uid = me.uid; av.dataset.letter = me.name.charAt(0).toUpperCase(); paintAvatar(av);
   updateRankUI();
   loadTheme(); paintMeXp();
+  myStatus = "online"; offlineOpen = false;   // every login starts as Online with the offline list closed
 
   ensureAvatar(me.uid);
-  watch(db.ref("meta/owner"), "value", s => { ownerUid = s.val(); updateRankUI(); renderMembers(); });
-  watch(db.ref("owners"), "value", s => { owners = s.val() || {}; updateRankUI(); renderMembers(); });
-  watch(db.ref("roles"), "value", s => { roles = s.val() || {}; updateRankUI(); renderMembers(); });
-  watch(db.ref("users"), "value", s => { usersMap = s.val() || {}; renderMembers(); renderDMs(); refreshColors(); });
+  watch(db.ref("meta/owner"), "value", s => { ownerUid = s.val(); updateRankUI(); renderMembers(); rankReady.add("m"); bjEnforceTheme(); });
+  watch(db.ref("owners"), "value", s => { owners = s.val() || {}; updateRankUI(); renderMembers(); rankReady.add("o"); bjEnforceTheme(); });
+  watch(db.ref("roles"), "value", s => { roles = s.val() || {}; updateRankUI(); renderMembers(); rankReady.add("r"); bjEnforceTheme(); });
+  watch(db.ref("users"), "value", s => { usersMap = s.val() || {}; if (window.setStarMembers) window.setStarMembers(Object.keys(usersMap).length); renderMembers(); renderDMs(); refreshColors(); });
+  watch(db.ref("config"), "value", s => { applyXpConfig(s.val()); onXpChange(); }, () => {});
   watch(db.ref("xp"), "value", s => { xpData = s.val() || {}; xpLoaded = true; onXpChange(); });
+  watch(db.ref("xpGift"), "value", s => {   // XP given by admins and owners (xpGift/<uid>/v is the running total)
+    const before = giftLoaded && me ? giftOf(me.uid) : null;
+    giftData = s.val() || {}; giftLoaded = true;
+    const g = me && giftData[me.uid];
+    if (before !== null && g && g.v > before) { toast(`${g.byName || "A staff member"} gave you ${(g.v - before).toLocaleString()} XP!`); ping(); }
+    onXpChange();
+  }, () => { giftData = {}; giftLoaded = true; onXpChange(); });
+  watch(db.ref("rules"), "value", s => { rulesData = s.val(); drawRules(); }, () => { rulesData = null; });
+  watch(db.ref("bj"), "value", s => { bjData = s.val() || {}; bjLoaded = true; bjEnabled = true; bjStaleCheck(); onXpChange(); if (bjOpen) bjRender(); }, () => { bjData = {}; bjLoaded = true; bjEnabled = false; onXpChange(); if (bjOpen) bjRender(); });
   watch(db.ref("dmIndex/" + me.uid), "value", s => { dmIdx = s.val() || {}; renderDMs(); watchDMs(); });
   watch(db.ref("dmRead/" + me.uid), "value", s => { dmRead = s.val() || {}; renderDMs(); });
   watch(db.ref("userRooms/" + me.uid), "value", s => { myRooms = s.val() || {}; renderRooms(); watchRoomPings(); });
@@ -863,14 +991,14 @@ async function startSession(user) {
   watch(db.ref("presence"), "value", s => {
     const next = s.val() || {};
     if (presenceReady) announcePresence(presence, next);   // the first snapshot is just the starting point
-    presenceReady = true; presence = next; renderMembers();
+    presenceReady = true; presence = next; renderMembers(); renderDMs();
   });
   watch(db.ref(".info/connected"), "value", s => {
     const on = !!s.val();
     $("#connDot").classList.toggle("off", !on);
     if (on && me) {
       const p = db.ref("presence/" + me.uid);
-      p.onDisconnect().remove().then(() => p.set({ name: me.name, ts: TS() }));
+      p.onDisconnect().remove().then(() => p.set({ name: me.name, ts: TS(), status: myStatus }));
     }
   });
   typingTick = setInterval(renderTyping, 2000);
@@ -887,9 +1015,9 @@ function endSession(keepUser) {
   detachChannel();
   clearInterval(typingTick);
   if (me && db) { db.ref("presence/" + me.uid).remove().catch(() => {}); }
-  presence = {}; presenceReady = false; channels = {}; roles = {}; owners = {}; usersMap = {}; dmIdx = {}; dmRead = {}; ownerUid = null; currentChan = null; currentDM = null; currentRoom = null; myRooms = {}; imgAccess = {}; chansLoaded = false; chanPings = {}; chanWatch = {}; roomWatch = {}; dmWatch = {}; replyTo = null; paintReplyBar(); Object.keys(replyCache).forEach(k => delete replyCache[k]); sugs = {}; sugWatching = false; myMute = 0; Object.keys(avWatched).forEach(k => delete avWatched[k]);
+  presence = {}; presenceReady = false; myStatus = "online"; channels = {}; roles = {}; owners = {}; usersMap = {}; if (window.setStarMembers) window.setStarMembers(0); dmIdx = {}; dmRead = {}; ownerUid = null; currentChan = null; currentDM = null; currentRoom = null; myRooms = {}; imgAccess = {}; chansLoaded = false; chanPings = {}; chanWatch = {}; roomWatch = {}; dmWatch = {}; replyTo = null; paintReplyBar(); Object.keys(replyCache).forEach(k => delete replyCache[k]); sugs = {}; sugWatching = false; myMute = 0; Object.keys(avWatched).forEach(k => delete avWatched[k]);
   msgEls.clear(); msgData.clear(); lastDay = "";
-  xpData = {}; xpLoaded = false; prevLvIdx = null; lastXpAt = 0; lastXpText = ""; pins = {}; pinMsgs = {}; votesData = {}; applyTheme("nebula");
+  xpData = {}; xpLoaded = false; giftData = {}; giftLoaded = false; rulesData = null; rulesEditing = false; applyXpConfig(null); prevLvIdx = null; lastXpAt = 0; lastXpText = ""; pins = {}; pinMsgs = {}; votesData = {}; applyTheme("nebula"); bjReset();
   if (!keepUser) me = null;
   document.body.classList.remove("nav-open", "members-open");
 }
@@ -937,12 +1065,22 @@ const nameOf = uid => (usersMap[uid] || {}).name || (dmIdx[uid] || {}).name || "
 const msgPath = () => currentRoom ? "roomMsgs/" + currentRoom : currentDM ? "dms/" + pairId(currentDM) + "/messages" : "messages/" + currentChan;
 const typePath = () => currentRoom ? "roomTyping/" + currentRoom : currentDM ? "dmTyping/" + pairId(currentDM) : "typing/" + currentChan;
 function markRead() { if (currentDM) db.ref("dmRead/" + me.uid + "/" + currentDM).set(TS()).catch(() => {}); }
+let dmOpen = false;   // the Direct messages dropdown; closed until you open it (unread DMs show a dot on the header)
+try { dmOpen = localStorage.getItem("nebulaDmOpen") === "1"; } catch (e) {}
+const setDmOpen = v => { dmOpen = v; try { localStorage.setItem("nebulaDmOpen", v ? "1" : "0"); } catch (e) {} renderDMs(); };
+$("#dmToggle").onclick = () => setDmOpen(!dmOpen);
 function renderDMs() {
   const box = $("#dmList"); if (!box) return; box.innerHTML = "";
+  const anyUnread = Object.entries(dmIdx).some(([uid, d]) => uid !== currentDM && (d.ts || 0) > (dmRead[uid] || 0));
+  $("#dmToggle").classList.toggle("shut", !dmOpen); $("#dmToggle").setAttribute("aria-expanded", String(dmOpen));
+  $("#dmUnread").hidden = dmOpen || !anyUnread; box.hidden = !dmOpen;
+  if (!dmOpen) return;
+  if (!Object.keys(dmIdx).length) { const e = document.createElement("div"); e.className = "dm-empty"; e.textContent = "No conversations yet. Press + to message anyone, online or offline."; box.appendChild(e); }
   Object.entries(dmIdx).sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0)).forEach(([uid, d]) => {
     const b = document.createElement("button"); b.className = "chan" + (uid === currentDM ? " on" : "");
     const un = uid !== currentDM && (d.ts || 0) > (dmRead[uid] || 0);
-    b.innerHTML = `<span class="hash">@</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis">${esc(nameOf(uid))}</span>` + (un ? '<span class="unread"></span>' : "");
+    const pk = presence[uid] ? statusOf(uid) : "";
+    b.innerHTML = `<span class="hash">@</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis">${esc(nameOf(uid))}</span><span class="dm-dot ${pk === "online" ? "on" : pk}" title="${pk ? STATUS[pk].label : "Offline"}"></span>` + (un ? '<span class="unread"></span>' : "");
     b.onclick = () => selectDM(uid); box.appendChild(b);
   });
 }
@@ -965,10 +1103,11 @@ function selectChannel(id) {
 }
 function selectDM(uid) {
   detachChannel(); currentDM = uid; currentChan = null; currentRoom = null;
-  startConv("@", nameOf(uid), `Message @${nameOf(uid)}`); markRead();
+  if (!dmOpen) setDmOpen(true);
+  startConv("@", nameOf(uid), `Message @${nameOf(uid)}` + (presence[uid] ? "" : " (offline, they’ll see it when they’re back)")); markRead();
 }
 function startConv(h, title, ph) {
-  msgEls.clear(); msgData.clear(); lastDay = ""; $("#messages").innerHTML = "";
+  msgEls.clear(); msgData.clear(); lastDay = ""; $("#messages").innerHTML = ""; pinToBottom();
   $("#chanHash").textContent = h; $("#chanTitle").textContent = title; $("#input").placeholder = ph;
   typingNames = {}; renderTyping(); renderChannels(); renderDMs(); renderRooms(); $("#roomTimer").hidden = !currentRoom;
   attachTs = now();
@@ -987,6 +1126,16 @@ function startConv(h, title, ph) {
 const msgBox = () => $("#messages");
 const nearBottom = () => { const m = msgBox(); return m.scrollHeight - m.scrollTop - m.clientHeight < 140; };
 const scrollBottom = () => { const m = msgBox(); m.scrollTop = m.scrollHeight; };
+// When you open a channel, DM or room, stay pinned to the newest message while it loads (images, replies and avatars
+// change heights after the first paint). Scrolling up yourself releases the pin right away.
+let joinPin = false, joinTimer;
+function pinToBottom() { joinPin = true; clearTimeout(joinTimer); joinTimer = setTimeout(() => { joinPin = false; }, 3000); scrollBottom(); }
+(function () {
+  const box = msgBox(), keep = () => { if (joinPin) scrollBottom(); };
+  new MutationObserver(keep).observe(box, { childList: true, subtree: true, characterData: true });
+  box.addEventListener("load", keep, true);
+  ["wheel", "touchmove", "pointerdown"].forEach(ev => box.addEventListener(ev, () => { joinPin = false; }, { passive: true }));
+})();
 function updateEmpty() {
   let e = $("#empty");
   if (msgEls.size === 0 && !msgBox().querySelector(".note")) {
@@ -1013,7 +1162,7 @@ function onAdded(snap) {
   el.dataset.day = day;
   box.appendChild(el);
   msgEls.set(id, el); msgData.set(id, m);
-  if (near || m.uid === me.uid) scrollBottom();
+  if (near || joinPin || m.uid === me.uid) scrollBottom();
   markRead();
   if ((m.ts || 0) > attachTs && m.uid !== me.uid && m.type !== "system") {
     const mentioned = mentionsMe(m);
@@ -1180,8 +1329,7 @@ $("#filterBtn").onclick = () => {
 
 /* ───────── members ───────── */
 const OFFLINE_MAX = 100;
-let offlineOpen = true;
-try { offlineOpen = localStorage.getItem("nebulaOfflineOpen") !== "no"; } catch (e) {}
+let offlineOpen = false;   // closed every time you log in
 function renderMembers() {
   if (!me) return;
   const online = Object.entries(presence).map(([uid, p]) => ({ uid, name: p.name || "?", rank: rankOf(uid) }));
@@ -1198,7 +1346,9 @@ function renderMembers() {
     b.appendChild(makeAvatar(u.name, u.uid, true, !on));
     const n = document.createElement("span"); n.className = "nm"; n.textContent = ICON[u.rank] + " " + u.name + (u.uid === me.uid ? " (you)" : ""); n.style.color = nameColor(u.uid);
     b.appendChild(n);
-    const dot = document.createElement("span"); dot.className = on ? "on-dot" : "off-dot"; dot.title = on ? "Online" : "Offline"; b.appendChild(dot);
+    const st = on ? statusOf(u.uid) : null;
+    if (st && st !== "online") { const tag = document.createElement("span"); tag.className = "st"; tag.textContent = STATUS[st].label; b.appendChild(tag); }
+    const dot = document.createElement("span"); dot.className = on ? "on-dot" + (st !== "online" ? " " + st : "") : "off-dot"; dot.title = on ? STATUS[st].label : "Offline"; b.appendChild(dot);
     b.onclick = ev => openUserMenu(ev, u);
     return b;
   };
@@ -1214,7 +1364,7 @@ function renderMembers() {
     const h = document.createElement("button"); h.type = "button"; h.className = "sec" + (online.length ? "" : " first") + (offlineOpen ? "" : " shut");
     h.setAttribute("aria-expanded", String(offlineOpen)); h.title = offlineOpen ? "Hide offline members" : "Show offline members";
     h.innerHTML = `<span class="chev">▼</span><span>Offline — ${offline.length}</span>`;
-    h.onclick = () => { offlineOpen = !offlineOpen; try { localStorage.setItem("nebulaOfflineOpen", offlineOpen ? "yes" : "no"); } catch (e) {} renderMembers(); };
+    h.onclick = () => { offlineOpen = !offlineOpen; renderMembers(); };
     box.appendChild(h);
     if (offlineOpen) groups(offline.slice(0, OFFLINE_MAX), false);
     if (offlineOpen && offline.length > OFFLINE_MAX) { const d = document.createElement("div"); d.className = "more"; d.textContent = `+ ${offline.length - OFFLINE_MAX} more. Use the search next to Direct messages to find anyone.`; box.appendChild(d); }
@@ -1263,13 +1413,6 @@ function openUserMenu(ev, u) {
     }
   }
   if (levelOf() >= 2 && u.uid !== me.uid && lvl(u.uid) < 2) add(imgAccess[u.uid] ? "Remove image permission" : "Allow images", () => imgAccess[u.uid] ? mod.takeimg(t) : mod.giveimg(t));
-  if (myRank() === "owner" && u.uid !== me.uid) {
-    if (rankOf(u.uid) === "owner") { if (me.uid === ownerUid && u.uid !== ownerUid) add("Remove owner", () => mod.removeowner(t), true); }
-    else {
-      add(rankOf(u.uid) === "admin" ? "Remove admin" : "Make admin", () => rankOf(u.uid) === "admin" ? mod.demote(t) : mod.promote(t));
-      if (me.uid === ownerUid) add("Make owner", () => mod.addowner(t));
-    }
-  }
   if (menu.children.length === 1) return;
   menu.hidden = false;
   const r = menu.getBoundingClientRect();
@@ -1404,9 +1547,8 @@ async function resolveUser(raw) {
   return { uid, name: prof ? prof.name : lower };
 }
 function need(t) { if (!canModerate(t.uid)) throw new Error("You can’t do that to " + t.name + "."); }
+const GIVE_MAX_ADMIN = 500, GIVE_MAX_OWNER = 1000000000;   // per /givexp; owners are effectively unlimited
 const needAdmin = () => { if (levelOf() < 2) throw new Error("Only admins can do that."); };
-const needFounder = () => { if (me.uid !== ownerUid) throw new Error("Only the original owner can add or remove owners."); };
-const needOwner = () => { if (myRank() !== "owner") throw new Error("Only owners can do that."); };
 const mod = {
   async kick(t) { need(t); await db.ref("kicks/" + t.uid).set(TS()); await sys(`${t.name} was kicked by ${me.name}.`); },
   async mute(t, mins) { need(t); mins = Math.max(1, Math.min(10080, Math.round(mins) || 10)); await db.ref("mutes/" + t.uid).set(now() + mins * 60000); await sys(`${t.name} was muted for ${mins} min by ${me.name}.`); },
@@ -1418,11 +1560,27 @@ const mod = {
   async mod(t) { needAdmin(); need(t); await db.ref("roles/" + t.uid).set("mod"); await sys(`${t.name} is now a moderator.`); },
   async unmod(t) { needAdmin(); if (rankOf(t.uid) !== "mod") throw new Error(t.name + " isn’t a moderator."); await db.ref("roles/" + t.uid).remove(); await sys(`${t.name} is no longer a moderator.`); },
   async vip(t) { needAdmin(); need(t); const r = rankOf(t.uid); if (r !== "regular") throw new Error(r === "vip" ? t.name + " is already a VIP." : t.name + " already has a higher role."); await db.ref("roles/" + t.uid).set("vip"); await sys(`${t.name} is now a VIP.`); },
-  async unvip(t) { needAdmin(); need(t); if (rankOf(t.uid) !== "vip") throw new Error(t.name + " isn’t a VIP."); await db.ref("roles/" + t.uid).remove(); await sys(`${t.name} is no longer a VIP.`); },
-  async promote(t) { needOwner(); if (rankOf(t.uid) === "owner") throw new Error(t.name + " is already an owner."); await db.ref("roles/" + t.uid).set("admin"); await sys(`${t.name} is now an admin.`); },
-  async demote(t) { needOwner(); if (rankOf(t.uid) !== "admin") throw new Error(t.name + " isn’t an admin."); await db.ref("roles/" + t.uid).remove(); await sys(`${t.name} is no longer an admin.`); },
-  async addowner(t) { needFounder(); if (rankOf(t.uid) === "owner") throw new Error(t.name + " is already an owner."); await db.ref("owners/" + t.uid).set(true); await db.ref("roles/" + t.uid).remove().catch(() => {}); await sys(`${t.name} is now an owner.`); },
-  async removeowner(t) { needFounder(); if (t.uid === ownerUid) throw new Error("The original owner can’t be removed."); if (rankOf(t.uid) !== "owner") throw new Error(t.name + " isn’t an owner."); await db.ref("owners/" + t.uid).remove(); await sys(`${t.name} is no longer an owner.`); }
+  async promote(t, role) {   // role: "mod", "vip" or "member" (member removes their mod/VIP role)
+    if (role === "mod") return mod.mod(t);
+    if (role === "vip") return mod.vip(t);
+    const r = rankOf(t.uid);
+    if (r === "mod") return mod.unmod(t);
+    if (r === "vip") return mod.unvip(t);
+    throw new Error(t.name + " doesn’t have a role to remove.");
+  },
+  async givexp(t, amt) {
+    needAdmin();
+    const owner = levelOf() >= 3;
+    amt = Math.floor(Number(String(amt || "").replace(/,/g, "")));
+    if (!isFinite(amt) || amt < 1) throw new Error("Usage: /givexp <user> <amount>");
+    if (!owner && amt > GIVE_MAX_ADMIN) throw new Error(`Admins can give up to ${GIVE_MAX_ADMIN} XP at a time.`);
+    if (amt > GIVE_MAX_OWNER) throw new Error("That’s too much XP to give in one go.");
+    if (t.uid === me.uid && !owner) throw new Error("You can’t give XP to yourself.");
+    const r = await db.ref("xpGift/" + t.uid).transaction(cur => ({ v: ((cur && cur.v) || 0) + amt, t: TS(), by: me.uid, byName: me.name }));
+    if (!r.committed) throw new Error("Couldn’t give XP. The owner needs to publish the updated database rules.");
+    await sys(`${t.name} was given ${amt.toLocaleString()} XP by ${me.name}.`);
+  },
+  async unvip(t) { needAdmin(); need(t); if (rankOf(t.uid) !== "vip") throw new Error(t.name + " isn’t a VIP."); await db.ref("roles/" + t.uid).remove(); await sys(`${t.name} is no longer a VIP.`); }
 };
 
 /* ───────── commands ───────── */
@@ -1433,11 +1591,13 @@ const COMMANDS = {
   profile:     { level: 0, usage: "/profile <user>", desc: "Open someone’s profile" },
   dm:          { level: 0, usage: "/dm <user>", desc: "Open a direct message" },
   ranks:       { level: 0, usage: "/ranks", desc: "See what every rank can do" },
+  rules:       { level: 0, usage: "/rules", desc: "Read the chat rules" },
   poll:        { level: 0, usage: "/poll <question> | <option> | <option>", desc: "Start a poll with 2 to 5 options (channels only)" },
   pins:        { level: 0, usage: "/pins", desc: "See this channel’s pinned messages" },
   xp:          { level: 0, usage: "/xp [user]", desc: "See your level and XP, or someone else’s" },
   top:         { level: 0, usage: "/top", desc: "Show the XP leaderboard" },
   theme:       { level: 0, usage: "/theme", desc: "Pick a theme (new ones unlock as you level up)" },
+  blackjack:   { level: 0, usage: "/blackjack", desc: "Open the blackjack table and bet your XP" },
   kick:        { level: 1, usage: "/kick <user>", desc: "Remove someone; they can log back in" },
   mute:        { level: 1, usage: "/mute <user> [minutes]", desc: "Stop someone from posting" },
   unmute:      { level: 1, usage: "/unmute <user>", desc: "Let someone post again" },
@@ -1448,16 +1608,10 @@ const COMMANDS = {
   clear:       { level: 2, usage: "/clear", desc: "Delete every message in this channel" },
   newchannel:  { level: 3, usage: "/newchannel <name> [mod|admin|owner]", desc: "Create a permanent channel (optionally locked to a rank)" },
   delchannel:  { level: 2, usage: "/delchannel <name>", desc: "Delete a channel and its messages" },
-  mod:         { level: 2, usage: "/mod <user>", desc: "Make someone a moderator" },
-  unmod:       { level: 2, usage: "/unmod <user>", desc: "Remove someone’s moderator role" },
-  vip:         { level: 2, usage: "/vip <user>", desc: "Give someone the VIP role (a badge, no commands)" },
-  unvip:       { level: 2, usage: "/unvip <user>", desc: "Remove someone’s VIP role" },
+  promote:     { level: 2, usage: "/promote <user> <mod|vip|member>", desc: "Set someone’s role: moderator, VIP (a badge, no commands), or member (removes their role)" },
+  givexp:      { level: 2, usage: "/givexp <user> <amount>", desc: "Give someone XP (admins up to 500 at a time, owners any amount)" },
   giveimages:  { level: 2, usage: "/giveimages <user>", desc: "Let someone send images" },
   takeimages:  { level: 2, usage: "/takeimages <user>", desc: "Remove someone’s image permission" },
-  promote:     { level: 3, usage: "/promote <user>", desc: "Make someone an admin" },
-  demote:      { level: 3, usage: "/demote <user>", desc: "Remove someone’s admin rank" },
-  addowner:    { level: 3, usage: "/addowner <user>", desc: "Make someone an owner (original owner only)" },
-  removeowner: { level: 3, usage: "/removeowner <user>", desc: "Remove an owner (original owner only)" },
   logs:        { level: 3, usage: "/logs", desc: "View chat and moderation logs" },
   suggestions: { level: 3, usage: "/suggestions", desc: "Read the suggestions members have sent" }
 };
@@ -1470,7 +1624,7 @@ async function runCommand(raw) {
   const arg = parts.join(" ");
   const def = COMMANDS[name];
   if (!def) { localNote(`Unknown command “/${name}”. Type /help to see what you can use.`, true); return; }
-  if ((currentDM || currentRoom) && !["help", "me", "whois", "profile", "dm", "ranks", "xp", "top", "theme"].includes(name)) { localNote("That command only works in channels.", true); return; }
+  if ((currentDM || currentRoom) && !["help", "me", "whois", "profile", "dm", "ranks", "rules", "xp", "top", "theme", "blackjack"].includes(name)) { localNote("That command only works in channels.", true); return; }
   if (def.level > levelOf()) { localNote("You don’t have permission to use /" + name + ".", true); return; }
   try {
     switch (name) {
@@ -1487,13 +1641,14 @@ async function runCommand(raw) {
         const t = await resolveUser(parts[0]);
         const prof = (await db.ref("users/" + t.uid).once("value")).val() || {};
         const r = rankOf(t.uid);
-        localNote(`${t.name}: ${LABEL[r].replace(/^\S+ /, "")}, joined ${prof.joined ? new Date(prof.joined).toLocaleDateString() : "unknown"}, ${presence[t.uid] ? "online now" : "offline"}.`);
+        localNote(`${t.name}: ${LABEL[r].replace(/^\S+ /, "")}, joined ${prof.joined ? new Date(prof.joined).toLocaleDateString() : "unknown"}, ${presence[t.uid] ? (statusOf(t.uid) === "online" ? "online now" : STATUS[statusOf(t.uid)].label) : "offline"}.`);
         break;
       }
       case "ranks": openRanks(); break;
       case "pins": openPins(); break;
       case "top": openTop(); break;
       case "theme": openThemes(); break;
+      case "blackjack": bjOpenGame(); break;
       case "xp": {
         const t = parts[0] ? await resolveUser(parts[0]) : { uid: me.uid, name: me.name };
         const x = xpOf(t.uid), i = lvIdx(t.uid), nx = LEVELS[i + 1];
@@ -1511,7 +1666,7 @@ async function runCommand(raw) {
         if (myMute > now()) throw new Error("You’re muted.");
         if (!checkCooldown()) break;
         await db.ref(msgPath()).push({ uid: me.uid, name: me.name, type: "poll", text: q, opts: opts.join("|"), ts: TS() });
-        awardXP(5);
+        awardXP(XPC.poll);
         break;
       }
       case "logs": openLogs(); break;
@@ -1519,20 +1674,19 @@ async function runCommand(raw) {
       case "takeimages": await mod.takeimg(await resolveUser(parts[0])); break;
       case "profile": { const t = await resolveUser(parts[0]); openProfile(t.uid); break; }
       case "dm": { const t = await resolveUser(parts[0]); if (t.uid === me.uid) throw new Error("You can’t DM yourself."); selectDM(t.uid); break; }
-      case "mod":         await mod.mod(await resolveUser(parts[0])); break;
-      case "unmod":       await mod.unmod(await resolveUser(parts[0])); break;
-      case "vip":         await mod.vip(await resolveUser(parts[0])); break;
-      case "unvip":       await mod.unvip(await resolveUser(parts[0])); break;
+      case "promote": {
+        const role = (parts[1] || "").toLowerCase().replace(/^(none|regular|remove)$/, "member");
+        if (!["mod", "vip", "member"].includes(role)) throw new Error("Usage: /promote <user> <mod|vip|member>   (member removes their role)");
+        await mod.promote(await resolveUser(parts[0]), role); break;
+      }
+      case "givexp": await mod.givexp(await resolveUser(parts[0]), parts[1]); break;
+      case "rules": openRules(); break;
       case "suggestions": openSugs(); break;
-      case "addowner":    await mod.addowner(await resolveUser(parts[0])); break;
-      case "removeowner": await mod.removeowner(await resolveUser(parts[0])); break;
       case "kick":    await mod.kick(await resolveUser(parts[0])); break;
       case "mute":    await mod.mute(await resolveUser(parts[0]), parseInt(parts[1], 10) || 10); break;
       case "unmute":  await mod.unmute(await resolveUser(parts[0])); break;
       case "ban":     await mod.ban(await resolveUser(parts[0]), parts.slice(1).join(" ")); break;
       case "unban":   await mod.unban(await resolveUser(parts[0])); break;
-      case "promote": await mod.promote(await resolveUser(parts[0])); break;
-      case "demote":  await mod.demote(await resolveUser(parts[0])); break;
       case "banlist": {
         const bans = (await db.ref("bans").once("value")).val() || {};
         const ids = Object.keys(bans);
@@ -1629,7 +1783,20 @@ function openProfile(uid) {
   $("#pfName").textContent = u.name;
   const bd = badgeEl(rankOf(uid)); if (bd) $("#pfBadge").appendChild(bd);
   $("#pfBio").textContent = u.bio || (uid === me.uid ? "You haven’t written a bio yet." : "No bio yet.");
-  $("#pfInfo").textContent = `Level ${lvIdx(uid) + 1} ${LEVELS[lvIdx(uid)].n} · ${xpOf(uid).toLocaleString()} XP · Joined ${fmtJoin(u.joined)} · ${presence[uid] ? "online" : "offline"}`;
+  const paintInfo = () => { $("#pfInfo").textContent = `Level ${lvIdx(uid) + 1} ${LEVELS[lvIdx(uid)].n} · ${xpOf(uid).toLocaleString()} XP · Joined ${fmtJoin(u.joined)} · ${presence[uid] ? STATUS[statusOf(uid)].label : "Offline"}`; };
+  paintInfo();
+  if (uid === me.uid) {
+    const wrap = document.createElement("div"), lab = document.createElement("div"), row = document.createElement("div");
+    lab.className = "sub"; lab.style.margin = "0 0 6px"; lab.textContent = "Your status (resets to Online when you leave)"; row.className = "st-row";
+    const paint = () => row.querySelectorAll(".st-opt").forEach(b => b.classList.toggle("on", b.dataset.k === myStatus));
+    Object.entries(STATUS).forEach(([k, v]) => {
+      const b = document.createElement("button"); b.type = "button"; b.className = "st-opt"; b.dataset.k = k;
+      const i = document.createElement("i"), t = document.createElement("span"); t.textContent = v.label; b.append(i, t);
+      b.onclick = async () => { await setMyStatus(k); paint(); paintInfo(); };
+      row.appendChild(b);
+    });
+    paint(); wrap.append(lab, row); $("#pfBtns").before(wrap);
+  }
   const add = (t, fn, ghost) => { const b = document.createElement("button"); b.className = "btn" + (ghost ? " ghost" : ""); b.textContent = t; b.onclick = fn; $("#pfBtns").appendChild(b); };
   if (uid === me.uid) add("Edit profile", editProfile); else add("Send message", () => { closeModal(); selectDM(uid); });
   add("Close", closeModal, true);
@@ -1661,8 +1828,13 @@ function openDirectory() {
     Object.entries(usersMap).filter(([, u]) => u.name.toLowerCase().includes(q)).sort((a, b) => rankW(b[0]) - rankW(a[0]) || a[1].name.localeCompare(b[1].name)).forEach(([uid, u]) => {
       const b = document.createElement("button"); b.className = "mem"; b.appendChild(makeAvatar(u.name, uid, true));
       const w = document.createElement("span"); w.className = "nm"; w.innerHTML = `${esc(u.name)}${uid === me.uid ? " (you)" : ""} <small>${LABEL[rankOf(uid)]} · Lv ${lvIdx(uid) + 1} · joined ${esc(fmtJoin(u.joined))}</small>`;
-      b.appendChild(w); if (presence[uid]) { const d = document.createElement("span"); d.className = "on-dot"; b.appendChild(d); }
-      b.onclick = () => openProfile(uid); box.appendChild(b);
+      b.appendChild(w); if (presence[uid]) { const k = statusOf(uid), d = document.createElement("span"); d.className = "on-dot" + (k !== "online" ? " " + k : ""); d.title = STATUS[k].label; b.appendChild(d); }
+      b.onclick = () => openProfile(uid);
+      if (uid === me.uid) { box.appendChild(b); return; }
+      const wrap = document.createElement("div"); wrap.style.cssText = "display:flex;gap:6px;align-items:center";
+      b.style.flex = "1"; const m = document.createElement("button"); m.type = "button"; m.className = "btn ghost"; m.textContent = "💬";
+      m.title = "Send a message" + (presence[uid] ? "" : " (they’re offline, they’ll see it when they’re back)"); m.style.cssText = "width:auto;margin:0;padding:6px 12px";
+      m.onclick = () => { closeModal(); selectDM(uid); }; wrap.append(b, m); box.appendChild(wrap);
     });
   };
   $("#dirQ").oninput = draw; draw(); $("#dirQ").focus();
@@ -1721,7 +1893,11 @@ $("#colorBtn").onclick = () => openColors();
 (function () {
   const cv = $("#stars"), cx = cv.getContext("2d");
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let on = true, W, H, stars = [], cons = [], shoot = null, nextShoot = 0, raf;
+  let on = true, W, H, stars = [], cons = [], shoot = null, nextShoot = 0, raf, members = 0;
+  // More members, more constellations: CON_BASE to start with, plus one more for every CON_PER_MEMBERS people who have joined.
+  // CON_MAX is the ceiling; it's also scaled down on small screens so phones don't get crowded.
+  const CON_BASE = 2, CON_PER_MEMBERS = 2, CON_MAX = 24;
+  const targetCons = () => Math.min(Math.max(3, Math.min(CON_MAX, Math.round(W * H / 80000))), CON_BASE + Math.floor(members / CON_PER_MEMBERS));
   try { on = localStorage.getItem("nebulaFx") !== "off"; } catch (e) {}
   // Real constellation outlines, drawn as simple point-and-line figures (x and y run 0 to 1).
   const CONS = [
@@ -1730,6 +1906,13 @@ $("#colorBtn").onclick = () => openColors();
     { name: "Cassiopeia", p: [[0,.7],[.22,.2],[.5,.6],[.78,.15],[1,.55]], e: [[0,1],[1,2],[2,3],[3,4]] },
     { name: "Cygnus", p: [[.5,0],[.5,.5],[.5,1],[.08,.38],[.92,.62]], e: [[0,1],[1,2],[3,1],[1,4]] },
     { name: "Lyra", p: [[.5,0],[.25,.45],[.75,.45],[.3,1],[.8,1]], e: [[0,1],[0,2],[1,2],[1,3],[2,4],[3,4]] },
+    { name: "Crux", p: [[.5,0],[.5,1],[.1,.4],[.9,.6]], e: [[0,1],[2,3]] },
+    { name: "Scorpius", p: [[.95,.12],[.88,.28],[.8,.4],[.66,.5],[.55,.6],[.45,.78],[.32,.9],[.18,.84],[.1,.64]], e: [[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,8]] },
+    { name: "Gemini", p: [[.2,0],[.25,.3],[.3,.6],[.3,1],[.7,.05],[.72,.35],[.68,.65],[.78,1]], e: [[0,1],[1,2],[2,3],[4,5],[5,6],[6,7],[1,5]] },
+    { name: "Taurus", p: [[.05,.1],[.3,.45],[.5,.6],[.8,.7],[1,.85],[.6,.2],[.75,0]], e: [[0,1],[1,2],[2,3],[3,4],[2,5],[5,6]] },
+    { name: "Aquila", p: [[.5,.4],[.35,.5],[.65,.5],[.5,0],[.5,1],[.1,.7]], e: [[3,0],[0,4],[1,0],[0,2],[1,5]] },
+    { name: "Pegasus", p: [[.2,.2],[.8,.2],[.8,.8],[.2,.8],[0,.95],[1,0]], e: [[0,1],[1,2],[2,3],[3,0],[0,4],[1,5]] },
+    { name: "Ursa Minor", p: [[0,.05],[.15,.2],[.3,.3],[.45,.42],[.62,.4],[.7,.72],[.92,.85],[.88,.5]], e: [[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,4]] },
     { name: "Leo", p: [[.12,.65],[.08,.4],[.18,.2],[.32,.06],[.44,.2],[.4,.45],[.65,.5],[.95,.4],[.82,.78]], e: [[0,1],[1,2],[2,3],[3,4],[4,5],[5,0],[5,6],[6,7],[7,8],[8,6]] }
   ];
   const rnd = (a, b) => a + Math.random() * (b - a);
@@ -1745,8 +1928,7 @@ $("#colorBtn").onclick = () => openColors();
     const d = devicePixelRatio || 1; W = innerWidth; H = innerHeight;
     cv.width = W * d; cv.height = H * d; cx.setTransform(d, 0, 0, d, 0, 0);
     stars = Array.from({ length: Math.round(W * H / 9000) }, () => ({ x: Math.random() * W, y: Math.random() * H, r: Math.random() * 1.4 + .3, p: Math.random() * 6.28, s: Math.random() * .02 + .005, v: Math.random() * .12 + .02, h: 200 + Math.random() * 100 }));
-    const n = Math.max(2, Math.min(6, Math.round(W * H / 190000)));
-    cons = Array.from({ length: n }, () => spawnCon(performance.now(), true));
+    cons = Array.from({ length: targetCons() }, () => spawnCon(performance.now(), true));
   }
   const tone = (a, i, t) => fxTheme.rainbow ? `hsla(${(t * .02 + i * 70) % 360},90%,75%,${a})` : `rgba(${fxTheme.cst},${a})`;
   function drawCons(t) {
@@ -1803,6 +1985,12 @@ $("#colorBtn").onclick = () => openColors();
   addEventListener("resize", () => { size(); start(); });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) start(); });
   window.redrawStars = start;   // called when the theme changes
+  window.setStarMembers = n => {   // called with the number of people who have joined
+    members = n | 0; const want = targetCons(), t = performance.now();
+    if (cons.length === want) return;
+    while (cons.length < want) { const c = spawnCon(t, false); c.born += rnd(0, 4000); cons.push(c); }   // new ones fade in, staggered
+    cons.length = want; start();
+  };
   const btn = $("#fxBtn"), paint = () => btn.style.opacity = on ? 1 : .4;
   btn.title = "Toggle starfield and constellations";
   paint();
@@ -1874,14 +2062,68 @@ function openRooms() {
   };
 }
 
+/* ───────── chat rules page ─────────
+   rules/{text, by, byName, t}: written by owners only, readable by everyone signed in.
+   Text format: "# Heading", "- bullet", blank line = spacing, anything else is a paragraph. */
+const canEditRules = () => !!me && lvl(me.uid) >= 3;
+$("#rulesFab").onclick = () => openRules();
+function openRules() {
+  if (!me) return;
+  rulesEditing = false;
+  modal('<h2>📜 Chat rules</h2><div id="rlBody"></div>', true);
+  drawRules();
+}
+function drawRules() {
+  const body = $("#rlBody"); if (!body || rulesEditing || $("#modal").hidden) return;
+  body.innerHTML = "";
+  const text = (rulesData && rulesData.text) || "";
+  if (!text.trim()) {
+    const n = document.createElement("p"); n.className = "none";
+    n.textContent = canEditRules() ? "You haven’t written any rules yet. Press Edit rules to add them." : "The owners haven’t posted any rules yet.";
+    body.appendChild(n);
+  } else text.split("\n").forEach(line => {
+    const t = line.trim(); if (!t) return;
+    const h = /^#+\s*(.*)$/.exec(t), li = /^[-•*]\s+(.*)$/.exec(t);
+    const el = document.createElement(h ? "h3" : "p");
+    if (li) { el.className = "li"; el.textContent = "• " + li[1]; } else el.textContent = h ? h[1] : t;
+    body.appendChild(el);
+  });
+  if (rulesData && rulesData.byName) {
+    const f = document.createElement("p"); f.className = "sub"; f.style.cssText = "margin-top:14px;font-size:12.5px";
+    f.textContent = `Last updated by ${rulesData.byName}` + (rulesData.t ? " on " + new Date(rulesData.t).toLocaleDateString() : "");
+    body.appendChild(f);
+  }
+  const row = document.createElement("div"); row.style.marginTop = "14px";
+  if (canEditRules()) { const b = document.createElement("button"); b.className = "btn"; b.textContent = "Edit rules"; b.onclick = editRules; row.appendChild(b); }
+  const c = document.createElement("button"); c.className = "btn ghost"; c.textContent = "Close"; c.onclick = closeModal; row.appendChild(c);
+  body.appendChild(row);
+}
+function editRules() {
+  if (!canEditRules()) return;
+  rulesEditing = true;
+  const body = $("#rlBody");
+  body.innerHTML = `<p class="sub" style="margin:0 0 8px;font-size:13px">Start a line with # for a heading and - for a bullet. Blank lines are skipped. Everyone can read this page.</p>
+    <textarea id="rlText" maxlength="5000" placeholder="# Be kind&#10;- No harassment&#10;- No spam"></textarea>
+    <div class="err" id="rlErr"></div><button class="btn" id="rlSave">Save rules</button><button class="btn ghost" id="rlCancel">Cancel</button>`;
+  $("#rlText").value = (rulesData && rulesData.text) || ""; $("#rlText").focus();
+  $("#rlCancel").onclick = () => { rulesEditing = false; drawRules(); };
+  $("#rlSave").onclick = async () => {
+    const text = $("#rlText").value.trim(); $("#rlSave").disabled = true;
+    try {
+      if (text) await db.ref("rules").set({ text, by: me.uid, byName: me.name, t: TS() }); else await db.ref("rules").remove();
+      rulesEditing = false; toast("Rules saved."); drawRules();
+    } catch (e) { $("#rlSave").disabled = false; $("#rlErr").textContent = "Couldn’t save. The owner needs to publish the updated database rules."; }
+  };
+}
+
 /* ───────── image permission, ranks & logs ───────── */
 const canImg = () => !!me && (lvl(me.uid) >= 2 || imgAccess[me.uid] === true);
 function updateImgUI() { if (!me) return; $("#attachBtn").hidden = !canImg(); if (!canImg()) clearStage(); }
 $("#rankBtn").onclick = () => openRanks();
 $("#logBtn").onclick = () => openLogs();
 const PERKS = {
-  owner: ["Posts every 1 second", "Creates permanent channels", "Reads every channel and the chat logs", "Adds and removes admins", "Always sends images"],
-  admin: ["Posts every 1 second", "Bans and unbans", "Deletes channels and posts announcements", "Grants image permission", "Always sends images"],
+  owner: ["Posts every 1 second", "Creates permanent channels", "Gives any amount of XP", "Writes the chat rules", "Reads every channel and the chat logs", "Always sends images"],
+  admin: ["Posts every 1 second", "Bans and unbans", "Gives up to 500 XP at a time", "Deletes channels and posts announcements", "Grants image permission", "Always sends images"],
   mod: ["Posts every 2 seconds", "Deletes messages in channels", "Reads #mod", "Sends images only if granted"],
   vip: ["Gets a 💎 VIP badge", "No commands beyond the everyday ones every member has", "Posts every 2 seconds", "Sends images only if granted"],
   regular: ["Posts every 2 seconds", "Chats, sends DMs, makes temporary rooms", "Sends images only if granted"]
@@ -2044,10 +2286,7 @@ function drawSugs() {
   const list = Object.entries(sugs).sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
   if (!list.length) { box.textContent = "No suggestions yet."; return; }
   list.forEach(([id, s]) => {
-    const d = document.createElement("div"); d.style.cssText = "padding:10px 4px;border-bottom:1px solid var(--line)";
-    const h = document.createElement("div"); h.style.cssText = "color:var(--mute);font-size:12.5px;margin-bottom:4px";
-    h.textContent = `${s.name} · ${SUG_CAT[s.cat] || "Something else"} · ${new Date(s.ts || 0).toLocaleString()}`;
-    const t = document.createElement("div"); t.style.cssText = "white-space:pre-wrap;word-break:break-word"; t.textContent = s.text;
+    const [d, h, t] = listRow(`${s.name} · ${SUG_CAT[s.cat] || "Something else"} · ${new Date(s.ts || 0).toLocaleString()}`, s.text);
     const x = document.createElement("button"); x.type = "button"; x.className = "btn ghost"; x.textContent = "Delete"; x.style.cssText = "width:auto;margin-top:6px;padding:4px 14px";
     x.onclick = () => db.ref("suggestions/" + id).remove().catch(() => toast("Couldn’t delete that one."));
     d.append(h, t, x); box.appendChild(d);
@@ -2062,9 +2301,9 @@ function openSugs() {
 }
 
 /* ───────── XP & levels ─────────
-   XP is earned by chatting. The database rules enforce the limits (a small gain per write, one write every
-   25 seconds, and a daily cap), so the top levels take months. Levels are cosmetic; they never grant staff powers. */
-const LEVELS = [
+   XP is earned by chatting. The database rules enforce the limits (a small gain per write, a minimum gap
+   between writes, and a daily cap), all read from config/xp. Levels are cosmetic; they never grant staff powers. */
+const DEFAULT_LEVELS = [
   { n: "Stardust",  xp: 0,      icon: "✨" },
   { n: "Meteoroid", xp: 200,    icon: "☄️" },
   { n: "Comet",     xp: 800,    icon: "🌠" },
@@ -2075,12 +2314,44 @@ const LEVELS = [
   { n: "Quasar",    xp: 70000,  icon: "🌀" },
   { n: "Galaxy",    xp: 150000, icon: "🌌" }
 ];
-const XP_DAILY = 500, XP_GAP = 30000, XP_MAXGAIN = 12, DAY_MS = 86400000;
-const xpOf = uid => ((xpData[uid] || {}).v) || 0;
+/* Everything below can be changed live from the Firebase console, no code edit needed:
+     config/levels/<0,1,2…>  { n: name, xp: XP needed, icon: emoji }
+     config/xp               { daily, gapSec, maxGain, msgBase, msgBonusMax, msgBonusChars, poll, vote }
+     xp/<uid>/v              a single person's XP
+   If a value is missing or invalid, the default below is used. */
+const DEFAULT_XP = { daily: 500, gapSec: 30, maxGain: 12, msgBase: 4, msgBonusMax: 6, msgBonusChars: 25, poll: 5, vote: 3 };
+let LEVELS = DEFAULT_LEVELS.map(l => ({ ...l })), XPC = { ...DEFAULT_XP };
+const DEFAULT_BJ = { minBet: 10, maxBet: 500, gapSec: 1 };   // config/blackjack/{minBet,maxBet,gapSec}
+let BJC = { ...DEFAULT_BJ }, bjData = {}, bjLoaded = false, bjEnabled = true, bjStale = false;
+const rankReady = new Set();   // owner/owners/roles snapshots seen, so staff status is known before a theme is ever taken away
+const DAY_MS = 86400000;
+function applyXpConfig(cfg) {
+  cfg = cfg || {}; const x = cfg.xp || {};
+  const num = (v, d, min, max) => { const n = Number(v); return v !== null && v !== undefined && v !== "" && isFinite(n) && n >= min && n <= max ? n : d; };
+  XPC = {
+    daily: num(x.daily, DEFAULT_XP.daily, 1, 1e7), gapSec: num(x.gapSec, DEFAULT_XP.gapSec, 0, 3600), maxGain: num(x.maxGain, DEFAULT_XP.maxGain, 1, 1e6),
+    msgBase: num(x.msgBase, DEFAULT_XP.msgBase, 0, 1e6), msgBonusMax: num(x.msgBonusMax, DEFAULT_XP.msgBonusMax, 0, 1e6),
+    msgBonusChars: num(x.msgBonusChars, DEFAULT_XP.msgBonusChars, 1, 1e4), poll: num(x.poll, DEFAULT_XP.poll, 0, 1e6), vote: num(x.vote, DEFAULT_XP.vote, 0, 1e6)
+  };
+  const b = cfg.blackjack || {}, ev = n => Math.round(n / 2) * 2;
+  BJC = { minBet: ev(num(b.minBet, DEFAULT_BJ.minBet, 2, 1e6)), maxBet: ev(num(b.maxBet, DEFAULT_BJ.maxBet, 2, 1e6)), gapSec: num(b.gapSec, DEFAULT_BJ.gapSec, 0, 60) };
+  if (BJC.maxBet < BJC.minBet) BJC.maxBet = BJC.minBet;
+  const raw = cfg.levels, arr = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw) : [];
+  let lv = arr.filter(l => l && typeof l === "object" && isFinite(Number(l.xp)) && Number(l.xp) >= 0 && l.xp !== "" && l.xp !== null)
+    .map((l, i) => ({ n: String(l.n || "Level " + (i + 1)).slice(0, 24), xp: Number(l.xp), icon: String(l.icon || "⭐").slice(0, 8) }))
+    .sort((a, b) => a.xp - b.xp);
+  if (!lv.length) lv = DEFAULT_LEVELS.map(l => ({ ...l }));
+  lv[0].xp = 0;   // the first level always starts at 0 XP so everyone has a level
+  LEVELS = lv;
+}
+const thLv = t => Math.min(t.lv, LEVELS.length - 1);   // themes tied to a level that no longer exists unlock at the top level
+const bjOf = uid => (bjData[uid] || {}).v || 0;   // blackjack winnings/losses, can be negative
+const giftOf = uid => (giftData[uid] || {}).v || 0;   // XP given by admins/owners
+const xpOf = uid => Math.max(0, (((xpData[uid] || {}).v) || 0) + bjOf(uid) + giftOf(uid));
 const lvIdx = uid => { const x = xpOf(uid); let i = 0; LEVELS.forEach((l, k) => { if (x >= l.xp) i = k; }); return i; };
 function lvBadge(uid) {
   const i = lvIdx(uid), b = document.createElement("span");
-  b.className = "lv t" + (i + 1); b.dataset.uid = uid;
+  b.className = "lv t" + Math.min(i + 1, 9); b.dataset.uid = uid;
   b.textContent = `${LEVELS[i].icon} Lv ${i + 1}`;
   b.title = `Level ${i + 1} · ${LEVELS[i].n} · ${xpOf(uid).toLocaleString()} XP`;
   return b;
@@ -2088,31 +2359,35 @@ function lvBadge(uid) {
 function paintLevels() {
   document.querySelectorAll(".lv[data-uid]").forEach(el => { const n = lvBadge(el.dataset.uid); el.className = n.className; el.textContent = n.textContent; el.title = n.title; });
 }
+const xpPct = (x, cur, nx) => nx ? Math.max(0, Math.min(100, (x - cur.xp) / (nx.xp - cur.xp) * 100)) : 100;
 function paintMeXp() {
   if (!me) return;
   const x = xpOf(me.uid), i = lvIdx(me.uid), cur = LEVELS[i], nx = LEVELS[i + 1];
   $("#meLv").textContent = `${cur.icon} Lv ${i + 1} · ${cur.n}`;
-  $("#xpFill").style.width = (nx ? Math.max(0, Math.min(100, (x - cur.xp) / (nx.xp - cur.xp) * 100)) : 100) + "%";
+  $("#xpFill").style.width = xpPct(x, cur, nx) + "%";
   $("#xpBar").title = nx ? `${x.toLocaleString()} / ${nx.xp.toLocaleString()} XP` : `${x.toLocaleString()} XP · max level`;
 }
 function onXpChange() {
   if (!me) return;
   paintLevels(); paintMeXp();
+  if (!xpLoaded || !bjLoaded || !giftLoaded) return;   // wait until all XP sources are in, so a half-loaded total never looks like a rank change
   const i = lvIdx(me.uid);
   if (prevLvIdx !== null && i > prevLvIdx) {
-    const th = Object.values(THEMES).filter(t => t.lv === i).map(t => t.name);
+    const th = Object.values(THEMES).filter(t => thLv(t) === i && t.lv > 0).map(t => t.name);
     toast(`${LEVELS[i].icon} Level up! You’re now level ${i + 1}, ${LEVELS[i].n}.` + (th.length ? ` Unlocked the ${th.join(", ")} theme.` : ""));
     ping();
-  }
+  } else if (prevLvIdx !== null && i < prevLvIdx) bjRankLost(prevLvIdx, i);
+  else bjEnforceTheme();
   prevLvIdx = i;
+  if (bjOpen && xpOf(me.uid) !== bjLastTotal) bjRender();
   if ($("#xpBody") && !$("#modal").hidden) drawXP();
 }
 async function awardXP(base) {
   if (!db || !me || !xpLoaded || xpBusy) return;
-  const t = now(); if (t - lastXpAt < XP_GAP) return;
+  const t = now(); if (t - lastXpAt < XPC.gapSec * 1000) return;
   const cur = xpData[me.uid] || {}, day = Math.floor(t / DAY_MS);
   const dv = cur.d === day ? (cur.dv || 0) : 0;
-  const gain = Math.min(base, XP_MAXGAIN, XP_DAILY - dv);
+  const gain = Math.floor(Math.min(base, XPC.maxGain, XPC.daily - dv));
   if (gain <= 0) return;
   lastXpAt = t; xpBusy = true;
   try { await db.ref("xp/" + me.uid).set({ v: (cur.v || 0) + gain, t: TS(), d: day, dv: dv + gain }); }
@@ -2122,29 +2397,29 @@ function xpFromMessage(raw) {
   const text = (raw || "").trim();
   if (text.replace(/\s+/g, "").length < 4 || text === lastXpText) return;   // short or repeated messages earn nothing
   lastXpText = text;
-  awardXP(4 + Math.min(6, Math.floor(text.length / 25)));
+  awardXP(XPC.msgBase + Math.min(XPC.msgBonusMax, Math.floor(text.length / XPC.msgBonusChars)));
 }
 function drawXP() {
   const body = $("#xpBody"); if (!body || !me) return;
   const x = xpOf(me.uid), i = lvIdx(me.uid), cur = LEVELS[i], nx = LEVELS[i + 1];
-  const pct = nx ? Math.max(0, Math.min(100, (x - cur.xp) / (nx.xp - cur.xp) * 100)) : 100;
+  const pct = xpPct(x, cur, nx);
   const e = xpData[me.uid] || {}, today = e.d === Math.floor(now() / DAY_MS) ? (e.dv || 0) : 0;
   const rows = LEVELS.map((l, k) => {
-    const th = Object.values(THEMES).filter(t => t.lv === k).map(t => t.name).join(", ");
+    const th = Object.values(THEMES).filter(t => thLv(t) === k && t.lv > 0).map(t => t.name).join(", ");
     return `<div class="lv-row${k <= i ? " got" : ""}"><span>${l.icon}</span><b>Lv ${k + 1} · ${esc(l.n)}</b><small>${l.xp.toLocaleString()} XP${th ? " · unlocks the " + esc(th) + " theme" : ""}</small><em>${k <= i ? "✓" : ""}</em></div>`;
   }).join("");
   body.innerHTML = `<h2>${cur.icon} Level ${i + 1} · ${esc(cur.n)}</h2>
-    <p class="sub" style="margin:4px 0 12px">${x.toLocaleString()} XP${nx ? ` · ${(nx.xp - x).toLocaleString()} XP to ${esc(nx.n)}` : " · You’ve reached the top. You’re a Galaxy."}</p>
+    <p class="sub" style="margin:4px 0 12px">${x.toLocaleString()} XP${nx ? ` · ${(nx.xp - x).toLocaleString()} XP to ${esc(nx.n)}` : ` · You’ve reached the top level, ${esc(cur.n)}.`}</p>
     <div class="xpbar big"><i style="width:${pct}%"></i></div>
-    <p class="sub" style="margin:10px 0 4px">Today: ${today} / ${XP_DAILY} XP</p>
-    <p class="sub" style="margin:0 0 12px;font-size:13px">Earn XP by chatting: 4 to 10 XP per message, at most once every 30 seconds. Short or repeated messages don’t count. Starting a poll gives +5 and voting in one gives +3. You can earn up to ${XP_DAILY} XP a day, so the top levels take months.</p>
+    <p class="sub" style="margin:10px 0 4px">Today: ${today} / ${XPC.daily} XP</p>
+    <p class="sub" style="margin:0 0 12px;font-size:13px">Earn XP by chatting (or win it at the blackjack table, 🃏 in the corner): ${XPC.msgBase} to ${XPC.msgBase + XPC.msgBonusMax} XP per message, at most once every ${XPC.gapSec} seconds. Short or repeated messages don’t count. Starting a poll gives +${XPC.poll} and voting in one gives +${XPC.vote}. You can earn up to ${XPC.daily} XP a day.</p>
     <div class="dir" style="max-height:36dvh">${rows}</div>
     <button class="btn" id="xpTh">Themes</button><button class="btn ghost" id="xpTop">Leaderboard</button><button class="btn ghost" id="xpX">Close</button>`;
   $("#xpTh").onclick = openThemes; $("#xpTop").onclick = openTop; $("#xpX").onclick = closeModal;
 }
 function openXP() { if (!me) return; modal('<div id="xpBody"></div>', true); drawXP(); }
 function openTop() {
-  const list = Object.entries(xpData).filter(([uid, x]) => usersMap[uid] && x && x.v > 0).sort((a, b) => b[1].v - a[1].v).slice(0, 10);
+  const list = Object.keys({ ...xpData, ...bjData, ...giftData }).filter(uid => usersMap[uid] && xpOf(uid) > 0).map(uid => [uid, { v: xpOf(uid) }]).sort((a, b) => b[1].v - a[1].v).slice(0, 10);
   modal(`<h2>🏆 XP leaderboard</h2><p class="sub" style="margin:4px 0 12px">The ten highest levels in the chat.</p><div class="dir" id="topList"></div><button class="btn ghost" id="topX">Close</button>`);
   $("#topX").onclick = closeModal;
   const box = $("#topList");
@@ -2168,7 +2443,7 @@ const THEMES = {
   void:      { name: "Void",        lv: 5, sw: "linear-gradient(135deg,#a8842c,#5b4a1f,#2f2f3d)", fx: { shift: -240, cst: "240,220,150" } },
   cosmic:    { name: "Galaxy Core", lv: 8, sw: "linear-gradient(135deg,#d62fb0,#6a4cf0,#1c9fd6)", fx: { shift: 0, cst: "255,255,255", rainbow: true } }
 };
-const themeOK = id => { const t = THEMES[id]; return !!t && (t.lv === 0 || (!!me && (lvl(me.uid) >= 2 || lvIdx(me.uid) >= t.lv))); };
+const themeOK = id => { const t = THEMES[id]; return !!t && (t.lv === 0 || (!!me && (lvl(me.uid) >= 2 || lvIdx(me.uid) >= thLv(t)))); };
 function applyTheme(id, save) {
   if (!THEMES[id]) id = "nebula";
   curTheme = id; fxTheme = THEMES[id].fx;
@@ -2188,9 +2463,9 @@ function openThemes() {
       b.className = "th-card" + (id === curTheme ? " on" : "") + (ok ? "" : " locked");
       const sw = document.createElement("div"); sw.className = "th-sw"; sw.style.background = t.sw;
       const nm = document.createElement("b"); nm.textContent = t.name;
-      const sm = document.createElement("small"); sm.textContent = ok ? (id === curTheme ? "In use" : "Unlocked") : `🔒 Level ${t.lv + 1} · ${LEVELS[t.lv].n}`;
+      const sm = document.createElement("small"); sm.textContent = ok ? (id === curTheme ? "In use" : "Unlocked") : `🔒 Level ${thLv(t) + 1} · ${LEVELS[thLv(t)].n}`;
       b.append(sw, nm, sm);
-      b.onclick = () => { if (!themeOK(id)) { toast(`Reach level ${t.lv + 1} (${LEVELS[t.lv].n}) to unlock ${t.name}.`); return; } applyTheme(id, true); draw(); };
+      b.onclick = () => { if (!themeOK(id)) { toast(`Reach level ${thLv(t) + 1} (${LEVELS[thLv(t)].n}) to unlock ${t.name}.`); return; } applyTheme(id, true); draw(); };
       g.appendChild(b);
     });
   };
@@ -2235,7 +2510,7 @@ async function castVote(mid, idx) {
   const path = `votes/${currentChan}/${mid}/${me.uid}`, cur = (votesData[mid] || {})[me.uid];
   try {
     if (cur === idx) await db.ref(path).remove();
-    else { await db.ref(path).set(idx); if (cur === undefined) awardXP(3); }
+    else { await db.ref(path).set(idx); if (cur === undefined) awardXP(XPC.vote); }
   } catch (e) { toast("Couldn’t record your vote. The updated database rules need to be published."); }
 }
 
@@ -2298,11 +2573,8 @@ function drawPins() {
   if (!ids.length) { box.textContent = "Nothing is pinned in this channel yet." + (canPin() ? " Hover over a message and press 📌 to pin it." : ""); return; }
   ids.forEach(id => {
     const p = pins[id], m = pinMsg(id);
-    const d = document.createElement("div"); d.style.cssText = "padding:10px 4px;border-bottom:1px solid var(--line)";
-    const h = document.createElement("div"); h.style.cssText = "color:var(--mute);font-size:12.5px;margin-bottom:4px";
-    h.textContent = `${m ? m.name : "…"} · pinned by ${p.byName || "staff"} · ${new Date(p.ts || 0).toLocaleDateString()}`;
-    const t = document.createElement("div"); t.style.cssText = "white-space:pre-wrap;word-break:break-word";
-    t.textContent = m === undefined ? "Loading…" : m === false ? "(This message was deleted.)" : maskBad(pinPreview(m));
+    const [d, h, t] = listRow(`${m ? m.name : "…"} · pinned by ${p.byName || "staff"} · ${new Date(p.ts || 0).toLocaleDateString()}`,
+      m === undefined ? "Loading…" : m === false ? "(This message was deleted.)" : maskBad(pinPreview(m)));
     d.append(h, t);
     const row = document.createElement("div"); row.style.cssText = "display:flex;gap:8px;margin-top:6px";
     const add = (label, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = "btn ghost"; b.textContent = label; b.style.cssText = "width:auto;margin:0;padding:4px 14px"; b.onclick = fn; row.appendChild(b); };
@@ -2312,6 +2584,341 @@ function drawPins() {
     box.appendChild(d);
   });
 }
+
+/* ───────── Blackjack ─────────
+   You bet XP. Your XP is the chat XP (xp/<uid>/v) plus your blackjack balance (bj/<uid>/v, which can go negative).
+   A bet is held in escrow (bj/<uid>/e) while a hand is in play, so closing the tab mid-hand forfeits it.
+   Rules: 6-deck shoe, dealer stands on all 17s, blackjack pays 3:2, double on any two cards (also after a split),
+   split up to 4 hands (one card on split aces), insurance pays 2:1, late surrender.
+   If a loss drops your XP under your current level's threshold you lose that rank and fall back to the default theme. */
+const BJ_SUITS = ["♠", "♥", "♦", "♣"], BJ_RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+const BJ_CHIPS = { 10: "#e8eaff", 20: "#ff8aa4", 50: "#7fb0ff", 100: "#b9a6ff", 250: "#5fe3b0", 500: "#ffcf6b", 1000: "#ff9ad5", 2500: "#ffd0a8" };
+let bjMode = "xp", bjFunBal = 1000;   // "xp" bets real XP; "fun" bets play money ($1,000 to start, saved on this device)
+let bj = null, bjShoe = [], bjChips = 0, bjLast = 0, bjOpen = false, bjBusy = false, bjNotice = "", bjLastWrite = 0, bjLastTotal = -1;
+
+function bjRand(n) {
+  const a = new Uint32Array(1), lim = Math.floor(4294967296 / n) * n;
+  do crypto.getRandomValues(a); while (a[0] >= lim);
+  return a[0] % n;
+}
+function bjNewShoe() {
+  const s = [];
+  for (let d = 0; d < 6; d++) BJ_SUITS.forEach(su => BJ_RANKS.forEach(r => s.push({ r, s: su })));
+  for (let i = s.length - 1; i > 0; i--) { const j = bjRand(i + 1); [s[i], s[j]] = [s[j], s[i]]; }
+  return s;
+}
+function bjDraw() { if (!bjShoe.length) bjShoe = bjNewShoe(); const c = bjShoe.pop(); c.fresh = true; return c; }
+const bjVal = c => c.r === "A" ? 11 : "JQK".includes(c.r) || c.r === "10" ? 10 : Number(c.r);
+function bjTotal(cards) {
+  let t = 0, aces = 0;
+  cards.forEach(c => { t += bjVal(c); if (c.r === "A") aces++; });
+  while (t > 21 && aces) { t -= 10; aces--; }
+  return { t, soft: aces > 0 };
+}
+const bjHand = bet => ({ cards: [], bet, done: false, split: false, aceSplit: false, surrendered: false, bj: false, tag: "", ret: 0 });
+const bjSleep = ms => new Promise(r => setTimeout(r, ms));
+const lvIdxAt = x => { let i = 0; LEVELS.forEach((l, k) => { if (x >= l.xp) i = k; }); return i; };
+const bjEven = n => Math.floor(n / 2) * 2;
+
+/* XP you can still stake: your total minus any bet already held in escrow. */
+const bjSpendable = () => bjMode === "fun" ? bjFunBal : Math.max(0, xpOf(me.uid) - ((bjData[me.uid] || {}).e || 0));
+const bjFmt = n => bjMode === "fun" ? "$" + n.toLocaleString() : n.toLocaleString() + " XP";
+const bjKey = k => "nebulaBj" + k + ":" + me.uid;
+function bjModeLoad() {
+  try { bjMode = localStorage.getItem(bjKey("Mode")) === "fun" ? "fun" : "xp"; const raw = localStorage.getItem(bjKey("Fun")), v = Number(raw); bjFunBal = raw !== null && isFinite(v) && v >= 0 ? Math.floor(v) : 1000; }
+  catch (e) { bjFunBal = 1000; }
+}
+function bjFunSave() { try { localStorage.setItem(bjKey("Fun"), String(bjFunBal)); } catch (e) {} }
+function bjSetMode(m) {
+  if (bjBusy || (bj && bj.phase !== "done") || (m !== "xp" && m !== "fun")) return;
+  bjMode = m; try { localStorage.setItem(bjKey("Mode"), m); } catch (e) {}
+  bj = null; bjNotice = ""; bjChips = bjClamp(bjChips || bjLast || BJC.minBet); bjRender();
+}
+/* A bet leaves your balance when the hand is dealt (escrow for XP, straight off the play-money balance), and the payout lands when it ends. */
+async function bjPlace(bet) { if (bjMode === "fun") { bjFunBal -= bet; bjFunSave(); return; } await bjWrite(0, bet); }
+async function bjPay(r) { if (r.mode === "fun") { bjFunBal += r.net + r.bet; bjFunSave(); return true; } return bjWriteRetry(r.net, 0); }
+const bjAvail = () => bjSpendable() - (bj ? bj.extra : 0);
+const bjCap = () => bjEven(Math.min(BJC.maxBet, bjSpendable()));
+const bjClamp = x => { x = bjEven(Math.min(x, bjCap())); return x >= BJC.minBet ? x : 0; };
+
+async function bjWrite(dv, e) {
+  const wait = bjLastWrite + BJC.gapSec * 1000 + 200 - now();
+  if (wait > 0) await bjSleep(wait);
+  const cur = bjData[me.uid] || {};
+  await db.ref("bj/" + me.uid).set({ v: (cur.v || 0) + dv, e, t: TS() });
+  bjLastWrite = now();
+}
+async function bjWriteRetry(dv, e) {
+  for (let i = 0; i < 3; i++) { try { await bjWrite(dv, e); return true; } catch (err) { await bjSleep(1200); } }
+  return false;
+}
+
+/* ── rank & theme loss ── */
+function bjRankLost(prev, i) {
+  const old = curTheme !== "nebula" && THEMES[curTheme] ? THEMES[curTheme].name : "";
+  if (curTheme !== "nebula") applyTheme("nebula", true);
+  const msg = `${LEVELS[prev].icon} You fell from ${LEVELS[prev].n} to ${LEVELS[i].n}. Your rank` + (old ? ` and the ${old} theme are gone.` : " is gone.");
+  bjNotice = msg; toast(msg);
+}
+function bjEnforceTheme() {
+  // Only once everything that decides theme access has loaded, so a half-loaded login never strips a theme by mistake.
+  if (!me || rankReady.size < 3 || !xpLoaded || !bjLoaded) return;
+  if (curTheme !== "nebula" && !themeOK(curTheme)) {
+    const old = THEMES[curTheme] ? THEMES[curTheme].name : curTheme;
+    applyTheme("nebula", true);
+    toast(`The ${old} theme is locked at your current rank, so you’re back on Nebula.`);
+  }
+}
+function bjStaleCheck() {
+  if (bjStale || !me) return; bjStale = true;
+  const e = (bjData[me.uid] || {}).e || 0;
+  if (e > 0 && !bj) bjWriteRetry(-e, 0).then(ok => { if (ok) toast(`You left a blackjack hand unfinished, so your ${e.toLocaleString()} XP bet was forfeited.`); });
+}
+function bjReset() {
+  bj = null; bjBusy = false; bjOpen = false; bjNotice = ""; bjData = {}; bjLoaded = false; bjEnabled = true; bjStale = false; bjLastTotal = -1; rankReady.clear();
+  const el = $("#bj"); if (el) { el.hidden = true; el.innerHTML = ""; }
+}
+
+/* ── opening & closing ── */
+function bjOpenGame() {
+  if (!me) return;
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  $("#bj").hidden = false; bjOpen = true;
+  if (!bj) bjModeLoad();
+  if (!bj || bj.phase === "done") bjChips = bjClamp(bjChips || bjLast || BJC.minBet);
+  bjRender();
+}
+function bjClose(force) {
+  if (bj && bj.phase !== "done" && !force) {
+    if (bjBusy || bj.phase === "dealer" || bj.phase === "settle" || bj.phase === "deal") { toast("Hang on, the hand is still playing out."); return; }
+    bj.leaving = true; bjRender(); return;
+  }
+  bjOpen = false; $("#bj").hidden = true;
+}
+
+/* ── round flow ── */
+async function bjDeal() {
+  if (bjBusy || !me || (bjMode === "xp" && (!bjEnabled || !bjLoaded))) return;
+  if (bj && bj.phase !== "done") return;
+  const bet = bjChips;
+  if (bet < BJC.minBet || bet > bjCap()) return;
+  bj = null; bjBusy = true; bjNotice = ""; bjRender();
+  try { await bjPlace(bet); }
+  catch (e) { bjBusy = false; toast("Couldn’t place that bet. Check your connection and try again."); bjRender(); return; }
+  if (bjShoe.length < 78) { bjShoe = bjNewShoe(); bjNotice = "🔀 A fresh shoe was shuffled."; }
+  bjLast = bet;
+  const r = bj = { bet, hands: [bjHand(bet)], active: 0, dealer: [], hole: true, extra: 0, ins: 0, phase: "deal", net: 0, leaving: false, mode: bjMode };
+  const h = r.hands[0];
+  for (const arr of [h.cards, r.dealer, h.cards, r.dealer]) {
+    arr.push(bjDraw()); bjRender(); await bjSleep(380); if (bj !== r) return;
+  }
+  if (r.dealer[0].r === "A") { r.phase = "insure"; bjBusy = false; bjRender(); return; }
+  bjPeek(r);
+}
+async function bjPeek(r) {
+  const h = r.hands[0], dBJ = bjTotal(r.dealer).t === 21, pBJ = bjTotal(h.cards).t === 21;
+  if (pBJ) h.bj = true;
+  if (dBJ || pBJ) { r.hole = false; r.phase = "peek"; bjRender(); await bjSleep(700); if (bj !== r) return; return bjSettle(r); }
+  r.phase = "play"; bjBusy = false; bjRender();
+}
+function bjInsure(take) {
+  const r = bj; if (!r || r.phase !== "insure" || bjBusy) return;
+  if (take) { const c = r.bet / 2; if (bjAvail() < c) return; r.ins = c; r.extra += c; }
+  bjBusy = true; bjRender(); bjPeek(r);
+}
+async function bjStartHand(r) {
+  const h = r.hands[r.active];
+  if (h.cards.length === 1) {
+    bjBusy = true; r.phase = "deal"; bjRender(); await bjSleep(300); if (bj !== r) return;
+    h.cards.push(bjDraw()); bjRender(); await bjSleep(400); if (bj !== r) return;
+  }
+  if (h.aceSplit || bjTotal(h.cards).t >= 21) { h.done = true; return bjNext(r); }
+  r.phase = "play"; bjBusy = false; bjRender();
+}
+function bjNext(r) { r.active++; return r.active >= r.hands.length ? bjDealerTurn(r) : bjStartHand(r); }
+const bjCur = () => (bj && bj.phase === "play" && !bjBusy) ? bj.hands[bj.active] : null;
+const bjCan = {
+  double: () => { const h = bjCur(); return !!h && h.cards.length === 2 && bjAvail() >= h.bet; },
+  split: () => { const h = bjCur(); return !!h && h.cards.length === 2 && bjVal(h.cards[0]) === bjVal(h.cards[1]) && bj.hands.length < 4 && !h.aceSplit && bjAvail() >= h.bet; },
+  surrender: () => { const h = bjCur(); return !!h && bj.hands.length === 1 && h.cards.length === 2 && !h.split; }
+};
+async function bjHit() {
+  const h = bjCur(), r = bj; if (!h) return;
+  bjBusy = true; h.cards.push(bjDraw()); bjRender(); await bjSleep(380); if (bj !== r) return;
+  if (bjTotal(h.cards).t >= 21) { h.done = true; return bjNext(r); }
+  bjBusy = false; bjRender();
+}
+function bjStand() { const h = bjCur(), r = bj; if (!h) return; h.done = true; bjBusy = true; bjNext(r); }
+async function bjDouble() {
+  if (!bjCan.double()) return;
+  const h = bjCur(), r = bj;
+  r.extra += h.bet; h.bet *= 2; h.doubled = true; bjBusy = true;
+  h.cards.push(bjDraw()); bjRender(); await bjSleep(450); if (bj !== r) return;
+  h.done = true; bjNext(r);
+}
+function bjSplit() {
+  if (!bjCan.split()) return;
+  const h = bjCur(), r = bj, c2 = h.cards.pop(), nh = bjHand(h.bet);
+  r.extra += h.bet; nh.cards = [c2]; nh.split = h.split = true;
+  if (c2.r === "A") nh.aceSplit = h.aceSplit = true;
+  r.hands.splice(r.active + 1, 0, nh);
+  bjBusy = true; bjStartHand(r);
+}
+function bjSurrender() { if (!bjCan.surrender()) return; const h = bjCur(), r = bj; h.surrendered = true; h.done = true; bjBusy = true; bjNext(r); }
+async function bjDealerTurn(r) {
+  r.phase = "dealer"; bjBusy = true; r.hole = false; bjRender(); await bjSleep(700); if (bj !== r) return;
+  if (r.hands.some(h => !h.surrendered && bjTotal(h.cards).t <= 21)) {
+    while (bjTotal(r.dealer).t < 17) { r.dealer.push(bjDraw()); bjRender(); await bjSleep(750); if (bj !== r) return; }   // stands on soft 17
+  }
+  bjSettle(r);
+}
+async function bjSettle(r, forfeit) {
+  r.phase = "settle"; bjBusy = true; r.hole = false; r.leaving = false;
+  const dT = bjTotal(r.dealer).t, dBJ = r.dealer.length === 2 && dT === 21;
+  let ret = 0, staked = r.ins;
+  r.hands.forEach(h => {
+    staked += h.bet;
+    const pT = bjTotal(h.cards).t; let g = 0, tag;
+    if (forfeit) tag = "Forfeited";
+    else if (h.surrendered) { g = h.bet / 2; tag = "Surrendered"; }
+    else if (h.bj) { if (dBJ) { g = h.bet; tag = "Push"; } else { g = h.bet * 2.5; tag = "Blackjack!"; } }
+    else if (pT > 21) tag = "Bust";
+    else if (dBJ) tag = "Lose";
+    else if (dT > 21 || pT > dT) { g = h.bet * 2; tag = "Win"; }
+    else if (pT === dT) { g = h.bet; tag = "Push"; }
+    else tag = "Lose";
+    h.ret = g; h.tag = tag; ret += g;
+  });
+  if (r.ins && dBJ && !forfeit) ret += r.ins * 3;
+  r.net = Math.round(ret - staked); r.dBJ = dBJ;
+  bjRender();
+  const ok = await bjPay(r);
+  if (bj !== r) return;
+  r.saveFailed = !ok;
+  r.phase = "done"; bjBusy = false;
+  if (bjChips) bjChips = bjClamp(bjChips);
+  bjRender();
+}
+async function bjForfeit() {
+  const r = bj; if (!r || r.phase === "done" || bjBusy) return;
+  await bjSettle(r, true);
+  bjClose(true);
+}
+
+/* ── drawing ── */
+function bjCardHtml(c, hidden) {
+  if (hidden) return `<div class="bj-card back"></div>`;
+  const red = c.s === "♥" || c.s === "♦";
+  return `<div class="bj-card${red ? " red" : ""}${c.fresh ? " deal" : ""}"><span class="c1">${c.r}<i>${c.s}</i></span><span class="mid">${c.s}</span></div>`;
+}
+function bjTotPill(cards, hidden) {
+  if (!cards.length) return "";
+  if (hidden) return `<span class="bj-tot">${bjVal(cards[0])}</span>`;
+  const { t, soft } = bjTotal(cards);
+  return `<span class="bj-tot${t > 21 ? " bust" : ""}">${t > 21 ? "Bust " : ""}${t}${soft && t < 21 ? " soft" : ""}</span>`;
+}
+function bjRender() {
+  const root = $("#bj"); if (!root || root.hidden || !me) return;
+  const total = xpOf(me.uid), li = lvIdx(me.uid), L = LEVELS[li], r = bj;
+  bjLastTotal = total;
+  let body = "";
+  const fun = bjMode === "fun", locked = bjBusy || (r && r.phase !== "done");
+  if (!fun && !bjLoaded) body = `<p class="bj-msg" style="padding:60px 0">Loading your balance…</p>`;
+  else if (!fun && !bjEnabled) body = `<p class="bj-msg" style="padding:40px 10px">Blackjack isn’t switched on for this chat yet. The owner needs to publish the updated <code>database.rules.json</code> (it adds the <code>bj</code> section), then reload. You can still play with play money.</p>`;
+  else {
+    const showHands = r && r.hands.length;
+    let felt = `<div class="bj-row"><div class="bj-lab">Dealer ${r ? bjTotPill(r.dealer, r.hole && r.dealer.length > 1 && r.phase !== "done") : ""}</div><div class="bj-cards">${r ? r.dealer.map((c, k) => bjCardHtml(c, r.hole && k === 1)).join("") : ""}</div></div>`;
+    felt += `<div class="bj-msg">${r ? bjMsg(r) : "Place your bet to start a hand."}</div>`;
+    felt += `<div class="bj-hands">${showHands ? r.hands.map((h, k) => {
+      const live = r.phase === "play" && k === r.active;
+      const tagCls = /^(Win|Blackjack)/.test(h.tag) ? " win" : /^(Lose|Bust|Forfeit)/.test(h.tag) ? " lose" : "";
+      return `<div class="bj-hand${live && r.hands.length > 1 ? " on" : ""}"><div class="bj-lab">${r.hands.length > 1 ? "Hand " + (k + 1) + " " : "You "}${bjTotPill(h.cards)}</div><div class="bj-cards">${h.cards.map(c => bjCardHtml(c)).join("")}</div><div class="bj-meta"><span class="bj-bet">🪙 ${h.bet.toLocaleString()}</span>${h.tag ? `<span class="bj-tag${tagCls}">${h.tag}</span>` : ""}</div></div>`;
+    }).join("") : `<div class="bj-cards" style="opacity:.25"><div class="bj-card back deal"></div><div class="bj-card back deal"></div></div>`}</div>`;
+    body = `<div class="bj-felt">${felt}</div>`;
+    if (r && r.phase === "done") {
+      const n = r.net;
+      body += `<div class="bj-result ${n > 0 ? "win" : n < 0 ? "lose" : "push"}">${n > 0 ? "You won " + bjFmt(n) : n < 0 ? "You lost " + bjFmt(-n) : "Push, your bet is back"}</div>`;
+      if (r.saveFailed) body += `<div class="bj-note">⚠ The result couldn’t be saved. Your bet stays held and will be forfeited on your next login.</div>`;
+    }
+    if (bjNotice) body += `<div class="bj-note">${esc(bjNotice)}</div>`;
+    if (r && r.leaving) body += `<div class="bj-leave">Leave the table? Your bet on this hand is forfeited.<div class="bj-ctl"><button class="bj-btn" data-act="stay">Keep playing</button><button class="bj-btn go" data-act="forfeit">Forfeit &amp; leave</button></div></div>`;
+    else if (!r || r.phase === "done") body += bjBetPanel(total, li);
+    else if (r.phase === "insure") {
+      const c = r.bet / 2;
+      body += `<div class="bj-ctl"><button class="bj-btn go" data-act="ins" ${bjBusy || bjAvail() < c ? "disabled" : ""}>Insurance (${bjFmt(c)})<kbd>Y</kbd></button><button class="bj-btn" data-act="noins" ${bjBusy ? "disabled" : ""}>No thanks<kbd>N</kbd></button></div>`;
+    } else {
+      const on = !bjBusy && r.phase === "play";
+      body += `<div class="bj-ctl">
+        <button class="bj-btn go" data-act="hit" ${on ? "" : "disabled"}>Hit<kbd>H</kbd></button>
+        <button class="bj-btn" data-act="stand" ${on ? "" : "disabled"}>Stand<kbd>S</kbd></button>
+        <button class="bj-btn" data-act="double" ${on && bjCan.double() ? "" : "disabled"}>Double<kbd>D</kbd></button>
+        <button class="bj-btn" data-act="split" ${on && bjCan.split() ? "" : "disabled"}>Split<kbd>P</kbd></button>
+        <button class="bj-btn" data-act="surr" ${on && bjCan.surrender() ? "" : "disabled"}>Surrender<kbd>U</kbd></button></div>`;
+    }
+    body += `<div class="bj-rules">Blackjack pays 3:2 · Dealer stands on all 17s · Double on any two cards · Split up to 4 hands · Insurance pays 2:1 · Late surrender</div>`;
+  }
+  const rankLine = fun ? `🎲 Play money · your real XP, rank and theme are safe here.` : null;
+  const floor = li > 0 ? ` · <b>${(total - L.xp).toLocaleString()} XP</b> above your rank floor` : ` · lowest rank, nothing lower to fall to`;
+  root.innerHTML = `<div class="bj-table"><div class="bj-head"><h3>🃏 Blackjack</h3><div class="bj-mode" role="group" aria-label="Currency"><button data-act="mode" data-m="xp" class="${fun ? "" : "on"}" ${locked ? "disabled" : ""}>⭐ XP</button><button data-act="mode" data-m="fun" class="${fun ? "on" : ""}" ${locked ? "disabled" : ""}>💵 Play money</button></div><span class="bj-bal" title="${fun ? "Your play-money balance" : "Your total XP"}">${fun ? bjFmt(bjFunBal) : bjFmt(total)}</span><button class="bj-x" data-act="close" aria-label="Close">✕</button></div>
+    <div class="bj-rank">${rankLine || `${L.icon} ${esc(L.n)} · Lv ${li + 1}${floor}. Fall below ${li > 0 ? L.xp.toLocaleString() + " XP" : "it"} and you lose your rank and theme.`}</div>${body}</div>`;
+  if (r) { r.dealer.forEach(c => c.fresh = false); r.hands.forEach(h => h.cards.forEach(c => c.fresh = false)); }
+}
+function bjMsg(r) {
+  if (r.phase === "insure") return "Dealer shows an Ace. Take insurance?";
+  if (r.phase === "dealer") return "Dealer’s turn…";
+  if (r.phase === "peek") return "Checking for blackjack…";
+  if (r.phase === "play") return r.hands.length > 1 ? `Playing hand ${r.active + 1} of ${r.hands.length}` : "Your move.";
+  if (r.phase === "done") return r.ins ? (r.dBJ ? "Dealer had blackjack. Insurance paid 2:1." : "Dealer had no blackjack, insurance lost.") : "";
+  return "";
+}
+function bjBetPanel(total, li) {
+  const spend = bjSpendable(), cap = bjCap();
+  if (bjMode === "xp" && !bjEnabled) return "";
+  if (spend < BJC.minBet) return bjMode === "fun" ? `<p class="bj-warn">You’re out of chips.</p><div class="bj-ctl"><button class="bj-btn go" data-act="refill">Refill to $1,000</button></div>` : `<p class="bj-warn">You need at least ${bjFmt(BJC.minBet)} to play. Chat to earn more, or switch to play money.</p>`;
+  const chips = Object.keys(BJ_CHIPS).map(Number).filter(v => v >= BJC.minBet && v <= BJC.maxBet);
+  const ni = lvIdxAt(total - bjChips);
+  const warn = bjMode === "xp" && bjChips && ni < li ? `⚠ If this hand loses you’ll fall to ${LEVELS[ni].icon} ${esc(LEVELS[ni].n)} and lose your theme. Doubling or splitting risks more.` : "";
+  const ok = bjChips >= BJC.minBet && bjChips <= cap && !bjBusy;
+  return `<div class="bj-big">🪙 ${bjChips.toLocaleString()}<small>Bet (${bjFmt(BJC.minBet)} to ${bjFmt(BJC.maxBet)})</small></div>
+    <div class="bj-warn">${warn}</div>
+    <div class="bj-chips">${chips.map(v => `<button class="bj-chip" data-act="chip" data-v="${v}" style="background:${BJ_CHIPS[v]}" ${bjChips + v > cap || bjBusy ? "disabled" : ""}>${v}</button>`).join("")}</div>
+    <div class="bj-ctl"><button class="bj-btn" data-act="clear" ${bjBusy ? "disabled" : ""}>Clear</button><button class="bj-btn" data-act="max" ${bjBusy ? "disabled" : ""}>Max</button>${bjLast ? `<button class="bj-btn" data-act="rebet" ${bjBusy || bjClamp(bjLast) < BJC.minBet ? "disabled" : ""}>Rebet ${bjLast.toLocaleString()}</button>` : ""}<button class="bj-btn go" data-act="deal" ${ok ? "" : "disabled"}>${bj ? "Deal again" : "Deal"}<kbd>↵</kbd></button></div>`;
+}
+
+/* ── events ── */
+$("#bjFab").onclick = bjOpenGame;
+$("#bj").addEventListener("click", e => {
+  const b = e.target.closest("[data-act]");
+  if (!b) { if (e.target.id === "bj") bjClose(); return; }
+  if (b.disabled) return;
+  switch (b.dataset.act) {
+    case "close": bjClose(); break;
+    case "mode": bjSetMode(b.dataset.m); break;
+    case "refill": if (bjMode === "fun" && bjSpendable() < BJC.minBet && (!bj || bj.phase === "done")) { bjFunBal = 1000; bjFunSave(); bjChips = bjClamp(bjLast || BJC.minBet); bjRender(); } break;
+    case "chip": bjChips = Math.min(bjChips + Number(b.dataset.v), bjCap()); bjRender(); break;
+    case "clear": bjChips = 0; bjRender(); break;
+    case "max": bjChips = bjCap(); bjRender(); break;
+    case "rebet": bjChips = bjClamp(bjLast); bjRender(); break;
+    case "deal": bjDeal(); break;
+    case "hit": bjHit(); break;
+    case "stand": bjStand(); break;
+    case "double": bjDouble(); break;
+    case "split": bjSplit(); break;
+    case "surr": bjSurrender(); break;
+    case "ins": bjInsure(true); break;
+    case "noins": bjInsure(false); break;
+    case "stay": if (bj) { bj.leaving = false; bjRender(); } break;
+    case "forfeit": bjForfeit(); break;
+  }
+});
+document.addEventListener("keydown", e => {
+  if (!bjOpen || e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === "escape") { e.preventDefault(); bjClose(); return; }
+  if (!bj || bj.phase === "done") { if (k === "enter" && !(document.activeElement && document.activeElement.tagName === "BUTTON")) { e.preventDefault(); bjDeal(); } return; }
+  if (bj.phase === "insure") { if (k === "y") bjInsure(true); else if (k === "n") bjInsure(false); return; }
+  if (k === "h") bjHit(); else if (k === "s") bjStand(); else if (k === "d") bjDouble(); else if (k === "p") bjSplit(); else if (k === "u") bjSurrender();
+});
 
 init();
 </script>
