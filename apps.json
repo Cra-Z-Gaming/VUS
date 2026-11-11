@@ -1,5 +1,5 @@
 {
-"updated":"November 2, 2026 - 7:04 PM",
+"updated":"November 10, 2026 - 7:19 PM",
 "message":"",
 "apps":[
 {"name":"VUS-OS","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS-OS/refs/heads/main/index.html","desc":"Desktop version of VUS Hub","icon":"OS","color":"white"},
@@ -29,7 +29,7 @@
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"Chat Room","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/VUS-Chat","desc":"Talk to people who also use VUS Hub","icon":"Chat","color":"blue"},
 {"name":"VUS DM's","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/VUS-DM","desc":"add your friends and message them privately - V2","icon":"DM","color":"white"},
-{"name":"","url":"","desc":"","icon":"","color":""},
+{"name":"Hollow Knight","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUSL/refs/heads/main/MultiFile/HollowKnight/index.html","desc":"i just wanna put the game here for now, ill move it somewhere else later","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
