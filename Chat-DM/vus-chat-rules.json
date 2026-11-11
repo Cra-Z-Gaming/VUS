@@ -59,6 +59,12 @@
       ".read": true,
       ".write": false
     },
+    "coins": {
+      "$id": {
+        ".read": true,
+        ".write": false
+      }
+    },
     ".read": false,
     ".write": false,
     "chatState": {
@@ -104,6 +110,24 @@
           "$x": {
             ".validate": false
           }
+        }
+      },
+      "dev_1": {
+        "$id": {
+          ".write": false,
+          ".validate": "$id.matches(/^[0-9]{4,12}$/) && newData.val() === true"
+        }
+      },
+      "dev_2": {
+        "$id": {
+          ".write": false,
+          ".validate": "$id.matches(/^[0-9]{4,12}$/) && newData.val() === true"
+        }
+      },
+      "dev_3": {
+        "$id": {
+          ".write": false,
+          ".validate": "$id.matches(/^[0-9]{4,12}$/) && newData.val() === true"
         }
       },
       "mod": {

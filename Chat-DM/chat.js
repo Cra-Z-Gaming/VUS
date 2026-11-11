@@ -520,7 +520,13 @@ const ChatBackend = {
     this._pushRaw = this._ref.push.bind(this._ref);   // the original push, no ticket
     // Messages pushed here go through _signedPush; everything else on the ref is untouched.
     const selfBackend = this;
-    this._ref.push = (d) => (d === undefined ? selfBackend._pushRaw() : selfBackend._signedPush(d));
+    this._ref.push = (d) => {
+      if (d === undefined) return selfBackend._pushRaw();
+      const room = selfBackend.currentRoomId, p = selfBackend._signedPush(d);
+      // once the message is really in the database, ask the server for its coin (the server checks everything itself)
+      p.then(r => { try { coinClaim(room, r && r.key, d); } catch (e) {} }, () => {});
+      return p;
+    };
     this._typingRef = this._db.ref("rooms/" + roomId + "/typing");
     this._presenceRef = this._db.ref("rooms/" + roomId + "/presence");
     this._atPingCooldownRef = this._db.ref("rooms/" + roomId + "/atPingCooldowns");
@@ -1993,6 +1999,46 @@ new MutationObserver(keepPinned).observe($messages, { childList: true, subtree: 
 if (window.ResizeObserver) new ResizeObserver(keepPinned).observe($messages);
 $messages.addEventListener("load", keepPinned, true);
 
+/* ══════════ DEV role (3 levels) ══════════
+   A badge role, NOT a moderation rank: it gives no commands and changes no delays or permissions.
+   It can only be added by hand in the Firebase console (the database rules refuse every browser write):
+       roleIds/dev_1/<6-digit ID> = true   (Silver)
+       roleIds/dev_2/<6-digit ID> = true   (Gold)
+       roleIds/dev_3/<6-digit ID> = true   (Diamond)
+   If an ID is in more than one, the highest level shows. Nothing in the chat can grant or remove it. */
+const DEV_ROLES = [
+  null,
+  { level: 1, id: "dev_1", tier: "Silver",  label: "DEV Silver",  text: "DEV \uD83D\uDD28" },
+  { level: 2, id: "dev_2", tier: "Gold",    label: "DEV Gold",    text: "DEV \uD83D\uDD28" },
+  { level: 3, id: "dev_3", tier: "Diamond", label: "DEV Diamond", text: "DEV \uD83D\uDD28" }
+];
+let devLevels = {};          // loginId -> highest DEV level held (1-3)
+const devSets = { 1: new Set(), 2: new Set(), 3: new Set() };
+function devLevelOf(loginId) { return loginId ? (devLevels[String(loginId)] || 0) : 0; }
+function devRoleOf(loginId) { const l = devLevelOf(loginId); return l ? DEV_ROLES[l] : null; }
+function rebuildDevLevels() {
+  const out = {};
+  [1, 2, 3].forEach(l => devSets[l].forEach(id => { out[id] = l; }));   // higher levels overwrite lower ones
+  devLevels = out;
+}
+function watchDevRoles() {
+  [1, 2, 3].forEach(l => {
+    ChatBackend._db.ref("roleIds/" + DEV_ROLES[l].id).on("value", s => {
+      const v = s.val() || {};
+      devSets[l] = new Set(Object.keys(v).filter(id => v[id] === true && /^[0-9]{4,12}$/.test(id)));
+      rebuildDevLevels();
+      try { scheduleRoleBadgeRefresh(); renderMembersPane(); } catch (e) {}
+    }, () => {});
+  });
+}
+function devBadgeEl(role) {
+  const d = document.createElement("div");
+  d.className = "dev-bubble dev-t" + role.level;
+  d.textContent = role.text;
+  d.title = role.label;
+  return d;
+}
+
 // Fills (or refreshes) one badge row from the sender's current rank.
 // The badge is looked up from who is actually ONLINE under that name right
 // now. The loginId stamped on a message is only a claim -- anyone can write any
@@ -2012,6 +2058,8 @@ function fillRoleBadge(row) {
   bubble.textContent = role.icon;
   bubble.title = role.label;
   row.appendChild(bubble);
+  const dev = devRoleOf(liveId);
+  if (dev) row.appendChild(devBadgeEl(dev));
 }
 
 let badgeRefreshTimer = null;
@@ -6542,7 +6590,7 @@ async function renderOwnerMenuList() {
     const nameEl = document.createElement("span");
     nameEl.className = "room-member-name";
     const rowRole = loginId ? ROLES[effectiveRoleForLoginId(loginId)] : null;
-    const badges = rowRole && !rowRole.implicit ? rowRole.icon + " " : "";
+    const badges = (rowRole && !rowRole.implicit ? rowRole.icon + " " : "") + (devRoleOf(loginId) ? "\uD83D\uDD28 " : "");
     nameEl.textContent = badges + name + (loginId ? " (#" + loginId + ")" : "");
     row.appendChild(nameEl);
 
@@ -6939,7 +6987,7 @@ function renderOnlineListPanel() {
     row.style.cssText = "display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px solid #273549;font-size:13.5px";
     const nameEl = document.createElement("span");
     const safeName = ChatBackend._safeKey(entry.name);
-    const icons = Object.values(ROLES).filter(role => (roleHolders[role.id] || new Set()).has(safeName)).map(role => role.icon).join(" ");
+    const icons = Object.values(ROLES).filter(role => (roleHolders[role.id] || new Set()).has(safeName)).map(role => role.icon).concat(devRoleOf(nameToLoginId()[safeName]) ? ["\uD83D\uDD28"] : []).join(" ");
     nameEl.textContent = (icons ? icons + " " : "") + entry.name;
     nameEl.style.cssText = "color:#f1f5f9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
     const timeEl = document.createElement("span");
@@ -8764,6 +8812,7 @@ function bootChat() {
       onMyRoleMaybeChanged();
     });
   });
+  watchDevRoles();
   ChatBackend.watchVerify(on => {
     const was = verifyFlagOn;
     verifyFlagOn = on;
@@ -9945,6 +9994,123 @@ async function equipItemLegacyUnused(it, on) {
 (function wireCrateRail() {
   const b = document.getElementById("navCrate");
   if (b) b.addEventListener("click", () => { if (crateModal) closeCrateModal(); else openCrateModal(); });
+})();
+
+/* ══════════ Coins and the Shop ══════════
+   1 message = 1 coin. The SERVER decides all of it (api/coins/claim.js, api/shop/buy.js): the browser only asks, then
+   shows the balance it reads from coins/<id>/n. The database rules refuse every browser write to coins, and the server
+   works out prices itself, so editing this file (or sending your own requests) can't give coins or change a price.
+   SHOP_CRATE_PRICE below is only what the shop DISPLAYS and sends as a sanity check; the real price is in api/_shop.js. */
+const COIN_API = window.VUS_API_BASE || "https://vus-orcin.vercel.app";
+const SHOP_CRATE_PRICE = 50;
+let myCoins = null, coinWatchId = "", coinWatchRef = null, coinNeedsToken = false, coinPauseUntil = 0;
+function ensureCoinWatch() {
+  const id = myLoginId ? String(myLoginId) : "";
+  if (id === coinWatchId) return;
+  if (coinWatchRef) { try { coinWatchRef.off(); } catch (e) {} coinWatchRef = null; }
+  coinWatchId = id; myCoins = null;
+  if (!id || !ChatBackend._db) { coinWatchId = ""; paintCoinBits(); return; }
+  coinWatchRef = ChatBackend._db.ref("coins/" + id + "/n");
+  coinWatchRef.on("value", s => { myCoins = Number(s.val()) || 0; paintCoinBits(); }, () => { myCoins = 0; paintCoinBits(); });
+}
+function paintCoinBits() {
+  const b = document.getElementById("navShop");
+  if (b) b.title = "Shop" + (myCoins === null ? "" : " \u00B7 " + myCoins + " coins");
+  if (shopModal && !shopBusy) paintShop();
+}
+setInterval(ensureCoinWatch, 3000);   // follows logins and logouts
+
+// Called after every message this account sends. Sends only the message id; the server looks the message up and decides.
+function coinClaim(room, mid, data) {
+  if (!mid || !myLoginId || !data || data.system === true || data.bot === true) return;
+  if (String(data.loginId || "") !== String(myLoginId)) return;
+  if (!(room === MAIN_ROOM_ID || (/^ch-/.test(room || "") && room !== "ch-ai"))) return;
+  const A = window.VUS_AUTH, tok = A && A.peekToken ? A.peekToken(myLoginId) : "";
+  if (!tok) { coinNeedsToken = true; return; }   // this device hasn't confirmed the password yet: the shop offers it
+  if (Date.now() < coinPauseUntil) return;
+  fetch(COIN_API + "/api/coins/claim", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + tok }, body: JSON.stringify({ room, mid }) })
+    .then(r => r.json().catch(() => ({})).then(j => {
+      if (r.status === 401) { coinNeedsToken = true; coinPauseUntil = Date.now() + 10 * 60 * 1000; }
+      else if (j && j.ok) coinNeedsToken = false;
+    }))
+    .catch(() => { coinPauseUntil = Date.now() + 30000; });
+}
+
+let shopModal = null, shopBusy = false, shopMsg = null;
+function openShop() {
+  if (shopModal) return;
+  ensureCoinWatch();
+  const ov = el("div", "crate-overlay"), box = el("div", "crate-modal shop-modal");
+  ov.appendChild(box); document.body.appendChild(ov);
+  shopModal = ov; shopMsg = null;
+  ov.addEventListener("click", e => { if (e.target === ov && !shopBusy) closeShop(); });
+  paintShop();
+}
+function closeShop() { if (shopModal) { shopModal.remove(); shopModal = null; } }
+function paintShop() {
+  if (!shopModal) return;
+  const box = shopModal.querySelector(".shop-modal");
+  box.replaceChildren();
+  const x = el("button", "poll-x", "\u00D7"); x.type = "button"; x.addEventListener("click", () => { if (!shopBusy) closeShop(); });
+  box.appendChild(x);
+  box.appendChild(el("h3", "cr-h", "\uD83E\uDE99 Shop"));
+  const bal = el("div", "shop-bal");
+  bal.append(el("span", "shop-bal-ic", "\uD83E\uDE99"), el("b", "", myCoins === null ? "…" : String(myCoins)), el("span", "", myCoins === 1 ? " coin" : " coins"));
+  box.appendChild(bal);
+
+  const A = window.VUS_AUTH;
+  if (!A || !A.hasToken(myLoginId) || coinNeedsToken) {
+    const n = el("div", "shop-msg"); n.appendChild(el("div", "", "Confirm your password once on this device to earn coins and buy things."));
+    const b = el("button", "pm-go", "Confirm password"); b.type = "button"; b.disabled = shopBusy;
+    b.addEventListener("click", async () => {
+      try { if (A && (await A.loginToken(String(myLoginId), !!coinNeedsToken))) { coinNeedsToken = false; coinPauseUntil = 0; } } catch (e) {}
+      paintShop();
+    });
+    n.appendChild(b); box.appendChild(n);
+  }
+  if (shopMsg) {
+    const m = el("div", "shop-msg" + (shopMsg.ok ? " ok" : ""), shopMsg.t);
+    if (shopMsg.open) { const o = el("button", "pm-go", "Open crates"); o.type = "button"; o.addEventListener("click", () => { closeShop(); openCrateModal(); }); m.appendChild(o); }
+    box.appendChild(m);
+  }
+
+  const card = el("div", "shop-item");
+  const info = el("div", "shop-info");
+  info.append(el("b", "", "Crate"), el("small", "", "Open it for a ring, tag, text effect, font or bubble. It joins the crates you earn."));
+  card.append(el("div", "shop-ic", "\uD83D\uDCE6"), info, el("div", "shop-price", SHOP_CRATE_PRICE + " \uD83E\uDE99 each"));
+  box.appendChild(card);
+  const row = el("div", "shop-buys");
+  [1, 5, 10].forEach(n => {
+    const cost = n * SHOP_CRATE_PRICE;
+    const b = el("button", "cr-count-b", "Buy " + n + " \u00B7 " + cost + " \uD83E\uDE99"); b.type = "button";
+    b.disabled = shopBusy || myCoins === null || myCoins < cost;
+    b.addEventListener("click", () => buyShop("crate", n));
+    row.appendChild(b);
+  });
+  box.appendChild(row);
+  box.appendChild(el("div", "cr-note", "Earn 1 coin for each message you send (at most one coin every 5 seconds). Bot messages don't earn coins."));
+}
+async function buyShop(item, qty, retried) {
+  if (shopBusy || !myLoginId) return;
+  shopBusy = true; shopMsg = { t: "Buying…" }; paintShop();
+  try {
+    const A = window.VUS_AUTH, tok = A ? await A.loginToken(String(myLoginId), !!retried) : "";
+    if (!tok) throw new Error("Confirm your password to buy.");
+    let r;
+    try { r = await fetch(COIN_API + "/api/shop/buy", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + tok }, body: JSON.stringify({ item, qty, price: qty * SHOP_CRATE_PRICE }) }); }
+    catch (e) { throw new Error("Couldn't reach the server. Check your connection."); }
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 401 && !retried) { shopBusy = false; return buyShop(item, qty, true); }   // token no longer valid: ask for the password again
+    if (!r.ok || !j.ok) throw new Error(j.error || "Couldn't buy that.");
+    coinNeedsToken = false; coinPauseUntil = 0;
+    if (typeof j.balance === "number") myCoins = j.balance;
+    shopMsg = { ok: true, t: "Bought " + qty + (qty === 1 ? " crate" : " crates") + " for " + j.cost + " coins.", open: true };
+  } catch (e) { shopMsg = { t: (e && e.message) || "Couldn't buy that." }; }
+  shopBusy = false; paintShop();
+}
+(function wireShopRail() {
+  const b = document.getElementById("navShop");
+  if (b) b.addEventListener("click", () => { if (shopModal) closeShop(); else openShop(); });
 })();
 
 /* ══════════ Time active (shown on profiles) ══════════

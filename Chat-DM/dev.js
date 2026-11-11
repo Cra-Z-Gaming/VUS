@@ -57,7 +57,7 @@
     return reqCache.v;
   }
   async function obtainIfRequired(id, password) {   // called at login; silent and harmless when tokens aren't required
-    try { if (getToken(id) || !(await required())) return; await obtain(id, password); } catch (e) {}
+    try { if (getToken(id)) return; await obtain(id, password); } catch (e) {}   // always get a token now: coins and the shop need one
   }
   function askPassword(id) {   // one small prompt, only for a device that has no token yet while tokens are required
     if (asking) return asking;
@@ -92,7 +92,7 @@
     if (!(await askPassword(id))) return "";
     return getToken(id);
   }
-  window.VUS_AUTH = { obtain: obtain, obtainIfRequired: obtainIfRequired, loginToken: loginToken, ticket: ticket, hasToken: function (id) { return !!getToken(id); } };
+  window.VUS_AUTH = { obtain: obtain, obtainIfRequired: obtainIfRequired, loginToken: loginToken, ticket: ticket, hasToken: function (id) { return !!getToken(id); }, peekToken: function (id) { return getToken(id); } };   // peekToken never shows a password box
   window.addEventListener("vus:logout", function () { try { localStorage.removeItem(TKEY); } catch (e) {} tbuf = []; });
 
   // ── The DEV tab ──
