@@ -9217,12 +9217,12 @@ ChatBackend.setAfk = function (v) {
 };
 
 /* ══════════ Crates ══════════
-   One crate can be earned per 3-hour window. To earn it: 15 messages and 5 minutes online inside the window; it then goes
+   One crate can be earned per 1-hour window. To earn it: 15 messages and 5 minutes online inside the window; it then goes
    to your inventory (stacking) and can be opened any time, one, 3 or all at once. The database keeps one record per account
    (`w` last window earned, `n` crates earned, `o` crates opened) and only accepts the window that is current on ITS clock,
    so changing your device clock does nothing.
    Rings, tags and text effects come from here; what you equip is stored on your profile (`cosm`). */
-const CRATE_WINDOW_MS = 3 * 3600 * 1000, CRATE_OFFSET_MS = 4 * 3600 * 1000;
+const CRATE_WINDOW_MS = 1 * 3600 * 1000, CRATE_OFFSET_MS = 4 * 3600 * 1000;
 const CRATE_NEED_MSGS = 15, CRATE_NEED_MS = 5 * 60 * 1000;
 const RARITY = {
   common:    { label: "Common",    color: "#94a3b8", weight: 70 },
@@ -9358,7 +9358,15 @@ const CRATE_TYPES = [
 const SEASON_DEFAULTS = { w26: { name: "Winter", start: 1793491200000, end: 1803859200000 } };   // Nov 1 2026 → Mar 1 2027 (UTC)
 let crateSeasons = Object.assign({}, SEASON_DEFAULTS);
 function seasonMs(v) { if (typeof v === "string" && isNaN(Number(v))) v = Date.parse(v); v = Number(v); return v > 0 && v < 1e11 ? v * 1000 : v; }   // accepts ms, seconds, or a date string
-function mergeSeasons(db) { crateSeasons = Object.assign({}, SEASON_DEFAULTS, db && typeof db === "object" ? db : {}); }
+function mergeSeasons(db) {
+  crateSeasons = Object.assign({}, SEASON_DEFAULTS, db && typeof db === "object" ? db : {});
+  // a broken database entry (missing/invalid dates) must not hide a built-in season: fall back to the default for that id
+  Object.keys(SEASON_DEFAULTS).forEach(id => {
+    const v = crateSeasons[id];
+    const st = v && typeof v === "object" ? seasonMs(v.start) : NaN, en = v && typeof v === "object" ? seasonMs(v.end) : NaN;
+    if (!(st > 0 && en > st)) crateSeasons[id] = SEASON_DEFAULTS[id];
+  });
+}
 function activeSeason() {
   const now = srvNow();
   let best = null;
@@ -9628,7 +9636,7 @@ function paintOpen(box) {
     box.appendChild(bar("Messages", p.msgs, CRATE_NEED_MSGS, v => String(v)));
     box.appendChild(bar("Time online", p.ms, CRATE_NEED_MS, v => Math.floor(v / 60000) + ":" + String(Math.floor(v % 60000 / 1000)).padStart(2, "0")));
   } else box.appendChild(el("div", "cr-note", "You've earned this window's crate."));
-  box.appendChild(el("div", "cr-note", "A new crate can be earned in " + fmtLeft(crateWindowEnd(w) - srvNow()) + " (every 3 hours). Earned crates stack in your inventory, so nothing is lost if you wait."));
+  box.appendChild(el("div", "cr-note", "A new crate can be earned in " + fmtLeft(crateWindowEnd(w) - srvNow()) + " (every hour). Earned crates stack in your inventory, so nothing is lost if you wait."));
   if (choices.length) {
     const row = el("div", "cr-count");
     row.appendChild(el("span", "cr-count-l", "Open"));

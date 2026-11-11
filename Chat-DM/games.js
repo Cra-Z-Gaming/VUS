@@ -423,7 +423,7 @@
     c.appendChild(el("div", "gm-note", (serverUp === null ? "Checking the game server\u2026 " : serverUp ? "Game server reachable. " : "Game server not reachable from here. ") +
       (cm === "secure" ? "This game will be Secure: the server runs it, so it can't be cheated." : "This game will be Direct: it works without the server, but it relies on both players' browsers, so a determined cheater could fake results or crates.")));
     if (!opts.length) {
-      c.appendChild(el("div", "gm-note", "You need at least 1 crate to play. A new crate can be earned every 3 hours by chatting."));
+      c.appendChild(el("div", "gm-note", "You need at least 1 crate to play. A new crate can be earned every hour by chatting."));
     } else {
       c.appendChild(el("div", "gm-note", "Pick how many crates to bet. The winner takes both bets. Leaving, or being disconnected for 15 seconds, gives your bet to the other player."));
       var bets = el("div", "gm-bets");
