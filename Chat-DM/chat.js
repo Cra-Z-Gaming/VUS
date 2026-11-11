@@ -9418,7 +9418,7 @@ function rollCrate(type, w, owned) {
 const CRATE_KEY = "vus_crate_progress_v1";
 let crateProgAll = {};
 try { crateProgAll = JSON.parse(localStorage.getItem(CRATE_KEY) || "{}") || {}; } catch (e) { crateProgAll = {}; }
-let crateClaimedW = null, crateEarned = 0, crateOpened = 0, crateEarning = false, crateOwned = new Set(), crateWatchId = "", crateWatchRefs = [], crateNotifiedW = null, lastCrateMsgAt = 0, myCosm = {};
+let crateClaimedW = null, crateEarned = 0, crateOpened = 0, crateGameNet = 0, crateEarning = false, crateOwned = new Set(), crateWatchId = "", crateWatchRefs = [], crateNotifiedW = null, lastCrateMsgAt = 0, myCosm = {};
 function progFor() {
   const w = crateWindow(srvNow());
   let p = crateProgAll[myLoginId];
@@ -9433,7 +9433,7 @@ function crateCountMessage() {
   lastCrateMsgAt = now;
   progFor().msgs++; saveProg(); crateTick(true);
 }
-function crateStock() { return Math.max(0, crateEarned - crateOpened); }
+function crateStock() { return Math.max(0, crateEarned - crateOpened + crateGameNet); }   // + net crates from games (won minus staked)
 function crateReady() { return !!myLoginId && crateClaimedW !== undefined && crateStock() > 0; }   // something to open
 function crateEarnable() {
   if (!myLoginId || crateClaimedW === undefined) return false;
@@ -9453,13 +9453,15 @@ let crateRulesBad = false;
 function ensureCrateWatch() {
   if (!myLoginId || !ChatBackend._db || crateWatchId === myLoginId) return;
   crateWatchRefs.forEach(r => { try { r.off(); } catch (e) {} });
-  crateWatchId = myLoginId; crateClaimedW = undefined; crateEarned = 0; crateOpened = 0; crateOwned = new Set(); myCosm = {};
+  crateWatchId = myLoginId; crateClaimedW = undefined; crateEarned = 0; crateOpened = 0; crateGameNet = 0; crateOwned = new Set(); myCosm = {};
   const claim = ChatBackend._db.ref("crateClaims/" + myLoginId), inv = ChatBackend._db.ref("crateInv/" + myLoginId + "/items");
   claim.on("value", s => { const v = s.val(); crateClaimedW = v && typeof v.w === "number" ? v.w : null; crateEarned = v && Number(v.n) > 0 ? Number(v.n) : 0; crateOpened = v && Number(v.o) > 0 ? Number(v.o) : 0; crateTick(true); }, () => { crateClaimedW = null; });
   inv.on("value", s => { crateOwned = new Set(Object.keys(s.val() || {}).filter(k => itemOf(k))); if (crateModal && !crateBusy) paintCrateModal(); });
   const seasons = ChatBackend._db.ref("crateSeasons");
   seasons.on("value", s => { mergeSeasons(s.val()); crateTick(true); }, () => { mergeSeasons(null); });
-  crateWatchRefs = [claim, inv, seasons];
+  const gnet = ChatBackend._db.ref("crateGames/" + myLoginId);
+  gnet.on("value", s => { crateGameNet = Number(s.val()) || 0; crateTick(true); }, () => { crateGameNet = 0; });
+  crateWatchRefs = [claim, inv, seasons, gnet];
   ChatBackend.getProfile(myLoginId).then(p => { myCosm = (p && p.cosm) || {}; });
 }
 function crateTick(noTime) {
@@ -9751,7 +9753,7 @@ async function openCrate(type, count) {
     if (type === "season" && !sea) throw new Error("no-season");
     const ref = ChatBackend._db.ref("crateClaims/" + myLoginId);
     // Always count from what the database says right now, never from a local running total.
-    const fresh = async () => { const v = (await ref.get()).val() || {}; crateEarned = Number(v.n) > 0 ? Number(v.n) : 0; crateOpened = Number(v.o) > 0 ? Number(v.o) : 0; };
+    const fresh = async () => { const v = (await ref.get()).val() || {}; crateEarned = Number(v.n) > 0 ? Number(v.n) : 0; crateOpened = Number(v.o) > 0 ? Number(v.o) : 0; try { crateGameNet = Number((await ChatBackend._db.ref("crateGames/" + myLoginId).get()).val()) || 0; } catch (e) { crateGameNet = 0; } };
     await fresh();
     count = Math.min(count, crateStock());
     if (count < 1) throw new Error("no-crates");
