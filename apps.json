@@ -1,5 +1,5 @@
 {
-"updated":"November 10, 2026 - 7:19 PM",
+"updated":"November 11, 2026 - 1:02 PM",
 "message":"",
 "apps":[
 {"name":"VUS-OS","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS-OS/refs/heads/main/index.html","desc":"Desktop version of VUS Hub","icon":"OS","color":"white"},
@@ -22,7 +22,7 @@
 {"name":"ixxl OS","url":"https://raw.githubusercontent.com/weirdsimplegames/My-os/main/launcher.html","desc":"","icon":"","color":""},
 {"name":"Nebula Chat","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/other/STH.html","desc":"Nebula Chat / Sal The Healer's Chat","icon":"STH","color":""},
 {"name":"EDN Terminal","url":"https://raw.githubusercontent.com/EdenVRCC/EdenVRCC.github.io/refs/heads/main/index.html","desc":"","icon":"","color":""},
-{"name":"Marshmello OS","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/other/MARSHMELLO-OS.html","desc":"","icon":"MOS","color":""},
+{"name":"Marshmello OS","url":"https://raw.githubusercontent.com/AaronJudge23/MARSHMELLO/refs/heads/main/MARSHMELLO-OS","desc":"","icon":"MOS","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
 {"name":"","url":"","desc":"","icon":"","color":""},
