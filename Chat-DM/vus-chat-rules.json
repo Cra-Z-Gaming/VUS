@@ -62,7 +62,14 @@
     "coins": {
       "$id": {
         ".read": true,
-        ".write": false
+        ".write": "$id.matches(/^[0-9]{4,12}$/) && newData.exists() && ((newData.child('n').val() === (data.child('n').exists() ? data.child('n').val() : 0) + 1 && newData.child('last').val() === now && now - (data.child('last').exists() ? data.child('last').val() : 0) >= 5000 && (newData.child('pc').exists() ? newData.child('pc').val() : 0) === (data.child('pc').exists() ? data.child('pc').val() : 0) && newData.child('mid').isString() && newData.child('mid').val().matches(/^[-A-Za-z0-9_]{10,30}$/) && newData.child('room').isString() && (newData.child('room').val() === 'vus-hub-main' || (newData.child('room').val().matches(/^ch-[a-z0-9_-]{1,40}$/) && newData.child('room').val() !== 'ch-ai')) && root.child('rooms/' + newData.child('room').val() + '/messages/' + newData.child('mid').val() + '/loginId').val() === $id && root.child('rooms/' + newData.child('room').val() + '/messages/' + newData.child('mid').val() + '/ts').val() > (data.child('last').exists() ? data.child('last').val() : 0) && root.child('rooms/' + newData.child('room').val() + '/messages/' + newData.child('mid').val() + '/ts').val() > now - 60000 && !root.child('rooms/' + newData.child('room').val() + '/messages/' + newData.child('mid').val() + '/bot').exists() && !root.child('rooms/' + newData.child('room').val() + '/messages/' + newData.child('mid').val() + '/system').exists()) || (data.child('n').exists() && newData.child('last').val() === data.child('last').val() && newData.child('mid').val() === data.child('mid').val() && newData.child('room').val() === data.child('room').val() && newData.child('n').val() >= 0 && (newData.child('pc').exists() ? newData.child('pc').val() : 0) - (data.child('pc').exists() ? data.child('pc').val() : 0) >= 1 && (newData.child('pc').exists() ? newData.child('pc').val() : 0) - (data.child('pc').exists() ? data.child('pc').val() : 0) <= 10 && data.child('n').val() - newData.child('n').val() === 50 * ((newData.child('pc').exists() ? newData.child('pc').val() : 0) - (data.child('pc').exists() ? data.child('pc').val() : 0))))",
+        ".validate": "newData.hasChildren(['n'])",
+        "n": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000" },
+        "pc": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000" },
+        "last": { ".validate": "newData.isNumber()" },
+        "mid": { ".validate": "newData.isString() && newData.val().length <= 30" },
+        "room": { ".validate": "newData.isString() && newData.val().length <= 45" },
+        "$x": { ".validate": false }
       }
     },
     ".read": false,
@@ -746,13 +753,16 @@
     "crateClaims": {
       ".read": true,
       "$id": {
-        ".write": "$id.matches(/^[0-9]{4,12}$/) && ((newData.child('w').val() === (now - 14400000 - (now - 14400000) % 3600000) / 3600000 && (!data.exists() || data.child('w').val() < newData.child('w').val()) && newData.child('n').val() === (data.child('n').exists() ? data.child('n').val() : 0) + 1 && (newData.child('o').exists() ? newData.child('o').val() : 0) === (data.child('o').exists() ? data.child('o').val() : 0)) || (data.exists() && newData.child('w').val() === data.child('w').val() && (newData.child('n').exists() ? newData.child('n').val() : 0) === (data.child('n').exists() ? data.child('n').val() : 0) && newData.child('o').val() > (data.child('o').exists() ? data.child('o').val() : 0) && newData.child('o').val() <= (newData.child('n').exists() ? newData.child('n').val() : 0) + (root.child('crateGames/' + $id).exists() ? root.child('crateGames/' + $id).val() : 0) && newData.child('o').val() - (data.child('o').exists() ? data.child('o').val() : 0) <= 50))",
-        ".validate": "newData.hasChildren(['w','ts'])",
+        ".write": "$id.matches(/^[0-9]{4,12}$/) && ((newData.child('w').val() === (now - 14400000 - (now - 14400000) % 3600000) / 3600000 && (!data.exists() || data.child('w').val() < newData.child('w').val()) && newData.child('n').val() === (data.child('n').exists() ? data.child('n').val() : 0) + 1 && (newData.child('o').exists() ? newData.child('o').val() : 0) === (data.child('o').exists() ? data.child('o').val() : 0)) || (data.exists() && newData.child('w').val() === data.child('w').val() && (newData.child('n').exists() ? newData.child('n').val() : 0) === (data.child('n').exists() ? data.child('n').val() : 0) && newData.child('o').val() > (data.child('o').exists() ? data.child('o').val() : 0) && newData.child('o').val() <= (newData.child('n').exists() ? newData.child('n').val() : 0) + (root.child('crateGames/' + $id).exists() ? root.child('crateGames/' + $id).val() : 0) && newData.child('o').val() - (data.child('o').exists() ? data.child('o').val() : 0) <= 50) || (data.exists() && newData.child('w').val() === data.child('w').val() && (newData.child('o').exists() ? newData.child('o').val() : 0) === (data.child('o').exists() ? data.child('o').val() : 0) && newData.child('n').val() - (data.child('n').exists() ? data.child('n').val() : 0) >= 1 && newData.child('n').val() - (data.child('n').exists() ? data.child('n').val() : 0) === (newData.child('pb').exists() ? newData.child('pb').val() : 0) - (data.child('pb').exists() ? data.child('pb').val() : 0) && (newData.child('pb').exists() ? newData.child('pb').val() : 0) <= (root.child('coins/' + $id + '/pc').exists() ? root.child('coins/' + $id + '/pc').val() : 0)) || (!data.exists() && newData.child('w').val() === 0 && !newData.child('o').exists() && newData.child('n').val() >= 1 && newData.child('n').val() === (newData.child('pb').exists() ? newData.child('pb').val() : 0) && (newData.child('pb').exists() ? newData.child('pb').val() : 0) <= (root.child('coins/' + $id + '/pc').exists() ? root.child('coins/' + $id + '/pc').val() : 0)))",
+        ".validate": "newData.hasChildren(['w','ts']) && (!data.child('pb').exists() || (newData.child('pb').exists() && newData.child('pb').val() >= data.child('pb').val()))",
         "w": {
           ".validate": "newData.isNumber()"
         },
         "ts": {
           ".validate": "newData.val() === now"
+        },
+        "pb": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000"
         },
         "s": {
           ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9]{2,8}$/) && ((root.child('crateSeasons/' + newData.val() + '/start').val() <= now && root.child('crateSeasons/' + newData.val() + '/end').val() > now) || (newData.val() === 'w26' && now >= 1793491200000 && now < 1803859200000))"

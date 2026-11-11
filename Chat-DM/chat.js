@@ -9997,21 +9997,25 @@ async function equipItemLegacyUnused(it, on) {
 })();
 
 /* ══════════ Coins and the Shop ══════════
-   1 message = 1 coin. The SERVER decides all of it (api/coins/claim.js, api/shop/buy.js): the browser only asks, then
-   shows the balance it reads from coins/<id>/n. The database rules refuse every browser write to coins, and the server
-   works out prices itself, so editing this file (or sending your own requests) can't give coins or change a price.
-   SHOP_CRATE_PRICE below is only what the shop DISPLAYS and sends as a sanity check; the real price is in api/_shop.js. */
-const COIN_API = window.VUS_API_BASE || "https://vus-orcin.vercel.app";
+   1 message = 1 coin. NO SERVER IS NEEDED: everything is checked by the database rules (vus-chat-rules.json), so it works
+   for everyone who can reach the chat. The rules only allow:
+     - coins/<id>: +1 at most every 5 s, and only for a REAL message from that same ID that is newer than the last coin
+       (bot and system messages never count); or a purchase, which must take exactly 50 coins per crate (pc = crates paid for)
+     - crateClaims/<id>: extra crates only up to the number paid for (pb can never go down, can never pass pc)
+   Nobody can set a balance, skip the price, pay more or less than 50, or get paid twice. What the rules can't do is tell
+   who is really behind an ID (the chat has no Firebase login), so see the notes about impersonation. */
 const SHOP_CRATE_PRICE = 50;
-let myCoins = null, coinWatchId = "", coinWatchRef = null, coinNeedsToken = false, coinPauseUntil = 0;
+const COIN_GAP_MS = 5000;
+let myCoins = null, myCoinRec = null, coinWatchId = "", coinWatchRef = null, coinBusy = false;
 function ensureCoinWatch() {
   const id = myLoginId ? String(myLoginId) : "";
   if (id === coinWatchId) return;
   if (coinWatchRef) { try { coinWatchRef.off(); } catch (e) {} coinWatchRef = null; }
-  coinWatchId = id; myCoins = null;
+  coinWatchId = id; myCoins = null; myCoinRec = null;
   if (!id || !ChatBackend._db) { coinWatchId = ""; paintCoinBits(); return; }
-  coinWatchRef = ChatBackend._db.ref("coins/" + id + "/n");
-  coinWatchRef.on("value", s => { myCoins = Number(s.val()) || 0; paintCoinBits(); }, () => { myCoins = 0; paintCoinBits(); });
+  coinWatchRef = ChatBackend._db.ref("coins/" + id);
+  coinWatchRef.on("value", s => { myCoinRec = s.val() || {}; myCoins = Number(myCoinRec.n) || 0; paintCoinBits(); }, () => { myCoinRec = {}; myCoins = 0; paintCoinBits(); });
+  settleShopCrates().catch(() => {});   // hand over anything paid for but not delivered yet
 }
 function paintCoinBits() {
   const b = document.getElementById("navShop");
@@ -10020,26 +10024,37 @@ function paintCoinBits() {
 }
 setInterval(ensureCoinWatch, 3000);   // follows logins and logouts
 
-// Called after every message this account sends. Sends only the message id; the server looks the message up and decides.
+// Called after every message this account sends. The database rules check that the message is real, yours, newer than your
+// last coin and not a bot message; if anything is off the write is simply refused and nothing happens.
 function coinClaim(room, mid, data) {
   if (!mid || !myLoginId || !data || data.system === true || data.bot === true) return;
   if (String(data.loginId || "") !== String(myLoginId)) return;
   if (!(room === MAIN_ROOM_ID || (/^ch-/.test(room || "") && room !== "ch-ai"))) return;
-  const A = window.VUS_AUTH, tok = A && A.peekToken ? A.peekToken(myLoginId) : "";
-  if (!tok) { coinNeedsToken = true; return; }   // this device hasn't confirmed the password yet: the shop offers it
-  if (Date.now() < coinPauseUntil) return;
-  fetch(COIN_API + "/api/coins/claim", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + tok }, body: JSON.stringify({ room, mid }) })
-    .then(r => r.json().catch(() => ({})).then(j => {
-      if (r.status === 401) { coinNeedsToken = true; coinPauseUntil = Date.now() + 10 * 60 * 1000; }
-      else if (j && j.ok) coinNeedsToken = false;
-    }))
-    .catch(() => { coinPauseUntil = Date.now() + 30000; });
+  ensureCoinWatch();
+  const rec = myCoinRec;
+  if (!rec || coinBusy) return;   // balance not loaded yet, or the last coin is still being saved
+  if (ChatBackend.serverNowSync() - (Number(rec.last) || 0) < COIN_GAP_MS) return;   // too soon: the database would refuse it
+  coinBusy = true;
+  ChatBackend._db.ref("coins/" + myLoginId).update({ n: (Number(rec.n) || 0) + 1, last: firebase.database.ServerValue.TIMESTAMP, mid: String(mid), room: String(room) })
+    .catch(() => {}).then(() => { coinBusy = false; });
+}
+// Crates you have paid coins for but that haven't been handed over (for example the connection dropped between the two steps).
+async function settleShopCrates() {
+  if (!myLoginId || !ChatBackend._db) return 0;
+  const id = String(myLoginId), db = ChatBackend._db;
+  const [cs, cr] = await Promise.all([db.ref("coins/" + id + "/pc").get(), db.ref("crateClaims/" + id).get()]);
+  const paid = Number(cs.val()) || 0, claim = cr.val(), got = claim ? Number(claim.pb) || 0 : 0, owed = paid - got;
+  if (owed <= 0) return 0;
+  if (claim) await db.ref("crateClaims/" + id).update({ n: (Number(claim.n) || 0) + owed, pb: got + owed });
+  else await db.ref("crateClaims/" + id).update({ w: 0, ts: firebase.database.ServerValue.TIMESTAMP, n: owed, pb: owed });
+  return owed;
 }
 
 let shopModal = null, shopBusy = false, shopMsg = null;
 function openShop() {
   if (shopModal) return;
   ensureCoinWatch();
+  settleShopCrates().catch(() => {});
   const ov = el("div", "crate-overlay"), box = el("div", "crate-modal shop-modal");
   ov.appendChild(box); document.body.appendChild(ov);
   shopModal = ov; shopMsg = null;
@@ -10058,16 +10073,6 @@ function paintShop() {
   bal.append(el("span", "shop-bal-ic", "\uD83E\uDE99"), el("b", "", myCoins === null ? "…" : String(myCoins)), el("span", "", myCoins === 1 ? " coin" : " coins"));
   box.appendChild(bal);
 
-  const A = window.VUS_AUTH;
-  if (!A || !A.hasToken(myLoginId) || coinNeedsToken) {
-    const n = el("div", "shop-msg"); n.appendChild(el("div", "", "Confirm your password once on this device to earn coins and buy things."));
-    const b = el("button", "pm-go", "Confirm password"); b.type = "button"; b.disabled = shopBusy;
-    b.addEventListener("click", async () => {
-      try { if (A && (await A.loginToken(String(myLoginId), !!coinNeedsToken))) { coinNeedsToken = false; coinPauseUntil = 0; } } catch (e) {}
-      paintShop();
-    });
-    n.appendChild(b); box.appendChild(n);
-  }
   if (shopMsg) {
     const m = el("div", "shop-msg" + (shopMsg.ok ? " ok" : ""), shopMsg.t);
     if (shopMsg.open) { const o = el("button", "pm-go", "Open crates"); o.type = "button"; o.addEventListener("click", () => { closeShop(); openCrateModal(); }); m.appendChild(o); }
@@ -10090,22 +10095,24 @@ function paintShop() {
   box.appendChild(row);
   box.appendChild(el("div", "cr-note", "Earn 1 coin for each message you send (at most one coin every 5 seconds). Bot messages don't earn coins."));
 }
-async function buyShop(item, qty, retried) {
-  if (shopBusy || !myLoginId) return;
+async function buyShop(item, qty) {
+  if (shopBusy || !myLoginId || item !== "crate") return;
   shopBusy = true; shopMsg = { t: "Buying…" }; paintShop();
+  let paid = false;
   try {
-    const A = window.VUS_AUTH, tok = A ? await A.loginToken(String(myLoginId), !!retried) : "";
-    if (!tok) throw new Error("Confirm your password to buy.");
-    let r;
-    try { r = await fetch(COIN_API + "/api/shop/buy", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + tok }, body: JSON.stringify({ item, qty, price: qty * SHOP_CRATE_PRICE }) }); }
-    catch (e) { throw new Error("Couldn't reach the server. Check your connection."); }
-    const j = await r.json().catch(() => ({}));
-    if (r.status === 401 && !retried) { shopBusy = false; return buyShop(item, qty, true); }   // token no longer valid: ask for the password again
-    if (!r.ok || !j.ok) throw new Error(j.error || "Couldn't buy that.");
-    coinNeedsToken = false; coinPauseUntil = 0;
-    if (typeof j.balance === "number") myCoins = j.balance;
-    shopMsg = { ok: true, t: "Bought " + qty + (qty === 1 ? " crate" : " crates") + " for " + j.cost + " coins.", open: true };
-  } catch (e) { shopMsg = { t: (e && e.message) || "Couldn't buy that." }; }
+    const id = String(myLoginId), db = ChatBackend._db, cost = qty * SHOP_CRATE_PRICE;
+    await settleShopCrates();   // finish any earlier purchase first
+    const rec = (await db.ref("coins/" + id).get()).val() || {}, have = Number(rec.n) || 0;
+    if (have < cost) throw new Error("You need " + cost + " coins. You have " + have + ".");
+    // step 1: pay. The rules only accept exactly 50 coins for each crate.
+    await db.ref("coins/" + id).update({ n: have - cost, pc: (Number(rec.pc) || 0) + qty });
+    paid = true;
+    // step 2: receive the crates you paid for
+    await settleShopCrates();
+    shopMsg = { ok: true, t: "Bought " + qty + (qty === 1 ? " crate" : " crates") + " for " + cost + " coins.", open: true };
+  } catch (e) {
+    shopMsg = { t: paid ? "You paid, but the crates didn't arrive yet. Close and reopen the shop and they will be delivered." : isPermissionDenied(e) ? "The database refused that purchase. Check that the newest database rules are published, then try again." : ((e && e.message) || "Couldn't buy that.") };
+  }
   shopBusy = false; paintShop();
 }
 (function wireShopRail() {
