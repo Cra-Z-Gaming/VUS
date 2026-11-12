@@ -23,31 +23,32 @@
     if (!r.ok || !j.ok) throw new Error((j.error || "Couldn't confirm (HTTP " + r.status + ").") + (j.attemptsLeft !== undefined ? " (" + j.attemptsLeft + " tries left.)" : ""));
     setToken(id, j.token); tbuf = []; return true;
   }
-  async function fetchTicket(id) {
+  async function fetchTicket(id, name) {
     var tok = getToken(id);
     if (!tok) throw new Error("NO_TOKEN");
     var r;
-    try { r = await fetch(API + "/api/chat/ticket", { method: "POST", headers: { Authorization: "Bearer " + tok } }); } catch (e) { throw new Error("OFFLINE"); }
+    try { r = await fetch(API + "/api/chat/ticket", { method: "POST", headers: { Authorization: "Bearer " + tok, "Content-Type": "application/json" }, body: JSON.stringify({ name: name || "" }) }); } catch (e) { throw new Error("OFFLINE"); }
     var j = {}; try { j = await r.json(); } catch (e) {}
     if (r.status === 401) { setToken(id, ""); throw new Error("NO_TOKEN"); }
     if (!r.ok || !j.ok) throw new Error(j.error || "Couldn't get permission to send.");
-    return { t: j.ticket, at: Date.now() };
+    return { t: j.ticket, at: Date.now(), n: name || "" };
   }
-  function refill(id) {   // keep two tickets ready so sending feels instant
+  function refill(id, name) {   // keep two tickets (for this name) ready so sending feels instant
     if (refilling) return; refilling = true;
-    (async function () { try { while (tbuf.length < 2) tbuf.push(await fetchTicket(id)); } catch (e) {} refilling = false; })();
+    (async function () { try { while (tbuf.filter(function (x) { return x.n === name; }).length < 2) tbuf.push(await fetchTicket(id, name)); } catch (e) {} refilling = false; })();
   }
-  async function ticket(id) {
+  async function ticket(id, name) {
+    name = name || "";
     var now = Date.now(); tbuf = tbuf.filter(function (x) { return now - x.at < 80000; });
-    var x = tbuf.shift();
+    var i = tbuf.findIndex(function (x) { return x.n === name; }), x = i >= 0 ? tbuf.splice(i, 1)[0] : null;
     if (!x) {
-      try { x = await fetchTicket(id); }
+      try { x = await fetchTicket(id, name); }
       catch (e) {   // no (or a rejected) token on this device: ask for the password once, then carry on
         if (String(e && e.message) !== "NO_TOKEN" || !(await askPassword(id))) throw e;
-        x = await fetchTicket(id);
+        x = await fetchTicket(id, name);
       }
     }
-    refill(id);
+    refill(id, name);
     return x.t;
   }
   var reqCache = { at: 0, v: false }, asking = null;

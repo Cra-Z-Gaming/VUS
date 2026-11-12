@@ -678,7 +678,7 @@ const ChatBackend = {
     let ticket;
     try {
       if (!data || !data.loginId || !window.VUS_AUTH) throw new Error("NO_TOKEN");
-      ticket = await window.VUS_AUTH.ticket(String(data.loginId));
+      ticket = await window.VUS_AUTH.ticket(String(data.loginId), String(data.name || ""));
     } catch (e) {
       const m = String(e && e.message);
       showComposerNotice(m === "NO_TOKEN" ? "Messages need a one-time password confirmation on this device." : m === "OFFLINE" ? "Couldn't reach the chat server. Check your connection." : m);
