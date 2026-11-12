@@ -2627,6 +2627,8 @@ body.hide-bubcolors .msg-bubble.bubfx { animation: none !important; box-shadow: 
 .msg-tag.tg-tag-sweaty { background: #3b0a0a; border-color: #f87171; color: #fecaca; }
 .msg-tag.tg-tag-yin { background: #f8fafc; border-color: #0f172a; color: #0f172a; }
 .msg-tag.tg-tag-yang { background: #0f172a; border-color: #f8fafc; color: #f8fafc; }
+/* shop-only: Loaded 💰 (shiny gold) */
+.msg-tag.tg-tag-loaded { color: #3b2300; font-weight: 800; border-color: #fff3a3; background: linear-gradient(110deg,#b8860b,#ffd700,#fff7ae,#ffd700,#b8860b); background-size: 250% 100%; animation: tagShine 2.2s linear infinite; box-shadow: 0 0 8px rgba(255,215,0,.65); }
 .msg-tag.tg-tag-bookworm { background: #13293d; border-color: #60a5fa; color: #bfdbfe; }
 .msg-tag.tg-tag-speedy { background: #1f2a05; border-color: #bef264; color: #ecfccb; }
 /* tags: epic */

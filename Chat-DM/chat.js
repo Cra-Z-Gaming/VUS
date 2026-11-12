@@ -9328,6 +9328,8 @@ const CRATE_ITEMS = [
   { id: "tag-ascended", type: "tag", rar: "legendary", name: "Ascended" },
   { id: "tag-legend",  type: "tag", rar: "legendary", name: "Legend" },
   { id: "tag-goat",    type: "tag", rar: "legendary", name: "G.O.A.T." },
+  // Shop-only (1000 coins in the Shop, never from a crate): a shiny gold tag
+  { id: "tag-loaded",  type: "tag", rar: "legendary", name: "Loaded 💰", shop: true },
   // text effects (CSS class fxt-<id>)
   { id: "fx-sunset", type: "fx", rar: "common", name: "Sunset Fade" },
   { id: "fx-ocean",  type: "fx", rar: "common", name: "Ocean Fade" },
@@ -9734,7 +9736,7 @@ function paintOpen(box) {
 // ── true odds: the weight of a rarity is split evenly between the items of that rarity in the crate ──
 function cratePool(type) {
   if (type === "season") { const a = activeSeason(); return a ? CRATE_ITEMS.filter(i => i.season === a.id) : []; }
-  return CRATE_ITEMS.filter(i => !i.season && (type === "mixed" || i.type === type));
+  return CRATE_ITEMS.filter(i => !i.season && !i.shop && (type === "mixed" || i.type === type));
 }
 function crateChance(it, pool) { return RARITY[it.rar].weight / pool.filter(i => i.rar === it.rar).length; }
 // chance that opening this crate ends with something you don't own yet (up to 4 rolls, 50% retry on a duplicate)
@@ -9940,7 +9942,7 @@ function paintCollection(box) {
   const tabs = el("div", "cr-subtabs");
   const act = activeSeason();
   // a seasonal item shows up while its season runs, or once you own it (past seasons you missed stay hidden)
-  const shown = i => !i.season || crateOwned.has(i.id) || (act && act.id === i.season);
+  const shown = i => (!i.season && !i.shop) || crateOwned.has(i.id) || (act && act.id === i.season);   // shop-only items appear once you own them
   [["ring", "Rings"], ["tag", "Tags"], ["fx", "Text effects"], ["font", "Fonts"], ["bub", "Bubbles"]].forEach(([k, t]) => {
     const own = CRATE_ITEMS.filter(i => i.type === k && shown(i) && crateOwned.has(i.id)).length, all = CRATE_ITEMS.filter(i => i.type === k && shown(i)).length;
     const b = el("button", "cr-subtab" + (collectionType === k ? " on" : ""), t + " " + own + "/" + all); b.type = "button";
@@ -9956,7 +9958,7 @@ function paintCollection(box) {
     const on = isFont ? (onName || onText) : !!(myCosm && myCosm[it.type] === it.id);
     const c = el(isFont ? "div" : "button", "cr-item r-" + it.rar + (own ? "" : " locked") + (on ? " equipped" : "")); if (!isFont) c.type = "button";
     const eqText = isFont ? (onName && onText ? " \u00B7 name + text" : onName ? " \u00B7 name" : onText ? " \u00B7 text" : "") : (on ? " \u00B7 equipped" : "");
-    c.append(own ? itemPreview(it) : el("div", "cr-q", "?"), el("b", "", own ? it.name : "???"), el("small", "", RARITY[it.rar].label + (it.season ? " \u00B7 " + seasonName(it.season) : "") + eqText));
+    c.append(own ? itemPreview(it) : el("div", "cr-q", "?"), el("b", "", own ? it.name : "???"), el("small", "", RARITY[it.rar].label + (it.season ? " \u00B7 " + seasonName(it.season) : "") + (it.shop ? " \u00B7 Shop" : "") + eqText));
     if (isFont && own) {   // fonts go on your name, your message text, or both: pick each separately
       const row = el("div", "cr-slots");
       [["Name", onName, "font"], ["Text", onText, "tfont"]].forEach(([lab, isOn, slot]) => {
@@ -10039,6 +10041,7 @@ function ensureCoinWatch() {
   coinWatchRef.on("value", s => { myCoinRec = s.val() || {}; myCoins = Number(myCoinRec.n) || 0; paintCoinBits(); }, () => { myCoinRec = {}; myCoins = 0; paintCoinBits(); });
   settleShopCrates().catch(() => {});   // hand over anything paid for but not delivered yet
   flushCoinPending().catch(() => {});   // and any crate coins that couldn't be saved earlier
+  settleLoadedTag().catch(() => {});    // and a Loaded tag that was paid for but not delivered
 }
 function paintCoinBits() {
   const b = document.getElementById("navShop");
@@ -10142,9 +10145,42 @@ async function sellCrates(count) {
   crateTick(true);
 }
 
+// ── The Loaded 💰 tag: sold only in the Shop for 1000 coins, never from a crate. ──
+// Step 1 pays (coins `ld` goes 0 → 1 and the balance drops by exactly 1000 in the same write). Step 2 hands over the tag: the rules only accept
+// crateInv/<id>/items/tag-loaded once `ld` is 1, so it can't come from anywhere else.
+const LOADED_ID = "tag-loaded", LOADED_PRICE = 1000;
+async function settleLoadedTag() {   // paid for (ld = 1) but not in the inventory yet
+  if (!myLoginId || !ChatBackend._db) return false;
+  const id = String(myLoginId), db = ChatBackend._db;
+  const [ld, inv] = await Promise.all([db.ref("coins/" + id + "/ld").get(), db.ref("crateInv/" + id + "/items/" + LOADED_ID).get()]);
+  if (Number(ld.val()) !== 1 || inv.exists()) return false;
+  await db.ref("crateInv/" + id + "/items/" + LOADED_ID).set(firebase.database.ServerValue.TIMESTAMP);
+  return true;
+}
+async function buyLoadedTag() {
+  if (shopBusy || !myLoginId) return;
+  shopBusy = true; shopMsg = { t: "Buying…" }; paintShop();
+  let paid = false;
+  try {
+    const id = String(myLoginId), db = ChatBackend._db;
+    await settleLoadedTag();   // finish an earlier purchase first
+    const rec = (await db.ref("coins/" + id).get()).val() || {}, have = Number(rec.n) || 0;
+    if (Number(rec.ld) === 1 || crateOwned.has(LOADED_ID)) throw new Error("You already own the Loaded 💰 tag.");
+    if (have < LOADED_PRICE) throw new Error("You need " + LOADED_PRICE + " coins. You have " + have + ".");
+    await db.ref("coins/" + id).update({ n: have - LOADED_PRICE, ld: 1 });
+    paid = true;
+    await settleLoadedTag();
+    shopMsg = { ok: true, t: "You bought the Loaded 💰 tag! Equip it in the Collection tab.", coll: true };
+  } catch (e) {
+    shopMsg = { t: paid ? "You paid, but the tag didn't arrive yet. Close and reopen the shop and it will be delivered." : isPermissionDenied(e) ? "The database refused that purchase. Check that the newest database rules are published, then try again." : ((e && e.message) || "Couldn't buy that.") };
+  }
+  shopBusy = false; paintShop();
+}
+
 let shopModal = null, shopBusy = false, shopMsg = null;
 function openShop() {
   if (shopModal) return;
+  settleLoadedTag().catch(() => {});
   ensureCoinWatch();
   settleShopCrates().catch(() => {});
   const ov = el("div", "crate-overlay"), box = el("div", "crate-modal shop-modal");
@@ -10167,6 +10203,7 @@ function paintShop() {
 
   if (shopMsg) {
     const m = el("div", "shop-msg" + (shopMsg.ok ? " ok" : ""), shopMsg.t);
+    if (shopMsg.coll) { const o = el("button", "pm-go", "Open collection"); o.type = "button"; o.addEventListener("click", () => { closeShop(); openCrateModal(); crateView = "collection"; collectionType = "tag"; paintCrateModal(); }); m.appendChild(o); }
     if (shopMsg.open) { const o = el("button", "pm-go", "Open crates"); o.type = "button"; o.addEventListener("click", () => { closeShop(); openCrateModal(); }); m.appendChild(o); }
     box.appendChild(m);
   }
@@ -10185,6 +10222,18 @@ function paintShop() {
     row.appendChild(b);
   });
   box.appendChild(row);
+    {   // the Loaded tag (Shop only)
+    const owned = crateOwned.has(LOADED_ID) || !!(myCoinRec && Number(myCoinRec.ld) === 1);
+    const c2 = el("div", "shop-item"), i2 = el("div", "shop-info");
+    i2.append(el("b", "", "Loaded 💰 tag"), el("small", "", "A shiny gold tag. Only sold here, never found in crates."));
+    c2.append(el("div", "shop-ic", "🏷️"), i2, el("div", "shop-price", LOADED_PRICE + " 🪙"));
+    box.appendChild(c2);
+    const r2 = el("div", "shop-buys");
+    const b2 = el("button", "cr-count-b", owned ? "Owned ✓" : "Buy · " + LOADED_PRICE + " 🪙"); b2.type = "button";
+    b2.disabled = owned || shopBusy || myCoins === null || myCoins < LOADED_PRICE;
+    b2.addEventListener("click", () => buyLoadedTag());
+    r2.appendChild(b2); box.appendChild(r2);
+  }
   box.appendChild(el("div", "cr-note", "Earn 1 coin for each message you send (at most one coin every 5 seconds). Bot messages don't earn coins."));
 }
 async function buyShop(item, qty) {
@@ -10310,7 +10359,7 @@ async function openInventoryOf(loginId, name) {
   if (!stock && !rows.length) body.appendChild(el("div", "rooms-empty", "No items"));
   // 2. collection: everything they own, grouped by kind, with what they have equipped marked
   const owned = new Set(Object.keys(items).filter(k => itemOf(k)));
-  const count = CRATE_ITEMS.filter(i => !i.season || owned.has(i.id)).length;
+  const count = CRATE_ITEMS.filter(i => (!i.season && !i.shop) || owned.has(i.id)).length;
   body.appendChild(el("div", "uinv-sec", "\uD83D\uDDC2\uFE0F Collection \u00B7 " + owned.size + " / " + count));
   previewNameOverride = name || "";
   try {
@@ -10320,7 +10369,7 @@ async function openInventoryOf(loginId, name) {
       const list = CRATE_ITEMS.filter(i => i.type === k && owned.has(i.id)).sort((a, b) => (a.season ? 1 : 0) - (b.season ? 1 : 0) || order[a.rar] - order[b.rar]);
       if (!list.length) return;
       any = true;
-      body.appendChild(el("div", "uinv-sub", title + " " + list.length + "/" + CRATE_ITEMS.filter(i => i.type === k && (!i.season || owned.has(i.id))).length));
+      body.appendChild(el("div", "uinv-sub", title + " " + list.length + "/" + CRATE_ITEMS.filter(i => i.type === k && ((!i.season && !i.shop) || owned.has(i.id))).length));
       const grid = el("div", "cr-grid");
       list.forEach(it => {
         const isFont = it.type === "font", onName = cos.font === it.id, onText = cos.tfont === it.id;
