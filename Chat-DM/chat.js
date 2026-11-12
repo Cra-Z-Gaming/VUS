@@ -9316,6 +9316,8 @@ const CRATE_ITEMS = [
   { id: "tag-sweaty",    type: "tag", rar: "rare", name: "Sweaty" },
   { id: "tag-bookworm",  type: "tag", rar: "rare", name: "Bookworm" },
   { id: "tag-speedy",    type: "tag", rar: "rare", name: "Speedy" },
+  { id: "tag-yin",       type: "tag", rar: "rare", name: "Yin" },
+  { id: "tag-yang",      type: "tag", rar: "rare", name: "Yang" },
   { id: "tag-gremlin", type: "tag", rar: "epic", name: "Gremlin" },
   { id: "tag-menace",  type: "tag", rar: "epic", name: "Menace" },
   { id: "tag-chaos",   type: "tag", rar: "epic", name: "Chaos" },
@@ -9503,10 +9505,11 @@ async function earnCrate() {
   const w = crateWindow(srvNow());
   try {
     await ChatBackend._db.ref("crateClaims/" + myLoginId).update({ w, ts: firebase.database.ServerValue.TIMESTAMP, n: crateEarned + 1 });
-  } catch (e) { /* stale count or rules not published: the listener refreshes and the next tick retries */ if (isPermissionDenied(e)) crateRulesBad = true; }
+    crateDenials = 0;
+  } catch (e) { /* stale count or rules not published: the listener refreshes and the next tick retries */ if (isPermissionDenied(e) && ++crateDenials >= 3) { crateRulesBad = true; showComposerNotice("Couldn't add your crate: the database rules for crates don't match this version of the chat. Tell an admin."); } }
   crateEarning = false;
 }
-let crateRulesBad = false;
+let crateRulesBad = false, crateDenials = 0;   // a single refused write (stale count) is retried; only 3 in a row count as "rules out of date"
 function ensureCrateWatch() {
   if (!myLoginId || !ChatBackend._db || crateWatchId === myLoginId) return;
   crateWatchRefs.forEach(r => { try { r.off(); } catch (e) {} });
@@ -9696,6 +9699,23 @@ function paintOpen(box) {
     });
     box.appendChild(row);
   }
+  if (stock >= 1 && ready) {   // sell crates for coins (tap twice to confirm)
+    const row = el("div", "cr-count");
+    row.appendChild(el("span", "cr-count-l", "Sell (\uD83E\uDE99 " + SELL_COINS + " each)"));
+    const opts = [{ k: 1, label: "1\u00D7" }];
+    if (stock > 1) opts.push({ k: Math.min(stock, CRATE_MAX_OPEN), label: stock > CRATE_MAX_OPEN ? "Max (" + CRATE_MAX_OPEN + ")" : "All (" + stock + ")" });
+    opts.forEach(c => {
+      const armed = sellArm === c.k;
+      const b = el("button", "cr-count-b" + (armed ? " on" : ""), armed ? "Sure? +" + c.k * SELL_COINS : c.label); b.type = "button"; b.disabled = crateBusy;
+      b.addEventListener("click", () => {
+        if (sellArm === c.k) { sellArm = 0; sellCrates(c.k); return; }
+        sellArm = c.k; paintCrateModal();
+        setTimeout(() => { if (sellArm === c.k) { sellArm = 0; paintCrateModal(); } }, 4000);
+      });
+      row.appendChild(b);
+    });
+    box.appendChild(row);
+  }
   const grid = el("div", "cr-types");
   visibleTypes().forEach(t => {
     const b = el("button", "cr-type" + (t.id === "season" ? " cr-season" : "")); b.type = "button"; b.disabled = !ready || crateBusy;
@@ -9708,7 +9728,7 @@ function paintOpen(box) {
   });
   box.appendChild(grid);
   { const sea = activeSeason(); box.appendChild(el("div", "cr-note", sea ? "\u2744\uFE0F The " + sea.name + " season runs until " + new Date(sea.end).toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" }) + "." : "No seasonal crate is running right now.")); }
-  box.appendChild(el("div", "cr-odds", "Rarity odds: Common " + RARITY.common.weight + "% · Rare " + RARITY.rare.weight + "% · Epic " + RARITY.epic.weight + "% · Legendary " + RARITY.legendary.weight + "%, split evenly between the items of that rarity. The wheel's slices are the real chances. Landing on something you own: 50% another spin, 50% nothing."));
+  box.appendChild(el("div", "cr-odds", "Rarity odds: Common " + RARITY.common.weight + "% · Rare " + RARITY.rare.weight + "% · Epic " + RARITY.epic.weight + "% · Legendary " + RARITY.legendary.weight + "%, split evenly between the items of that rarity. The wheel's slices are the real chances. Landing on something you own: 50% another spin, 50% 10 coins instead."));
 }
 
 // ── true odds: the weight of a rarity is split evenly between the items of that rarity in the crate ──
@@ -9872,7 +9892,7 @@ async function openCrate(type, count) {
         status.textContent = count > 1 ? "Crate " + (n + 1) + " of " + count + "…" : "Spinning…";
         await annSleep(PER + PAUSE);
         if (st.dup && count === 1) {
-          status.replaceChildren(); status.append(el("b", "", "Duplicate: " + st.item.name + ". "), document.createTextNode(st.retry ? "You already own it — spinning again…" : "You already own it — nothing this time."));
+          status.replaceChildren(); status.append(el("b", "", "Duplicate: " + st.item.name + ". "), document.createTextNode(st.retry ? "You already own it — spinning again…" : "You already own it — 10 coins instead."));
           await annSleep(1700);
         }
       }
@@ -9890,12 +9910,14 @@ async function openCrate(type, count) {
     if (!wrote) failed.push(it);
   }
   const saved = got.filter(i => !failed.includes(i));
+  // A crate that gave nothing new pays 10 coins instead.
+  const coinsBack = nothing > 0 && (await claimCrateCoins("rc", nothing)) ? nothing * DUD_COINS : 0;
   const done = el("div", "cr-shake");
   if (count === 1) {
     done.appendChild(wheel.wrap);
     if (saved.length) done.appendChild(revealCard(saved[0], "You got", "Open the Collection tab to equip it."));
     else if (failed.length) done.appendChild(el("div", "cr-note", "You got " + failed[0].name + " but it couldn't be saved. Check your connection; the crate is used up."));
-    else done.appendChild(el("div", "cr-note", "No new item this time. Come back for the next crate!"));
+    else done.appendChild(el("div", "cr-note", coinsBack ? "No new item this time, so you got " + coinsBack + " coins instead. Come back for the next crate!" : "No new item this time. Come back for the next crate!"));
   } else {
     done.appendChild(el("h3", "cr-h", "Opened " + count + " crates"));
     if (saved.length) {
@@ -9907,7 +9929,7 @@ async function openCrate(type, count) {
       saved.forEach(it => grid.appendChild(revealCard(it, "New", "")));
       done.appendChild(grid);
     }
-    done.appendChild(el("div", "cr-note", saved.length + " new item" + (saved.length === 1 ? "" : "s") + ", " + nothing + " crate" + (nothing === 1 ? "" : "s") + " with nothing new" + (failed.length ? ", " + failed.length + " couldn't be saved" : "") + ". Open the Collection tab to equip."));
+    done.appendChild(el("div", "cr-note", saved.length + " new item" + (saved.length === 1 ? "" : "s") + ", " + nothing + " crate" + (nothing === 1 ? "" : "s") + " with nothing new" + (coinsBack ? " (+" + coinsBack + " coins)" : "") + (failed.length ? ", " + failed.length + " couldn't be saved" : "") + ". Open the Collection tab to equip."));
   }
   const again = el("button", "pm-go", crateStock() ? "Nice — " + crateStock() + " left" : "Nice"); again.type = "button"; again.addEventListener("click", () => { crateReveal = null; paintCrateModal(); });
   done.appendChild(again);
@@ -10016,6 +10038,7 @@ function ensureCoinWatch() {
   coinWatchRef = ChatBackend._db.ref("coins/" + id);
   coinWatchRef.on("value", s => { myCoinRec = s.val() || {}; myCoins = Number(myCoinRec.n) || 0; paintCoinBits(); }, () => { myCoinRec = {}; myCoins = 0; paintCoinBits(); });
   settleShopCrates().catch(() => {});   // hand over anything paid for but not delivered yet
+  flushCoinPending().catch(() => {});   // and any crate coins that couldn't be saved earlier
 }
 function paintCoinBits() {
   const b = document.getElementById("navShop");
@@ -10048,6 +10071,75 @@ async function settleShopCrates() {
   if (claim) await db.ref("crateClaims/" + id).update({ n: (Number(claim.n) || 0) + owed, pb: got + owed });
   else await db.ref("crateClaims/" + id).update({ w: 0, ts: firebase.database.ServerValue.TIMESTAMP, n: owed, pb: owed });
   return owed;
+}
+
+// ── Crate coins: a crate that gives nothing new pays 10 coins; any crate can be sold for 25. ──
+// The crate is used up first (crateClaims `o` goes up), then the coins are paid (coins `rc` = refunds, `sc` = sales). The rules only pay
+// up to the number of crates actually used (rc + sc can't pass `o`) and exactly 10 / 25 per crate, so nobody can set a balance.
+const DUD_COINS = 10, SELL_COINS = 25, COIN_PEND_KEY = "vus_coin_pend_v1";
+function coinPend() { try { return JSON.parse(localStorage.getItem(COIN_PEND_KEY) || "{}") || {}; } catch (e) { return {}; } }
+function savePend(o) { try { localStorage.setItem(COIN_PEND_KEY, JSON.stringify(o)); } catch (e) {} }
+function addPend(kind, k) { const o = coinPend(), id = String(myLoginId); o[id] = o[id] || {}; o[id][kind] = (Number(o[id][kind]) || 0) + k; savePend(o); }
+async function claimCrateCoins(kind, k) {   // kind: "rc" (10 each) or "sc" (25 each); resolves true when every coin was saved
+  if (!myLoginId || !ChatBackend._db || !(k >= 1)) return false;
+  const per = kind === "sc" ? SELL_COINS : DUD_COINS, ref = ChatBackend._db.ref("coins/" + myLoginId);
+  while (k > 0) {
+    const c = Math.min(50, k);   // the rules take at most 50 crates per write
+    let ok = false;
+    for (let i = 0; i < 3 && !ok; i++) {
+      try {
+        const rec = (await ref.get()).val() || {};   // re-read each try: a message coin may have changed the balance
+        const upd = { n: (Number(rec.n) || 0) + per * c }; upd[kind] = (Number(rec[kind]) || 0) + c;
+        await ref.update(upd); ok = true;
+      } catch (e) { await annSleep(500); }
+    }
+    if (!ok) { addPend(kind, k); return false; }   // saved on this device and retried on the next login
+    k -= c;
+  }
+  return true;
+}
+async function flushCoinPending() {
+  const o = coinPend(), id = String(myLoginId || ""), mine = o[id];
+  if (!mine) return;
+  delete o[id]; savePend(o);
+  for (const kind of ["rc", "sc"]) { const k = Number(mine[kind]) || 0; if (k > 0) await claimCrateCoins(kind, k); }
+}
+let sellArm = 0;   // the sell button that was tapped once and is waiting for the second tap
+async function sellCrates(count) {
+  count = Math.max(1, Math.min(CRATE_MAX_OPEN, Number(count) || 1));
+  if (crateBusy || !crateReady() || !ChatBackend._db) return;
+  count = Math.min(count, crateStock());
+  if (count < 1) return;
+  crateBusy = true;
+  let sold = 0, paid = false, problem = "";
+  try {
+    const ref = ChatBackend._db.ref("crateClaims/" + myLoginId);
+    const fresh = async () => { const v = (await ref.get()).val() || {}; crateEarned = Number(v.n) > 0 ? Number(v.n) : 0; crateOpened = Number(v.o) > 0 ? Number(v.o) : 0; try { crateGameNet = Number((await ChatBackend._db.ref("crateGames/" + myLoginId).get()).val()) || 0; } catch (e) { crateGameNet = 0; } };
+    await fresh();
+    count = Math.min(count, crateStock());
+    if (count < 1) throw new Error("no-crates");
+    try { await ref.update({ o: crateOpened + count }); }
+    catch (e1) {
+      if (!isPermissionDenied(e1)) throw e1;
+      await fresh(); count = Math.min(count, crateStock());   // stale numbers: re-read once and try again
+      if (count < 1) throw new Error("no-crates");
+      await ref.update({ o: crateOpened + count });
+    }
+    sold = count;
+    paid = await claimCrateCoins("sc", sold);
+  } catch (e) {
+    problem = isPermissionDenied(e) ? "Selling needs the updated database rules (coins). Publish the new chat rules." : String(e && e.message) === "no-crates" ? "You have no crates to sell." : "Couldn't sell the crate \u2014 check your connection.";
+  }
+  crateBusy = false;
+  if (sold) {
+    const done = el("div", "cr-shake");
+    done.appendChild(el("h3", "cr-h", "Sold " + sold + (sold === 1 ? " crate" : " crates")));
+    done.appendChild(el("div", "cr-note", paid ? "+" + sold * SELL_COINS + " coins added to your balance." : "The " + sold * SELL_COINS + " coins couldn't be saved just now. They'll be added the next time the chat connects."));
+    const again = el("button", "pm-go", crateStock() ? "Nice \u2014 " + crateStock() + " left" : "Nice"); again.type = "button"; again.addEventListener("click", () => { crateReveal = null; paintCrateModal(); });
+    done.appendChild(again);
+    crateReveal = done;
+  } else if (problem) showComposerNotice(problem);
+  crateTick(true);
 }
 
 let shopModal = null, shopBusy = false, shopMsg = null;
