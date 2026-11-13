@@ -2146,7 +2146,27 @@ function markLastRead(key) {
   scheduleUnread();
 }
 
+// Load order (same block as in chat.js; whichever file loads first creates it): DM/group names show first, the unread/last-message
+// loading of every thread runs afterwards one at a time, and it pauses while you open a DM or group so that one loads first.
+window.VUS_LOADQ = window.VUS_LOADQ || (function () {
+  const q = []; let started = false, t = null, holds = 0, startT = null;
+  function pump() { t = null; if (!started || holds > 0) return; const job = q.shift(); if (!job) return; try { job(); } catch (e) {} t = setTimeout(pump, 40); }
+  function kick() { if (!t) t = setTimeout(pump, 0); }
+  function start() { started = true; kick(); }
+  startT = setTimeout(start, 6000);   // safety: never leave the queue waiting forever
+  return {
+    add(fn) { q.push(fn); kick(); },
+    startSoon(ms) { clearTimeout(startT); startT = setTimeout(start, ms || 2000); },
+    hold(ms) { holds++; setTimeout(() => { holds--; kick(); }, ms || 2500); }
+  };
+})();
+var unreadQueued = {};
 function ensureUnreadWatch(key, isGroup) {
+  if (!currentSession || !dmsRef || unreadRefs[key] || unreadQueued[key]) return;
+  unreadQueued[key] = true;
+  window.VUS_LOADQ.add(() => ensureUnreadWatchNow(key, isGroup));
+}
+function ensureUnreadWatchNow(key, isGroup) {
   if (!currentSession || !dmsRef || unreadRefs[key]) return;
   if (lastReadMap[key] === undefined && localLastRead[key] === undefined) markLastRead(key);   // first time: start from "now"
   const ref = (isGroup ? groupChatsRef.child(key) : dmsRef.child(key)).child("messages").limitToLast(100);
@@ -2162,6 +2182,7 @@ function ensureUnreadWatch(key, isGroup) {
 function stopAllUnread() {
   Object.values(unreadRefs).forEach(r => { try { r.off("child_added"); } catch (e) {} });
   Object.values(markReadTimers).forEach(clearTimeout);
+  Object.keys(unreadQueued).forEach(k => delete unreadQueued[k]);
   unreadRefs = {}; threadMsgs = {}; unreadCounts = {}; lastReadMap = {}; localLastRead = {}; otherChatKeys = []; lastUnreadSig = "";
   clearTimeout(unreadTimer); unreadTimer = null;
   updateDmBadge();
@@ -3013,6 +3034,7 @@ function renderTypingIndicator(activeUsernames) {
 }
 
 function openChatWith(accountKey, username) {
+  window.VUS_LOADQ.hold(2500);   // pause background loading so this DM loads first
   showConversationsView();
   unwatchGroupInfo();
   clearPendingImage();
@@ -3064,6 +3086,7 @@ function refreshReadReceiptDisplay() {
 }
 
 function openGroupChat(gcId) {
+  window.VUS_LOADQ.hold(2500);   // pause background loading so this group loads first
   showConversationsView();
   clearPendingImage();
   cancelReply();
@@ -3827,6 +3850,7 @@ function resetProfileCard() {
   $chatUserProfileAddBtn.style.display = "none";
   $chatUserProfileMsgBtn.style.display = "none";
   $chatUserProfileMuteBtn.style.display = "none";
+  { const rb = document.getElementById("chatUserProfileReportBtn"); if (rb) rb.style.display = "none"; }
   { const sb = document.getElementById("chatUserProfileStaff"); if (sb) { sb.replaceChildren(); sb.style.display = ""; } const sc = document.getElementById("chatUserProfileStaffCard"); if (sc) sc.style.display = "none"; }
   staffRenderToken++;
   { const ib = document.getElementById("chatUserProfileInvBtn"); if (ib) { ib.style.display = "none"; ib.onclick = null; } }
@@ -3847,6 +3871,8 @@ function setupProfileMute(prof) {
   $chatUserProfileMuteBtn.style.display = "inline-block";
   $chatUserProfileMuteBtn.onclick = () => { chat.toggleMute(prof.id, prof.username); paint(); };
   paint();
+  { const rb = document.getElementById("chatUserProfileReportBtn");   // Report: see chat.js (append-only, readable only from the Firebase console)
+    if (rb && chat.reportUser && String(prof.id) !== String(chat.myId ? chat.myId() : "")) { rb.style.display = "inline-block"; rb.onclick = () => chat.reportUser(prof.id, prof.username); } }
 }
 
 // Mute / Unmute / Ban / Unban / Kick and rank changes live in their own little card beside the profile, so the profile

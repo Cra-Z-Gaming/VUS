@@ -20,6 +20,21 @@ const FIREBASE_CONFIG = {
 const FIREBASE_APP_NAME = "vusChat";
 
 let dmAuthDb = null; // accounts database (vus-dm), shared with dm.js
+// Load order: the main chat's messages come first. Everything else (DM/group unread counts, offline names) goes in this queue, runs one job at a
+// time after the chat has loaded, and stands still for a couple of seconds whenever you open a DM or group so that one loads first.
+// (dm.js has the same block; whichever file loads first creates it.)
+window.VUS_LOADQ = window.VUS_LOADQ || (function () {
+  const q = []; let started = false, t = null, holds = 0, startT = null;
+  function pump() { t = null; if (!started || holds > 0) return; const job = q.shift(); if (!job) return; try { job(); } catch (e) {} t = setTimeout(pump, 40); }
+  function kick() { if (!t) t = setTimeout(pump, 0); }
+  function start() { started = true; kick(); }
+  startT = setTimeout(start, 6000);   // safety: never leave the queue waiting forever
+  return {
+    add(fn) { q.push(fn); kick(); },
+    startSoon(ms) { clearTimeout(startT); startT = setTimeout(start, ms || 2000); },
+    hold(ms) { holds++; setTimeout(() => { holds--; kick(); }, ms || 2500); }
+  };
+})();
 
 const MAIN_ROOM_ID = "vus-hub-main";
 const GIPHY_KEY = "I9fFlwBYOG1ao4aqKqRoCMFwLI8QcJpK";
@@ -663,6 +678,7 @@ const ChatBackend = {
   },
 
   watchMessages(onMessage) {
+    if (window.VUS_LOADQ) window.VUS_LOADQ.startSoon(2500);   // background loading starts once the main chat has had its turn
     this._ref.limitToLast(MAX_MESSAGES).on("child_added", snap => {
       onMessage({ id: snap.key, ...snap.val() });
     });
@@ -1770,6 +1786,12 @@ const chatPrefs = { autoScroll: true, showJoinLeave: true, peerVerify: true, wor
 try { Object.assign(chatPrefs, JSON.parse(localStorage.getItem(CHAT_PREFS_KEY) || "{}")); } catch (e) {}
 function saveChatPrefs() { try { localStorage.setItem(CHAT_PREFS_KEY, JSON.stringify(chatPrefs)); } catch (e) {} }
 let autoScroll = chatPrefs.autoScroll !== false;
+// Low Power Mode (Settings > Chat). Nothing is deleted or overwritten: it only changes how the page runs while it's on (the body
+// gets .low-power, which switches off animations and effects in CSS, and the refresh timers below run less often).
+// Turn it off and everything is back instantly.
+function isLowPower() { return chatPrefs.lowPower === true; }
+function lpInterval(fn, ms, every) { let n = 0; return setInterval(() => { if (isLowPower() && (++n % (every || 4)) !== 0) return; fn(); }, ms); }
+function lpDelay(ms, factor) { return isLowPower() ? ms * (factor || 5) : ms; }
 let stickToBottom = true;      // true while the view is pinned to the newest message
 document.body.classList.toggle("hide-joinleave", chatPrefs.showJoinLeave === false);
 // Looks: text size, bubble size and bold text. Client-side only, remembered on this device.
@@ -1791,6 +1813,7 @@ function applyAppearance() {
   b.classList.toggle("hide-textfx", chatPrefs.showTextFx === false);
   b.classList.toggle("hide-rings", chatPrefs.showRings === false);
   b.classList.add("has-radius");
+  b.classList.toggle("low-power", isLowPower());
   const r = Number(chatPrefs.radius);
   b.style.setProperty("--bubble-radius", (r >= 0 && r <= 40 ? r : 12) + "px");
   applyBackground();
@@ -1990,7 +2013,7 @@ function restoreAnchor() {
 function followIfPinned() { if (autoScroll && stickToBottom) scrollToBottom(); }
 function keepPinned() {
   if (autoScroll && stickToBottom) snapToBottom();     // gear 1
-  else if (farFromBottom()) restoreAnchor();            // gear 2
+  else if (!autoScroll || farFromBottom()) restoreAnchor();   // gear 2 (always on while Auto Scroll is off: nothing ever moves what you're reading)
 }
 // Your own scrolling always wins, even in the instant after the app scrolled.
 $messages.addEventListener("wheel", e => { programmaticScrollUntil = 0; if (e.deltaY < 0) stickToBottom = false; }, { passive: true });
@@ -3020,6 +3043,40 @@ function trackNewAccountBurst(msg) {
 }
 
 let sysShownAt = [];
+// Client-side anti-forgery for LIVE messages (history is never re-judged: people legitimately change gear and names later).
+// The sender's saved profile is the source of truth: the name on the message must be the name they joined with, and any
+// tag / effect / font / bubble / ring / colour the message claims must match what their profile has equipped right now.
+// A message that claims something the profile doesn't have is hidden on THIS client. Missing fields are fine (plain message).
+function forgeryMismatch(msg, prof) {
+  if (!prof) return false;   // couldn't read the profile: don't punish
+  const low = v => String(v == null ? "" : v).toLowerCase();
+  const sentName = low(msg.name).trim();
+  const presenceEntry = latestPresenceList.find(e => String(e.loginId || "") === String(msg.loginId));
+  const nameOk = (prof.lastName && low(prof.lastName).trim() === sentName) || (presenceEntry && low(presenceEntry.name).trim() === sentName);
+  if (!nameOk && (prof.lastName || presenceEntry)) return true;
+  const cos = cosmFields(prof.cosm);
+  const color = prof.color || null;
+  const wantRing = cos.ring || (color && color.ring) || "";
+  if (msg.ring && low(msg.ring) !== low(wantRing)) return true;
+  for (const k of ["rfx", "tag", "fx", "font", "tfont", "bub", "bc"]) {
+    if (msg[k] && low(msg[k]) !== low(cos[k])) return true;
+  }
+  if (msg.bubble && (!color || low(msg.bubble) !== low(color.bubble))) return true;
+  if (msg.textColor && (!color || low(msg.textColor) !== low(color.text))) return true;
+  return false;
+}
+async function liveForgeryCheck(msg) {
+  try {
+    if (!msg || msg.system || msg.bot === true || isAiSender(msg.loginId)) return false;
+    if (!(Number(msg.ts) >= liveSince) || !liveSince) return false;
+    let prof = await ChatBackend.getProfile(msg.loginId);   // fresh read, never cached
+    if (!forgeryMismatch(msg, prof)) return false;
+    // The profile write can land a moment after the message: look once more before calling it fake.
+    await new Promise(r => setTimeout(r, 2000));
+    prof = await ChatBackend.getProfile(msg.loginId);
+    return forgeryMismatch(msg, prof);
+  } catch (e) { return false; }
+}
 function renderMessage(msg) {
   $emptyState.style.display = "none";
 
@@ -3263,6 +3320,7 @@ function renderMessage(msg) {
       const isMedia = !!(msg.imageData || msg.video || msg.gif);
       let bad = !r.ok || (isMedia && !r.nameMatches);
       if (!bad && isMedia && !(await senderMayPostImages(String(msg.loginId)))) bad = true;
+      if (!bad && !mine && await liveForgeryCheck(msg)) { el.classList.add("anon-hidden", "forged-hidden"); el.dataset.forged = "1"; return; }   // name/effects don't match the sender's real profile
       if (bad && !(r.unknown && !isMedia)) { el.classList.add("anon-hidden"); }
       else { el.classList.remove("anon-hidden"); if (r.ok && r.nameMatches) rememberPerson(msg.loginId, msg.name); firePing(); }
       if (autoScroll && stickToBottom) scrollToBottom();
@@ -3568,6 +3626,7 @@ async function joinWithDmSession(session, nickname) {
   }
   myName = name;
   myLoginId = String(session.id);
+  registerVerifiedSelf();
 
   // Switch screens FIRST. Everything below is a nicety; if any of it fails the
   // person is still in the chat instead of stuck on the join screen with their
@@ -4498,7 +4557,7 @@ async function sendMessage() {
     stopTyping();
     ChatBackend.sendVideo(myName, pv.file, pv.dur, myLoginId, p => { lbl.textContent = "Uploading video… " + Math.round(p * 100) + "%"; }, text ? silentText : "", currentReplyPayload())
       .then(() => { clearPendingImage(); })
-      .then(() => { cancelReply(); $msgInput.value = ""; autosizeInput(); updateCharCounter(); autoScroll = true; setAutoScrollUI(); })
+      .then(() => { cancelReply(); $msgInput.value = ""; autosizeInput(); updateCharCounter(); scrollToBottom(); })
       .catch(() => { clearPendingImage(); $connError.textContent = "Video failed to send — check your connection (or the clip may be too large)."; $connError.style.display = "block"; })
       .finally(() => { $sendBtn.disabled = false; $uploadImageBtn.disabled = false; updateSendButtonState(); $msgInput.focus(); });
     return;
@@ -4531,7 +4590,7 @@ async function sendMessage() {
         $msgInput.value = "";
         autosizeInput();
         updateCharCounter();
-        autoScroll = true;
+        scrollToBottom();   // sending shows your own message, but never turns Auto Scroll back on
         setAutoScrollUI();
       })
       .catch(() => {
@@ -4845,7 +4904,7 @@ async function sendGifFromPicker(url) {
   lastSentAt = Date.now(); lastImageSentAt = Date.now();
   try {
     await ChatBackend.sendGif(myName, url, myLoginId, currentReplyPayload());
-    cancelReply(); autoScroll = true; setAutoScrollUI();
+    cancelReply(); scrollToBottom();   // your own send shows your message; it no longer flips Auto Scroll back on
   } catch (e) {
     $connError.textContent = isPermissionDenied(e) ? "GIFs need the updated database rules. Publish the new chat rules." : "GIF failed to send — check your connection.";
     $connError.style.display = "block";
@@ -4891,6 +4950,7 @@ function setAutoScrollUI() {
 }
 function setAutoScroll(on) {
   autoScroll = !!on;
+  if (!autoScroll) captureAnchor();   // remember what's on screen right now so new messages can't move it
   chatPrefs.autoScroll = autoScroll;
   saveChatPrefs();
   setAutoScrollUI();
@@ -5016,6 +5076,7 @@ function renderChatSettings(container) {
 
   card("\uD83D\uDCAC", "Chat", "How the conversation behaves");
   toggle("Auto scroll", "Keeps the newest message in view", () => autoScroll, v => setAutoScroll(v));
+  toggle("Low Power Mode", "Turns off animations and effects and refreshes lists less often. Everything comes back when it's off.", () => isLowPower(), v => { chatPrefs.lowPower = v; saveChatPrefs(); applyAppearance(); if (typeof renderMembersPane === "function") scheduleMembersRender(); });
   toggle("Verified tag", "Show the green \u201cVerified\u201d tag next to verified people", () => chatPrefs.showVerified !== false, v => {
     chatPrefs.showVerified = v; saveChatPrefs(); applyAppearance();
   });
@@ -6152,11 +6213,13 @@ async function openFullCommandHistory() {
   const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
   try {
     w.document.open();
-    w.document.write('<!doctype html><meta charset="utf-8"><title>Command history</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{background:#0f172a;color:#e2e8f0;font:14px system-ui,sans-serif;margin:0;padding:18px}h1{font-size:18px;margin:0 0 4px}small{color:#94a3b8}table{border-collapse:collapse;width:100%;margin-top:14px}th,td{text-align:left;padding:7px 10px;border-bottom:1px solid #1e293b;vertical-align:top}th{color:#94a3b8;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.05em;position:sticky;top:0;background:#0f172a}code{color:#4ade80;font-family:ui-monospace,monospace;word-break:break-word}.id{color:#64748b;font-size:12px}.t{white-space:nowrap;color:#94a3b8}#more{color:#64748b;text-align:center;padding:16px;font-size:13px}</style><h1>Command history</h1><small id="sub">Loading\u2026</small><table><thead><tr><th>When</th><th>Who</th><th>Command</th><th>Aimed at</th></tr></thead><tbody id="rows"></tbody></table><div id="more"></div>');
+    w.document.write('<!doctype html><meta charset="utf-8"><title>Command history</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{background:#0f172a;color:#e2e8f0;font:14px system-ui,sans-serif;margin:0;padding:18px}h1{font-size:18px;margin:0 0 4px}small{color:#94a3b8}table{border-collapse:collapse;width:100%;margin-top:14px}th,td{text-align:left;padding:7px 10px;border-bottom:1px solid #1e293b;vertical-align:top}th{color:#94a3b8;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.05em;position:sticky;top:0;background:#0f172a}code{color:#4ade80;font-family:ui-monospace,monospace;word-break:break-word}.id{color:#64748b;font-size:12px}.t{white-space:nowrap;color:#94a3b8}#more{color:#64748b;text-align:center;padding:16px;font-size:13px}</style><h1>Command history</h1><small id="sub">Loading\u2026</small><div style="margin-top:10px"><input id="q" type="text" placeholder="Search commands, names or IDs\u2026" autocomplete="off" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:8px;padding:8px 10px;font-size:14px;width:100%;max-width:420px;box-sizing:border-box"></div><table><thead><tr><th>When</th><th>Who</th><th>Command</th><th>Aimed at</th></tr></thead><tbody id="rows"></tbody></table><div id="more"></div>');
     w.document.close();
   } catch (e) { return; }
   const doc = w.document, tbody = doc.getElementById("rows"), sub = doc.getElementById("sub"), more = doc.getElementById("more");
-  const PAGE = 100;
+  const PAGE = 200;   // same page size as the chat logs
+  let curQ = "";
+  const matchQ = tr => !curQ || curQ.split(/\s+/).every(t => String(tr.dataset.q || "").includes(t));
   let before = null, total = 0, done = false, loading = false;
   const cache = new Map();
   const resolve = text => {
@@ -6171,11 +6234,13 @@ async function openFullCommandHistory() {
     const tgt = target ? esc(target.name) + ' <span class="id">#' + esc(target.loginId) + "</span>" : (tt ? esc(tt) + ' <span class="id">(not found)</span>' : '<span class="id">\u2014</span>');
     const tr = doc.createElement("tr");
     tr.innerHTML = "<td class=t>" + esc(when) + "</td><td>" + actor + "</td><td><code>" + esc(e.command) + "</code></td><td>" + tgt + "</td>";
+    tr.dataset.q = ((e.actorName || "") + " " + (e.actorLoginId || "") + " " + e.command + " " + (target ? target.name + " " + target.loginId : (tt || "")) + " " + when).toLowerCase();
+    if (!matchQ(tr)) tr.hidden = true;
     tbody.appendChild(tr);
   };
   const status = () => {
-    sub.textContent = total + " command" + (total === 1 ? "" : "s") + " so far, newest first. Names are shown first; the account ID is beside them." + (done ? " That's all of them." : "");
-    more.textContent = done ? (total ? "" : "No commands logged yet.") : "Loading older commands as you scroll\u2026";
+    sub.textContent = total + " command" + (total === 1 ? "" : "s") + " loaded, newest first." + (curQ ? " " + tbody.querySelectorAll("tr:not([hidden])").length + " match" + (tbody.querySelectorAll("tr:not([hidden])").length === 1 ? "" : "es") + "." : "") + " Names are shown first; the account ID is beside them." + (done ? " That's all of them." : "");
+    more.textContent = done ? (total ? "" : "No commands logged yet.") : "Loading older commands\u2026";
   };
   const loadPage = async () => {
     if (loading || done || w.closed) return;
@@ -6197,9 +6262,12 @@ async function openFullCommandHistory() {
     if (!w.closed) status();
   };
   const nearBottom = () => { try { return doc.documentElement.scrollHeight - w.scrollY - w.innerHeight < 500; } catch (e) { return false; } };
+  const qEl = doc.getElementById("q");
+  const applyFilter = () => { curQ = String((qEl && qEl.value) || "").trim().toLowerCase(); tbody.querySelectorAll("tr").forEach(tr => { tr.hidden = !matchQ(tr); }); status(); };
+  if (qEl) qEl.addEventListener("input", applyFilter);
   w.addEventListener("scroll", () => { if (nearBottom()) loadPage(); });
   await loadPage();
-  while (!done && !w.closed && nearBottom()) { await loadPage(); }   // first pages fill the screen
+  { let guard = 0; while (!done && !w.closed && guard++ < 400) { await new Promise(r => setTimeout(r, 450)); await loadPage(); } }   // same gradual pace as the chat logs: a big history fills in over time without freezing the tab
 }
 
 async function _openFullCommandHistoryLegacy() {
@@ -7010,7 +7078,7 @@ function openOnlineListPanel() {
   $onlineListPanel.style.display = "block";
   renderOnlineListPanel();
   clearInterval(onlineListRefreshTimer);
-  onlineListRefreshTimer = setInterval(renderOnlineListPanel, 30000);
+  onlineListRefreshTimer = lpInterval(renderOnlineListPanel, 30000, 4);
 }
 
 $onlineCount.addEventListener("click", (e) => {
@@ -7863,7 +7931,7 @@ function openRoomsSidebar() {
   $roomsSidebar.classList.add("open");
   renderRoomsSidebar();
   clearInterval(sidebarCountdownTimer);
-  sidebarCountdownTimer = setInterval(renderRoomsSidebar, 1000);
+  sidebarCountdownTimer = lpInterval(renderRoomsSidebar, 1000, 3);
 }
 
 function stopRoomsSidebarLive() {
@@ -7881,6 +7949,7 @@ function stopRoomsSidebarLive() {
 const $railRooms = document.getElementById("railRooms");
 const $navRooms = document.getElementById("navRooms");
 const $roomsRailDot = document.getElementById("roomsRailDot");
+const $roomsRailCount = document.getElementById("roomsRailCount");
 const $navChatBtn = document.getElementById("navChat");
 const railMetaCache = {};
 let railSignature = "";
@@ -7915,30 +7984,17 @@ function renderRailRooms() {
   const entries = railRoomEntries();
   const pinged = roomPingBadges.size > 0;
   $roomsRailDot.classList.toggle("show", pinged);
-  const sig = entries.map(e => e.code + "|" + e.name + "|" + (roomPingBadges.has(e.code) ? 1 : 0)).join(",") + "#" + currentRoomCode;
-  if (sig === railSignature) return;
-  railSignature = sig;
-  $railRooms.innerHTML = "";
-  entries.forEach(e => {
-    const btn = document.createElement("button");
-    btn.className = "rail-nav-btn rail-room" + (currentRoomCode === e.code ? " active" : "");
-    btn.title = e.name;
-    btn.setAttribute("aria-label", e.name);
-    btn.textContent = railInitials(e.name);
-    if (roomPingBadges.has(e.code)) {
-      const dot = document.createElement("span");
-      dot.className = "rail-dot show";
-      btn.appendChild(dot);
-    }
-    btn.addEventListener("click", () => {
-      if (window.VUS_UI) window.VUS_UI.showChat();
-      closeRoomsSidebar();
-      joinRoomByCode(e.code);
-    });
-    $railRooms.appendChild(btn);
-  });
+  // One Rooms button with a number badge instead of one button per room: open public rooms + rooms you've joined, each counted
+  // once (railRoomEntries merges them by room code, so a joined public room is never counted twice).
+  const count = entries.length;
+  if ($roomsRailCount) {
+    $roomsRailCount.textContent = count > 99 ? "99+" : String(count);
+    $roomsRailCount.classList.toggle("show", count > 0);
+  }
+  if ($navRooms) { const t = "Rooms (" + count + ")"; $navRooms.title = t; $navRooms.setAttribute("aria-label", t); }
+  if ($railRooms.firstChild) $railRooms.innerHTML = "";
 }
-setInterval(renderRailRooms, 1200);
+lpInterval(renderRailRooms, 1200, 4);
 
 // Chat button = main room (only when you're already in chat mode; from DMs it just returns).
 $navChatBtn.addEventListener("click", () => {
@@ -8556,7 +8612,7 @@ let showOfflineRanks = false;   // offline rank-holders are tucked away until yo
 // Cosmetics (ring, tag, text effect, font) of the people in the online list: read from their profile once, then re-read now and then.
 const memberCosmCache = {}, memberCosmLoading = new Set();
 let membersRenderTimer = null;
-function scheduleMembersRender() { clearTimeout(membersRenderTimer); membersRenderTimer = setTimeout(() => renderMembersPane(), 250); }
+function scheduleMembersRender() { clearTimeout(membersRenderTimer); membersRenderTimer = setTimeout(() => renderMembersPane(), lpDelay(250, 6)); }
 function memberCosm(id) {
   id = String(id || "");
   if (!/^\d{4,12}$/.test(id)) return null;
@@ -8595,7 +8651,7 @@ function renderMembersPane() {
       const cached = memberNameCache[id];
       if (!cached && !memberNameLoading.has(id)) {
         memberNameLoading.add(id);
-        ChatBackend.getProfile(id).then(p => {
+        (window.VUS_LOADQ ? new Promise(r => window.VUS_LOADQ.add(r)) : Promise.resolve()).then(() => ChatBackend.getProfile(id)).then(p => {   // offline names load last
           memberNameCache[id] = (p && p.lastName) || "";
         }).catch(() => { memberNameCache[id] = ""; }).then(() => { renderMembersPane(); });
       }
@@ -9154,7 +9210,7 @@ function paintPoll(rec) {
   rec.bubble.classList.toggle("poll-done", pollEnded(rec));
   if (rec.modal && rec.modal.isConnected) paintPollModal(rec);
 }
-setInterval(() => { pollRecs.forEach(rec => { if (!rec.bubble.isConnected) { if (rec.modal) rec.modal.remove(); pollRecs.delete(rec); } else paintPoll(rec); }); }, 1000);
+lpInterval(() => { pollRecs.forEach(rec => { if (!rec.bubble.isConnected) { if (rec.modal) rec.modal.remove(); pollRecs.delete(rec); } else paintPoll(rec); }); }, 1000);
 function openPollModal(rec) {
   if (rec.modal && rec.modal.isConnected) return;
   const ov = document.createElement("div");
@@ -9543,7 +9599,7 @@ function crateTick(noTime) {
   if (ib) { const t = "\uD83C\uDF92 Inventory" + (crateStock() > 0 ? " \u00B7 " + crateStock() + " \uD83D\uDCE6" : ""); if (ib.textContent !== t) ib.textContent = t; }
   if ($inventoryOverlay && $inventoryOverlay.style.display === "flex") renderInventory();
 }
-setInterval(() => crateTick(false), 5000);
+lpInterval(() => crateTick(false), 5000, 3);
 
 // ── look of items ──
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -10096,7 +10152,7 @@ function paintCoinBits() {
   if (b) b.title = "Shop" + (myCoins === null ? "" : " \u00B7 " + myCoins + " coins");
   if (shopModal && !shopBusy) paintShop();
 }
-setInterval(ensureCoinWatch, 3000);   // follows logins and logouts
+lpInterval(ensureCoinWatch, 3000, 4);   // follows logins and logouts
 
 // Called after every message this account sends. The database rules check that the message is real, yours, newer than your
 // last coin and not a bot message; if anything is off the write is simply refused and nothing happens.
@@ -10316,6 +10372,190 @@ async function buyShop(item, qty) {
   const b = document.getElementById("navShop");
   if (b) b.addEventListener("click", () => { if (shopModal) closeShop(); else openShop(); });
 })();
+
+/* ══════════ Community rules and Reports ══════════ */
+const COMMUNITY_RULES = [
+  "No hate speech, racism, or hate against religions.",
+  "No spamming.",
+  "No begging for ranks or crates."
+];
+let rulesModal = null;
+function openRules() {
+  if (rulesModal) return;
+  const ov = el("div", "crate-overlay"), box = el("div", "crate-modal rep-modal");
+  const x = el("button", "poll-x", "\u00D7"); x.type = "button"; x.addEventListener("click", closeRules);
+  box.append(x, el("h3", "cr-h", "\uD83D\uDCDC Community rules"));
+  const ol = el("ol", "rules-list"); COMMUNITY_RULES.forEach(t => ol.appendChild(el("li", "", t))); box.appendChild(ol);
+  box.appendChild(el("div", "cr-note", "See someone breaking these? Open their profile and tap Report."));
+  ov.appendChild(box); ov.addEventListener("click", e => { if (e.target === ov) closeRules(); });
+  document.body.appendChild(ov); rulesModal = ov;
+}
+function closeRules() { if (rulesModal) { rulesModal.remove(); rulesModal = null; } }
+
+/* ══════════ Lists panel: Verified Users (Most Active goes in the same panel) ══════════ */
+let listsModal = null;
+function closeLists() { if (listsModal) { listsModal.remove(); listsModal = null; } }
+// Firestore can't list MZK links, so each verified person adds their own id to verifiedIds when they open chat (and removes it
+// if they unlink). The panel treats that index as a list of CANDIDATES only: every id is still checked against the MZK link.
+async function registerVerifiedSelf() {
+  try {
+    const id = String(myLoginId || "");
+    if (!/^\d{6}$/.test(id) || !window.VUS_DM || !ChatBackend._db) return;
+    const ref = ChatBackend._db.ref("verifiedIds/" + id);
+    if (await window.VUS_DM.isVerified(id)) await ref.set(true); else await ref.remove();
+  } catch (e) {}
+}
+// Verified = an account linked to a verified MZK email (checked by VUS_DM.isVerified, which reads the MZK link record).
+// The candidates come from the verifiedIds index (see above), plus everyone this browser can see (online now, ranked, or
+// seen in chat before). Only the ones that really check out against the MZK link are shown.
+async function loadVerifiedList(onProgress) {
+  const dm = window.VUS_DM;
+  if (!dm || !dm.isVerified) return { rows: [], full: false };
+  const cand = new Set();
+  let full = false;
+  try { const s = await ChatBackend._db.ref("verifiedIds").limitToFirst(500).get(); Object.keys(s.val() || {}).forEach(i => { if (/^\d{6}$/.test(i)) cand.add(i); }); full = true; } catch (e) {}
+  knownPeople.forEach((n, id) => { if (/^\d{6}$/.test(id)) cand.add(id); });
+  presenceIds().forEach(id => { if (/^\d{6}$/.test(id)) cand.add(id); });
+  Object.values(roleIdHolders || {}).forEach(s => { if (s && s.forEach) s.forEach(id => { if (/^\d{6}$/.test(String(id))) cand.add(String(id)); }); });
+  const ids = [...cand].slice(0, 400), ok = [];
+  let i = 0, done = 0;
+  const worker = async () => {
+    while (i < ids.length) {
+      const id = ids[i++];
+      try { if (await dm.isVerified(id)) ok.push(id); } catch (e) {}
+      if (onProgress && ++done % 10 === 0) onProgress(done, ids.length);
+    }
+  };
+  await Promise.all([worker(), worker(), worker(), worker(), worker(), worker()]);
+  const online = new Set(presenceIds());
+  const rows = await Promise.all(ok.map(async id => {
+    let name = knownPeople.get(id) || "";
+    const e = latestPresenceList.find(x => String(x.loginId || "") === id);
+    if (e && e.name) name = e.name;
+    if (!name) { try { const p = await ChatBackend.getProfile(id); name = (p && p.lastName) || ""; } catch (e2) {} }
+    return { id, name: name || ("#" + id), online: online.has(id) };
+  }));
+  rows.sort((a, b) => (b.online - a.online) || a.name.localeCompare(b.name));
+  return { rows, full };
+}
+// Most Active: the 100 profiles with the most accumulated active time (see "Time active" above). The database does the sorting
+// (indexOn activeMs), so only the top 100 are downloaded. One account can only be in chat once at a time, so time isn't double counted.
+async function paintActiveTab(note, list, ov) {
+  try {
+    const snap = await ChatBackend._db.ref("userProfiles").orderByChild("activeMs").limitToLast(100).get();
+    if (listsModal !== ov) return;
+    const rows = [];
+    snap.forEach(c => {
+      const p = c.val() || {}, ms = Number(p.activeMs) || 0;
+      if (ms > 0 && /^\d{4,12}$/.test(c.key)) rows.push({ id: c.key, ms: ms + (myLoginId && c.key === String(myLoginId) ? Math.round(activePending) : 0), name: String(p.lastName || "") || ("#" + c.key) });
+    });
+    rows.sort((a, b) => b.ms - a.ms);
+    const online = new Set(presenceIds());
+    list.textContent = "";
+    note.textContent = rows.length ? "Top " + rows.length + " by time active in chat" : "Nobody has any active time yet.";
+    rows.forEach((p, i) => {
+      const row = el("div", ""); row.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 4px;cursor:pointer;border-radius:6px";
+      const rk = el("span", "", "#" + (i + 1)); rk.style.cssText = "min-width:2.6em;opacity:.7;font-variant-numeric:tabular-nums";
+      const dot = el("span", "", online.has(p.id) ? "\u25CF" : "\u25CB"); dot.style.color = online.has(p.id) ? "#3ba55d" : "#888";
+      const nm = el("span", "", p.name); nm.style.cssText = "font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis";
+      const t = el("span", "", formatActiveTime(p.ms)); t.style.cssText = "opacity:.85;font-size:.9em;white-space:nowrap";
+      row.append(rk, dot, nm, t);
+      row.addEventListener("click", () => openProfileFor(p.id, p.name));
+      list.appendChild(row);
+    });
+  } catch (e) {
+    if (listsModal === ov) note.textContent = isPermissionDenied(e) ? "Can't load this yet: publish the newest vus-chat-rules.json first." : "Couldn't load the list. Try again.";
+  }
+}
+function openLists(tab) {
+  tab = tab === "active" ? "active" : "verified";
+  if (listsModal) return;
+  const ov = el("div", "crate-overlay"), box = el("div", "crate-modal rep-modal");
+  const x = el("button", "poll-x", "\u00D7"); x.type = "button"; x.addEventListener("click", closeLists);
+  box.append(x);
+  { const tabs = el("div", ""); tabs.style.cssText = "display:flex;gap:6px;margin:0 0 8px;flex-wrap:wrap";
+    [["verified", "\u2713 Verified Users"], ["active", "\u23F1 Most Active"]].forEach(([k, label]) => {
+      const b = el("button", "", label); b.type = "button"; b.style.cssText = "padding:6px 10px;border-radius:8px;cursor:pointer;font-weight:" + (k === tab ? "700" : "400") + ";opacity:" + (k === tab ? "1" : ".65");
+      b.addEventListener("click", () => { if (k !== tab) { closeLists(); openLists(k); } });
+      tabs.appendChild(b);
+    });
+    box.appendChild(tabs); }
+  const note = el("div", "cr-note", "Loading\u2026");
+  const list = el("div", ""); list.style.cssText = "max-height:55vh;overflow-y:auto;margin-top:8px";
+  box.append(note, list);
+  ov.appendChild(box); ov.addEventListener("click", e => { if (e.target === ov) closeLists(); });
+  document.body.appendChild(ov); listsModal = ov;
+  if (tab === "active") { paintActiveTab(note, list, ov); return; }
+  loadVerifiedList((d, n) => { if (listsModal === ov) note.textContent = "Checking accounts\u2026 " + d + "/" + n; }).then(r => {
+    if (listsModal !== ov) return;
+    list.textContent = "";
+    note.textContent = r.rows.length
+      ? r.rows.length + " verified " + (r.rows.length === 1 ? "user" : "users") + (r.full ? " (people appear here once they open chat on this version)" : " (people your browser has seen; others may exist)")
+      : "No verified users found yet.";
+    r.rows.forEach(p => {
+      const row = el("div", ""); row.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 4px;cursor:pointer;border-radius:6px";
+      const dot = el("span", "", p.online ? "\u25CF" : "\u25CB"); dot.style.color = p.online ? "#3ba55d" : "#888"; dot.title = p.online ? "Online" : "Offline";
+      const nm = el("span", "", p.name); nm.style.fontWeight = "600";
+      const idEl = el("span", "", "#" + p.id); idEl.style.cssText = "opacity:.6;font-size:.85em";
+      row.append(dot, nm, idEl);
+      row.addEventListener("click", () => openProfileFor(p.id, p.name));
+      list.appendChild(row);
+    });
+  }).catch(() => { if (listsModal === ov) note.textContent = "Couldn't load the verified list. Try again."; });
+}
+(function wireListsBtn() {
+  const b = document.getElementById("listsBtn");
+  if (b) b.addEventListener("click", () => { if (listsModal) closeLists(); else openLists(); });
+})();
+(function wireRulesBtn() {
+  const b = document.getElementById("rulesBtn");
+  if (b) b.addEventListener("click", () => { if (rulesModal) closeRules(); else openRules(); });
+})();
+
+// Reports are written to reports/<your id>/<their id>/<0-4>. The database rules only allow NEW entries (nothing can be edited or
+// deleted), at most 5 per pair, and nobody can read them from the app: you read them in the Firebase console.
+const REPORT_CATS = [["hate", "Hate speech / racism / religion"], ["spam", "Spamming"], ["beg", "Begging for rank or crates"], ["harass", "Harassment"], ["fake", "Impersonation / fake messages"], ["other", "Something else"]];
+let reportModal = null;
+function closeReport() { if (reportModal) { reportModal.remove(); reportModal = null; } }
+function reportUser(targetId, targetName) {
+  if (reportModal) return;
+  const me = myLoginId ? String(myLoginId) : "", target = String(targetId || "");
+  const ov = el("div", "crate-overlay"), box = el("div", "crate-modal rep-modal");
+  const x = el("button", "poll-x", "\u00D7"); x.type = "button"; x.addEventListener("click", closeReport);
+  box.append(x, el("h3", "cr-h", "Report " + (targetName || "this user")));
+  const msg = el("div", "shop-msg"); msg.style.display = "none";
+  const say = (t, ok) => { msg.textContent = t; msg.className = "shop-msg" + (ok ? " ok" : ""); msg.style.display = t ? "" : "none"; };
+  if (!me || !/^[0-9]{4,12}$/.test(target) || me === target) {
+    box.appendChild(el("div", "cr-note", !me ? "Log in to report someone." : "That account can't be reported."));
+  } else {
+    const sel = document.createElement("select");
+    REPORT_CATS.forEach(c => { const o = document.createElement("option"); o.value = c[0]; o.textContent = c[1]; sel.appendChild(o); });
+    const ta = document.createElement("textarea"); ta.maxLength = 500; ta.placeholder = "What happened? (a few words at least)";
+    const row = el("div", "rep-btns");
+    const cancel = el("button", "chat-modal-btn-secondary", "Cancel"), send = el("button", "chat-modal-btn-primary", "Send report");
+    cancel.type = send.type = "button"; cancel.addEventListener("click", closeReport);
+    send.addEventListener("click", async () => {
+      const reason = ta.value.trim();
+      if (reason.length < 3) { say("Please say what happened."); return; }
+      send.disabled = true; say("Sending\u2026");
+      try {
+        let done = false;
+        for (let n = 0; n < 5 && !done; n++) {   // slot n is taken (refused) if you already filed that many; try the next one
+          try {
+            await ChatBackend._db.ref("reports/" + me + "/" + target + "/" + n).set({ reason: reason, cat: sel.value, rn: String(myName || "").slice(0, 40), tn: String(targetName || "").slice(0, 40), ts: firebase.database.ServerValue.TIMESTAMP });
+            done = true;
+          } catch (e) { if (!isPermissionDenied(e)) throw e; }
+        }
+        if (done) { say("Report sent. Thank you.", true); setTimeout(closeReport, 1500); }
+        else { say("Couldn't send it: you've already reported this person 5 times, or the newest database rules aren't published yet."); send.disabled = false; }
+      } catch (e) { say("Couldn't send the report. Check your connection and try again."); send.disabled = false; }
+    });
+    row.append(cancel, send);
+    box.append(el("label", "cr-note", "Reason"), sel, ta, msg, row);
+  }
+  ov.appendChild(box); ov.addEventListener("click", e => { if (e.target === ov) closeReport(); });
+  document.body.appendChild(ov); reportModal = ov;
+}
 
 /* ══════════ Time active (shown on profiles) ══════════
    Counts the time this tab is open and showing the chat while you're not AFK. It is kept exactly (down to the second), saved to the
@@ -10843,7 +11083,7 @@ window.VUS_CHAT = {
   _wheelSlices() { return lastWheel ? lastWheel.slices.map(x => ({ id: x.it.id, a0: x.a0, w: x.w })) : null; },
   _crateProg(m, ms) { const p = progFor(); p.msgs = m; p.ms = ms; saveProg(); crateTick(true); },
   cosmFor: async id => { try { const p = await ChatBackend.getProfile(id); const c = cosmFields(p && p.cosm); if (!c.ring && p && p.color && p.color.ring) c.ring = p.color.ring; return await ownedCosmOnly(id, c); } catch (e) { return {}; } },
-  tagEl, applyRingTo,
+  tagEl, reportUser, applyRingTo,
   toggleBotMute, botMutedList: () => botMutedMap,
   myId: () => myLoginId, myName: () => myName, crateStock, srvNow, db: () => ChatBackend._db,
   activeMsFor, formatActiveTime, openInventoryOf,

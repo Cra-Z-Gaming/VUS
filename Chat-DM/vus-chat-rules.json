@@ -59,6 +59,29 @@
       ".read": true,
       ".write": false
     },
+    "verifiedIds": {
+      ".read": true,
+      "$id": {
+        ".write": "$id.matches(/^[0-9]{6}$/)",
+        ".validate": "newData.val() === true"
+      }
+    },
+    "reports": {
+      "$reporter": {
+        "$reported": {
+          "$n": {
+            ".write": "$reporter.matches(/^[0-9]{4,12}$/) && $reported.matches(/^[0-9]{4,12}$/) && $reporter !== $reported && $n.matches(/^[0-4]$/) && !data.exists() && newData.exists()",
+            ".validate": "newData.hasChildren(['reason', 'ts'])",
+            "reason": { ".validate": "newData.isString() && newData.val().length >= 3 && newData.val().length <= 500" },
+            "cat": { ".validate": "newData.isString() && newData.val().length <= 20" },
+            "rn": { ".validate": "newData.isString() && newData.val().length <= 40" },
+            "tn": { ".validate": "newData.isString() && newData.val().length <= 40" },
+            "ts": { ".validate": "newData.val() === now" },
+            "$x": { ".validate": false }
+          }
+        }
+      }
+    },
     "coins": {
       "$id": {
         ".read": true,
@@ -187,6 +210,8 @@
       }
     },
     "userProfiles": {
+      ".read": true,
+      ".indexOn": ["activeMs"],
       "$id": {
         ".read": true,
         ".write": true,

@@ -2754,3 +2754,31 @@ body.hide-bubcolors .msg-bubble.bubfx { animation: none !important; box-shadow: 
 .dev-bubble.dev-t3{background:linear-gradient(135deg,#0e7490,#a5f3fc 50%,#22d3ee);border-color:#cffafe;color:#083344;box-shadow:0 0 8px rgba(34,211,238,.55);background-size:200% 200%;animation:devShine 3s linear infinite}
 @keyframes devShine{0%{background-position:0% 50%}100%{background-position:200% 50%}}
 .msg-meta .role-bubble-row > div.dev-bubble{margin-left:4px !important;font-size:12px !important}
+
+/* Topbar: wraps instead of overlapping when the page is zoomed in or the window is narrow */
+.chat-header { height: auto !important; min-height: 48px; display: flex !important; flex-wrap: wrap; align-items: center; justify-content: space-between; column-gap: 8px; row-gap: 4px; padding-top: 6px; padding-bottom: 6px; }
+.hdr-left { flex: 0 0 auto; }
+.hdr-title { flex: 1 1 120px; min-width: 0; justify-self: auto; overflow: hidden; text-overflow: ellipsis; text-align: center; }
+.hdr-right { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; row-gap: 4px; max-width: 100%; }
+.hdr-right > button { flex: 0 0 auto; white-space: nowrap; }
+#youAre .ya-name { max-width: min(220px, 30vw); }
+
+/* Rules button, report/rules windows, rooms count badge */
+#rulesBtn { background: transparent; border: 1.5px solid #334155; color: #94a3b8; font-size: 13px; padding: 5px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+#rulesBtn:hover { color: #f1f5f9; border-color: #475569; }
+.rep-modal { width: min(440px, 100%); }
+.rep-modal select, .rep-modal textarea { width: 100%; box-sizing: border-box; background: #0f172a; color: #e2e8f0; border: 1.5px solid #334155; border-radius: 10px; padding: 9px 11px; font: inherit; margin: 6px 0 10px; }
+.rep-modal textarea { min-height: 96px; resize: vertical; }
+.rep-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+.rules-list { margin: 6px 0 14px; padding-left: 22px; line-height: 1.7; font-size: 15px; color: #e2e8f0; }
+#railRooms { display: none; }
+#navRooms #roomsRailDot { top: auto; bottom: -3px; }
+
+/* Low Power Mode (Settings > Chat): no animations, transitions or fancy effects. All of it is only this class on <body>, so turning the
+   mode off brings every effect back exactly as people equipped it. */
+body.low-power *, body.low-power *::before, body.low-power *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+body.low-power * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+body.low-power .msg-bubble.bubfx { box-shadow: none !important; filter: none !important; }
+body.low-power .msg-av.has-ring, body.low-power .member-av.has-ring { box-shadow: none !important; }
+body.low-power .msg-bubble .fxtext, body.low-power .member-name .fxtext { background: none !important; color: inherit !important; -webkit-text-fill-color: currentColor !important; text-shadow: none !important; filter: none !important; }
+body.low-power .bg-video-el { display: none !important; }
