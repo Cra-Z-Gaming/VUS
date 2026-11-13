@@ -319,12 +319,7 @@
 
   /* ---------- VIP role, suggestions, notification button ---------- */
   .badge.vip { background: rgba(255,154,213,.14); color: #ff9ad5; border: 1px solid rgba(255,154,213,.4); }
-  #sugFab { position: fixed; right: 14px; bottom: 14px; z-index: 30; display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: color-mix(in srgb, var(--panel2) 92%, transparent); backdrop-filter: blur(6px); color: var(--text); font-size: 13px; box-shadow: 0 8px 26px rgba(5,8,25,.5); opacity: .85; }
-  #sugFab:hover { opacity: 1; border-color: var(--blue); }
   #memberList { padding-bottom: 64px; }
-  body.hide-members #sugFab { bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
-  @media (max-width: 1000px) { #sugFab { bottom: calc(100px + env(safe-area-inset-bottom, 0px)); } }
-  @media (max-width: 720px) { #sugFab { right: 10px; padding: 9px 11px; } #sugFab span { display: none; } }
   #sugListBtn { position: relative; }
   #sugListBtn[data-n]::after { content: attr(data-n); position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: #ff5d7a; color: #fff; font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; }
   @media (max-width: 720px) { .topbar { gap: 4px; padding: 12px 10px; } .topbar .icon-btn { width: 28px; } .topbar .pill { white-space: nowrap; padding: 6px 9px; } }
@@ -387,17 +382,9 @@
   #pinBar .pin-more { border: 1px solid var(--line); background: var(--panel2); border-radius: 999px; padding: 2px 12px; font-size: 12.5px; color: var(--mute); white-space: nowrap; }
   #pinBar .pin-more:hover { color: var(--text); }
   .msg.pinned .meta::after { content: "📌"; font-size: 11px; }
-  @media (max-width: 720px) { #themeBtn { display: none; } }   /* on phones, open themes from your level in the sidebar or with /theme */
 
   /* ---------- Blackjack ---------- */
-  #bjFab, #rulesFab { position: fixed; right: 14px; bottom: 58px; z-index: 30; width: 42px; height: 42px; display: grid; place-items: center; font-size: 20px; line-height: 1; border-radius: 50%; border: 1px solid var(--line); background: color-mix(in srgb, var(--panel2) 92%, transparent); backdrop-filter: blur(6px); box-shadow: 0 8px 26px rgba(5,8,25,.5); opacity: .9; transition: transform .15s ease, border-color .15s ease; }
-  #bjFab:hover, #rulesFab:hover { opacity: 1; border-color: var(--blue); transform: translateY(-2px); }
   #memberList { padding-bottom: 112px; }
-  body.hide-members #bjFab, body.hide-members #rulesFab { bottom: calc(148px + env(safe-area-inset-bottom, 0px)); }
-  @media (max-width: 1000px) { #bjFab, #rulesFab { bottom: calc(148px + env(safe-area-inset-bottom, 0px)); } }
-  @media (max-width: 720px) { #bjFab { right: 10px; } }
-  #rulesFab { right: 64px; }
-  @media (max-width: 720px) { #rulesFab { right: 60px; } }
   #rlBody h3 { margin: 14px 0 4px; font-size: 15px; }
   #rlBody p { margin: 0 0 8px; line-height: 1.5; overflow-wrap: anywhere; }
   #rlBody .li { margin: 0 0 4px; padding-left: 16px; text-indent: -12px; line-height: 1.5; overflow-wrap: anywhere; }
@@ -464,10 +451,227 @@
     .bj-chip { width: 46px; height: 46px; }
   }
 
+  .bj-tabs { display: inline-flex; gap: 4px; margin-right: auto; }
+  .bj-tabs button { border: 1px solid transparent; background: transparent; color: rgba(255,255,255,.65); font-size: 15px; font-weight: 800; padding: 4px 12px; border-radius: 999px; }
+  .bj-tabs button:hover:not(:disabled) { color: #fff; }
+  .bj-tabs button.on { background: rgba(0,0,0,.35); border-color: rgba(255,255,255,.2); color: #fff; }
+  .bj-tabs button:disabled:not(.on) { opacity: .4; cursor: not-allowed; }
+  .pk-bot { min-width: 96px; padding: 6px 8px 8px; }
+  .pk-bot .bj-cards { min-height: 62px; padding-left: 18px; }
+  .pk-bot .bj-card { width: 44px; height: 62px; margin-left: -18px; border-radius: 7px; }
+  .pk-bot .bj-card .c1 { font-size: 12px; left: 4px; top: 3px; } .pk-bot .bj-card .c1 i { font-size: 11px; } .pk-bot .bj-card .mid { font-size: 20px; }
+  .pk-folded { opacity: .42; }
+  .pk-board { display: flex; gap: 6px; justify-content: center; min-height: 88px; }
+  .pk-board .bj-card { margin-left: 0; }
+  .pk-slot { flex: none; width: 62px; height: 88px; border: 2px dashed rgba(255,255,255,.18); border-radius: 9px; }
+  .pk-d { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: #fff; color: #15182e; font-size: 11px; font-weight: 800; letter-spacing: 0; }
+  .pk-slide { display: flex; align-items: center; gap: 10px; max-width: 420px; margin: 8px auto 0; }
+  .pk-slide input { flex: 1; min-width: 0; }
+  .pk-slide .bj-btn { min-width: 0; padding: 6px 12px; font-size: 12.5px; }
+  @media (max-width: 720px) { .pk-board { gap: 4px; min-height: 72px; } .pk-slot { width: 50px; height: 72px; } .bj-tabs button { font-size: 14px; padding: 4px 9px; } }
   .bj-mode { display: inline-flex; padding: 3px; border-radius: 999px; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.14); }
   .bj-mode button { border: none; background: transparent; color: rgba(255,255,255,.7); padding: 4px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 700; }
   .bj-mode button.on { background: var(--grad); color: #fff; }
   .bj-mode button:disabled:not(.on) { opacity: .4; cursor: not-allowed; }
+
+  /* ═════════════════════════════════════════════════════════════
+     VUS-STYLE LAYOUT on the Nebula skin
+     Single column: header (status / title / buttons) → channel bar →
+     messages → toolbar → composer (⚙ · input · Send). Rooms, DMs and
+     channels live in a slide-over drawer; members drop down from the
+     online count; role pills sit above each name.
+     ═════════════════════════════════════════════════════════════ */
+  #app { display: flex; flex-direction: column; height: 100dvh; }
+
+  /* header */
+  .chat-header { position: relative; z-index: 20; flex-shrink: 0; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; padding: 16px 21px; border-bottom: 1.5px solid var(--line); background: color-mix(in srgb, var(--bg) 62%, transparent); backdrop-filter: blur(10px); }
+  .hdr-left { position: relative; justify-self: start; display: flex; align-items: center; min-width: 0; }
+  .hdr-title { justify-self: center; white-space: nowrap; font-size: 24px; font-weight: 600; letter-spacing: -.01em; }
+  .hdr-right { justify-self: end; display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--mute); }
+  #membersBtn { background: none; border: none; padding: 4px 6px; border-radius: 9px; display: inline-flex; align-items: center; gap: 8px; color: var(--mute); font-size: 14.5px; white-space: nowrap; }
+  #membersBtn:hover { color: var(--text); }
+  .dot { width: 10.5px; height: 10.5px; }
+  .hdr-btn { flex: 0 0 auto; background: transparent; border: 1.5px solid var(--line); color: var(--mute); font-size: 14.5px; padding: 5px 11px; border-radius: 9px; white-space: nowrap; }
+  .hdr-btn:hover { color: var(--text); border-color: var(--mute); }
+  #menuBtn { display: inline-block; }
+  #meAv.avatar { width: 27px; height: 27px; font-size: 13px; cursor: pointer; }
+  #meWho { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; cursor: pointer; }
+  #meWho b { color: var(--text); font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; display: block; }
+  #meRank { font-size: 13.5px; color: var(--mute); white-space: nowrap; }
+  #meRank:not(:empty)::before { content: "· "; }
+
+  /* members: dropdown under the online count */
+  #members { display: none; position: absolute; top: calc(100% + 10px); left: -6px; width: 300px; max-width: calc(100vw - 24px); max-height: min(70dvh, 520px); z-index: 50; background: var(--panel); border: 1.5px solid var(--line); border-radius: 12px; box-shadow: 0 18px 50px rgba(5,8,25,.65); backdrop-filter: none; flex-direction: column; overflow: hidden; }
+  body.members-open #members { display: flex; }
+  #members h3 { padding: 12px 14px 4px; font-size: 14px; color: var(--mute); font-weight: 600; }
+  #memberList { padding-bottom: 12px; }
+
+  /* channel bar (VUS room top bar) */
+  #chanBar { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 21px; background: rgba(var(--blue-rgb),.06); border-bottom: 1.5px solid var(--line); }
+  #chanBar h2 { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #chanBar h2 .hash { color: var(--violet); margin-right: 3px; }
+  #roomTimer { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13.5px; padding: 3px 10px; }
+  #notifBar, #pinBar { padding-left: 21px; padding-right: 21px; flex-shrink: 0; }
+
+  /* rooms drawer (right slide-over) */
+  #sidebar { position: fixed; top: 0; right: 0; bottom: 0; left: auto; width: 300px; max-width: 88vw; z-index: 40; border-right: none; border-left: 1.5px solid var(--line); background: var(--panel); backdrop-filter: none; box-shadow: -16px 0 48px rgba(0,0,0,.4); transform: translateX(100%); visibility: hidden; transition: transform .25s ease, visibility 0s linear .25s; }
+  body.nav-open #sidebar { transform: none; visibility: visible; transition: transform .25s ease, visibility 0s; }
+  body.nav-open #scrim { display: block; position: fixed; inset: 0; z-index: 35; background: rgba(5,7,20,.6); }
+  body.members-open:not(.nav-open) #scrim { display: none; }
+  .side-top { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1.5px solid var(--line); flex-shrink: 0; }
+  .side-top h3 { font-size: 16.5px; font-weight: 600; }
+  #sideClose { background: transparent; border: none; color: var(--mute); font-size: 22px; line-height: 1; padding: 4px 8px; }
+  #sideClose:hover { color: var(--text); }
+  .side-head { padding: 14px 18px 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; font-weight: 700; }
+  #channelList, #dmList, #roomList { padding-left: 14px !important; padding-right: 14px !important; }
+  .chan { border: 1.5px solid var(--line); background: var(--panel2); border-radius: 11px; padding: 10px 13px; margin-bottom: 8px; }
+  .chan:hover { border-color: var(--mute); }
+  .chan.on { border-color: var(--blue); background: linear-gradient(90deg, rgba(var(--blue-rgb),.16), rgba(var(--violet-rgb),.16)); }
+
+  /* messages: no avatars, role pill above the name line, even rounded bubbles */
+  #messages { padding: 18px 21px; gap: 12px; }
+  .msg { max-width: 82%; flex-direction: column; align-items: flex-start; gap: 3px; }
+  .msg.mine { flex-direction: column; align-items: flex-end; }
+  .msg > .avatar { display: none; }
+  .msg .col { max-width: 100%; align-items: flex-start; gap: 3px; }
+  .msg.mine .col { align-items: flex-end; }
+  .meta { column-gap: 7px; row-gap: 0; padding: 0 6px; font-size: 16.5px; max-width: 100%; }
+  .meta::before { content: ""; order: -1; flex-basis: 100%; height: 0; }
+  .meta .nm { cursor: pointer; }
+  .meta .nm:hover { text-decoration: underline; }
+  .badge { order: -2; font-size: 14px; padding: 3px 10px; border-radius: 10px; border-width: 1.5px; margin-bottom: 3px; }
+  .bubble, .msg.mine .bubble { border-radius: 15px; border-width: 1.5px; padding: 12px 16.5px; font-size: 20.2px; line-height: 1.4; }
+  .msg.mine .bubble { border-width: 0; padding: 13.5px 18px; }
+  .note { font-size: 16px; }
+
+  /* toolbar (VUS) */
+  #toolbar { flex-shrink: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 9px; padding: 9px 21px; border-top: 1.5px solid var(--line); background: color-mix(in srgb, var(--bg) 55%, transparent); }
+  .toolbar-btn { position: relative; display: inline-flex; align-items: center; gap: 6px; background: transparent; border: 1.5px solid var(--line); color: var(--mute); font-size: 15px; padding: 6px 12px; border-radius: 9px; white-space: nowrap; }
+  .toolbar-btn:hover { color: var(--text); border-color: var(--mute); }
+  .toolbar-btn.on, #filterBtn.on, #notifBtn.on { background: rgba(var(--blue-rgb),.14); border-color: var(--blue); color: var(--accent3); }
+  #filterBtn:not(.on), #notifBtn:not(.on) { opacity: 1; }
+  #charCounter { font-size: 14.5px; color: var(--mute); font-variant-numeric: tabular-nums; min-width: 34px; }
+  #charCounter.warn { color: var(--gold); }
+  #charCounter.limit { color: var(--danger); }
+  .tb-spacer { flex: 1; }
+  #typing { padding: 4px 21px; font-style: italic; }
+
+  /* composer (VUS): ⚙ · input · Send */
+  .composer-wrap { position: relative; flex-shrink: 0; padding: 0; }
+  #replyBar, #stage { margin: 8px 18px 0; }
+  #composer { display: flex; align-items: flex-end; gap: 12px; padding: 15px 18px calc(15px + env(safe-area-inset-bottom, 0px)); border-top: 1.5px solid var(--line); }
+  #settingsBtn { flex-shrink: 0; width: 51px; height: 51px; background: var(--panel2); border: 1.5px solid var(--line); border-radius: 12px; color: var(--mute); font-size: 24px; line-height: 1; }
+  #settingsBtn:hover { color: var(--text); border-color: var(--mute); }
+  #settingsBtn.open { border-color: var(--blue); color: var(--accent3); background: rgba(var(--blue-rgb),.14); }
+  .composer-input { flex: 1; min-width: 0; display: flex; align-items: center; background: var(--panel); border: 1.5px solid var(--line); border-radius: 12px; padding: 6px 10px; }
+  .composer-input:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(var(--blue-rgb),.16); }
+  #input { flex: 1; min-width: 60px; min-height: 0; max-height: 135px; padding: 7.5px 4px; font-size: 20.2px; line-height: 1.4; }
+  #sendBtn.send { width: auto; height: 51px; padding: 0 24px; border-radius: 12px; font-size: 19.5px; font-weight: 600; color: #fff; }
+  #sendBtn.send:disabled { opacity: .5; cursor: not-allowed; }
+  #hints { left: 18px; right: 18px; }
+
+  /* ⚙ settings panel */
+  #settingsPanel { position: absolute; bottom: 100%; left: 18px; margin-bottom: 8px; width: 270px; max-height: 70dvh; overflow-y: auto; z-index: 30; background: var(--panel); border: 1.5px solid var(--line); border-radius: 12px; padding: 8px; box-shadow: 0 16px 40px rgba(5,8,25,.55); }
+  .sp-lv { padding: 8px 8px 10px; margin-bottom: 4px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 14px; }
+  .sp-lv .xpbar { margin-top: 7px; }
+  .sp-row { position: relative; display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent; border: none; padding: 9px 10px; border-radius: 9px; color: var(--text); font-size: 15px; }
+  .sp-row:hover { background: var(--panel2); }
+  .sp-row.danger { color: var(--danger); }
+
+  /* modals, toast, ban screen */
+  #modalCard { border-radius: 14px; padding: 20px; max-width: 380px; background: var(--panel); border: 1.5px solid var(--line); backdrop-filter: none; }
+  #modalCard.wide { max-width: 560px; }
+  #modalCard h2 { font-size: 17px; }
+  #toast { bottom: auto; top: 76px; border: 1.5px solid var(--blue); }
+  #banned .card { text-align: center; border-color: rgba(255,107,139,.45); }
+  #banned h2 { color: var(--danger); }
+  .ban-ic { font-size: 42px; margin-bottom: 6px; }
+
+  /* phone layout (VUS ≤600) */
+  @media (max-width: 600px) {
+    .chat-header { display: flex; justify-content: space-between; padding: 10px 12px; gap: 8px; }
+    .hdr-title { font-size: 18px; flex: 0 0 auto; }
+    .hdr-right { flex: 1 1 0; justify-content: flex-end; gap: 8px; }
+    .hdr-btn { font-size: 13px; padding: 4px 8px; }
+    #membersBtn { font-size: 13px; padding: 4px 2px; }
+    #meWho { flex-direction: column; align-items: flex-end; gap: 0; line-height: 1.15; max-width: 110px; }
+    #meWho b { font-size: 13px; max-width: 100%; }
+    #meRank { font-size: 11.5px; }
+    #meRank:not(:empty)::before { content: ""; }
+    #chanBar, #notifBar, #pinBar { padding-left: 12px; padding-right: 12px; }
+    #messages { padding: 12px; gap: 9px; }
+    .msg { max-width: 94%; }
+    .bubble, .msg.mine .bubble { font-size: 17px; padding: 11px 14px; }
+    .meta { font-size: 13.5px; }
+    #toolbar { padding: 6px 12px; gap: 6px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+    #toolbar::-webkit-scrollbar { display: none; }
+    .tb-spacer { flex: 0 0 4px; }
+    #input::placeholder { font-size: 14px; }
+    .toolbar-btn { font-size: 13.5px; padding: 5px 9px; }
+    #composer { padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); gap: 8px; }
+    #settingsBtn { width: 44px; height: 44px; font-size: 20px; }
+    #input { font-size: 17px; }
+    #sendBtn.send { height: 44px; padding: 0 16px; font-size: 17px; }
+    #settingsPanel, #hints { left: 12px; }
+    #replyBar, #stage { margin-left: 12px; margin-right: 12px; }
+  }
+  @media (max-width: 480px) { .hdr-btn .lbl { display: none; } #meWho { display: none; } }
+  @media (max-width: 430px) { .hdr-title { display: none; } }
+
+  /* ---------- timed mute/ban dialog, poll dialog, ban countdown ---------- */
+  .pl-row { display: flex; gap: 8px; margin-bottom: 8px; }
+  .pl-row input { flex: 1; min-width: 0; background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; font-size: 15px; outline: none; }
+  .pl-row input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(var(--blue-rgb),.2); }
+  .pl-row .icon-btn { flex-shrink: 0; width: 42px; height: 42px; border-color: var(--line); }
+  #modalCard .btn.ghost { margin-top: 8px; }
+  .ban-count { margin: 4px 0 14px; }
+  #banClock { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 34px; font-weight: 700; letter-spacing: 1px; }
+  .ban-count small { color: var(--mute); }
+
+  /* ---------- sidebar: always visible on desktop/tablet, slide-over on phones ---------- */
+  @media (min-width: 721px) {
+    #app { display: grid; grid-template-columns: 260px minmax(0,1fr); grid-template-rows: auto minmax(0,1fr); }
+    .chat-header { grid-column: 1 / -1; }
+    #sidebar { position: static; grid-row: 2; grid-column: 1; width: auto; max-width: none; min-height: 0; z-index: auto; transform: none; visibility: visible; transition: none; box-shadow: none; border-left: none; border-right: 1.5px solid var(--line); background: color-mix(in srgb, var(--panel) 80%, transparent); backdrop-filter: blur(10px); padding-top: 6px; }
+    #main { grid-row: 2; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .side-top { display: none; }
+    body.side-hidden #app { grid-template-columns: minmax(0,1fr); }
+    body.side-hidden #sidebar { display: none; }
+    body.nav-open #scrim { display: none; }
+  }
+  #channelList { flex: 0 1 auto; max-height: 40%; }
+  #dmList, #roomList { flex: 0 1 auto; }
+  @media (max-width: 720px) {
+    #main { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
+  }
+
+  /* ---------- smaller left sidebar + docked, collapsible online/offline list ---------- */
+  .mem-top { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; padding-right: 8px; }
+  #membersX { background: none; border: none; color: var(--mute); font-size: 22px; line-height: 1; padding: 2px 9px 4px; border-radius: 8px; }
+  #membersX:hover { color: var(--text); background: var(--panel2); }
+  #membersTab { display: none; }
+  /* narrow screens: the list is a dropdown under the online count, as before */
+  @media (max-width: 900px) {
+    #members { position: fixed; top: 66px; left: 10px; right: auto; bottom: auto; width: 300px; max-width: calc(100vw - 20px); max-height: calc(100dvh - 80px); }
+  }
+  @media (max-width: 600px) { #members { top: 56px; } }
+  @media (min-width: 721px) {
+    #app { grid-template-columns: 200px minmax(0,1fr); }
+    #sidebar .side-head { padding: 10px 12px 4px; font-size: 11px; }
+    #channelList, #dmList, #roomList { padding-left: 8px !important; padding-right: 8px !important; }
+    #sidebar .chan { padding: 6px 9px; margin-bottom: 4px; border-radius: 9px; font-size: 14px; }
+  }
+  @media (min-width: 901px) {
+    #app { grid-template-columns: 200px minmax(0,1fr) 230px; }
+    body.side-hidden #app { grid-template-columns: minmax(0,1fr) 230px; }
+    body.hide-members #app { grid-template-columns: 200px minmax(0,1fr); }
+    body.side-hidden.hide-members #app { grid-template-columns: minmax(0,1fr); }
+    #members { display: flex; position: static; grid-row: 2; width: auto; max-width: none; max-height: none; min-height: 0; z-index: auto; border: none; border-left: 1.5px solid var(--line); border-radius: 0; box-shadow: none; background: color-mix(in srgb, var(--panel) 80%, transparent); }
+    body.hide-members #members { display: none; }
+    body.hide-members #membersTab { display: block; position: fixed; right: 0; top: 84px; z-index: 30; width: 24px; height: 48px; padding: 0 0 3px 2px; font-size: 22px; line-height: 1; color: var(--mute); background: var(--panel); border: 1.5px solid var(--line); border-right: none; border-radius: 12px 0 0 12px; box-shadow: -4px 4px 16px rgba(0,0,0,.3); }
+    body.hide-members #membersTab:hover { color: var(--text); border-color: var(--blue); width: 28px; }
+    #memberList { padding-bottom: 12px; }
+  }
 </style>
 </head>
 <body>
@@ -512,80 +716,100 @@
 <!-- ============ Banned ============ -->
 <div class="center-screen" id="banned" hidden>
   <div class="card">
+    <div class="ban-ic">🚫</div>
     <h2>You’re banned from this chat</h2>
     <p class="sub" id="banReason"></p>
+    <div class="ban-count" id="banCount" hidden><div id="banClock"></div><small>until you can log back in</small></div>
+    <button class="btn" id="banAgain">Check again</button>
     <button class="btn ghost" id="banOut">Log out</button>
   </div>
 </div>
 
 <!-- ============ App ============ -->
 <div id="app" hidden>
-  <aside id="sidebar">
-    <div class="brand">
-      <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></div>
-      <span id="brandName" class="wordmark">Nebula Chat</span>
+  <header class="chat-header">
+    <div class="hdr-left">
+      <button type="button" id="membersBtn" title="Show or hide the member list" aria-pressed="true"><span class="dot off" id="connDot"></span><span id="onlineCount">0 online</span></button>
     </div>
+    <div class="hdr-title"><span id="brandName" class="wordmark">Nebula Chat</span></div>
+    <div class="hdr-right">
+      <button type="button" class="hdr-btn" id="menuBtn" title="Channels, direct messages and rooms">🚪 <span class="lbl">Rooms</span></button>
+      <button type="button" class="hdr-btn" id="themeBtn" title="Levels &amp; themes">🪐 <span class="lbl">Levels</span></button>
+      <div class="avatar sm" id="meAv" title="Your profile"></div>
+      <div id="meWho" title="Levels &amp; XP"><b id="meName"></b><span id="meRank"></span></div>
+    </div>
+  </header>
+
+  <aside id="sidebar">
+    <div class="side-top"><h3>Rooms</h3><button type="button" id="sideClose" aria-label="Close">&times;</button></div>
     <div class="side-head"><span>Channels</span><button class="icon-btn" id="addChan" title="New channel" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button></div>
     <nav id="channelList"></nav>
     <div class="side-head"><button type="button" class="dm-toggle" id="dmToggle" aria-expanded="false" title="Show or hide direct messages"><span class="chev">▼</span><span>Direct messages</span><span class="unread" id="dmUnread" hidden></span></button><button class="icon-btn" id="addDM" title="Message anyone, online or offline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button></div>
     <nav id="dmList" style="max-height:30%;overflow-y:auto;padding:0 8px 6px" hidden></nav>
     <div class="side-head"><span>Temporary rooms</span><button class="icon-btn" id="addRoom" title="Create or join a room"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button></div>
     <nav id="roomList" style="max-height:25%;overflow-y:auto;padding:0 8px 6px"></nav>
-    <div class="me-card">
-      <div class="avatar" id="meAv"></div>
-      <div class="who" id="meWho" title="Levels &amp; XP"><b id="meName"></b><span id="meRank"></span><span class="lvline" id="meLv"></span><div class="xpbar" id="xpBar"><i id="xpFill"></i></div></div>
-      <button class="icon-btn" id="colorBtn" title="Chat colors">🎨</button>
-      <button class="icon-btn" id="logoutBtn" title="Log out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button>
-    </div>
   </aside>
 
-  <main>
-    <div class="topbar">
-      <button class="icon-btn" id="menuBtn" title="Channels"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
-      <h2><span class="hash" id="chanHash">#</span><span id="chanTitle">lounge</span></h2>
-      <span class="pill" id="roomTimer" hidden></span>
-      <button class="icon-btn" id="notifBtn" title="Notifications">🔔</button>
-      <button class="icon-btn" id="rankBtn" title="Ranks &amp; commands">📋</button>
-      <button class="icon-btn" id="logBtn" title="Chat logs" hidden>📜</button>
-      <button class="icon-btn" id="sugListBtn" title="Suggestions" hidden>📥</button>
-      <button class="icon-btn" id="filterBtn" title="Chat filter" aria-pressed="false">🧼</button>
-      <button class="icon-btn" id="fxBtn" title="Toggle starfield">✨</button>
-      <button class="icon-btn" id="themeBtn" title="Levels &amp; themes">🪐</button>
-      <button class="pill" id="membersBtn" title="Who’s online"><span class="dot off" id="connDot"></span><span id="onlineCount">0 online</span></button>
+  <main id="main">
+  <div id="chanBar">
+    <h2><span class="hash" id="chanHash">#</span><span id="chanTitle">lounge</span></h2>
+    <span class="pill" id="roomTimer" hidden></span>
+  </div>
+  <div id="notifBar" hidden><span>🔔 Get a notification when someone @mentions you.</span><button type="button" class="primary" id="notifOn">Turn on</button><button type="button" id="notifNo" aria-label="Dismiss" title="Not now">✕</button></div>
+  <div id="pinBar" hidden><span class="pin-ic">📌</span><button type="button" class="pin-txt" id="pinTxt"></button><button type="button" class="pin-more" id="pinMore"></button></div>
+
+  <div id="messages"></div>
+  <div id="typing"></div>
+
+  <div id="toolbar">
+    <button type="button" class="toolbar-btn" id="attachBtn" title="Send an image">📎 Image</button>
+    <button type="button" class="toolbar-btn" id="emojiBtn" title="Emoji">😊 Emoji</button>
+    <span id="charCounter">1000</span>
+    <input type="file" id="file" accept="image/*" hidden>
+    <div class="tb-spacer"></div>
+    <button type="button" class="toolbar-btn" id="bjFab" title="Casino: blackjack and Texas Hold’em (bet your XP)">🃏 Casino</button>
+    <button type="button" class="toolbar-btn" id="sugFab" title="Suggest an update">💡 Suggest</button>
+    <button type="button" class="toolbar-btn" id="rankBtn" title="Ranks &amp; commands">📋 Ranks</button>
+    <button type="button" class="toolbar-btn" id="rulesFab" title="Chat rules">📜 Rules</button>
+    <button type="button" class="toolbar-btn" id="filterBtn" title="Chat filter" aria-pressed="false">🧼 Filter</button>
+    <button type="button" class="toolbar-btn" id="notifBtn" title="Notifications">🔔 Alerts</button>
+  </div>
+
+  <div class="composer-wrap">
+    <div id="hints" hidden></div>
+    <div id="emojiPop" hidden></div>
+    <div id="settingsPanel" hidden>
+      <div class="sp-lv" id="meLvBox" title="Levels &amp; XP"><span id="meLv"></span><div class="xpbar" id="xpBar"><i id="xpFill"></i></div></div>
+      <button type="button" class="sp-row" id="colorBtn">🎨 Chat colors</button>
+      <button type="button" class="sp-row" id="fxBtn" title="Toggle starfield">✨ Starfield</button>
+      <button type="button" class="sp-row" id="sugListBtn" title="Suggestions" hidden>📥 Suggestions</button>
+      <button type="button" class="sp-row" id="logBtn" title="Chat logs" hidden>📜 Chat logs</button>
+      <button type="button" class="sp-row danger" id="logoutBtn">⎋ Log out</button>
     </div>
-    <div id="notifBar" hidden><span>🔔 Get a notification when someone @mentions you.</span><button type="button" class="primary" id="notifOn">Turn on</button><button type="button" id="notifNo" aria-label="Dismiss" title="Not now">✕</button></div>
-    <div id="pinBar" hidden><span class="pin-ic">📌</span><button type="button" class="pin-txt" id="pinTxt"></button><button type="button" class="pin-more" id="pinMore"></button></div>
-    <div id="messages"></div>
-    <div id="typing"></div>
-    <div class="composer-wrap">
-      <div id="hints" hidden></div>
-      <div id="emojiPop" hidden></div>
-      <div id="replyBar" hidden><span class="rb-text"></span><button type="button" id="replyX" title="Cancel reply" aria-label="Cancel reply">✕</button></div>
-      <div id="stage" hidden></div>
-      <div class="composer">
-        <button class="icon-btn" id="attachBtn" title="Send an image"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg></button>
-        <button class="icon-btn" id="emojiBtn" title="Emoji"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9.5h.01M15 9.5h.01"/></svg></button>
+    <div id="replyBar" hidden><span class="rb-text"></span><button type="button" id="replyX" title="Cancel reply" aria-label="Cancel reply">✕</button></div>
+    <div id="stage" hidden></div>
+    <div id="composer">
+      <button type="button" id="settingsBtn" title="Settings" aria-label="Settings">⚙</button>
+      <div class="composer-input">
         <textarea id="input" rows="1" maxlength="1000" placeholder="Message #lounge, or type / for commands" aria-label="Message"></textarea>
-        <button class="send" id="sendBtn" title="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg></button>
-        <input type="file" id="file" accept="image/*" hidden>
       </div>
+      <button class="send" id="sendBtn" title="Send">Send</button>
     </div>
+  </div>
   </main>
 
-  <aside id="members">
-    <h3>Members</h3>
+  <aside id="members" aria-label="Members">
+    <div class="mem-top"><h3>Members</h3><button type="button" id="membersX" aria-label="Hide member list" title="Hide member list">›</button></div>
     <div id="memberList"></div>
   </aside>
-  <button type="button" id="sugFab" title="Suggest an update">💡 <span>Suggest</span></button>
-  <button type="button" id="bjFab" title="Play blackjack (bet your XP)" aria-label="Play blackjack">🃏</button>
-  <button type="button" id="rulesFab" title="Chat rules" aria-label="Chat rules">📜</button>
+  <button type="button" id="membersTab" aria-label="Show member list" title="Show member list">‹</button>
 </div>
 <div class="center-screen" id="modal" hidden><div class="card" id="modalCard"></div></div>
 <div id="scrim"></div>
 <div id="userMenu" hidden></div>
 <div id="lightbox" hidden><img alt=""></div>
 <div id="toast" hidden></div>
-<div id="bj" hidden role="dialog" aria-modal="true" aria-label="Blackjack"></div>
+<div id="bj" hidden role="dialog" aria-modal="true" aria-label="Casino"></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -950,7 +1174,7 @@ async function startSession(user) {
   // Ban check first
   let ban = null;
   try { ban = (await db.ref("bans/" + me.uid).once("value")).val(); } catch (e) {}
-  if (ban) { showBanned(ban); return; }
+  if (ban && banActive(ban)) { showBanned(ban); return; }
 
   show("#auth", false); show("#banned", false); show("#app", true);
   try { chatFilter = localStorage.getItem("nebulaFilter:" + me.uid) === "on"; } catch (e) { chatFilter = false; }
@@ -965,7 +1189,7 @@ async function startSession(user) {
   watch(db.ref("meta/owner"), "value", s => { ownerUid = s.val(); updateRankUI(); renderMembers(); rankReady.add("m"); bjEnforceTheme(); });
   watch(db.ref("owners"), "value", s => { owners = s.val() || {}; updateRankUI(); renderMembers(); rankReady.add("o"); bjEnforceTheme(); });
   watch(db.ref("roles"), "value", s => { roles = s.val() || {}; updateRankUI(); renderMembers(); rankReady.add("r"); bjEnforceTheme(); });
-  watch(db.ref("users"), "value", s => { usersMap = s.val() || {}; if (window.setStarMembers) window.setStarMembers(Object.keys(usersMap).length); renderMembers(); renderDMs(); refreshColors(); });
+  watch(db.ref("users"), "value", s => { usersMap = s.val() || {}; if (window.setStarMembers) window.setStarMembers(Object.keys(usersMap).length); syncMyName(); syncShownNames(); renderMembers(); renderDMs(); refreshColors(); });
   watch(db.ref("config"), "value", s => { applyXpConfig(s.val()); onXpChange(); }, () => {});
   watch(db.ref("xp"), "value", s => { xpData = s.val() || {}; xpLoaded = true; onXpChange(); });
   watch(db.ref("xpGift"), "value", s => {   // XP given by admins and owners (xpGift/<uid>/v is the running total)
@@ -981,12 +1205,8 @@ async function startSession(user) {
   watch(db.ref("dmRead/" + me.uid), "value", s => { dmRead = s.val() || {}; renderDMs(); });
   watch(db.ref("userRooms/" + me.uid), "value", s => { myRooms = s.val() || {}; renderRooms(); watchRoomPings(); });
   watch(db.ref("imageAccess"), "value", s => { imgAccess = s.val() || {}; updateImgUI(); });
-  watch(db.ref("bans/" + me.uid), "value", s => { if (s.exists()) showBanned(s.val()); });
+  watch(db.ref("bans/" + me.uid), "value", s => { if (s.exists() && banActive(s.val())) showBanned(s.val()); });
   watch(db.ref("mutes/" + me.uid), "value", s => { myMute = s.val() || 0; });
-  watch(db.ref("kicks/" + me.uid), "value", s => {
-    const t = s.val();
-    if (t && t > sessionStart) { signOutNow().then(() => { $("#authErr").textContent = "An admin removed you from the chat. You can log back in."; }); }
-  });
   watch(db.ref("channels"), "value", onChannels);
   watch(db.ref("presence"), "value", s => {
     const next = s.val() || {};
@@ -1005,12 +1225,28 @@ async function startSession(user) {
   $("#input").focus();
 }
 let typingTick;
+let banTimer;
+const banActive = b => !!b && (!b.until || b.until > now());   // no "until" = permanent
 function showBanned(ban) {
   endSession(true);
   show("#app", false); show("#auth", false); show("#banned", true);
-  $("#banReason").textContent = ban && ban.reason ? "Reason: " + ban.reason : "An admin removed your access.";
+  const temp = !!(ban && ban.until);
+  $("#banReason").textContent = (ban && ban.reason ? "Reason: " + ban.reason : "An admin removed your access.") + (temp ? "" : " This ban has no end date.");
+  $("#banCount").hidden = !temp;
+  clearInterval(banTimer);
+  if (temp) {
+    const tick = () => {
+      const l = ban.until - now();
+      if (l <= 0) { clearInterval(banTimer); location.reload(); return; }
+      const t = Math.ceil(l / 1000), d = Math.floor(t / 86400), h = Math.floor(t % 86400 / 3600), m = Math.floor(t % 3600 / 60), sec = t % 60, p = n => String(n).padStart(2, "0");
+      $("#banClock").textContent = (d ? d + "d " : "") + p(h) + ":" + p(m) + ":" + p(sec);
+    };
+    tick(); banTimer = setInterval(tick, 1000);
+  }
+  $("#banAgain").onclick = () => location.reload();
 }
 function endSession(keepUser) {
+  clearInterval(banTimer);
   listeners.forEach(([r, e, c]) => r.off(e, c)); listeners = [];
   detachChannel();
   clearInterval(typingTick);
@@ -1062,6 +1298,17 @@ function renderChannels() {
 }
 const pairId = o => [me.uid, o].sort().join("_");
 const nameOf = uid => (usersMap[uid] || {}).name || (dmIdx[uid] || {}).name || "user";
+const dispName = m => (usersMap[m.uid] || {}).name || m.name;   // messages keep the name they were sent with, but show the author’s current name
+const NAME_COOLDOWN = 86400000;   // one display-name change per day (the database rules enforce this too)
+function syncMyName() {
+  const u = me && usersMap[me.uid]; if (!u || !u.name || u.name === me.name) return;
+  me.name = u.name; $("#meName").textContent = me.name;
+  const av = $("#meAv"); av.dataset.letter = me.name.charAt(0).toUpperCase(); paintAvatar(av);
+  if (presence[me.uid]) db.ref("presence/" + me.uid + "/name").set(me.name).catch(() => {});
+}
+function syncShownNames() {
+  document.querySelectorAll(".msg[data-author]").forEach(w => { const n = (usersMap[w.dataset.author] || {}).name, e = w.querySelector(".nm"); if (n && e && e.textContent !== n) e.textContent = n; });
+}
 const msgPath = () => currentRoom ? "roomMsgs/" + currentRoom : currentDM ? "dms/" + pairId(currentDM) + "/messages" : "messages/" + currentChan;
 const typePath = () => currentRoom ? "roomTyping/" + currentRoom : currentDM ? "dmTyping/" + pairId(currentDM) : "typing/" + currentChan;
 function markRead() { if (currentDM) db.ref("dmRead/" + me.uid + "/" + currentDM).set(TS()).catch(() => {}); }
@@ -1190,11 +1437,11 @@ function buildMessage(id, m) {
     const d = document.createElement("div"); d.className = "note"; d.textContent = maskBad(m.text); return d;
   }
   if (type === "me") {
-    const d = document.createElement("div"); d.className = "note"; d.textContent = `✦ ${m.name} ${maskBad(m.text)}`; return d;
+    const d = document.createElement("div"); d.className = "note"; d.textContent = `✦ ${dispName(m)} ${maskBad(m.text)}`; return d;
   }
   if (type === "announce") {
     const d = document.createElement("div"); d.className = "announce";
-    d.innerHTML = `<b>Announcement from ${esc(m.name)}</b><span>${fmt(m.text)}</span>`;
+    d.innerHTML = `<b>Announcement from ${esc(dispName(m))}</b><span>${fmt(m.text)}</span>`;
     return d;
   }
   const mine = m.uid === me.uid;
@@ -1203,12 +1450,12 @@ function buildMessage(id, m) {
   wrap.className = "msg" + (mine ? " mine" : "");
   wrap.dataset.author = m.uid;
   if (pins[id]) wrap.classList.add("pinned");
-  const av = makeAvatar(m.name, m.uid, true);
-  av.onclick = ev => openUserMenu(ev, { uid: m.uid, name: m.name });
+  const av = makeAvatar(dispName(m), m.uid, true);
+  av.onclick = ev => openUserMenu(ev, { uid: m.uid, name: dispName(m) });
   wrap.appendChild(av);
   const col = document.createElement("div"); col.className = "col";
   const meta = document.createElement("div"); meta.className = "meta";
-  const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = m.name;
+  const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = dispName(m); nm.title = "Open menu"; nm.onclick = ev => openUserMenu(ev, { uid: m.uid, name: dispName(m) });
   if (!mine) nm.style.color = nameColor(m.uid);
   else nm.style.color = "#c9d4ff";
   meta.appendChild(nm);
@@ -1224,7 +1471,7 @@ function buildMessage(id, m) {
   paintBubble(bub, userTc(m.uid), userBc(m.uid));
   if (type === "poll") { bub.classList.add("poll"); paintPoll(bub, id, m); }
   else if (m.img && /^data:image\//.test(m.img)) {
-    const img = document.createElement("img"); img.className = "msg-img"; img.src = m.img; img.alt = "Image sent by " + m.name;
+    const img = document.createElement("img"); img.className = "msg-img"; img.src = m.img; img.alt = "Image sent by " + dispName(m);
     img.onclick = () => { $("#lightbox img").src = m.img; show("#lightbox", true); };
     bub.appendChild(img);
     if (m.text) { const c = document.createElement("span"); c.className = "cap"; c.innerHTML = fmt(m.text); bub.appendChild(c); }
@@ -1332,7 +1579,7 @@ const OFFLINE_MAX = 100;
 let offlineOpen = false;   // closed every time you log in
 function renderMembers() {
   if (!me) return;
-  const online = Object.entries(presence).map(([uid, p]) => ({ uid, name: p.name || "?", rank: rankOf(uid) }));
+  const online = Object.entries(presence).map(([uid, p]) => ({ uid, name: (usersMap[uid] || {}).name || p.name || "?", rank: rankOf(uid) }));
   // Everyone with an account who isn't currently in presence is offline.
   const offline = Object.entries(usersMap)
     .filter(([uid, u]) => u && u.name && !presence[uid])
@@ -1380,11 +1627,22 @@ function presenceNote(name, what) {
   const d = document.createElement("div"); d.className = "note presence " + what.toLowerCase(); d.textContent = `${name} ${what}`;
   box.appendChild(d); if (near) scrollBottom();
 }
-$("#membersBtn").onclick = () => {
-  if (matchMedia("(max-width:1000px)").matches) document.body.classList.toggle("members-open");
-  else document.body.classList.toggle("hide-members");
-};
-$("#menuBtn").onclick = () => document.body.classList.add("nav-open");
+const wideMembers = () => matchMedia("(min-width:901px)").matches;
+function paintMembersBtn() { $("#membersBtn").setAttribute("aria-pressed", String(wideMembers() ? !document.body.classList.contains("hide-members") : document.body.classList.contains("members-open"))); }
+function toggleMembers(show) {
+  const b = document.body.classList;
+  if (wideMembers()) {   // docked on the right: collapse or expand it, and remember the choice
+    b.remove("members-open"); b.toggle("hide-members", show === undefined ? !b.contains("hide-members") : !show);
+    try { localStorage.setItem("nebulaHideMembers", b.contains("hide-members") ? "1" : "0"); } catch (e) {}
+  } else b.toggle("members-open", show);   // narrow screens: dropdown under the online count
+  paintMembersBtn();
+}
+try { if (localStorage.getItem("nebulaHideMembers") === "1") document.body.classList.add("hide-members"); } catch (e) {}
+$("#membersBtn").onclick = ev => { ev.stopPropagation(); toggleMembers(); };
+$("#membersX").onclick = ev => { ev.stopPropagation(); toggleMembers(false); };
+$("#membersTab").onclick = ev => { ev.stopPropagation(); toggleMembers(true); };
+window.addEventListener("resize", paintMembersBtn); paintMembersBtn();
+$("#menuBtn").onclick = () => { if (matchMedia("(max-width:720px)").matches) document.body.classList.add("nav-open"); else document.body.classList.toggle("side-hidden"); };
 $("#scrim").onclick = () => document.body.classList.remove("nav-open", "members-open");
 
 function openUserMenu(ev, u) {
@@ -1402,11 +1660,10 @@ function openUserMenu(ev, u) {
     add("Mention", () => { const i = $("#input"); i.value += (i.value && !i.value.endsWith(" ") ? " " : "") + "@" + u.name + " "; i.focus(); });
   }
   if (canModerate(u.uid)) {
-    add("Mute for 10 minutes", () => mod.mute(t, 10));
+    add("Mute…", () => openPunish(t, "mute"));
     add("Unmute", () => mod.unmute(t));
-    add("Kick", () => mod.kick(t));
     if (levelOf() >= 2) {
-      add("Ban…", () => { const r = prompt("Reason for banning " + u.name + " (optional):"); if (r !== null) return mod.ban(t, r); }, true);
+      add("Ban…", () => openPunish(t, "ban"), true);
       add(rankOf(u.uid) === "mod" ? "Remove moderator" : "Make moderator", () => rankOf(u.uid) === "mod" ? mod.unmod(t) : mod.mod(t));
       if (rankOf(u.uid) === "vip") add("Remove VIP", () => mod.unvip(t));
       else if (rankOf(u.uid) === "regular") add("Give VIP", () => mod.vip(t));
@@ -1533,6 +1790,111 @@ function stageImage(file) {
 }
 function clearStage() { stagedImg = null; $("#stage").hidden = true; $("#stage").innerHTML = ""; }
 
+
+/* ───────── timed mute / ban window ───────── */
+function openPunish(t, kind) {
+  const ban = kind === "ban";
+  const presets = ban ? [["1 hour", 60], ["1 day", 1440], ["7 days", 10080], ["30 days", 43200], ["Permanent", 0]]
+                      : [["5 min", 5], ["10 min", 10], ["30 min", 30], ["1 hour", 60], ["1 day", 1440], ["7 days", 10080]];
+  let sel = ban ? 1440 : 10;
+  modal(`<h2>${ban ? "🔨 Ban" : "🔇 Mute"} ${esc(t.name)}</h2>
+    <p class="sub" style="margin:6px 0 14px">${ban ? "They’re signed out right away and can’t log back in until the ban ends." : "They can read the chat but can’t post until the mute ends."}</p>
+    <div class="st-row" id="puDur"></div>
+    <div class="field"><label for="puCustom">Or type a length</label><input id="puCustom" maxlength="10" placeholder="${ban ? "e.g. 45m, 3h, 2d, 2w, perm" : "e.g. 45m, 3h, 2d"}" autocomplete="off"></div>
+    ${ban ? '<div class="field"><label for="puReason">Reason (optional, they will see it)</label><input id="puReason" maxlength="120" autocomplete="off"></div>' : ""}
+    <div class="err" id="puErr"></div>
+    <button class="btn" id="puGo">${ban ? "Ban" : "Mute"}</button><button class="btn ghost" id="puNo">Cancel</button>`);
+  const box = $("#puDur"), custom = $("#puCustom");
+  const paint = () => box.querySelectorAll(".st-opt").forEach(b => b.classList.toggle("on", !custom.value.trim() && Number(b.dataset.m) === sel));
+  presets.forEach(([label, m]) => {
+    const b = document.createElement("button"); b.type = "button"; b.className = "st-opt"; b.dataset.m = m; b.textContent = label;
+    b.onclick = () => { sel = m; custom.value = ""; $("#puErr").textContent = ""; paint(); };
+    box.appendChild(b);
+  });
+  custom.oninput = paint; paint();
+  $("#puNo").onclick = closeModal;
+  const go = $("#puGo");
+  go.onclick = async () => {
+    const err = $("#puErr"); err.textContent = "";
+    let mins = sel;
+    const cv = custom.value.trim();
+    if (cv) {
+      const d = parseDur(cv);
+      if (d === null || (d === 0 && !ban)) { err.textContent = ban ? "Try something like 30m, 2h, 3d or perm." : "Try something like 30m, 2h or 3d."; return; }
+      mins = d;
+    }
+    if (!ban && mins > MUTE_MAX) { err.textContent = "A mute can last up to 7 days."; return; }
+    if (ban && mins > BAN_MAX) { err.textContent = "A temporary ban can last up to 365 days."; return; }
+    go.disabled = true;
+    try {
+      if (ban) await mod.ban(t, ($("#puReason").value || "").trim(), mins); else await mod.mute(t, mins);
+      closeModal();
+      toast(ban ? `${t.name} was ${mins ? "banned for " + fmtMins(mins) : "banned permanently"}.` : `${t.name} was muted for ${fmtMins(mins)}.`);
+    } catch (e) { err.textContent = e.message || "That didn’t work."; go.disabled = false; }
+  };
+  custom.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); go.click(); } };
+  setTimeout(() => custom.focus(), 30);
+}
+
+/* ───────── poll window ───────── */
+async function createPoll(q, opts) {
+  if (!currentChan) throw new Error("Polls only work in channels.");
+  q = q.trim(); opts = opts.map(o => o.trim()).filter(Boolean);
+  if (!q) throw new Error("Give your poll a title.");
+  if (opts.length < 2) throw new Error("Add at least 2 answers.");
+  if (opts.length > 5) throw new Error("A poll can have up to 5 answers.");
+  if (q.length > 200) throw new Error("Keep the title under 200 characters.");
+  if (opts.some(o => o.length > 50)) throw new Error("Each answer can be up to 50 characters.");
+  if (opts.some(o => o.includes("|"))) throw new Error("Answers can’t contain the | character.");
+  if (new Set(opts.map(o => o.toLowerCase())).size !== opts.length) throw new Error("Every answer needs to be different.");
+  if (myMute > now()) throw new Error("You’re muted.");
+  if (!checkCooldown()) throw new Error("Slow down a little, then post again.");
+  await db.ref(msgPath()).push({ uid: me.uid, name: me.name, type: "poll", text: q, opts: opts.join("|"), ts: TS() });
+  awardXP(XPC.poll);
+}
+function openPollDialog(q0, opts0) {
+  if (!currentChan) { localNote("Polls only work in channels.", true); return; }
+  modal(`<h2>📊 Create a poll</h2>
+    <div class="field" style="margin-top:12px"><label for="plQ">Poll title</label><input id="plQ" maxlength="200" placeholder="What should we play tonight?" autocomplete="off"></div>
+    <div class="field"><label>Answers (2 to 5)</label><div id="plOpts"></div></div>
+    <button type="button" class="btn ghost" id="plAdd" style="margin:0 0 6px">+ Add an answer</button>
+    <div class="err" id="plErr"></div>
+    <button class="btn" id="plGo">Post poll</button><button class="btn ghost" id="plNo">Cancel</button>`);
+  const qi = $("#plQ"), box = $("#plOpts"), add = $("#plAdd"), go = $("#plGo");
+  qi.value = q0 || "";
+  const rows = () => [...box.querySelectorAll(".pl-row")];
+  const sync = () => {
+    const r = rows();
+    r.forEach((row, i) => { row.querySelector("input").placeholder = "Answer " + (i + 1); row.querySelector("button").hidden = r.length <= 2; });
+    add.hidden = r.length >= 5;
+  };
+  const addRow = (val, focus) => {
+    if (rows().length >= 5) return;
+    const row = document.createElement("div"); row.className = "pl-row";
+    const inp = document.createElement("input"); inp.maxLength = 50; inp.autocomplete = "off"; inp.value = val || "";
+    const x = document.createElement("button"); x.type = "button"; x.className = "icon-btn"; x.title = "Remove this answer"; x.setAttribute("aria-label", "Remove this answer"); x.textContent = "✕";
+    x.onclick = () => { if (rows().length > 2) { row.remove(); sync(); } };
+    inp.onkeydown = e => {
+      if (e.key !== "Enter") return; e.preventDefault();
+      const r = rows(), i = r.indexOf(row);
+      if (i < r.length - 1) r[i + 1].querySelector("input").focus(); else go.click();
+    };
+    row.append(inp, x); box.appendChild(row); sync(); if (focus) inp.focus();
+  };
+  const start = (opts0 && opts0.length ? opts0.slice(0, 5) : []);
+  while (start.length < 2) start.push("");
+  start.forEach(v => addRow(v));
+  add.onclick = () => addRow("", true);
+  qi.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); rows()[0].querySelector("input").focus(); } };
+  $("#plNo").onclick = closeModal;
+  go.onclick = async () => {
+    const err = $("#plErr"); err.textContent = ""; go.disabled = true;
+    try { await createPoll(qi.value, rows().map(r => r.querySelector("input").value)); closeModal(); }
+    catch (e) { err.textContent = e.message || "Couldn’t post the poll."; go.disabled = false; }
+  };
+  setTimeout(() => (qi.value ? rows()[0].querySelector("input") : qi).focus(), 30);
+}
+
 /* ───────── moderation ───────── */
 async function sys(text) {
   db.ref("modLog").push({ uid: me.uid, name: me.name, text: text.slice(0, 300), ts: TS() }).catch(() => {});
@@ -1540,7 +1902,7 @@ async function sys(text) {
 }
 async function resolveUser(raw) {
   const lower = String(raw || "").replace(/^@/, "").toLowerCase();
-  if (!lower) throw new Error("Tell me which user, for example /kick @name.");
+  if (!lower) throw new Error("Tell me which user, for example /mute @name.");
   const uid = (await db.ref("usernames/" + lower).once("value")).val();
   if (!uid) throw new Error("No user named “" + raw.replace(/^@/, "") + "”.");
   const prof = (await db.ref("users/" + uid).once("value")).val();
@@ -1549,11 +1911,36 @@ async function resolveUser(raw) {
 function need(t) { if (!canModerate(t.uid)) throw new Error("You can’t do that to " + t.name + "."); }
 const GIVE_MAX_ADMIN = 500, GIVE_MAX_OWNER = 1000000000;   // per /givexp; owners are effectively unlimited
 const needAdmin = () => { if (levelOf() < 2) throw new Error("Only admins can do that."); };
+// "30m", "2h", "1d", "1w" → minutes; "perm" → 0; anything else → null
+function parseDur(raw) {
+  const x = String(raw || "").trim().toLowerCase();
+  if (/^(perm|permanent|forever)$/.test(x)) return 0;
+  const m = /^(\d+)\s*(m|min|mins|h|hr|hrs|d|day|days|w|wk|wks)?$/.exec(x);
+  if (!m || !+m[1]) return null;
+  const u = (m[2] || "m")[0];
+  return +m[1] * (u === "h" ? 60 : u === "d" ? 1440 : u === "w" ? 10080 : 1);
+}
+function fmtMins(m) {
+  const n = (v, w) => v + " " + w + (v === 1 ? "" : "s");
+  return m % 1440 === 0 ? n(m / 1440, "day") : m % 60 === 0 ? n(m / 60, "hour") : n(m, "minute");
+}
+const MUTE_MAX = 10080, BAN_MAX = 525600;   // 7 days, 365 days (in minutes)
 const mod = {
-  async kick(t) { need(t); await db.ref("kicks/" + t.uid).set(TS()); await sys(`${t.name} was kicked by ${me.name}.`); },
-  async mute(t, mins) { need(t); mins = Math.max(1, Math.min(10080, Math.round(mins) || 10)); await db.ref("mutes/" + t.uid).set(now() + mins * 60000); await sys(`${t.name} was muted for ${mins} min by ${me.name}.`); },
+  async mute(t, mins) {
+    need(t); mins = Math.round(mins) || 10;
+    if (mins < 1 || mins > MUTE_MAX) throw new Error("A mute can last from 1 minute to 7 days.");
+    await db.ref("mutes/" + t.uid).set(now() + mins * 60000);
+    await sys(`${t.name} was muted for ${fmtMins(mins)} by ${me.name}.`);
+  },
   async unmute(t) { need(t); await db.ref("mutes/" + t.uid).remove(); await sys(`${t.name} was unmuted by ${me.name}.`); },
-  async ban(t, reason) { needAdmin(); need(t); await db.ref("bans/" + t.uid).set({ by: me.uid, byName: me.name, reason: reason || "", ts: TS() }); await sys(`${t.name} was banned by ${me.name}.`); },
+  async ban(t, reason, mins) {   // mins = 0 or empty → permanent
+    needAdmin(); need(t); mins = Math.round(mins) || 0;
+    if (mins < 0 || mins > BAN_MAX) throw new Error("A temporary ban can last up to 365 days. Leave the length off for a permanent ban.");
+    const rec = { by: me.uid, byName: me.name, reason: reason || "", ts: TS() };
+    if (mins) rec.until = now() + mins * 60000;
+    await db.ref("bans/" + t.uid).set(rec);
+    await sys(`${t.name} was ${mins ? "banned for " + fmtMins(mins) : "permanently banned"} by ${me.name}.`);
+  },
   async unban(t) { needAdmin(); need(t); await db.ref("bans/" + t.uid).remove(); await sys(`${t.name} was unbanned by ${me.name}.`); },
   async giveimg(t) { needAdmin(); if (lvl(t.uid) >= 2) throw new Error("Admins and owners can always send images."); await db.ref("imageAccess/" + t.uid).set(true); await sys(`${t.name} can now send images (granted by ${me.name}).`); },
   async takeimg(t) { needAdmin(); if (lvl(t.uid) >= 2) throw new Error("Admins and owners can always send images."); await db.ref("imageAccess/" + t.uid).remove(); await sys(`${t.name} can no longer send images.`); },
@@ -1592,17 +1979,17 @@ const COMMANDS = {
   dm:          { level: 0, usage: "/dm <user>", desc: "Open a direct message" },
   ranks:       { level: 0, usage: "/ranks", desc: "See what every rank can do" },
   rules:       { level: 0, usage: "/rules", desc: "Read the chat rules" },
-  poll:        { level: 0, usage: "/poll <question> | <option> | <option>", desc: "Start a poll with 2 to 5 options (channels only)" },
+  poll:        { level: 0, usage: "/poll", desc: "Open a window to write a poll question and 2 to 5 answers (channels only)" },
   pins:        { level: 0, usage: "/pins", desc: "See this channel’s pinned messages" },
   xp:          { level: 0, usage: "/xp [user]", desc: "See your level and XP, or someone else’s" },
   top:         { level: 0, usage: "/top", desc: "Show the XP leaderboard" },
   theme:       { level: 0, usage: "/theme", desc: "Pick a theme (new ones unlock as you level up)" },
   blackjack:   { level: 0, usage: "/blackjack", desc: "Open the blackjack table and bet your XP" },
-  kick:        { level: 1, usage: "/kick <user>", desc: "Remove someone; they can log back in" },
-  mute:        { level: 1, usage: "/mute <user> [minutes]", desc: "Stop someone from posting" },
+  holdem:      { level: 0, usage: "/holdem", desc: "Sit down at the Texas Hold’em table and bet your XP" },
+  mute:        { level: 1, usage: "/mute <user> [time]", desc: "Temporarily stop someone posting (e.g. 30m, 2h, 1d; default 10m)" },
   unmute:      { level: 1, usage: "/unmute <user>", desc: "Let someone post again" },
   announce:    { level: 2, usage: "/announce <text>", desc: "Post a highlighted announcement" },
-  ban:         { level: 2, usage: "/ban <user> [reason]", desc: "Block someone from the chat" },
+  ban:         { level: 2, usage: "/ban <user> [time] [reason]", desc: "Ban someone; add a time like 1d or 1w for a temporary ban" },
   unban:       { level: 2, usage: "/unban <user>", desc: "Lift a ban" },
   banlist:     { level: 2, usage: "/banlist", desc: "List banned users" },
   clear:       { level: 2, usage: "/clear", desc: "Delete every message in this channel" },
@@ -1624,7 +2011,7 @@ async function runCommand(raw) {
   const arg = parts.join(" ");
   const def = COMMANDS[name];
   if (!def) { localNote(`Unknown command “/${name}”. Type /help to see what you can use.`, true); return; }
-  if ((currentDM || currentRoom) && !["help", "me", "whois", "profile", "dm", "ranks", "rules", "xp", "top", "theme", "blackjack"].includes(name)) { localNote("That command only works in channels.", true); return; }
+  if ((currentDM || currentRoom) && !["help", "me", "whois", "profile", "dm", "ranks", "rules", "xp", "top", "theme", "blackjack", "holdem"].includes(name)) { localNote("That command only works in channels.", true); return; }
   if (def.level > levelOf()) { localNote("You don’t have permission to use /" + name + ".", true); return; }
   try {
     switch (name) {
@@ -1648,7 +2035,8 @@ async function runCommand(raw) {
       case "pins": openPins(); break;
       case "top": openTop(); break;
       case "theme": openThemes(); break;
-      case "blackjack": bjOpenGame(); break;
+      case "blackjack": bjOpenGame("bj"); break;
+      case "holdem": bjOpenGame("pk"); break;
       case "xp": {
         const t = parts[0] ? await resolveUser(parts[0]) : { uid: me.uid, name: me.name };
         const x = xpOf(t.uid), i = lvIdx(t.uid), nx = LEVELS[i + 1];
@@ -1657,16 +2045,8 @@ async function runCommand(raw) {
       }
       case "poll": {
         if (!currentChan) throw new Error("Polls only work in channels.");
-        const bits = arg.split("|").map(x => x.trim()).filter(Boolean);
-        if (bits.length < 3 || bits.length > 6) throw new Error("Usage: /poll Question | Option 1 | Option 2 (up to 5 options)");
-        const q = bits[0], opts = bits.slice(1);
-        if (q.length > 200) throw new Error("Keep the question under 200 characters.");
-        if (opts.some(o => o.length > 50)) throw new Error("Each option can be up to 50 characters.");
-        if (new Set(opts.map(o => o.toLowerCase())).size !== opts.length) throw new Error("Every option needs to be different.");
-        if (myMute > now()) throw new Error("You’re muted.");
-        if (!checkCooldown()) break;
-        await db.ref(msgPath()).push({ uid: me.uid, name: me.name, type: "poll", text: q, opts: opts.join("|"), ts: TS() });
-        awardXP(XPC.poll);
+        const bits = arg.split("|").map(x => x.trim()).filter(Boolean);   // /poll Q | A | B still pre-fills the window
+        openPollDialog(bits[0] || "", bits.slice(1));
         break;
       }
       case "logs": openLogs(); break;
@@ -1682,16 +2062,23 @@ async function runCommand(raw) {
       case "givexp": await mod.givexp(await resolveUser(parts[0]), parts[1]); break;
       case "rules": openRules(); break;
       case "suggestions": openSugs(); break;
-      case "kick":    await mod.kick(await resolveUser(parts[0])); break;
-      case "mute":    await mod.mute(await resolveUser(parts[0]), parseInt(parts[1], 10) || 10); break;
+      case "mute": {
+        const t = await resolveUser(parts[0]), d = parts[1] ? parseDur(parts[1]) : 10;
+        if (!d) throw new Error("Use a length like 30m, 2h or 1d (up to 7 days).");
+        await mod.mute(t, d); break;
+      }
       case "unmute":  await mod.unmute(await resolveUser(parts[0])); break;
-      case "ban":     await mod.ban(await resolveUser(parts[0]), parts.slice(1).join(" ")); break;
+      case "ban": {
+        const t = await resolveUser(parts[0]); let rest = parts.slice(1), d = 0;
+        if (rest.length && parseDur(rest[0]) !== null) { d = parseDur(rest[0]); rest = rest.slice(1); }
+        await mod.ban(t, rest.join(" "), d); break;
+      }
       case "unban":   await mod.unban(await resolveUser(parts[0])); break;
       case "banlist": {
         const bans = (await db.ref("bans").once("value")).val() || {};
-        const ids = Object.keys(bans);
+        const ids = Object.keys(bans).filter(id => banActive(bans[id]));
         if (!ids.length) { localNote("Nobody is banned."); break; }
-        const names = await Promise.all(ids.map(async id => ((await db.ref("users/" + id).once("value")).val() || {}).name || id));
+        const names = await Promise.all(ids.map(async id => (((await db.ref("users/" + id).once("value")).val() || {}).name || id) + (bans[id].until ? " (until " + new Date(bans[id].until).toLocaleString() + ")" : " (permanent)")));
         localNote("Banned: " + names.join(", "));
         break;
       }
@@ -1809,13 +2196,27 @@ function squarePhoto(file) {
   });
 }
 function editProfile() {
-  modal(`<h2>Edit profile</h2><p class="sub">Joined ${fmtJoin((usersMap[me.uid] || {}).joined)}</p><div class="field"><label for="pfFile">Profile photo</label><input type="file" id="pfFile" accept="image/*"></div><div class="field"><label for="pfBioIn">Bio</label><textarea id="pfBioIn" maxlength="200" rows="4" placeholder="Tell people about yourself"></textarea></div><div class="err" id="pfErr"></div><button class="btn" id="pfSave">Save</button><button class="btn ghost" id="pfRm">Remove photo</button><button class="btn ghost" id="pfX">Cancel</button>`);
-  $("#pfBioIn").value = (usersMap[me.uid] || {}).bio || "";
+  const loginName = ((auth.currentUser && auth.currentUser.email) || "").split("@")[0];
+  modal(`<h2>Edit profile</h2><p class="sub">Joined ${fmtJoin((usersMap[me.uid] || {}).joined)}</p><div class="field"><label for="pfNameIn">Display name</label><input id="pfNameIn" maxlength="16" autocomplete="off" spellcheck="false"><div class="sub" style="margin:4px 0 0;font-size:12px">3–16 letters, numbers or underscores. You can change it once a day. You still log in as “${esc(loginName)}”.</div></div><div class="field"><label for="pfFile">Profile photo</label><input type="file" id="pfFile" accept="image/*"></div><div class="field"><label for="pfBioIn">Bio</label><textarea id="pfBioIn" maxlength="200" rows="4" placeholder="Tell people about yourself"></textarea></div><div class="err" id="pfErr"></div><button class="btn" id="pfSave">Save</button><button class="btn ghost" id="pfRm">Remove photo</button><button class="btn ghost" id="pfX">Cancel</button>`);
+  $("#pfBioIn").value = (usersMap[me.uid] || {}).bio || ""; $("#pfNameIn").value = (usersMap[me.uid] || {}).name || me.name;
   let photo = null;
   $("#pfFile").onchange = async e => { const f = e.target.files[0]; if (!f) return; try { photo = await squarePhoto(f); $("#pfErr").textContent = "Photo ready. Press Save."; } catch (x) { $("#pfErr").textContent = "Couldn’t read that image."; } };
   $("#pfSave").onclick = async () => {
-    try { const up = {}; up["users/" + me.uid + "/bio"] = $("#pfBioIn").value.trim().slice(0, 200) || null; if (photo) up["avatars/" + me.uid] = photo; await db.ref().update(up); closeModal(); toast("Profile saved."); }
-    catch (x) { $("#pfErr").textContent = "Couldn’t save. Check your database rules."; }
+    const btn = $("#pfSave"), err = $("#pfErr"); err.textContent = ""; btn.disabled = true;
+    try {
+      const up = {}, nn = $("#pfNameIn").value.trim(), u = usersMap[me.uid] || {};
+      if (nn !== (u.name || me.name)) {
+        if (!/^[A-Za-z0-9_]{3,16}$/.test(nn)) { err.textContent = "Names are 3–16 letters, numbers or underscores."; btn.disabled = false; return; }
+        const left = (u.nc || 0) + NAME_COOLDOWN - now();
+        if (u.nc && left > 0) { const h = Math.ceil(left / 3600000); err.textContent = `You can change your name again in about ${h} hour${h === 1 ? "" : "s"}.`; btn.disabled = false; return; }
+        const lower = nn.toLowerCase(), owner = (await db.ref("usernames/" + lower).once("value")).val();
+        if (owner && owner !== me.uid) { err.textContent = "That name is taken."; btn.disabled = false; return; }
+        if (!owner) await db.ref("usernames/" + lower).set(me.uid);   // claiming it also reserves it, and your old name stays reserved too
+        up["users/" + me.uid + "/name"] = nn; up["users/" + me.uid + "/nc"] = TS();
+      }
+      up["users/" + me.uid + "/bio"] = $("#pfBioIn").value.trim().slice(0, 200) || null; if (photo) up["avatars/" + me.uid] = photo;
+      await db.ref().update(up); closeModal(); toast(up["users/" + me.uid + "/name"] ? "Profile saved. Your name is now " + nn + "." : "Profile saved.");
+    } catch (x) { btn.disabled = false; err.textContent = "Couldn’t save. If you changed your name, the owner needs to publish the updated database rules."; }
   };
   $("#pfRm").onclick = async () => { try { await db.ref("avatars/" + me.uid).remove(); closeModal(); toast("Photo removed."); } catch (x) { $("#pfErr").textContent = "Couldn’t remove it."; } };
   $("#pfX").onclick = closeModal;
@@ -2412,7 +2813,7 @@ function drawXP() {
     <p class="sub" style="margin:4px 0 12px">${x.toLocaleString()} XP${nx ? ` · ${(nx.xp - x).toLocaleString()} XP to ${esc(nx.n)}` : ` · You’ve reached the top level, ${esc(cur.n)}.`}</p>
     <div class="xpbar big"><i style="width:${pct}%"></i></div>
     <p class="sub" style="margin:10px 0 4px">Today: ${today} / ${XPC.daily} XP</p>
-    <p class="sub" style="margin:0 0 12px;font-size:13px">Earn XP by chatting (or win it at the blackjack table, 🃏 in the corner): ${XPC.msgBase} to ${XPC.msgBase + XPC.msgBonusMax} XP per message, at most once every ${XPC.gapSec} seconds. Short or repeated messages don’t count. Starting a poll gives +${XPC.poll} and voting in one gives +${XPC.vote}. You can earn up to ${XPC.daily} XP a day.</p>
+    <p class="sub" style="margin:0 0 12px;font-size:13px">Earn XP by chatting (or win it at the blackjack or Hold’em tables, 🃏 in the corner): ${XPC.msgBase} to ${XPC.msgBase + XPC.msgBonusMax} XP per message, at most once every ${XPC.gapSec} seconds. Short or repeated messages don’t count. Starting a poll gives +${XPC.poll} and voting in one gives +${XPC.vote}. You can earn up to ${XPC.daily} XP a day.</p>
     <div class="dir" style="max-height:36dvh">${rows}</div>
     <button class="btn" id="xpTh">Themes</button><button class="btn ghost" id="xpTop">Leaderboard</button><button class="btn ghost" id="xpX">Close</button>`;
   $("#xpTh").onclick = openThemes; $("#xpTop").onclick = openTop; $("#xpX").onclick = closeModal;
@@ -2630,9 +3031,9 @@ function bjModeLoad() {
 }
 function bjFunSave() { try { localStorage.setItem(bjKey("Fun"), String(bjFunBal)); } catch (e) {} }
 function bjSetMode(m) {
-  if (bjBusy || (bj && bj.phase !== "done") || (m !== "xp" && m !== "fun")) return;
+  if (bjBusy || pk || (bj && bj.phase !== "done") || (m !== "xp" && m !== "fun")) return;
   bjMode = m; try { localStorage.setItem(bjKey("Mode"), m); } catch (e) {}
-  bj = null; bjNotice = ""; bjChips = bjClamp(bjChips || bjLast || BJC.minBet); bjRender();
+  bj = null; bjNotice = ""; pkNotice = ""; bjChips = bjClamp(bjChips || bjLast || BJC.minBet); pkBuy = bjClamp(pkBuy || pkLastBuy || 100); bjRender();
 }
 /* A bet leaves your balance when the hand is dealt (escrow for XP, straight off the play-money balance), and the payout lands when it ends. */
 async function bjPlace(bet) { if (bjMode === "fun") { bjFunBal -= bet; bjFunSave(); return; } await bjWrite(0, bet); }
@@ -2672,23 +3073,32 @@ function bjEnforceTheme() {
 function bjStaleCheck() {
   if (bjStale || !me) return; bjStale = true;
   const e = (bjData[me.uid] || {}).e || 0;
-  if (e > 0 && !bj) bjWriteRetry(-e, 0).then(ok => { if (ok) toast(`You left a blackjack hand unfinished, so your ${e.toLocaleString()} XP bet was forfeited.`); });
+  if (e > 0 && !bj && !pk) bjWriteRetry(-e, 0).then(ok => { if (ok) toast(`You left a table game unfinished, so your ${e.toLocaleString()} XP stake was forfeited.`); });
 }
 function bjReset() {
+  if (pkWait) { const w = pkWait; pkWait = null; w({ t: "fold" }); }
+  pkToken++; pk = null; pkBuy = 0; pkNotice = ""; bjGame = "bj";
   bj = null; bjBusy = false; bjOpen = false; bjNotice = ""; bjData = {}; bjLoaded = false; bjEnabled = true; bjStale = false; bjLastTotal = -1; rankReady.clear();
   const el = $("#bj"); if (el) { el.hidden = true; el.innerHTML = ""; }
 }
 
 /* ── opening & closing ── */
-function bjOpenGame() {
+function bjOpenGame(g) {
   if (!me) return;
+  if ((g === "bj" || g === "pk") && g !== bjGame && !pk && !(bj && bj.phase !== "done")) bjGame = g;
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   $("#bj").hidden = false; bjOpen = true;
-  if (!bj) bjModeLoad();
+  if (!bj && !pk) bjModeLoad();
+  if (!pk) pkBuy = bjClamp(pkBuy || pkLastBuy || 100);
   if (!bj || bj.phase === "done") bjChips = bjClamp(bjChips || bjLast || BJC.minBet);
   bjRender();
 }
 function bjClose(force) {
+  if (bjGame === "pk" && pk && !force) {
+    if (bjBusy) { toast("Hang on, saving your result."); return; }
+    if (pk.phase === "bust") { pkCashOut(true); return; }
+    pk.leaving = true; bjRender(); return;
+  }
   if (bj && bj.phase !== "done" && !force) {
     if (bjBusy || bj.phase === "dealer" || bj.phase === "settle" || bj.phase === "deal") { toast("Hang on, the hand is still playing out."); return; }
     bj.leaving = true; bjRender(); return;
@@ -2817,8 +3227,16 @@ function bjTotPill(cards, hidden) {
   const { t, soft } = bjTotal(cards);
   return `<span class="bj-tot${t > 21 ? " bust" : ""}">${t > 21 ? "Bust " : ""}${t}${soft && t < 21 ? " soft" : ""}</span>`;
 }
+/* header (game tabs, currency switch, balance) and rank line, shared by blackjack and Hold’em */
+function bjTop(fun, locked, total, li, L) {
+  const rankLine = fun ? `🎲 Play money · your real XP, rank and theme are safe here.` : null;
+  const floor = li > 0 ? ` · <b>${(total - L.xp).toLocaleString()} XP</b> above your rank floor` : ` · lowest rank, nothing lower to fall to`;
+  return `<div class="bj-head"><div class="bj-tabs" role="tablist" aria-label="Game"><button data-act="game" data-g="bj" role="tab" aria-selected="${bjGame === "bj"}" class="${bjGame === "bj" ? "on" : ""}" ${locked ? "disabled" : ""}>🃏 Blackjack</button><button data-act="game" data-g="pk" role="tab" aria-selected="${bjGame === "pk"}" class="${bjGame === "pk" ? "on" : ""}" ${locked ? "disabled" : ""}>♠️ Hold’em</button></div><div class="bj-mode" role="group" aria-label="Currency"><button data-act="mode" data-m="xp" class="${fun ? "" : "on"}" ${locked ? "disabled" : ""}>⭐ XP</button><button data-act="mode" data-m="fun" class="${fun ? "on" : ""}" ${locked ? "disabled" : ""}>�� Play money</button></div><span class="bj-bal" title="${fun ? "Your play-money balance" : "Your total XP"}">${fun ? bjFmt(bjFunBal) : bjFmt(total)}</span><button class="bj-x" data-act="close" aria-label="Close">✕</button></div>
+    <div class="bj-rank">${rankLine || `${L.icon} ${esc(L.n)} · Lv ${li + 1}${floor}. Fall below ${li > 0 ? L.xp.toLocaleString() + " XP" : "it"} and you lose your rank and theme.`}</div>`;
+}
 function bjRender() {
   const root = $("#bj"); if (!root || root.hidden || !me) return;
+  if (bjGame === "pk") return pkRender(root);
   const total = xpOf(me.uid), li = lvIdx(me.uid), L = LEVELS[li], r = bj;
   bjLastTotal = total;
   let body = "";
@@ -2857,10 +3275,7 @@ function bjRender() {
     }
     body += `<div class="bj-rules">Blackjack pays 3:2 · Dealer stands on all 17s · Double on any two cards · Split up to 4 hands · Insurance pays 2:1 · Late surrender</div>`;
   }
-  const rankLine = fun ? `🎲 Play money · your real XP, rank and theme are safe here.` : null;
-  const floor = li > 0 ? ` · <b>${(total - L.xp).toLocaleString()} XP</b> above your rank floor` : ` · lowest rank, nothing lower to fall to`;
-  root.innerHTML = `<div class="bj-table"><div class="bj-head"><h3>🃏 Blackjack</h3><div class="bj-mode" role="group" aria-label="Currency"><button data-act="mode" data-m="xp" class="${fun ? "" : "on"}" ${locked ? "disabled" : ""}>⭐ XP</button><button data-act="mode" data-m="fun" class="${fun ? "on" : ""}" ${locked ? "disabled" : ""}>💵 Play money</button></div><span class="bj-bal" title="${fun ? "Your play-money balance" : "Your total XP"}">${fun ? bjFmt(bjFunBal) : bjFmt(total)}</span><button class="bj-x" data-act="close" aria-label="Close">✕</button></div>
-    <div class="bj-rank">${rankLine || `${L.icon} ${esc(L.n)} · Lv ${li + 1}${floor}. Fall below ${li > 0 ? L.xp.toLocaleString() + " XP" : "it"} and you lose your rank and theme.`}</div>${body}</div>`;
+  root.innerHTML = `<div class="bj-table">${bjTop(fun, locked, total, li, L)}${body}</div>`;
   if (r) { r.dealer.forEach(c => c.fresh = false); r.hands.forEach(h => h.cards.forEach(c => c.fresh = false)); }
 }
 function bjMsg(r) {
@@ -2893,8 +3308,9 @@ $("#bj").addEventListener("click", e => {
   if (b.disabled) return;
   switch (b.dataset.act) {
     case "close": bjClose(); break;
+    case "game": bjSetGame(b.dataset.g); break;
     case "mode": bjSetMode(b.dataset.m); break;
-    case "refill": if (bjMode === "fun" && bjSpendable() < BJC.minBet && (!bj || bj.phase === "done")) { bjFunBal = 1000; bjFunSave(); bjChips = bjClamp(bjLast || BJC.minBet); bjRender(); } break;
+    case "refill": if (bjMode === "fun" && bjSpendable() < BJC.minBet && (!bj || bj.phase === "done")) { bjFunBal = 1000; bjFunSave(); bjChips = bjClamp(bjLast || BJC.minBet); pkBuy = bjClamp(pkLastBuy || 100); bjRender(); } break;
     case "chip": bjChips = Math.min(bjChips + Number(b.dataset.v), bjCap()); bjRender(); break;
     case "clear": bjChips = 0; bjRender(); break;
     case "max": bjChips = bjCap(); bjRender(); break;
@@ -2909,16 +3325,407 @@ $("#bj").addEventListener("click", e => {
     case "noins": bjInsure(false); break;
     case "stay": if (bj) { bj.leaving = false; bjRender(); } break;
     case "forfeit": bjForfeit(); break;
+    default: if (/^pk/.test(b.dataset.act)) pkClick(b.dataset.act, b);
   }
 });
 document.addEventListener("keydown", e => {
   if (!bjOpen || e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key.toLowerCase();
   if (k === "escape") { e.preventDefault(); bjClose(); return; }
+  if (bjGame === "pk") { pkKeys(e, k); return; }
   if (!bj || bj.phase === "done") { if (k === "enter" && !(document.activeElement && document.activeElement.tagName === "BUTTON")) { e.preventDefault(); bjDeal(); } return; }
   if (bj.phase === "insure") { if (k === "y") bjInsure(true); else if (k === "n") bjInsure(false); return; }
   if (k === "h") bjHit(); else if (k === "s") bjStand(); else if (k === "d") bjDouble(); else if (k === "p") bjSplit(); else if (k === "u") bjSurrender();
 });
+
+/* ───────── Texas Hold’em (same window as blackjack, second tab) ─────────
+   You sit down against three bots. Your buy-in is held in escrow exactly like a blackjack bet (bj/<uid>/e, capped by the
+   same config/blackjack/maxBet), you play as many hands as you like with that stack, and when you cash out the difference
+   between your stack and your buy-in lands in bj/<uid>/v. Closing the tab mid-session forfeits the buy-in, same as blackjack.
+   No limit, fixed blinds (buy-in ÷ 25), bots re-buy when they bust. Needs no extra database rules. */
+const PK_BOTS = [{ name: "Orion", agg: .5, loose: .5 }, { name: "Vega", agg: .3, loose: .2 }, { name: "Lyra", agg: .75, loose: .75 }];
+const PK_CATS = ["High card", "Pair", "Two pair", "Three of a kind", "Straight", "Flush", "Full house", "Four of a kind", "Straight flush"];
+let bjGame = "bj";   // which tab is showing: "bj" (blackjack) or "pk" (Hold’em)
+let pk = null, pkBuy = 0, pkLastBuy = 0, pkToken = 0, pkWait = null, pkRaise = 0, pkNotice = "";
+
+const pkRV = c => c.r === "A" ? 14 : c.r === "K" ? 13 : c.r === "Q" ? 12 : c.r === "J" ? 11 : Number(c.r);
+const pkPot = r => r.seats.reduce((a, s) => a + s.total, 0);
+const pkRnd = () => bjRand(1000) / 1000;
+function pkNewDeck() {
+  const d = [];
+  BJ_SUITS.forEach(su => BJ_RANKS.forEach(rk => d.push({ r: rk, s: su })));
+  for (let i = d.length - 1; i > 0; i--) { const j = bjRand(i + 1); [d[i], d[j]] = [d[j], d[i]]; }
+  return d;
+}
+const pkDraw = r => { const c = r.deck.pop(); c.fresh = true; return c; };
+
+/* ── hand evaluation: best five of up to seven cards, compared as arrays ── */
+function pkEval5(cs) {
+  const v = cs.map(pkRV).sort((a, b) => b - a), flush = cs.every(c => c.s === cs[0].s), cnt = {};
+  v.forEach(x => cnt[x] = (cnt[x] || 0) + 1);
+  const g = Object.keys(cnt).map(Number).sort((a, b) => cnt[b] - cnt[a] || b - a);
+  let st = 0;
+  if (new Set(v).size === 5) { if (v[0] - v[4] === 4) st = v[0]; else if (v[0] === 14 && v[1] === 5 && v[4] === 2) st = 5; }
+  if (st && flush) return [8, st];
+  if (cnt[g[0]] === 4) return [7, g[0], g[1]];
+  if (cnt[g[0]] === 3 && cnt[g[1]] === 2) return [6, g[0], g[1]];
+  if (flush) return [5, ...v];
+  if (st) return [4, st];
+  if (cnt[g[0]] === 3) return [3, ...g];
+  if (cnt[g[0]] === 2 && cnt[g[1]] === 2) return [2, ...g];
+  if (cnt[g[0]] === 2) return [1, ...g];
+  return [0, ...v];
+}
+function pkCmp(a, b) { for (let i = 0; i < Math.max(a.length, b.length); i++) { const d = (a[i] || 0) - (b[i] || 0); if (d) return d > 0 ? 1 : -1; } return 0; }
+function pkBest(cards) {
+  let best = null; const n = cards.length;
+  const rec = (start, pick) => {
+    if (pick.length === 5) { const sc = pkEval5(pick.map(i => cards[i])); if (!best || pkCmp(sc, best) > 0) best = sc; return; }
+    for (let i = start; i < n; i++) { pick.push(i); rec(i + 1, pick); pick.pop(); }
+  };
+  rec(0, []); return best;
+}
+const PK_RN = { 14: "Ace", 13: "King", 12: "Queen", 11: "Jack", 10: "Ten", 9: "Nine", 8: "Eight", 7: "Seven", 6: "Six", 5: "Five", 4: "Four", 3: "Three", 2: "Two" };
+const pkRname = (v, pl) => PK_RN[v] + (pl ? (v === 6 ? "es" : "s") : "");
+function pkName(sc) {
+  const c = sc[0];
+  if (c === 8) return sc[1] === 14 ? "Royal flush" : "Straight flush, " + pkRname(sc[1]) + " high";
+  if (c === 7) return "Four " + pkRname(sc[1], 1);
+  if (c === 6) return "Full house, " + pkRname(sc[1], 1) + " over " + pkRname(sc[2], 1);
+  if (c === 5) return "Flush, " + pkRname(sc[1]) + " high";
+  if (c === 4) return "Straight, " + pkRname(sc[1]) + " high";
+  if (c === 3) return "Three " + pkRname(sc[1], 1);
+  if (c === 2) return "Two pair, " + pkRname(sc[1], 1) + " and " + pkRname(sc[2], 1);
+  if (c === 1) return "Pair of " + pkRname(sc[1], 1);
+  return pkRname(sc[1]) + " high";
+}
+
+/* ── bots ── */
+function pkPre(h) {
+  const a = pkRV(h[0]), b = pkRV(h[1]), hi = Math.max(a, b), lo = Math.min(a, b), gap = hi - lo, su = h[0].s === h[1].s;
+  let v;
+  if (a === b) v = .5 + (hi - 2) / 12 * .5;
+  else { v = (hi - 2) / 12 * .35 + (lo - 2) / 12 * .25; if (su) v += .06; if (gap === 1) v += .05; else if (gap >= 4) v -= .04; if (hi === 14) v += .08; }
+  return Math.max(0, Math.min(1, v));
+}
+function pkStrength(h, b) {
+  if (!b.length) return pkPre(h);
+  const all = h.concat(b), sc = pkBest(all), cat = sc[0], hv = h.map(pkRV), bv = b.map(pkRV).sort((x, y) => y - x);
+  let v;
+  if (cat === 0) v = .1 + (hv[0] >= 13 || hv[1] >= 13 ? .05 : 0);
+  else if (cat === 1) v = !hv.includes(sc[1]) ? .18 : sc[1] >= bv[0] ? .56 + (sc[1] >= 12 ? .06 : 0) : sc[1] >= (bv[1] || 0) ? .44 : .34;
+  else if (cat === 2) v = hv.includes(sc[1]) || hv.includes(sc[2]) ? .72 : .25;
+  else if (cat === 3) v = hv.includes(sc[1]) ? .8 : .3;
+  else v = [0, 0, 0, 0, .86, .9, .95, .98, 1][cat];
+  if (b.length < 5 && cat < 4) {
+    const su = {}; all.forEach(c => su[c.s] = (su[c.s] || 0) + 1);
+    if (Object.keys(su).some(s => su[s] === 4 && h.some(c => c.s === s))) v += .16;
+    const u = [...new Set(all.map(pkRV))]; if (u.includes(14)) u.push(1); u.sort((x, y) => x - y);
+    for (let i = 0; i + 3 < u.length; i++) if (u[i + 3] - u[i] === 3) { v += .1; break; }
+  }
+  return Math.min(1, v);
+}
+function pkBotAct(r, i) {
+  const s = r.seats[i], bot = PK_BOTS[i - 1] || PK_BOTS[0], need = r.curBet - s.bet, pot = pkPot(r), rnd = pkRnd();
+  const maxTo = s.bet + s.stack, minTo = Math.min(r.curBet + r.minRaise, maxTo), canRaise = s.stack > need;
+  const to = f => ({ t: "raise", to: Math.max(minTo, Math.min(maxTo, Math.round(r.curBet + f * (pot + need)))) });
+  const str = pkStrength(s.cards, r.board) + (bot.loose - .5) * .12, odds = need / (pot + need || 1);
+  if (need <= 0) {
+    if (canRaise && str > .68 && rnd < .5 + bot.agg * .4) return to(.45 + pkRnd() * .5);
+    if (canRaise && str > .45 && rnd < .12 + bot.agg * .25) return to(.35 + pkRnd() * .3);
+    if (canRaise && rnd < .04 + bot.agg * .06) return to(.5);
+    return { t: "call" };
+  }
+  if (need >= s.stack) return str > .45 + odds * .5 - bot.loose * .1 ? { t: "call" } : { t: "fold" };
+  if (canRaise && str > .8 && rnd < .35 + bot.agg * .4) return to(.6 + pkRnd() * .6);
+  if (str + (pkRnd() - .5) * .1 >= odds + .12 - bot.loose * .1) return { t: "call" };
+  return { t: "fold" };
+}
+
+/* ── betting ── */
+function pkPost(r, i, amt) {
+  const s = r.seats[i], a = Math.min(amt, s.stack);
+  s.stack -= a; s.bet += a; s.total += a; if (!s.stack) s.allin = true;
+}
+function pkApply(r, i, a) {
+  const s = r.seats[i]; s.acted = true;
+  if (a.t === "fold") { s.folded = true; s.tag = "Fold"; return; }
+  if (a.t === "call") {
+    const amt = Math.max(0, Math.min(r.curBet - s.bet, s.stack));
+    s.stack -= amt; s.bet += amt; s.total += amt; if (!s.stack) s.allin = true;
+    s.tag = s.allin ? "All-in" : amt === 0 ? "Check" : "Call"; return;
+  }
+  const prev = r.curBet, to = Math.min(a.to, s.bet + s.stack), add = to - s.bet;
+  s.stack -= add; s.bet = to; s.total += add; if (!s.stack) s.allin = true;
+  if (to > r.curBet) {
+    const size = to - r.curBet; if (size >= r.minRaise) r.minRaise = size;
+    r.curBet = to; r.seats.forEach((o, k) => { if (k !== i && !o.folded && !o.allin) o.acted = false; });
+  }
+  s.tag = s.allin ? "All-in" : (prev === 0 ? "Bet " : "Raise ") + to;
+}
+const pkMinTo = (r, s) => Math.min(r.curBet + r.minRaise, s.bet + s.stack);
+function pkAskMe(r) {
+  return new Promise(res => {
+    const s = r.seats[0]; pkRaise = pkMinTo(r, s); pkWait = res; r.turn = true; bjRender();
+  });
+}
+function pkAct(a) {
+  const r = pk; if (!r || !pkWait || !r.turn) return;
+  const s = r.seats[0], need = r.curBet - s.bet;
+  if (a.t === "allin") a = need >= s.stack ? { t: "call" } : { t: "raise", to: s.bet + s.stack };
+  if (a.t === "raise") {
+    if (s.stack <= need) a = { t: "call" };
+    else a = { t: "raise", to: Math.max(pkMinTo(r, s), Math.min(s.bet + s.stack, Math.round(a.to))) };
+  }
+  const w = pkWait; pkWait = null; r.turn = false; w(a);
+}
+
+/* ── pots & showdown ── */
+function pkPots(seats) {
+  const lv = [...new Set(seats.filter(s => s.total > 0).map(s => s.total))].sort((a, b) => a - b), pots = [];
+  let prev = 0;
+  lv.forEach(L => {
+    const part = seats.filter(s => s.total >= L), amt = (L - prev) * part.length, elig = part.filter(s => !s.folded);
+    prev = L;
+    if (!elig.length) { if (pots.length) pots[pots.length - 1].amt += amt; return; }
+    pots.push({ amt, elig });
+  });
+  return pots;
+}
+function pkFinish(r) {
+  const live = r.seats.filter(s => !s.folded);
+  r.seats.forEach(s => s.won = 0);
+  r.results = [];
+  if (live.length === 1) {
+    const w = live[0], amt = pkPot(r); w.stack += amt; w.won = amt;
+    r.results.push(`${w.name} takes the pot (${amt.toLocaleString()}), everyone else folded.`);
+  } else {
+    live.forEach(s => { s.show = true; s.best = pkBest(s.cards.concat(r.board)); });
+    const pots = pkPots(r.seats);
+    pots.forEach((p, pi) => {
+      let top = null, w = [];
+      p.elig.forEach(s => { const c = top ? pkCmp(s.best, top) : 1; if (c > 0) { top = s.best; w = [s]; } else if (c === 0) w.push(s); });
+      const share = Math.floor(p.amt / w.length); let rem = p.amt - share * w.length;
+      w.forEach(s => { const g = share + (rem > 0 ? 1 : 0); if (rem > 0) rem--; s.stack += g; s.won += g; });
+      r.results.push(`${w.map(s => s.name).join(" & ")} ${w.length > 1 ? "split" : "wins"} ${pots.length > 1 ? (pi === 0 ? "the main pot" : "a side pot") + " " : "the pot "}(${p.amt.toLocaleString()}) with ${pkName(top)}.`);
+    });
+  }
+  r.seats.forEach(s => { s.net = s.won - s.total; s.tag = s.won > 0 ? "Won " + s.won.toLocaleString() : s.folded ? "Fold" : s.best ? pkName(s.best) : ""; });
+  r.lastNet = r.seats[0].net;
+  r.stage = "show"; r.turn = false; r.toAct = -1;
+  r.phase = r.seats[0].stack <= 0 ? "bust" : "between";
+}
+
+/* ── hand flow ── */
+async function pkPlay(r, tok) {
+  const alive = () => pk === r && pkToken === tok;
+  const streets = ["pre", "flop", "turn", "river"];
+  for (let si = 0; si < 4; si++) {
+    r.stage = streets[si];
+    if (si > 0) {
+      r.seats.forEach(s => { s.bet = 0; s.acted = false; s.tag = s.folded ? "Fold" : s.allin ? "All-in" : ""; });
+      r.curBet = 0; r.minRaise = r.bb;
+      if (r.seats.filter(s => !s.folded && !s.allin).length < 2) { await bjSleep(700); if (!alive()) return; }
+      r.deck.pop();
+      for (let k = 0; k < (si === 1 ? 3 : 1); k++) { r.board.push(pkDraw(r)); bjRender(); await bjSleep(280); if (!alive()) return; }
+    }
+    let i = si === 0 ? (r.dealer + 3) % 4 : (r.dealer + 1) % 4;
+    for (;;) {
+      if (r.seats.filter(s => !s.folded).length === 1) break;
+      const actors = r.seats.filter(s => !s.folded && !s.allin).length;
+      let f = -1;
+      for (let k = 0; k < 4; k++) {
+        const j = (i + k) % 4, s = r.seats[j];
+        if (!s.folded && !s.allin && (s.bet < r.curBet || (!s.acted && actors >= 2))) { f = j; break; }
+      }
+      if (f < 0) break;
+      i = f; r.toAct = i; bjRender();
+      let a;
+      if (i === 0) a = await pkAskMe(r);
+      else { await bjSleep(600 + bjRand(600)); if (!alive()) return; a = pkBotAct(r, i); }
+      if (!alive()) return;
+      pkApply(r, i, a); bjRender();
+      if (i === 0) await bjSleep(200); if (!alive()) return;
+      i = (i + 1) % 4;
+    }
+    if (r.seats.filter(s => !s.folded).length === 1) break;
+  }
+  r.seats.forEach(s => { if (!s.folded && !s.allin) s.tag = ""; });
+  await bjSleep(450); if (!alive()) return;
+  pkFinish(r); bjRender();
+}
+async function pkDealHand() {
+  const r = pk; if (!r || r.phase !== "between" || bjBusy) return;
+  const tok = ++pkToken;
+  r.phase = "hand"; r.leaving = false; r.results = []; r.turn = false; r.hand++; pkNotice = "";
+  r.seats.forEach(s => { if (s.bot && s.stack <= 0) s.stack = r.buy; });
+  r.dealer = (r.dealer + 1) % 4; r.board = []; r.deck = pkNewDeck(); r.stage = "pre";
+  r.seats.forEach(s => { s.cards = []; s.bet = 0; s.total = 0; s.folded = false; s.allin = false; s.acted = false; s.show = false; s.tag = ""; s.won = 0; s.net = 0; s.best = null; });
+  pkPost(r, (r.dealer + 1) % 4, r.sb); pkPost(r, (r.dealer + 2) % 4, r.bb);
+  r.curBet = Math.max(...r.seats.map(s => s.bet)); r.minRaise = r.bb;
+  bjRender();
+  for (let n = 0; n < 2; n++) for (let k = 1; k <= 4; k++) {
+    r.seats[(r.dealer + k) % 4].cards.push(pkDraw(r)); bjRender(); await bjSleep(140); if (pk !== r || pkToken !== tok) return;
+  }
+  pkPlay(r, tok);
+}
+
+/* ── sitting down & cashing out ── */
+async function pkSit() {
+  if (bjBusy || pk || !me || (bjMode === "xp" && (!bjEnabled || !bjLoaded))) return;
+  const buy = pkBuy; if (buy < BJC.minBet || buy > bjCap()) return;
+  bjBusy = true; pkNotice = ""; bjRender();
+  try { await bjPlace(buy); }
+  catch (e) { bjBusy = false; toast("Couldn’t take that buy-in. Check your connection and try again."); bjRender(); return; }
+  pkLastBuy = buy;
+  const bb = Math.max(2, bjEven(Math.round(buy / 25)));
+  const mk = (name, bot) => ({ name, bot, stack: buy, cards: [], bet: 0, total: 0, folded: false, allin: false, acted: false, show: false, tag: "", won: 0, net: 0, best: null });
+  pk = { mode: bjMode, buy, bb, sb: bb / 2, dealer: 3, hand: 0, phase: "between", stage: "", seats: [mk("You", false), ...PK_BOTS.map(b => mk(b.name, true))], board: [], deck: [], curBet: 0, minRaise: bb, results: [], leaving: false, turn: false, toAct: -1, lastNet: 0 };
+  bjBusy = false; bjRender();
+}
+async function pkCashOut(closeAfter) {
+  const r = pk; if (!r || bjBusy) return;
+  pkToken++; if (pkWait) { const w = pkWait; pkWait = null; w({ t: "fold" }); }
+  bjBusy = true; r.leaving = false; r.turn = false; bjRender();
+  const stack = Math.max(0, r.seats[0].stack), net = stack - r.buy;
+  const ok = await bjPay({ mode: r.mode, net, bet: r.buy });
+  bjBusy = false; pk = null;
+  pkNotice = (stack > 0 ? `You cashed out ${bjFmt(stack)}` : `You busted out`) + ` (${net >= 0 ? "+" : "−"}${bjFmt(Math.abs(net))}).`;
+  if (!ok) pkNotice += " ⚠ The result couldn’t be saved. Your buy-in stays held and will be forfeited on your next login.";
+  pkBuy = bjClamp(pkBuy || pkLastBuy || 100);
+  if (closeAfter) { bjOpen = false; $("#bj").hidden = true; } else bjRender();
+}
+
+/* ── drawing ── */
+function pkBotHtml(r, i) {
+  const s = r.seats[i], hidden = !s.show, on = r.phase === "hand" && r.toAct === i;
+  const tagCls = /^(Won)/.test(s.tag) ? " win" : /^Fold/.test(s.tag) ? " lose" : "";
+  return `<div class="bj-hand pk-bot${on ? " on" : ""}${s.folded ? " pk-folded" : ""}"><div class="bj-lab">${esc(s.name)}${r.dealer === i ? ` <span class="pk-d">D</span>` : ""}<span class="bj-tot">🪙 ${s.stack.toLocaleString()}</span></div><div class="bj-cards">${s.cards.map(c => bjCardHtml(c, hidden)).join("")}</div><div class="bj-meta">${s.bet ? `<span class="bj-bet">🪙 ${s.bet.toLocaleString()}</span>` : ""}${s.tag ? `<span class="bj-tag${tagCls}">${esc(s.tag)}</span>` : ""}</div></div>`;
+}
+function pkTable(r) {
+  const me0 = r.seats[0], inHand = r.phase === "hand", pot = pkPot(r), need = Math.max(0, r.curBet - me0.bet);
+  const bots = [1, 2, 3].map(i => pkBotHtml(r, i)).join("");
+  const slots = []; for (let k = 0; k < 5; k++) slots.push(r.board[k] ? bjCardHtml(r.board[k]) : `<div class="pk-slot"></div>`);
+  const stageName = { pre: "Pre-flop", flop: "Flop", turn: "Turn", river: "River", show: "Showdown" }[r.stage] || "";
+  let made = "";
+  if (me0.cards.length === 2 && r.board.length >= 3 && !me0.folded) { const sc = pkBest(me0.cards.concat(r.board)); made = `<span class="bj-tot">${esc(pkName(sc))}</span>`; }
+  const myTag = me0.tag ? `<span class="bj-tag${/^Won/.test(me0.tag) ? " win" : /^Fold/.test(me0.tag) ? " lose" : ""}">${esc(me0.tag)}</span>` : "";
+  let msg = "";
+  if (r.phase === "hand") msg = r.turn ? (need > 0 ? `Your move. ${bjFmt(Math.min(need, me0.stack))} to call.` : "Your move. Check or bet.") : (r.toAct >= 0 && r.toAct < 4 ? `${r.seats[r.toAct].name} is thinking…` : "");
+  else if (r.phase === "bust") msg = "You’re out of chips.";
+  else if (r.hand === 0) msg = `Blinds ${r.sb.toLocaleString()} / ${r.bb.toLocaleString()}. Deal the first hand when you’re ready.`;
+  let h = `<div class="bj-felt"><div class="bj-hands">${bots}</div>
+    <div class="bj-row"><div class="bj-lab">${stageName ? stageName + " · " : ""}Pot <span class="bj-tot">🪙 ${pot.toLocaleString()}</span></div><div class="pk-board">${slots.join("")}</div></div>
+    <div class="bj-msg">${esc(msg)}</div>
+    <div class="bj-row"><div class="bj-hand pk-me${inHand && r.toAct === 0 ? " on" : ""}${me0.folded ? " pk-folded" : ""}"><div class="bj-lab">You${r.dealer === 0 ? ` <span class="pk-d">D</span>` : ""}<span class="bj-tot">🪙 ${me0.stack.toLocaleString()}</span>${made}</div><div class="bj-cards">${me0.cards.map(c => bjCardHtml(c)).join("") || `<div class="bj-card back" style="opacity:.2"></div><div class="bj-card back" style="opacity:.2"></div>`}</div><div class="bj-meta">${me0.bet ? `<span class="bj-bet">🪙 ${me0.bet.toLocaleString()}</span>` : ""}${myTag}</div></div></div></div>`;
+  if (r.phase === "between" || r.phase === "bust") {
+    if (r.hand > 0) {
+      const n = r.lastNet;
+      h += `<div class="bj-result ${n > 0 ? "win" : n < 0 ? "lose" : "push"}">${n > 0 ? "You won " + bjFmt(n) : n < 0 ? "You lost " + bjFmt(-n) : "You broke even"}</div>`;
+      h += r.results.map(t => `<div class="bj-msg">🏆 ${esc(t)}</div>`).join("");
+    }
+  }
+  if (pkNotice) h += `<div class="bj-note">${esc(pkNotice)}</div>`;
+  const sess = me0.stack - r.buy;
+  if (r.leaving) h += `<div class="bj-leave">Leave the table? ${inHand ? "You fold this hand and " : "You "}cash out ${bjFmt(Math.max(0, me0.stack))}.<div class="bj-ctl"><button class="bj-btn" data-act="pkstay">Keep playing</button><button class="bj-btn go" data-act="pkcash">Cash out &amp; leave</button></div></div>`;
+  else if (r.phase === "bust") h += `<div class="bj-ctl"><button class="bj-btn go" data-act="pkcash" ${bjBusy ? "disabled" : ""}>Leave table</button></div>`;
+  else if (r.phase === "between") h += `<div class="bj-ctl"><button class="bj-btn go" data-act="pkdeal" ${bjBusy ? "disabled" : ""}>Deal hand ${r.hand + 1}<kbd>↵</kbd></button><button class="bj-btn" data-act="pkcash" ${bjBusy ? "disabled" : ""}>Cash out ${bjFmt(me0.stack)}</button></div>`;
+  else {
+    const on = r.turn && !bjBusy, canRaise = on && me0.stack > need, minTo = pkMinTo(r, me0), maxTo = me0.bet + me0.stack;
+    if (pkRaise < minTo) pkRaise = minTo; if (pkRaise > maxTo) pkRaise = maxTo;
+    h += `<div class="bj-ctl">
+      <button class="bj-btn" data-act="pkfold" ${on ? "" : "disabled"}>Fold<kbd>F</kbd></button>
+      <button class="bj-btn go" data-act="pkcall" ${on ? "" : "disabled"}>${need === 0 ? "Check" : need >= me0.stack ? "Call all-in " + me0.stack.toLocaleString() : "Call " + need.toLocaleString()}<kbd>C</kbd></button>
+      <button class="bj-btn" data-act="pkraise" ${canRaise ? "" : "disabled"}>${r.curBet === 0 ? "Bet" : "Raise to"} <span id="pkRtxt">${pkRaise.toLocaleString()}</span><kbd>R</kbd></button>
+      <button class="bj-btn" data-act="pkallin" ${on ? "" : "disabled"}>All-in<kbd>A</kbd></button></div>
+      <div class="pk-slide"><button class="bj-btn" data-act="pkhalf" ${canRaise ? "" : "disabled"}>½ pot</button><input type="range" id="pkSlide" min="${minTo}" max="${Math.max(minTo, maxTo)}" step="1" value="${pkRaise}" ${canRaise ? "" : "disabled"} aria-label="Raise amount"><button class="bj-btn" data-act="pkpot" ${canRaise ? "" : "disabled"}>Pot</button></div>`;
+    if (!r.leaving) h += `<div class="bj-ctl" style="margin-top:2px"><button class="bj-btn" data-act="pkleave" style="min-width:0;padding:5px 12px;font-size:12px;opacity:.75">Cash out…</button></div>`;
+  }
+  h += `<div class="bj-rules">Texas Hold’em, no limit · Blinds ${r.sb.toLocaleString()}/${r.bb.toLocaleString()} · You vs 3 bots · Buy-in ${bjFmt(r.buy)} · Session ${sess >= 0 ? "+" : "−"}${bjFmt(Math.abs(sess))} · Closing the tab mid-game forfeits your buy-in</div>`;
+  return h;
+}
+function pkBuyPanel(total, li) {
+  const spend = bjSpendable(), cap = bjCap();
+  const note = pkNotice ? `<div class="bj-note">${esc(pkNotice)}</div>` : "";
+  if (spend < BJC.minBet) return note + (bjMode === "fun" ? `<p class="bj-warn">You’re out of chips.</p><div class="bj-ctl"><button class="bj-btn go" data-act="refill">Refill to $1,000</button></div>` : `<p class="bj-warn">You need at least ${bjFmt(BJC.minBet)} to sit down. Chat to earn more, or switch to play money.</p>`);
+  const chips = Object.keys(BJ_CHIPS).map(Number).filter(v => v >= BJC.minBet && v <= BJC.maxBet);
+  const ni = lvIdxAt(total - pkBuy);
+  const warn = bjMode === "xp" && pkBuy && ni < li ? `⚠ If you lose your whole buy-in you’ll fall to ${LEVELS[ni].icon} ${esc(LEVELS[ni].n)} and lose your theme.` : "";
+  const bb = Math.max(2, bjEven(Math.round(pkBuy / 25))), ok = pkBuy >= BJC.minBet && pkBuy <= cap && !bjBusy;
+  return `<div class="bj-felt" style="min-height:0;padding-bottom:0"><div class="bj-msg">♠️ Texas Hold’em against three bots. Buy in, play as many hands as you like, then cash out whenever you want.</div></div>${note}
+    <div class="bj-big">🪙 ${pkBuy.toLocaleString()}<small>Buy-in (${bjFmt(BJC.minBet)} to ${bjFmt(BJC.maxBet)})${pkBuy ? ` · blinds ${(bb / 2).toLocaleString()}/${bb.toLocaleString()}` : ""}</small></div>
+    <div class="bj-warn">${warn}</div>
+    <div class="bj-chips">${chips.map(v => `<button class="bj-chip" data-act="pkchip" data-v="${v}" style="background:${BJ_CHIPS[v]}" ${pkBuy + v > cap || bjBusy ? "disabled" : ""}>${v}</button>`).join("")}</div>
+    <div class="bj-ctl"><button class="bj-btn" data-act="pkclear" ${bjBusy ? "disabled" : ""}>Clear</button><button class="bj-btn" data-act="pkmax" ${bjBusy ? "disabled" : ""}>Max</button>${pkLastBuy ? `<button class="bj-btn" data-act="pkrebuy" ${bjBusy || bjClamp(pkLastBuy) < BJC.minBet ? "disabled" : ""}>Last ${pkLastBuy.toLocaleString()}</button>` : ""}<button class="bj-btn go" data-act="pksit" ${ok ? "" : "disabled"}>Sit down<kbd>↵</kbd></button></div>
+    <div class="bj-rules">No limit · Fixed blinds · Bots re-buy when they bust · Cash out any time · Closing the tab mid-game forfeits your buy-in</div>`;
+}
+function pkRender(root) {
+  const total = xpOf(me.uid), li = lvIdx(me.uid), L = LEVELS[li], r = pk;
+  bjLastTotal = total;
+  const fun = bjMode === "fun", locked = bjBusy || !!r;
+  let body;
+  if (!fun && !bjLoaded) body = `<p class="bj-msg" style="padding:60px 0">Loading your balance…</p>`;
+  else if (!fun && !bjEnabled) body = `<p class="bj-msg" style="padding:40px 10px">Table games aren’t switched on for XP yet. The owner needs to publish the updated <code>database.rules.json</code> (it adds the <code>bj</code> section), then reload. You can still play with play money.</p>`;
+  else body = r ? pkTable(r) : pkBuyPanel(total, li);
+  root.innerHTML = `<div class="bj-table">${bjTop(fun, locked, total, li, L)}${body}</div>`;
+  if (r) { r.board.forEach(c => c.fresh = false); r.seats.forEach(s => s.cards.forEach(c => c.fresh = false)); }
+}
+
+/* ── events ── */
+function bjSetGame(g) {
+  if ((g !== "bj" && g !== "pk") || g === bjGame || bjBusy || pk || (bj && bj.phase !== "done")) return;
+  bjGame = g; bjNotice = ""; pkNotice = "";
+  if (g === "pk") pkBuy = bjClamp(pkBuy || pkLastBuy || 100); else bjChips = bjClamp(bjChips || bjLast || BJC.minBet);
+  bjRender();
+}
+function pkClick(act, b) {
+  const r = pk;
+  switch (act) {
+    case "pkchip": pkBuy = Math.min(pkBuy + Number(b.dataset.v), bjCap()); bjRender(); break;
+    case "pkclear": pkBuy = 0; bjRender(); break;
+    case "pkmax": pkBuy = bjCap(); bjRender(); break;
+    case "pkrebuy": pkBuy = bjClamp(pkLastBuy); bjRender(); break;
+    case "pksit": pkSit(); break;
+    case "pkdeal": pkDealHand(); break;
+    case "pkfold": pkAct({ t: "fold" }); break;
+    case "pkcall": pkAct({ t: "call" }); break;
+    case "pkraise": pkAct({ t: "raise", to: pkRaise }); break;
+    case "pkallin": pkAct({ t: "allin" }); break;
+    case "pkhalf": case "pkpot": if (r && r.turn) { const s = r.seats[0], need = r.curBet - s.bet, f = act === "pkpot" ? 1 : .5; pkRaise = Math.max(pkMinTo(r, s), Math.min(s.bet + s.stack, Math.round(r.curBet + f * (pkPot(r) + need)))); bjRender(); } break;
+    case "pkleave": if (r && !bjBusy) { r.leaving = true; bjRender(); } break;
+    case "pkstay": if (r) { r.leaving = false; bjRender(); } break;
+    case "pkcash": pkCashOut(); break;
+  }
+}
+function pkKeys(e, k) {
+  const r = pk;
+  if (!r) { if (k === "enter" && !(document.activeElement && document.activeElement.tagName === "BUTTON")) { e.preventDefault(); pkSit(); } return; }
+  if (r.leaving) return;
+  if (r.phase === "between") { if (k === "enter" && !(document.activeElement && document.activeElement.tagName === "BUTTON")) { e.preventDefault(); pkDealHand(); } return; }
+  if (r.phase !== "hand" || !r.turn) return;
+  if (k === "f") pkAct({ t: "fold" }); else if (k === "c") pkAct({ t: "call" }); else if (k === "r") pkAct({ t: "raise", to: pkRaise }); else if (k === "a") pkAct({ t: "allin" });
+}
+$("#bj").addEventListener("input", e => {
+  if (e.target.id !== "pkSlide") return;
+  pkRaise = Number(e.target.value) || 0; const t = $("#pkRtxt"); if (t) t.textContent = pkRaise.toLocaleString();
+});
+
+/* ───────── VUS-style layout wiring: ⚙ settings panel, rooms drawer close, members dropdown, char counter ───────── */
+(function () {
+  const sp = $("#settingsPanel"), sb = $("#settingsBtn");
+  const closeSettings = () => { sp.hidden = true; sb.classList.remove("open"); };
+  sb.onclick = ev => { ev.stopPropagation(); sp.hidden = !sp.hidden; sb.classList.toggle("open", !sp.hidden); };
+  $("#meLvBox").onclick = () => { closeSettings(); openXP(); };
+  $("#sideClose").onclick = () => document.body.classList.remove("nav-open");
+  document.addEventListener("click", e => {
+    if (!e.target.closest("#settingsPanel") || e.target.closest("#settingsPanel .sp-row")) closeSettings();
+    if (!e.target.closest("#members, #membersBtn")) document.body.classList.remove("members-open");
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") { closeSettings(); document.body.classList.remove("nav-open", "members-open"); } });
+  const cc = $("#charCounter"), inp = $("#input");
+  const count = () => { const left = inp.maxLength - inp.value.length; cc.textContent = left; cc.className = left <= 0 ? "limit" : left <= 100 ? "warn" : ""; };
+  inp.addEventListener("input", count); setInterval(count, 400); count();
+})();
 
 init();
 </script>
