@@ -224,11 +224,16 @@
   async function sweep() { if (serverUp === false) return; try { await fetch(API + "/api/game", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "sweep" }) }); } catch (e) {} }
 
   // ── Direct mode: crates and moves go straight to Firebase ──
-  function friendly(e) {
+  function friendly(e, what) {   // says WHICH write the database refused, instead of blaming the rules for everything
     var m = String(e && (e.message || e.code) || e);
-    return /permission/i.test(m) ? "Direct mode isn't switched on yet: the database rules need to be published." : m;
+    if (!/permission/i.test(m)) return m;
+    var at = /at (\/[^:\s]+)/.exec(m), path = at ? at[1].replace(/\/\d{4,12}(?=\/|$)/g, "/<id>").replace(/\/-[\w-]{10,}/g, "/<game>") : "";
+    return (what || "That") + " was refused by the database" + (path ? " (" + path + ")" : "") + ". Try again; if it keeps happening, report this message.";
   }
-  async function adjustG(id, delta) { await db().ref("crateGames/" + id).transaction(function (v) { return (Number(v) || 0) + delta; }); }
+  async function adjustG(id, delta) {
+    try { await db().ref("crateGames/" + id).transaction(function (v) { return (Number(v) || 0) + delta; }); }
+    catch (e) { throw new Error(friendly(e, delta < 0 ? "Taking your bet" : "Returning your crates")); }
+  }
   function sideIn(raw) { var id = me(); return raw && raw.a && raw.a.id === id ? "a" : raw && raw.b && raw.b.id === id ? "b" : null; }
   async function append(gid, entry, stillOk) {   // add one entry to the game's log (retrying if the other player wrote first)
     for (var i = 0; i < 6; i++) {
@@ -247,7 +252,7 @@
       var ref = db().ref("pg").push();
       await ref.set({ type: type, bet: bet, created: TS(), a: { id: me(), name: myName() }, seen: { a: TS() }, v: 1 });
       return { gid: ref.key, mode: "direct" };
-    } catch (e) { await adjustG(me(), bet); throw new Error(friendly(e)); }
+    } catch (e) { await adjustG(me(), bet); throw new Error(friendly(e, "Creating the game")); }
   }
   async function dJoin(gid) {
     var raw = pgames[gid]; if (!raw || derive(raw).status !== "waiting") throw new Error("That game is no longer open.");
@@ -256,7 +261,11 @@
     await adjustG(me(), -raw.bet);
     var up = {}; up["pg/" + gid + "/b"] = { id: me(), name: myName() }; up["pg/" + gid + "/log/0000"] = { k: "start", t: TS() }; up["pg/" + gid + "/seen/b"] = TS();
     try { await db().ref().update(up); return { gid: gid, mode: "direct" }; }
-    catch (e) { await adjustG(me(), raw.bet); throw new Error(/permission/i.test(String(e && (e.code || e.message))) ? "Someone else just joined that game." : friendly(e)); }
+    catch (e) {
+      await adjustG(me(), raw.bet);
+      var fresh = null; try { fresh = (await db().ref("pg/" + gid).get()).val(); } catch (e2) {}
+      throw new Error(fresh && fresh.b ? "Someone else just joined that game." : friendly(e, "Joining the game"));
+    }
   }
   function dLeave(gid) {
     var raw = pgames[gid], side = sideIn(raw), st = raw && derive(raw); if (!side || !st) return;
