@@ -749,6 +749,7 @@ const ChatBackend = {
   },
 
   async send(name, text, mention, loginId, replyTo, slm) {
+    if (typeof text !== "string" || !/[^\s\u200B-\u200F\u2060\uFEFF\u3164\u2800\u00AD]/.test(text)) return;   // nothing to send
     const prof = await this.getProfile(loginId);
     const color = prof && prof.color ? prof.color : null, cos = cosmFields(prof && prof.cosm);
     const data = {
@@ -3160,6 +3161,8 @@ function renderMessage(msg) {
     return;
   }
 
+  // A message with nothing in it (empty, only spaces or invisible characters) is never shown.
+  if (!msg.imageData && !msg.video && !msg.gif && !msg.poll && typeof msg.text === "string" && !/[^\s\u200B-\u200F\u2060\uFEFF\u3164\u2800\u00AD]/.test(msg.text)) return;
   const aiPost = activeChannelId === "ai" && isAiSender(msg.loginId);
   // anyone else (or the AI outside its channel) is held to the normal length
   if (typeof msg.text === "string" && msg.text.length > MAX_CHARS && !aiPost) msg = Object.assign({}, msg, { text: msg.text.slice(0, MAX_CHARS) });
@@ -3186,6 +3189,8 @@ function renderMessage(msg) {
     if (!/^\d{6}$/.test(String(msg.loginId || "")) || !String(msg.name || "").trim()) { el.classList.add("anon-hidden"); hiddenForMe = true; }
     else {
       needsVerify = true;
+      // New messages stay hidden until they've been checked (real account, name really theirs, effects match), then are let through.
+      if (liveSince && Number(msg.ts) >= liveSince) el.classList.add("anon-hidden");
       if (msg.imageData || msg.video || msg.gif) el.classList.add("anon-hidden");   // images and videos stay hidden until the sender is confirmed
     }
   }
@@ -3349,14 +3354,16 @@ function renderMessage(msg) {
       // Text: hidden only if the id isn't a real account. Images: the account must be real, the name must match it,
       // and the sender must actually have image access (rank above Normie, or granted by a higher-up).
       const isMedia = !!(msg.imageData || msg.video || msg.gif);
-      let bad = !r.ok || (isMedia && !r.nameMatches);
+      const liveMsg = !!liveSince && Number(msg.ts) >= liveSince;
+      let bad = !r.ok || ((isMedia || liveMsg) && !r.nameMatches);   // a new message's name must be the account's real username
       if (!bad && isMedia && !(await senderMayPostImages(String(msg.loginId)))) bad = true;
       if (!bad && !mine && await liveForgeryCheck(msg)) { el.classList.add("anon-hidden", "forged-hidden"); el.dataset.forged = "1"; return; }   // name/effects don't match the sender's real profile
       if (bad && !(r.unknown && !isMedia)) { el.classList.add("anon-hidden"); }
       else { el.classList.remove("anon-hidden"); if (r.ok && r.nameMatches) rememberPerson(msg.loginId, msg.name); firePing(); }
       if (autoScroll && stickToBottom) scrollToBottom();
-    }).catch(() => { if (msg.imageData || msg.video || msg.gif) el.classList.add("anon-hidden"); else firePing(); });
+    }).catch(() => { if (msg.imageData || msg.video || msg.gif) el.classList.add("anon-hidden"); else { el.classList.remove("anon-hidden"); firePing(); } });
   } else {
+    if (needsVerify && !(msg.imageData || msg.video || msg.gif)) el.classList.remove("anon-hidden");   // can't verify here: don't leave it hidden
     firePing();
   }
 }
