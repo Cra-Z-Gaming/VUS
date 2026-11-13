@@ -3110,7 +3110,8 @@ function renderMessage(msg) {
   avEl.className = "msg-av";
   avEl.title = "View profile";
   paintAvatar(avEl, msg.loginId, msg.name);
-  applyRingTo(avEl, msg.ring, msg.rfx);
+  applyRingTo(avEl, msg.ring);
+  if (msg.rfx) showIfOwned(msg, msg.rfx, () => applyRingTo(avEl, "", msg.rfx));
   if (msg.loginId) avEl.addEventListener("click", () => openProfileFor(msg.loginId, msg.name));
   el.appendChild(avEl);
 
@@ -3119,14 +3120,14 @@ function renderMessage(msg) {
   const nameLink = document.createElement("span");
   nameLink.className = "msg-meta-name";
   nameLink.textContent = msg.name || (mine ? "You" : "");   // your own messages show your username ("You" stays in the online list)
-  if (msg.font) applyNameFont(nameLink, msg.font);
+  if (msg.font) showIfOwned(msg, msg.font, () => applyNameFont(nameLink, msg.font));
   if (msg.loginId) {
     nameLink.title = "View profile";
     nameLink.addEventListener("click", () => openProfileFor(msg.loginId, msg.name));
   }
   meta.appendChild(nameLink);
   if (msg.bot === true) { const bt = document.createElement("span"); bt.className = "bot-tag"; bt.textContent = "(Bot)"; meta.appendChild(bt); }   // only the server can set bot:true, so this always means a token-sent message
-  if (msg.tag) { const te = tagEl(msg.tag); if (te) meta.appendChild(te); }
+  if (msg.tag) { const te = tagEl(msg.tag); if (te) { const ph = document.createComment(""); meta.appendChild(ph); showIfOwned(msg, msg.tag, () => { if (ph.parentNode) ph.replaceWith(te); }); } }
   if (msg.loginId) { const vt = document.createElement("span"); vt.className = "verified-tag"; vt.dataset.vid = String(msg.loginId); vt.textContent = "\u2713 Verified"; meta.appendChild(vt); paintVerifiedTag(vt); }
   if (msg.ts) meta.appendChild(document.createTextNode(" · " + formatTime(msg.ts)));
   el.appendChild(meta);
@@ -3175,9 +3176,9 @@ function renderMessage(msg) {
     buildPollBubble(bubble, msg);
     if (msg.id) { pollEls.set(String(msg.id), { el, msg, mine }); paintAnnGate(String(msg.id)); }
   } else {
-    if (msg.fx && itemOf(msg.fx, "fx")) bubble.dataset.fx = msg.fx;
-    if (msg.tfont) applyTextFont(bubble, msg.tfont);
-    { const bubIt = msg.bub ? itemOf(msg.bub, "bub") : null; if (bubIt) applyBubFx(bubble, bubIt, msg.bc); }
+    if (msg.fx && itemOf(msg.fx, "fx")) showIfOwned(msg, msg.fx, () => { bubble.dataset.fx = msg.fx; });
+    if (msg.tfont) showIfOwned(msg, msg.tfont, () => applyTextFont(bubble, msg.tfont));
+    { const bubIt = msg.bub ? itemOf(msg.bub, "bub") : null; if (bubIt) showIfOwned(msg, bubIt.id, () => { applyBubFx(bubble, bubIt, msg.bc); bubble.classList.remove("ubg", "utc"); bubble.style.removeProperty("--user-background"); bubble.style.removeProperty("--user-text-color"); }); }
     if (msg.slm && typeof msg.slm === "object" && window.VUS_SLM) bubble.appendChild(window.VUS_SLM.card(msg.slm, typeof maskFiltered === "function" ? maskFiltered(String(msg.text || "")) : msg.text));
     else fillBubbleText(bubble, msg.text, msg.mention);
   }
@@ -9547,6 +9548,51 @@ setInterval(() => crateTick(false), 5000);
 // ── look of items ──
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 function tagEl(id) { const it = itemOf(id, "tag"); if (!it) return null; return el("span", "msg-tag tg-" + it.id + " r-" + it.rar, it.name); }
+// ── Cosmetics only show when the sender really owns them ──
+// A message (or profile) can claim any tag / text effect / font / bubble / ring effect, so every viewer's client checks the sender's
+// inventory (crateInv/<id>/items) and simply doesn't show what they don't own. An inventory is read once and remembered; an item that
+// isn't in the remembered list is re-checked after a few seconds (they may have just opened it). Bot messages are written by the server,
+// so they are trusted. Your own live inventory is used for your own messages.
+// Honest limit: this stops faking cosmetics through messages. It can't stop someone who ALSO writes items into their own inventory by
+// hand, because crate rolls are decided in the browser. The Loaded tag is the exception: its inventory rule needs the 1000 coins paid.
+const ownerInv = new Map();   // loginId -> { set, t } once known, or { p } while it loads
+const OWN_RECHECK_MS = 5000;
+function ownedItemsOf(loginId, fresh) {
+  const id = String(loginId || ""), hit = ownerInv.get(id);
+  if (!/^[0-9]{4,12}$/.test(id) || !ChatBackend._db) return Promise.resolve(new Set());
+  if (hit && hit.p) return hit.p;
+  if (hit && hit.set && !fresh) return Promise.resolve(hit.set);
+  const p = ChatBackend._db.ref("crateInv/" + id + "/items").get().then(
+    s => { const set = new Set(Object.keys(s.val() || {})); ownerInv.set(id, { set, t: Date.now() }); return set; },
+    () => { if (hit && hit.set) ownerInv.set(id, hit); else ownerInv.delete(id); return hit && hit.set ? hit.set : new Set(); });
+  ownerInv.set(id, { p, set: hit ? hit.set : null, t: hit ? hit.t : 0 });
+  return p;
+}
+// Runs apply() only once the sender is confirmed to own the item: right away when their inventory is already known, otherwise when it has loaded.
+function whenOwned(loginId, itemId, apply) {
+  const it = ITEM_BY_ID[String(itemId || "")];
+  if (!it || !apply) return;
+  const id = String(loginId || "");
+  if (id && id === String(myLoginId || "") && crateOwned.has(it.id)) { apply(); return; }
+  const hit = ownerInv.get(id);
+  if (hit && hit.set && !hit.p) {
+    if (hit.set.has(it.id)) { apply(); return; }
+    if (Date.now() - hit.t > OWN_RECHECK_MS) ownedItemsOf(id, true).then(s => { if (s.has(it.id)) apply(); });
+    return;
+  }
+  ownedItemsOf(id).then(s => { if (s.has(it.id)) apply(); });
+}
+function showIfOwned(msg, itemId, apply) { if (msg && msg.bot === true) { if (itemOf(itemId)) apply(); } else whenOwned(msg && msg.loginId, itemId, apply); }
+// For profile cards: drops equipped items the person doesn't actually own.
+async function ownedCosmOnly(loginId, c) {
+  const keys = ["tag", "fx", "font", "tfont", "bub", "rfx"].filter(k => c[k]);
+  if (!keys.length) return c;
+  let set = await ownedItemsOf(loginId);
+  if (keys.some(k => !set.has(c[k]))) set = await ownedItemsOf(loginId, true);
+  keys.forEach(k => { if (!set.has(c[k])) delete c[k]; });
+  if (!c.bub) delete c.bc;
+  return c;
+}
 // Fonted names: the Google Font is fetched once, the first time anyone's name (or a preview) uses it.
 const fontsRequested = new Set();
 function loadItemFont(it) {
@@ -9701,11 +9747,12 @@ function paintOpen(box) {
     });
     box.appendChild(row);
   }
-  if (stock >= 1 && ready) {   // sell crates for coins (tap twice to confirm)
+  const sellable = Math.min(stock, sellAllowance());
+  if (sellable >= 1 && ready) {   // sell crates for coins (tap twice to confirm)
     const row = el("div", "cr-count");
     row.appendChild(el("span", "cr-count-l", "Sell (\uD83E\uDE99 " + SELL_COINS + " each)"));
     const opts = [{ k: 1, label: "1\u00D7" }];
-    if (stock > 1) opts.push({ k: Math.min(stock, CRATE_MAX_OPEN), label: stock > CRATE_MAX_OPEN ? "Max (" + CRATE_MAX_OPEN + ")" : "All (" + stock + ")" });
+    if (sellable > 1) opts.push({ k: Math.min(sellable, CRATE_MAX_OPEN), label: sellable > CRATE_MAX_OPEN ? "Max (" + CRATE_MAX_OPEN + ")" : "All (" + sellable + ")" });
     opts.forEach(c => {
       const armed = sellArm === c.k;
       const b = el("button", "cr-count-b" + (armed ? " on" : ""), armed ? "Sure? +" + c.k * SELL_COINS : c.label); b.type = "button"; b.disabled = crateBusy;
@@ -9718,6 +9765,7 @@ function paintOpen(box) {
     });
     box.appendChild(row);
   }
+  if (stock > sellable && ready) box.appendChild(el("div", "cr-note", "Crates won in games can't be sold for coins."));
   const grid = el("div", "cr-types");
   visibleTypes().forEach(t => {
     const b = el("button", "cr-type" + (t.id === "season" ? " cr-season" : "")); b.type = "button"; b.disabled = !ready || crateBusy;
@@ -9913,7 +9961,7 @@ async function openCrate(type, count) {
   }
   const saved = got.filter(i => !failed.includes(i));
   // A crate that gave nothing new pays 10 coins instead.
-  const coinsBack = nothing > 0 && (await claimCrateCoins("rc", nothing)) ? nothing * DUD_COINS : 0;
+  const coinsBack = nothing > 0 ? (await claimCrateCoins("rc", nothing)) * DUD_COINS : 0;
   const done = el("div", "cr-shake");
   if (count === 1) {
     done.appendChild(wheel.wrap);
@@ -10083,23 +10131,26 @@ const DUD_COINS = 10, SELL_COINS = 25, COIN_PEND_KEY = "vus_coin_pend_v1";
 function coinPend() { try { return JSON.parse(localStorage.getItem(COIN_PEND_KEY) || "{}") || {}; } catch (e) { return {}; } }
 function savePend(o) { try { localStorage.setItem(COIN_PEND_KEY, JSON.stringify(o)); } catch (e) {} }
 function addPend(kind, k) { const o = coinPend(), id = String(myLoginId); o[id] = o[id] || {}; o[id][kind] = (Number(o[id][kind]) || 0) + k; savePend(o); }
-async function claimCrateCoins(kind, k) {   // kind: "rc" (10 each) or "sc" (25 each); resolves true when every coin was saved
-  if (!myLoginId || !ChatBackend._db || !(k >= 1)) return false;
-  const per = kind === "sc" ? SELL_COINS : DUD_COINS, ref = ChatBackend._db.ref("coins/" + myLoginId);
+async function claimCrateCoins(kind, k) {   // kind: "rc" (10 each) or "sc" (25 each); resolves with how many crates were paid
+  if (!myLoginId || !ChatBackend._db || !(k >= 1)) return 0;
+  const per = kind === "sc" ? SELL_COINS : DUD_COINS, db = ChatBackend._db, id = String(myLoginId), ref = db.ref("coins/" + id);
+  let paid = 0;
   while (k > 0) {
-    const c = Math.min(50, k);   // the rules take at most 50 crates per write
-    let ok = false;
-    for (let i = 0; i < 3 && !ok; i++) {
+    let ok = false, allow = 1;
+    for (let i = 0; i < 3 && !ok && allow > 0; i++) {
       try {
-        const rec = (await ref.get()).val() || {};   // re-read each try: a message coin may have changed the balance
+        const [rs, cs] = await Promise.all([ref.get(), db.ref("crateClaims/" + id + "/n").get()]);   // re-read each try: a message coin may have changed the balance
+        const rec = rs.val() || {};
+        allow = (Number(cs.val()) || 0) - (Number(rec.rc) || 0) - (Number(rec.sc) || 0);   // coins are only paid for crates that were earned or bought, never for crates won in games (the rules enforce this too)
+        const c = Math.min(50, k, allow);   // the rules take at most 50 crates per write
+        if (c < 1) break;
         const upd = { n: (Number(rec.n) || 0) + per * c }; upd[kind] = (Number(rec[kind]) || 0) + c;
-        await ref.update(upd); ok = true;
+        await ref.update(upd); ok = true; paid += c; k -= c;
       } catch (e) { await annSleep(500); }
     }
-    if (!ok) { addPend(kind, k); return false; }   // saved on this device and retried on the next login
-    k -= c;
+    if (!ok) { if (allow > 0) addPend(kind, k); return paid; }   // network trouble: saved on this device and retried on the next login
   }
-  return true;
+  return paid;
 }
 async function flushCoinPending() {
   const o = coinPend(), id = String(myLoginId || ""), mine = o[id];
@@ -10108,6 +10159,9 @@ async function flushCoinPending() {
   for (const kind of ["rc", "sc"]) { const k = Number(mine[kind]) || 0; if (k > 0) await claimCrateCoins(kind, k); }
 }
 let sellArm = 0;   // the sell button that was tapped once and is waiting for the second tap
+// Coins are only paid for crates you earned or bought (crateClaims n), never for crates won in games: the database rules enforce
+// rc + sc <= n, so this is also how many crates the Shop offers to sell.
+function sellAllowance() { return Math.max(0, (Number(crateEarned) || 0) - (Number(myCoinRec && myCoinRec.rc) || 0) - (Number(myCoinRec && myCoinRec.sc) || 0)); }
 async function sellCrates(count) {
   count = Math.max(1, Math.min(CRATE_MAX_OPEN, Number(count) || 1));
   if (crateBusy || !crateReady() || !ChatBackend._db) return;
@@ -10121,6 +10175,8 @@ async function sellCrates(count) {
     await fresh();
     count = Math.min(count, crateStock());
     if (count < 1) throw new Error("no-crates");
+    count = Math.min(count, sellAllowance());
+    if (count < 1) throw new Error("no-sellable");
     try { await ref.update({ o: crateOpened + count }); }
     catch (e1) {
       if (!isPermissionDenied(e1)) throw e1;
@@ -10129,9 +10185,9 @@ async function sellCrates(count) {
       await ref.update({ o: crateOpened + count });
     }
     sold = count;
-    paid = await claimCrateCoins("sc", sold);
+    paid = (await claimCrateCoins("sc", sold)) >= sold;
   } catch (e) {
-    problem = isPermissionDenied(e) ? "Selling needs the updated database rules (coins). Publish the new chat rules." : String(e && e.message) === "no-crates" ? "You have no crates to sell." : "Couldn't sell the crate \u2014 check your connection.";
+    problem = isPermissionDenied(e) ? "Selling needs the updated database rules (coins). Publish the new chat rules." : String(e && e.message) === "no-crates" ? "You have no crates to sell." : String(e && e.message) === "no-sellable" ? "Crates won in games can't be sold. Only crates you earned or bought can." : "Couldn't sell the crate \u2014 check your connection.";
   }
   crateBusy = false;
   if (sold) {
@@ -10786,7 +10842,7 @@ window.VUS_CHAT = {
   _deviceHash: () => deviceHash(),
   _wheelSlices() { return lastWheel ? lastWheel.slices.map(x => ({ id: x.it.id, a0: x.a0, w: x.w })) : null; },
   _crateProg(m, ms) { const p = progFor(); p.msgs = m; p.ms = ms; saveProg(); crateTick(true); },
-  cosmFor: async id => { try { const p = await ChatBackend.getProfile(id); const c = cosmFields(p && p.cosm); if (!c.ring && p && p.color && p.color.ring) c.ring = p.color.ring; return c; } catch (e) { return {}; } },
+  cosmFor: async id => { try { const p = await ChatBackend.getProfile(id); const c = cosmFields(p && p.cosm); if (!c.ring && p && p.color && p.color.ring) c.ring = p.color.ring; return await ownedCosmOnly(id, c); } catch (e) { return {}; } },
   tagEl, applyRingTo,
   toggleBotMute, botMutedList: () => botMutedMap,
   myId: () => myLoginId, myName: () => myName, crateStock, srvNow, db: () => ChatBackend._db,

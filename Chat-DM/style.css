@@ -2149,7 +2149,7 @@ body.bg-video #messages, body.bg-video #chatMessages { z-index: 1; }
 .cr-slot:hover { color: #e2e8f0; border-color: #64748b; }
 .cr-slot.on { background: #166534; border-color: #22c55e; color: #dcfce7; }
 /* bubble effects (fades, animations, custom colours) */
-body:not(.hide-bubcolors) .msg-bubble.bubfx, .cr-bubprev.bubfx { background: linear-gradient(135deg, var(--b1), var(--b2), var(--b3)) !important; color: var(--bt, #fff) !important; text-shadow: var(--bts, none); border-color: transparent !important; }
+body:not(.hide-bubcolors) .msg-bubble.bubfx, .cr-bubprev.bubfx { background-image: linear-gradient(135deg, var(--b1), var(--b2), var(--b3)) !important; color: var(--bt, #fff) !important; text-shadow: var(--bts, none); border-color: transparent !important; }
 .cr-bubprev { padding: 8px 12px; border-radius: 12px; font-size: 14px; display: inline-block; max-width: 100%; }
 .cr-bubprev-big { font-size: 16px; padding: 10px 14px; }
 .bubfx.bub-flow { background-size: 300% 300% !important; animation: bubFlow 6s ease infinite; }
@@ -2158,10 +2158,10 @@ body:not(.hide-bubcolors) .msg-bubble.bubfx, .cr-bubprev.bubfx { background: lin
 @keyframes bubPulse { 0%, 100% { box-shadow: 0 0 0 0 transparent; filter: brightness(1); } 50% { box-shadow: 0 0 14px 2px var(--b1); filter: brightness(1.18); } }
 body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-neon, .cr-bubprev.bubfx.bub-neon { background: #0b1220 !important; border: 2px solid var(--b1) !important; box-shadow: 0 0 10px var(--b1), inset 0 0 8px var(--b2); animation: bubNeon 5s linear infinite; }
 @keyframes bubNeon { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(360deg); } }
-body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-shimmer, .cr-bubprev.bubfx.bub-shimmer { background: linear-gradient(110deg, transparent 35%, rgba(255,255,255,.38) 50%, transparent 65%), linear-gradient(135deg, var(--b1), var(--b2)) !important; background-size: 250% 100%, 100% 100% !important; animation: bubShimmer 3.2s linear infinite; }
+body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-shimmer, .cr-bubprev.bubfx.bub-shimmer { background-image: linear-gradient(110deg, transparent 35%, rgba(255,255,255,.38) 50%, transparent 65%), linear-gradient(135deg, var(--b1), var(--b2)) !important; background-size: 250% 100%, 100% 100% !important; animation: bubShimmer 3.2s linear infinite; }
 @keyframes bubShimmer { 0% { background-position: 150% 0, 0 0; } 100% { background-position: -50% 0, 0 0; } }
-body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-rainbow, .cr-bubprev.bubfx.bub-rainbow { background: linear-gradient(90deg, #ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ef4444) !important; background-size: 400% 100% !important; animation: bubRainbow 8s linear infinite; --bt: #fff; --bts: 0 1px 2px rgba(0,0,0,.5); }
-@keyframes bubRainbow { 0% { background-position: 0% 50%; } 100% { background-position: 400% 50%; } }
+body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-rainbow, .cr-bubprev.bubfx.bub-rainbow { background-image: linear-gradient(90deg, #ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ef4444) !important; background-size: 400% 100% !important; animation: bubRainbow 6s linear infinite; --bt: #fff; --bts: 0 1px 2px rgba(0,0,0,.5); }
+@keyframes bubRainbow { 0% { background-position: 0% 50%; } 100% { background-position: 133.3333% 50%; } }   /* exactly one gradient tile, so the loop is seamless */
 .cr-bubedit { margin-top: 12px; padding: 10px; border: 1px solid #334155; border-radius: 12px; background: rgba(15,23,42,.5); }
 .cr-bubedit-h { font-size: 12px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: #94a3b8; margin-bottom: 8px; }
 .cr-bubedit-row { display: flex; gap: 10px; margin-top: 10px; }
@@ -2628,7 +2628,11 @@ body.hide-bubcolors .msg-bubble.bubfx { animation: none !important; box-shadow: 
 .msg-tag.tg-tag-yin { background: #f8fafc; border-color: #0f172a; color: #0f172a; }
 .msg-tag.tg-tag-yang { background: #0f172a; border-color: #f8fafc; color: #f8fafc; }
 /* shop-only: Loaded 💰 (shiny gold) */
-.msg-tag.tg-tag-loaded { color: #3b2300; font-weight: 800; border-color: #fff3a3; background: linear-gradient(110deg,#b8860b,#ffd700,#fff7ae,#ffd700,#b8860b); background-size: 250% 100%; animation: tagShine 2.2s linear infinite; box-shadow: 0 0 8px rgba(255,215,0,.65); }
+.msg-tag.tg-tag-loaded { position: relative; overflow: hidden; isolation: isolate; font-weight: 900; letter-spacing: .4px; color: #ffe27a; text-shadow: 0 0 6px rgba(255,200,40,.85), 0 1px 1px rgba(0,0,0,.6); border: 1.5px solid transparent; background: linear-gradient(#1c1405, #2b1d05) padding-box, linear-gradient(110deg,#8a5a00,#ffd700,#fff7ae,#ffd700,#8a5a00) border-box; background-size: 100% 100%, 300% 100%; animation: loadedBorder 2.6s linear infinite; box-shadow: 0 0 10px rgba(255,200,0,.55), inset 0 0 8px rgba(255,200,0,.18); }
+.msg-tag.tg-tag-loaded::after { content: ""; position: absolute; top: -20%; bottom: -20%; left: -70%; width: 45%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.75), transparent); transform: skewX(-22deg); animation: loadedSweep 3s ease-in-out infinite; pointer-events: none; }
+@keyframes loadedBorder { 0% { background-position: 0 0, 0% 50%; } 100% { background-position: 0 0, 300% 50%; } }
+@keyframes loadedSweep { 0% { left: -70%; } 55%, 100% { left: 140%; } }
+@media (prefers-reduced-motion: reduce) { .msg-tag.tg-tag-loaded, .msg-tag.tg-tag-loaded::after { animation: none !important; } }
 .msg-tag.tg-tag-bookworm { background: #13293d; border-color: #60a5fa; color: #bfdbfe; }
 .msg-tag.tg-tag-speedy { background: #1f2a05; border-color: #bef264; color: #ecfccb; }
 /* tags: epic */
