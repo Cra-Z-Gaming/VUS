@@ -140,7 +140,7 @@ function formatLeaveText(names) {
 }
 
 const TIMEOUT_MAX_MS = 30 * 24 * 60 * 60 * 1000; // 30-day cap for owners
-const MOD_TIMEOUT_MAX_MS = 24 * 60 * 60 * 1000; // mods can mute 1m - 1d
+const MOD_TIMEOUT_MAX_MS = 10 * 60 * 1000; // mods can mute 1m - 10m (and can't ban at all)
 const ADMIN_MUTE_MAX_MS = 7 * 24 * 60 * 60 * 1000; // admins: up to 1 week (mute and ban)
 const MOD_TIMEOUT_DEFAULT_MS = 10 * 60 * 1000; // prefilled duration when a mod opens the timeout modal
 const MOD_RETIMEOUT_COOLDOWN_MS = 7 * 1000; // a mod must wait this long after setting OR clearing a timeout before re-timing-out the SAME target
@@ -153,7 +153,7 @@ const MOD_RETIMEOUT_COOLDOWN_MS = 7 * 1000; // a mod must wait this long after s
 const TIME_LIMITS = {
   timeout:    { min: 1000,  max: TIMEOUT_MAX_MS },      // Co-owner and Owner: 30 days
   adminMute:  { min: 1000,  max: ADMIN_MUTE_MAX_MS },   // Admin: 1 week
-  modTimeout: { min: 60000, max: MOD_TIMEOUT_MAX_MS },  // Mod: 1 minute to 1 day
+  modTimeout: { min: 60000, max: MOD_TIMEOUT_MAX_MS },  // Mod: 1 minute to 10 minutes
   tempban:    { min: 60000, max: TIMEOUT_MAX_MS },      // Co-owner and Owner: 30 days
   adminTempban: { min: 60000, max: 3 * 24 * 60 * 60 * 1000 }, // Admin: up to 3 days
   modTempban:   { min: 60000, max: 6 * 60 * 60 * 1000 }, // Mod: up to 6 hours
@@ -1201,12 +1201,10 @@ const ChatBackend = {
     ]);
     const byRank = ROLES[byRole].rank, targetRank = ROLES[targetRole].rank;
     if (targetRank >= ROLES.coowner.rank) return false;
-    if (byRank < ROLES.mod.rank || byRank <= targetRank) return false;
-    if (byRank < ROLES.admin.rank) { // a Mod's ban only counts when it's temporary and within the Mod limit
-      const len = Number(ban.expiresAt) - Number(ban.bannedAt);
-      return Number.isFinite(len) && len > 0 && len <= TIME_LIMITS.modTempban.max + 20000;
-    }
-    return true;
+    if (byRank < ROLES.admin.rank || byRank <= targetRank) return false;   // Mods can't ban at all
+    if (!ban.expiresAt) return byRank >= ROLES.crown.rank;   // a permanent ban only counts when the Owner made it
+    const len = Number(ban.expiresAt) - Number(ban.bannedAt);
+    return Number.isFinite(len) && len > 0 && len <= banLimitsForRank(byRank).max + 20000;   // and a timed ban must fit that rank's limit
   },
 
   async getBan(loginId) {
@@ -2431,7 +2429,7 @@ function recLooksValid(r, requireOnline) {
   switch (r.k) {
     case "mute": return byRank >= ROLES.mod.rank && tRank < byRank && !isProtected(t) && d > 0 && d <= timeoutLimitsForRank(byRank).max + 1000;
     case "ban":
-      if (byRank < ROLES.mod.rank || tRank >= byRank || tRank >= ROLES.coowner.rank || isProtected(t)) return false;
+      if (byRank < ROLES.admin.rank || tRank >= byRank || tRank >= ROLES.coowner.rank || isProtected(t)) return false;   // Mods can't ban
       return d === 0 ? byRank >= ROLES.crown.rank : d <= banLimitsForRank(byRank).max + 1000;
     case "kick": return (byRank >= ROLES.admin.rank && tRank < byRank) || kickByRoomOwner(by);
     case "image": return byRank >= ROLES.admin.rank && tRank < byRank;
@@ -2485,12 +2483,10 @@ function banLocalValid(targetId, ban) {
   if (!ban || !ban.byLoginId) return false;
   if (!rolesReady) return true;
   const byRank = rankOfLoginId(ban.byLoginId), tRank = rankOfLoginId(targetId);
-  if (byRank < ROLES.mod.rank || byRank <= tRank || tRank >= ROLES.coowner.rank || isProtected(targetId)) return false;
-  if (byRank < ROLES.admin.rank) {
-    const len = Number(ban.expiresAt) - Number(ban.bannedAt);
-    return Number.isFinite(len) && len > 0 && len <= TIME_LIMITS.modTempban.max + 20000;
-  }
-  return true;
+  if (byRank < ROLES.admin.rank || byRank <= tRank || tRank >= ROLES.coowner.rank || isProtected(targetId)) return false;   // Mods can't ban
+  if (!ban.expiresAt) return byRank >= ROLES.crown.rank;   // permanent = Owner only
+  const len = Number(ban.expiresAt) - Number(ban.bannedAt);
+  return Number.isFinite(len) && len > 0 && len <= banLimitsForRank(byRank).max + 20000;
 }
 function banStatus(targetId, ban) {
   if (!verifyActive() || Number(ban.bannedAt) < VERIFY_EPOCH) return "ok";
@@ -3063,6 +3059,24 @@ function forgeryMismatch(msg, prof) {
   }
   if (msg.bubble && (!color || low(msg.bubble) !== low(color.bubble))) return true;
   if (msg.textColor && (!color || low(msg.textColor) !== low(color.text))) return true;
+  // The other direction: a real message carries everything its account has equipped. A forged one (written by someone else in
+  // this person's name) is usually plain, so when the profile has an item that the message is missing, it is hidden on this client.
+  // (Pictures and polls are skipped: GIFs/images/videos never carry the text effect or colours, and the profile picture is looked up
+  // from the real account by ID, not taken from the message.)
+  if (!msg.poll) {
+    const isMediaMsg = !!(msg.gif || msg.imageData || msg.video);
+    if (cos.tag && !msg.tag) return true;
+    if (cos.rfx && !msg.rfx) return true;
+    if (wantRing && !msg.ring && !cos.rfx) return true;
+    if (cos.font && !msg.font) return true;
+    if (cos.tfont && !msg.tfont) return true;
+    if (cos.bub && !msg.bub) return true;
+    if (!isMediaMsg && typeof msg.text === "string") {
+      if (cos.fx && !msg.fx) return true;
+      if (color && color.bubble && !msg.bubble) return true;
+      if (color && color.text && !msg.textColor) return true;
+    }
+  }
   return false;
 }
 async function liveForgeryCheck(msg) {
@@ -3099,6 +3113,22 @@ function renderMessage(msg) {
         }).catch(() => {});
       } catch (e) {}
     }
+    // Several people joining in a row become ONE line ("Bob and John joined", or "Several people joined" for more than 4).
+    const joinOnly = !Array.isArray(msg.leftNames) && /^.{1,60} joined$/.test(text);
+    const joinName = joinOnly ? text.slice(0, -7) : "";
+    if (joinOnly) {
+      const lastEl = [...$messages.children].filter(c => c.classList && c.classList.contains("msg")).pop();
+      if (lastEl && lastEl.dataset.joinNames && Math.abs((Number(msg.ts) || Date.now()) - Number(lastEl.dataset.joinTs)) <= 30000) {
+        let names = []; try { names = JSON.parse(lastEl.dataset.joinNames) || []; } catch (e) {}
+        if (!names.includes(joinName)) names.push(joinName);
+        lastEl.dataset.joinNames = JSON.stringify(names);
+        lastEl.dataset.joinTs = String(Number(msg.ts) || Date.now());
+        const joined = names.length > 4 ? "Several people joined" : names.length === 1 ? names[0] + " joined" : names.slice(0, -1).join(", ") + " and " + names[names.length - 1] + " joined";
+        lastEl.dataset.sysKey = joined;
+        const jb = lastEl.querySelector(".msg-bubble"); if (jb) jb.textContent = joined;
+        return;
+      }
+    }
     // Same line again within the last 5 messages: count it ("X joined x2" ... "x9+") instead of adding another one.
     const lastFive = [...$messages.children].filter(c => c.classList && c.classList.contains("msg")).slice(-5);
     const dup = lastFive.reverse().find(c => c.dataset.sysKey === text);
@@ -3119,6 +3149,7 @@ function renderMessage(msg) {
     const sysEl = document.createElement("div");
     sysEl.className = "msg system sys-joinleave";
     sysEl.dataset.sysKey = text;
+    if (joinOnly) { sysEl.dataset.joinNames = JSON.stringify([joinName]); sysEl.dataset.joinTs = String(Number(msg.ts) || Date.now()); }
     const sysBubble = document.createElement("div");
     sysBubble.className = "msg-bubble";
     sysBubble.textContent = text;
@@ -3977,9 +4008,9 @@ const SLASH_COMMANDS = [
     desc: rank => rank >= ROLES.admin.rank ? "Lift someone's mute early (a 6-digit ID works even if they're offline)." : "Lift a mute you set yourself (a 6-digit ID works even if they're offline).", insert: "/unmute " },
   { name: "/kick",    args: "username",               minRank: ROLES.admin.rank,
     desc: "Remove a user from the current private room.", insert: "/kick " },
-  { name: "/ban",     args: "username or ID [reason]", minRank: ROLES.mod.rank,
+  { name: "/ban",     args: "username or ID [reason]", minRank: ROLES.admin.rank,
     desc: rank => "Ban the account ID, so a new name won't get around it. " + (rank >= ROLES.crown.rank ? "Permanent." : "Lasts " + formatDurationShort(banLimitsForRank(rank).max) + " (the longest your rank can do).") + " A 6-digit ID works even if they're offline.", insert: "/ban " },
-  { name: "/tempban", args: "time username or ID [reason]", minRank: ROLES.mod.rank,
+  { name: "/tempban", args: "time username or ID [reason]", minRank: ROLES.admin.rank,
     desc: () => "Ban the account ID for a while (" + limitsText(banLimitsForRank(myRank())) + ").", insert: "/tempban " },
   { name: "/grant",   args: "rank perm|time username", minRank: ROLES.mod.rank,
     desc: rank => "Give a rank below yours. perm = permanent, or a time (" + limitsText(TIME_LIMITS.tempGrant) + "). " + (rank >= ROLES.admin.rank ? "Ranks: normie, mod, admin, coowner." : "Mods can give Normie."), insert: "/grant " },
@@ -4162,7 +4193,7 @@ function staffActionsFor(loginId, name, state) {
   if (!muted || rank >= ROLES.admin.rank) out.push({ id: "mute", label: muted ? "Re-mute…" : "Mute…" });
   if (banned) {
     if (rank >= UNBAN_MIN_RANK) out.push({ id: "unban", label: "Unban" });
-  } else {
+  } else if (rank >= ROLES.admin.rank) {   // Mods can't ban
     out.push({ id: "tempban", label: "Temp ban…" });
     out.push({ id: "ban", label: rank >= ROLES.crown.rank ? "Ban" : "Ban (" + formatDurationShort(banLimitsForRank(rank).max) + ")" });
   }
@@ -4385,6 +4416,7 @@ async function handleModerationCommand(text) {
 
   // ── /ban and /tempban: ALWAYS act on the account ID ──
   if (command === "/ban" || command === "/tempban") {
+    if (myRank() < ROLES.admin.rank) { showComposerNotice("Mods can't ban. You can mute for up to 10 minutes."); return true; }
     let durationMs = 0;
     let nameParts;
     let banReason = "";
@@ -6704,7 +6736,7 @@ async function renderOwnerMenuList() {
 
     // Admins can ban too (they have /ban and /tempban); Owners got theirs above.
     if (staffMenuMode === "admin") addBanButtons(actions, entry);
-    else if (staffMenuMode === "mod" && loginId) {
+    else if (false && staffMenuMode === "mod" && loginId) {   // Mods can't ban any more
       const mb = document.createElement("button");
       mb.className = "kick"; mb.textContent = "Temp ban";
       mb.title = "Ban login ID #" + loginId + " for a set time (" + limitsText(TIME_LIMITS.modTempban) + ")";
