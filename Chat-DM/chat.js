@@ -434,16 +434,25 @@ const ChatBackend = {
   // ══════════════════════════════════════════════════════════
   _pid(loginId) { return this._safeKey(String(loginId)); },
 
+  _prefProf: null,
+  prefetchProfile(loginId) {   // started at login: the first message can use this read instead of waiting for a new one
+    if (!loginId || !this._profilesRef) return;
+    const id = String(loginId), p = this._profilesRef.child(this._pid(id)).get();
+    p.catch(() => {});
+    this._prefProf = { id, at: Date.now(), p };
+  },
   async getProfile(loginId) {
     if (!loginId || !this._profilesRef) return null;
     try {
-      const snap = await this._profilesRef.child(this._pid(loginId)).get();
+      const pre = this._prefProf;
+      const snap = (pre && pre.id === String(loginId) && Date.now() - pre.at < 15000) ? await pre.p.catch(() => this._profilesRef.child(this._pid(loginId)).get()) : await this._profilesRef.child(this._pid(loginId)).get();
       return snap.exists() ? snap.val() : null;
     } catch (e) { return null; }
   },
 
   async updateProfile(loginId, patch) {
     if (!loginId || !this._profilesRef) throw new Error("Missing login ID");
+    this._prefProf = null;   // a profile change must never be hidden by the login pre-read
     await this._profilesRef.child(this._pid(loginId)).update({
       ...patch,
       updatedAt: firebase.database.ServerValue.TIMESTAMP
@@ -3574,8 +3583,8 @@ async function autoLoginOrPrompt() {
     // than bouncing the person to an error on every refresh.
     // Leaving the site and coming back leaves a ghost entry until the old connection times
     // out, so give it a few seconds to clear before offering "Join from this tab".
-    for (let i = 0; i < 3 && (await ChatBackend.isAccountOnline(session.id)); i++) {
-      await new Promise(r => setTimeout(r, 2000));
+    for (let i = 0; i < 12 && (await ChatBackend.isAccountOnline(session.id)); i++) {   // checks every half second and goes in the moment the old entry clears (still waits at most about 6 seconds)
+      await new Promise(r => setTimeout(r, 500));
     }
     await joinWithDmSession(session, session.username);
   } catch (e) {
@@ -3683,6 +3692,8 @@ async function joinWithDmSession(session, nickname) {
   myName = name;
   myLoginId = String(session.id);
   registerVerifiedSelf();
+  try { ChatBackend.prefetchProfile(myLoginId); } catch (e) {}   // read your profile now so your first message doesn't wait for it
+  try { if (window.VUS_AUTH && window.VUS_AUTH.warm) window.VUS_AUTH.warm(myLoginId, myName); } catch (e) {}   // get a server ticket ready in the background (optional, silent)
 
   // Switch screens FIRST. Everything below is a nicety; if any of it fails the
   // person is still in the chat instead of stuck on the join screen with their
@@ -4567,6 +4578,7 @@ async function handleModerationCommand(text) {
 }
 
 async function sendMessage() {
+  try { if (window.VUS_LOADQ && window.VUS_LOADQ.hold) window.VUS_LOADQ.hold(4000); } catch (e) {}   // your message goes first; queued background loading waits a moment
   const text = $msgInput.value.trim();
 
   // Moderation commands must run before timeout and send-cooldown guards so
@@ -8892,6 +8904,8 @@ let chatBooted = false;
   if (window.VUS_UI && window.VUS_UI.attachEmojiSuggest) window.VUS_UI.attachEmojiSuggest($msgInput);
   const cancel = document.getElementById("chatReplyCancel");
   if (cancel) cancel.addEventListener("click", () => { if (editingMsgId) cancelEdit(); else cancelReply(); });
+  let lastHold = 0;   // while you type or send, background loading stands still so your message goes first
+  $msgInput.addEventListener("input", () => { const t = Date.now(); if (t - lastHold > 2500 && window.VUS_LOADQ && window.VUS_LOADQ.hold) { lastHold = t; window.VUS_LOADQ.hold(4000); } }, { passive: true });
   $msgInput.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && (editingMsgId || replyingTo)) { e.preventDefault(); if (editingMsgId) cancelEdit(); else cancelReply(); }
   });
@@ -8938,7 +8952,11 @@ function bootChat() {
   ChatBackend.watchRecs("grants", onRec);
   setTimeout(startAnnouncementWatch, 2500);
   ChatBackend.watchAllBans((id, val) => { if (val) bansAll[id] = val; else delete bansAll[id]; refreshSilencedMessages(); });
-  ChatBackend.watchInventory(data => { inventoryData = data; if ($inventoryOverlay.style.display === "flex") renderInventory(); });
+  // The whole inventory tree is only needed for protection checks (the database rules check those too) and the Inventory window,
+  // so it, and the Lists panel data, load after the chat has had its turn instead of competing with your first message.
+  { const startInv = () => ChatBackend.watchInventory(data => { inventoryData = data; if ($inventoryOverlay.style.display === "flex") renderInventory(); });
+    if (window.VUS_LOADQ) { window.VUS_LOADQ.add(startInv); window.VUS_LOADQ.add(preloadLists); }
+    else { setTimeout(startInv, 3000); setTimeout(preloadLists, 6000); } }
   watchPublicRoomsList();
   restoreSidebarRoomList();
   openRoomsSidebar();
@@ -9432,6 +9450,7 @@ const CRATE_ITEMS = [
   { id: "tag-speedy",    type: "tag", rar: "rare", name: "Speedy" },
   { id: "tag-yin",       type: "tag", rar: "rare", name: "Yin" },
   { id: "tag-yang",      type: "tag", rar: "rare", name: "Yang" },
+  { id: "tag-flower",    type: "tag", rar: "rare", name: "Flower Enthusiast" },
   { id: "tag-gremlin", type: "tag", rar: "epic", name: "Gremlin" },
   { id: "tag-menace",  type: "tag", rar: "epic", name: "Menace" },
   { id: "tag-chaos",   type: "tag", rar: "epic", name: "Chaos" },
@@ -9928,7 +9947,7 @@ function buildOddsBar(type) {
     list.appendChild(row);
   });
   bar.appendChild(list);
-  bar.appendChild(el("div", "cr-side-foot", "Chance of a NEW item: " + fmtPct(crateNewChance(type)) + ". Landing on one you own is a 50% retry (up to 4 spins), else nothing."));
+  bar.appendChild(el("div", "cr-side-foot", "Chance of a NEW item: " + fmtPct(crateNewChance(type)) + ". Landing on one you own is a 50% retry (up to 4 spins), else 10 coins."));
   return bar;
 }
 // ── the wheel: every item gets a slice as wide as its real chance ──
@@ -10501,9 +10520,30 @@ async function loadVerifiedList(onProgress) {
 }
 // Most Active: the 100 profiles with the most accumulated active time (see "Time active" above). The database does the sorting
 // (indexOn activeMs), so only the top 100 are downloaded. One account can only be in chat once at a time, so time isn't double counted.
+// Both lists are fetched in the background a few seconds after you get on, so the panel opens already filled in.
+// A fetched copy is reused for 2 minutes; after that, opening the panel fetches a fresh one.
+const LISTS_FRESH_MS = 120000;
+let listsPre = { active: null, activeAt: 0, verified: null, verifiedAt: 0 };
+function activeSnap() {
+  if (!listsPre.active || Date.now() - listsPre.activeAt > LISTS_FRESH_MS) {
+    listsPre.activeAt = Date.now();
+    const p = ChatBackend._db.ref("userProfiles").orderByChild("activeMs").limitToLast(100).get();
+    listsPre.active = p; p.catch(() => { if (listsPre.active === p) listsPre.active = null; });
+  }
+  return listsPre.active;
+}
+function verifiedRows(onProgress) {
+  if (!listsPre.verified || Date.now() - listsPre.verifiedAt > LISTS_FRESH_MS) {
+    listsPre.verifiedAt = Date.now();
+    const p = loadVerifiedList(onProgress);
+    listsPre.verified = p; p.catch(() => { if (listsPre.verified === p) listsPre.verified = null; });
+  }
+  return listsPre.verified;
+}
+function preloadLists() { try { activeSnap().catch(() => {}); verifiedRows().catch(() => {}); } catch (e) {} }
 async function paintActiveTab(note, list, ov) {
   try {
-    const snap = await ChatBackend._db.ref("userProfiles").orderByChild("activeMs").limitToLast(100).get();
+    const snap = await activeSnap();
     if (listsModal !== ov) return;
     const rows = [];
     snap.forEach(c => {
@@ -10547,7 +10587,7 @@ function openLists(tab) {
   ov.appendChild(box); ov.addEventListener("click", e => { if (e.target === ov) closeLists(); });
   document.body.appendChild(ov); listsModal = ov;
   if (tab === "active") { paintActiveTab(note, list, ov); return; }
-  loadVerifiedList((d, n) => { if (listsModal === ov) note.textContent = "Checking accounts\u2026 " + d + "/" + n; }).then(r => {
+  verifiedRows((d, n) => { if (listsModal === ov) note.textContent = "Checking accounts\u2026 " + d + "/" + n; }).then(r => {
     if (listsModal !== ov) return;
     list.textContent = "";
     note.textContent = r.rows.length

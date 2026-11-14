@@ -60,7 +60,7 @@
   async function obtainIfRequired(id, password) {   // called at login; always tries to get a token quietly. If the server can't be reached nothing happens and chat works as before.
     try { if (getToken(id)) return; await obtain(id, password); } catch (e) {}
   }
-  // Optional server help for sending: returns a ticket if the server can be reached right now, otherwise "" (never asks for a password, never throws, gives up after 3 seconds).
+  // Optional server help for sending: returns a ticket if the server can be reached right now, otherwise "" (never asks for a password, never throws, gives up after 0.6 seconds so a slow server can never hold up a message).
   async function softTicket(id, name) {
     name = name || "";
     try {
@@ -68,11 +68,13 @@
       var i = tbuf.findIndex(function (x) { return x.n === name; });
       if (i >= 0) { var x = tbuf.splice(i, 1)[0]; refill(id, name); return x.t; }
       if (!getToken(id)) return "";
-      var got = await Promise.race([fetchTicket(id, name), new Promise(function (_, no) { setTimeout(function () { no(new Error("SLOW")); }, 3000); })]);
+      var got = await Promise.race([fetchTicket(id, name), new Promise(function (_, no) { setTimeout(function () { no(new Error("SLOW")); }, 600); })]);
       refill(id, name);
       return got.t;
     } catch (e) { return ""; }
   }
+  // Called as soon as you are in chat: gets a ticket ready in the background so your first message already has one. Silent if the server is unreachable.
+  function warm(id, name) { try { if (getToken(id)) refill(id, name || ""); } catch (e) {} }
   function askPassword(id) {   // one small prompt, only for a device that has no token yet while tokens are required
     if (asking) return asking;
     asking = new Promise(function (resolve) {
@@ -106,7 +108,7 @@
     if (!(await askPassword(id))) return "";
     return getToken(id);
   }
-  window.VUS_AUTH = { obtain: obtain, obtainIfRequired: obtainIfRequired, softTicket: softTicket, loginToken: loginToken, ticket: ticket, hasToken: function (id) { return !!getToken(id); } };
+  window.VUS_AUTH = { obtain: obtain, obtainIfRequired: obtainIfRequired, softTicket: softTicket, warm: warm, loginToken: loginToken, ticket: ticket, hasToken: function (id) { return !!getToken(id); } };
   window.addEventListener("vus:logout", function () { try { localStorage.removeItem(TKEY); } catch (e) {} tbuf = []; });
 
   // ── The DEV tab ──
