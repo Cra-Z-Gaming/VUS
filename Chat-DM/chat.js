@@ -9462,7 +9462,20 @@ const CRATE_ITEMS = [
   { id: "tag-legend",  type: "tag", rar: "legendary", name: "Legend" },
   { id: "tag-goat",    type: "tag", rar: "legendary", name: "G.O.A.T." },
   // Shop-only (1000 coins in the Shop, never from a crate): a shiny gold tag
-  { id: "tag-loaded",  type: "tag", rar: "legendary", name: "Loaded 💰", shop: true },
+  { id: "tag-loaded",  type: "tag", rar: "legendary", name: "Loaded 💰", shop: true, price: 1000, legacy: true, blurb: "A shiny gold tag. Only sold here, never found in crates." },
+  // ── Shop-only items (never in a crate). Ids start with "shp-". The price list lives in the database rules too (coins → sh), so a new
+  //    shop item needs: a line here (shop: true, price) AND its id + price added to that list in vus-chat-rules.json. ──
+  { id: "shp-tag-rich",  type: "tag", rar: "legendary", name: "Filthy Rich",    shop: true, price: 10000, blurb: "Money green and gold, with a shine that never stops." },
+  { id: "shp-tag-kanye", type: "tag", rar: "legendary", name: "I prefer kanye", shop: true, price: 25000, blurb: "For the real fans. The most expensive tag in the shop." },
+  { id: "shp-ring-rainbow", type: "ring", rar: "epic",      name: "Rainbow Spin", shop: true, price: 500,   blurb: "A full rainbow that spins around your picture and keeps changing colour." },
+  { id: "shp-ring-rod",     type: "ring", rar: "legendary", name: "Ring of Death", shop: true, price: 10000, blurb: "Red blades spinning around your picture." },
+  { id: "shp-bub-dirt",    type: "bub", rar: "common",    name: "Dirt",    shop: true, price: 50,   anim: "dirt",    txt: "#ffffff", colors: ["#6e4724", "#4a2f17"], blurb: "Crumbly brown dirt with little pebbles in it." },
+  { id: "shp-bub-stone",   type: "bub", rar: "common",    name: "Stone",   shop: true, price: 75,   anim: "stone",   txt: "#ffffff", colors: ["#7b8190", "#5a6070"], blurb: "Grey stone with cracks and speckles." },
+  { id: "shp-bub-iron",    type: "bub", rar: "rare",      name: "Iron",    shop: true, price: 200,  anim: "iron",    txt: "#ffffff", colors: ["#9aa3ae", "#6b7380"], blurb: "Brushed iron plate with rivets and a slow shine." },
+  { id: "shp-bub-gold",    type: "bub", rar: "epic",      name: "Gold",    shop: true, price: 500,  anim: "gold",    txt: "#3b2a00", colors: ["#ffd23a", "#a8740a"], blurb: "Rich gold with a glint that sweeps across and a warm glow." },
+  { id: "shp-bub-diamond", type: "bub", rar: "legendary", name: "Diamond", shop: true, price: 1000, anim: "diamond", txt: "#0c2d57", colors: ["#a5eaff", "#d6dcff"], blurb: "Icy facets with twinkling sparkles and a bright glow." },
+  { id: "shp-bub-emerald", type: "bub", rar: "legendary", name: "Emerald", shop: true, price: 3000, anim: "emerald", txt: "#ffffff", colors: ["#12b981", "#055a40"], blurb: "A deep green cut gem with sweeping glints." },
+  { id: "shp-bub-ruby",    type: "bub", rar: "legendary", name: "Ruby",    shop: true, price: 5000, anim: "ruby",    txt: "#ffffff", colors: ["#dc2626", "#6b0f1a"], blurb: "A glowing red gem that pulses." },
   // text effects (CSS class fxt-<id>)
   { id: "fx-sunset", type: "fx", rar: "common", name: "Sunset Fade" },
   { id: "fx-ocean",  type: "fx", rar: "common", name: "Ocean Fade" },
@@ -9773,7 +9786,7 @@ function applyBubFx(node, it, bc) {
   node.style.setProperty("--b1", cols[0]);
   node.style.setProperty("--b2", cols[1] || cols[0]);
   node.style.setProperty("--b3", cols[2] || cols[1] || cols[0]);
-  const tc = (it.anim === "neon" || it.anim === "rainbow") ? "#ffffff" : bubTextColor(cols);
+  const tc = it.txt || ((it.anim === "neon" || it.anim === "rainbow") ? "#ffffff" : bubTextColor(cols));
   node.style.setProperty("--bt", tc);
   node.style.setProperty("--bts", tc === "#ffffff" ? "0 1px 2px rgba(0,0,0,.45)" : "none");
 }
@@ -10223,6 +10236,7 @@ function ensureCoinWatch() {
   settleShopCrates().catch(() => {});   // hand over anything paid for but not delivered yet
   flushCoinPending().catch(() => {});   // and any crate coins that couldn't be saved earlier
   settleLoadedTag().catch(() => {});    // and a Loaded tag that was paid for but not delivered
+  settleShopItems().catch(() => {});    // and any other Shop item that was paid for but not delivered
 }
 function paintCoinBits() {
   const b = document.getElementById("navShop");
@@ -10369,10 +10383,83 @@ async function buyLoadedTag() {
   shopBusy = false; paintShop();
 }
 
+// ── Shop items for every kind (rings, tags, text effects, fonts, bubbles) ──
+// ONE purchase = ONE write to coins/<id> that takes exactly the price, sets sh/<item> = 1 and bk = <item>. The database rules hold the same
+// price list and only accept crateInv/<id>/items/shp-... once sh/<item> is 1, so nobody can skip or lower a price. The Loaded tag keeps its
+// older flow (coins `ld`); it is just listed in the Tags tab with the rest.
+const SHOP_TABS = [
+  { id: "crate", icon: "\uD83D\uDCE6", label: "Crates" },
+  { id: "ring",  icon: "\u2B55",       label: "Rings" },
+  { id: "tag",   icon: "\uD83C\uDFF7\uFE0F", label: "Tags" },
+  { id: "fx",    icon: "\u2728",       label: "Text effects" },
+  { id: "font",  icon: "Aa",           label: "Fonts" },
+  { id: "bub",   icon: "\uD83D\uDCAC", label: "Bubbles" }
+];
+let shopTab = "crate";
+function shopItemsOf(type) { return CRATE_ITEMS.filter(i => i.shop && i.type === type).sort((a, b) => a.price - b.price); }
+function shopOwned(it) {
+  if (crateOwned.has(it.id)) return true;
+  if (it.legacy) return !!(myCoinRec && Number(myCoinRec.ld) === 1);
+  return !!(myCoinRec && myCoinRec.sh && Number(myCoinRec.sh[it.id]) === 1);
+}
+async function settleShopItems() {   // paid for (sh/<item> = 1) but not in the inventory yet
+  if (!myLoginId || !ChatBackend._db) return 0;
+  const id = String(myLoginId), db = ChatBackend._db;
+  const [sh, inv] = await Promise.all([db.ref("coins/" + id + "/sh").get(), db.ref("crateInv/" + id + "/items").get()]);
+  const have = inv.val() || {};
+  let given = 0;
+  for (const k of Object.keys(sh.val() || {})) {
+    if (!/^shp-/.test(k) || !itemOf(k) || have[k]) continue;
+    await db.ref("crateInv/" + id + "/items/" + k).set(firebase.database.ServerValue.TIMESTAMP);
+    given++;
+  }
+  return given;
+}
+async function buyShopItem(itemId) {
+  const it = ITEM_BY_ID[itemId];
+  if (!it || !it.shop || shopBusy || !myLoginId) return;
+  if (it.legacy) { buyLoadedTag(); return; }
+  shopBusy = true; shopMsg = { t: "Buying…" }; paintShop();
+  let paid = false;
+  try {
+    const uid = String(myLoginId), db = ChatBackend._db;
+    await settleShopItems();   // finish an earlier purchase first
+    for (let attempt = 0; ; attempt++) {
+      const rec = (await db.ref("coins/" + uid).get()).val() || {}, have = Number(rec.n) || 0;
+      if ((rec.sh && Number(rec.sh[itemId]) === 1) || crateOwned.has(itemId)) throw new Error("You already own " + it.name + ".");
+      if (have < it.price) throw new Error("You need " + it.price + " coins. You have " + have + ".");
+      const upd = { n: have - it.price, bk: itemId }; upd["sh/" + itemId] = 1;
+      try { await db.ref("coins/" + uid).update(upd); paid = true; break; }
+      catch (e1) { if (!isPermissionDenied(e1) || attempt >= 2) throw e1; await annSleep(400); }   // a message coin may have landed between the read and the write: read again and retry
+    }
+    await settleShopItems();
+    shopMsg = { ok: true, t: "You bought " + it.name + "! Equip it in the Collection tab.", coll: it.type };
+  } catch (e) {
+    shopMsg = { t: paid ? "You paid, but " + it.name + " didn't arrive yet. Close and reopen the shop and it will be delivered." : isPermissionDenied(e) ? "The database refused that purchase. Check that the newest database rules are published, then try again." : ((e && e.message) || "Couldn't buy that.") };
+  }
+  shopBusy = false; paintShop();
+}
+function shopItemCard(it) {
+  const owned = shopOwned(it);
+  const card = el("div", "shop-item shop-item-" + it.type);
+  const pv = el("div", "shop-pv"); pv.appendChild(itemPreview(it));
+  const info = el("div", "shop-info");
+  info.append(el("b", "", it.name), el("small", "", it.blurb || ""));
+  const side = el("div", "shop-side");
+  side.appendChild(el("div", "shop-price", it.price.toLocaleString() + " \uD83E\uDE99"));
+  const b = el("button", "cr-count-b", owned ? "Owned \u2713" : "Buy"); b.type = "button";
+  b.disabled = owned || shopBusy || myCoins === null || myCoins < it.price;
+  b.addEventListener("click", () => buyShopItem(it.id));
+  side.appendChild(b);
+  card.append(pv, info, side);
+  return card;
+}
+
 let shopModal = null, shopBusy = false, shopMsg = null;
 function openShop() {
   if (shopModal) return;
   settleLoadedTag().catch(() => {});
+  settleShopItems().catch(() => {});
   ensureCoinWatch();
   settleShopCrates().catch(() => {});
   const ov = el("div", "crate-overlay"), box = el("div", "crate-modal shop-modal");
@@ -10385,6 +10472,7 @@ function closeShop() { if (shopModal) { shopModal.remove(); shopModal = null; } 
 function paintShop() {
   if (!shopModal) return;
   const box = shopModal.querySelector(".shop-modal");
+  const keepTop = box.scrollTop;   // coins change while the shop is open: stay where you were
   box.replaceChildren();
   const x = el("button", "poll-x", "\u00D7"); x.type = "button"; x.addEventListener("click", () => { if (!shopBusy) closeShop(); });
   box.appendChild(x);
@@ -10395,38 +10483,42 @@ function paintShop() {
 
   if (shopMsg) {
     const m = el("div", "shop-msg" + (shopMsg.ok ? " ok" : ""), shopMsg.t);
-    if (shopMsg.coll) { const o = el("button", "pm-go", "Open collection"); o.type = "button"; o.addEventListener("click", () => { closeShop(); openCrateModal(); crateView = "collection"; collectionType = "tag"; paintCrateModal(); }); m.appendChild(o); }
+    if (shopMsg.coll) { const ctype = typeof shopMsg.coll === "string" ? shopMsg.coll : "tag"; const o = el("button", "pm-go", "Open collection"); o.type = "button"; o.addEventListener("click", () => { closeShop(); openCrateModal(); crateView = "collection"; collectionType = ctype; paintCrateModal(); }); m.appendChild(o); }
     if (shopMsg.open) { const o = el("button", "pm-go", "Open crates"); o.type = "button"; o.addEventListener("click", () => { closeShop(); openCrateModal(); }); m.appendChild(o); }
     box.appendChild(m);
   }
 
-  const card = el("div", "shop-item");
-  const info = el("div", "shop-info");
-  info.append(el("b", "", "Crate"), el("small", "", "Open it for a ring, tag, text effect, font or bubble. It joins the crates you earn."));
-  card.append(el("div", "shop-ic", "\uD83D\uDCE6"), info, el("div", "shop-price", SHOP_CRATE_PRICE + " \uD83E\uDE99 each"));
-  box.appendChild(card);
-  const row = el("div", "shop-buys");
-  [1, 5, 10].forEach(n => {
-    const cost = n * SHOP_CRATE_PRICE;
-    const b = el("button", "cr-count-b", "Buy " + n + " \u00B7 " + cost + " \uD83E\uDE99"); b.type = "button";
-    b.disabled = shopBusy || myCoins === null || myCoins < cost;
-    b.addEventListener("click", () => buyShop("crate", n));
-    row.appendChild(b);
+  // one tab per kind of item: crates, rings, tags, text effects, fonts, bubbles
+  const tabs = el("div", "shop-tabs");
+  SHOP_TABS.forEach(t => {
+    const tb = el("button", "shop-tab" + (shopTab === t.id ? " on" : ""), t.icon + " " + t.label); tb.type = "button";
+    tb.addEventListener("click", () => { if (shopBusy || shopTab === t.id) return; shopTab = t.id; shopMsg = null; paintShop(); });
+    tabs.appendChild(tb);
   });
-  box.appendChild(row);
-    {   // the Loaded tag (Shop only)
-    const owned = crateOwned.has(LOADED_ID) || !!(myCoinRec && Number(myCoinRec.ld) === 1);
-    const c2 = el("div", "shop-item"), i2 = el("div", "shop-info");
-    i2.append(el("b", "", "Loaded 💰 tag"), el("small", "", "A shiny gold tag. Only sold here, never found in crates."));
-    c2.append(el("div", "shop-ic", "🏷️"), i2, el("div", "shop-price", LOADED_PRICE + " 🪙"));
-    box.appendChild(c2);
-    const r2 = el("div", "shop-buys");
-    const b2 = el("button", "cr-count-b", owned ? "Owned ✓" : "Buy · " + LOADED_PRICE + " 🪙"); b2.type = "button";
-    b2.disabled = owned || shopBusy || myCoins === null || myCoins < LOADED_PRICE;
-    b2.addEventListener("click", () => buyLoadedTag());
-    r2.appendChild(b2); box.appendChild(r2);
+  box.appendChild(tabs);
+
+  if (shopTab !== "crate") {
+    const list = shopItemsOf(shopTab);
+    if (!list.length) box.appendChild(el("div", "cr-note shop-empty", "Nothing for sale here yet. Check back soon!"));
+    else { const wrap = el("div", "shop-list"); list.forEach(it => wrap.appendChild(shopItemCard(it))); box.appendChild(wrap); }
+  } else {
+    const card = el("div", "shop-item");
+    const info = el("div", "shop-info");
+    info.append(el("b", "", "Crate"), el("small", "", "Open it for a ring, tag, text effect, font or bubble. It joins the crates you earn."));
+    card.append(el("div", "shop-ic", "\uD83D\uDCE6"), info, el("div", "shop-price", SHOP_CRATE_PRICE + " \uD83E\uDE99 each"));
+    box.appendChild(card);
+    const row = el("div", "shop-buys");
+    [1, 5, 10].forEach(n => {
+      const cost = n * SHOP_CRATE_PRICE;
+      const b = el("button", "cr-count-b", "Buy " + n + " \u00B7 " + cost + " \uD83E\uDE99"); b.type = "button";
+      b.disabled = shopBusy || myCoins === null || myCoins < cost;
+      b.addEventListener("click", () => buyShop("crate", n));
+      row.appendChild(b);
+    });
+    box.appendChild(row);
   }
   box.appendChild(el("div", "cr-note", "Earn 1 coin for each message you send (at most one coin every 5 seconds). Bot messages don't earn coins."));
+  box.scrollTop = keepTop;
 }
 async function buyShop(item, qty) {
   if (shopBusy || !myLoginId || item !== "crate") return;

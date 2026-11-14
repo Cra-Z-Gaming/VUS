@@ -2783,3 +2783,130 @@ body.low-power .msg-bubble.bubfx { box-shadow: none !important; filter: none !im
 body.low-power .msg-av.has-ring, body.low-power .member-av.has-ring { box-shadow: none !important; }
 body.low-power .msg-bubble .fxtext, body.low-power .member-name .fxtext { background: none !important; color: inherit !important; -webkit-text-fill-color: currentColor !important; text-shadow: none !important; filter: none !important; }
 body.low-power .bg-video-el { display: none !important; }
+
+/* ═══════════ Shop: tabs and item cards ═══════════ */
+.shop-tabs{display:flex;gap:6px;overflow-x:auto;margin:0 0 12px;padding-bottom:4px;scrollbar-width:thin}
+.shop-tab{flex:0 0 auto;padding:7px 12px;border-radius:999px;border:1px solid #334155;background:#0f172a;color:#cbd5e1;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.shop-tab:hover{border-color:#64748b}
+.shop-tab.on{background:#1d4ed8;border-color:#60a5fa;color:#fff}
+.shop-list{display:flex;flex-direction:column;gap:10px}
+.shop-pv{flex:0 0 104px;display:flex;align-items:center;justify-content:center;min-height:46px}
+.shop-pv .msg-tag{margin-left:0}
+.shop-pv .cr-bubprev{font-size:13px;padding:7px 10px}
+.shop-side{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.shop-empty{text-align:center;padding:18px 8px}
+@media (max-width: 480px) { .shop-pv{flex-basis:84px} }
+
+/* ═══════════ Shop rings: spinning (drawn on the edge of the picture) ═══════════ */
+.rfx-shp-ring-rainbow:not(.msg-av), .rfx-shp-ring-rod:not(.msg-av) { position: relative; }
+.rfx-shp-ring-rainbow::after, .rfx-shp-ring-rod::after, .rfx-shp-ring-rod::before {
+  content: ""; position: absolute; inset: 0; border-radius: 50%; padding: 3.5px; box-sizing: border-box; pointer-events: none; z-index: 2;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+}
+@keyframes rfxSpin { to { transform: rotate(360deg); } }
+@keyframes rfxHue { to { filter: hue-rotate(360deg); } }
+/* Rainbow Spin: a rainbow that rotates and slowly shifts colour, with a glow that follows the colours */
+.rfx-shp-ring-rainbow { animation: rfxRbGlow 6s linear infinite; }
+.rfx-shp-ring-rainbow::after { background: conic-gradient(#ff2d2d, #ff9a00, #ffe600, #2dff5a, #00e5ff, #2d6bff, #a82dff, #ff2dc6, #ff2d2d); animation: rfxSpin 2.2s linear infinite, rfxHue 5s linear infinite; }
+@keyframes rfxRbGlow {
+  0%, 100% { box-shadow: 0 0 9px 1px #ff2d2d; } 17% { box-shadow: 0 0 9px 1px #ffb300; } 33% { box-shadow: 0 0 9px 1px #2dff5a; }
+  50% { box-shadow: 0 0 9px 1px #00e5ff; } 67% { box-shadow: 0 0 9px 1px #2d6bff; } 83% { box-shadow: 0 0 9px 1px #c02dff; }
+}
+/* Ring of Death: red blades spinning one way, a thin inner ring spinning the other way, and a throbbing red glow */
+.rfx-shp-ring-rod { animation: rfxRodGlow 1.6s ease-in-out infinite; }
+.rfx-shp-ring-rod::after { background: conic-gradient(#ff1a1a 0 22deg, #3a0000 22deg 90deg, #c80000 90deg 118deg, #3a0000 118deg 180deg, #ff1a1a 180deg 202deg, #3a0000 202deg 270deg, #c80000 270deg 298deg, #3a0000 298deg 360deg); animation: rfxSpin 1.4s linear infinite; }
+.rfx-shp-ring-rod::before { inset: 5px; padding: 1.5px; background: conic-gradient(transparent 0 60deg, #ff4d4d 60deg 120deg, transparent 120deg 240deg, #ff4d4d 240deg 300deg, transparent 300deg 360deg); animation: rfxSpin 2.6s linear infinite reverse; }
+@keyframes rfxRodGlow {
+  0%, 100% { box-shadow: 0 0 0 2px #1a0000, 0 0 8px 1px rgba(255,26,26,.55); }
+  50% { box-shadow: 0 0 0 2px #1a0000, 0 0 18px 4px rgba(255,26,26,.95); }
+}
+body.hide-rings .rfx::before, body.hide-rings .rfx::after { display: none !important; }
+body.low-power .rfx::before, body.low-power .rfx::after { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .rfx-shp-ring-rainbow, .rfx-shp-ring-rainbow::after, .rfx-shp-ring-rod, .rfx-shp-ring-rod::before, .rfx-shp-ring-rod::after { animation: none !important; } }
+
+/* ═══════════ Shop tags ═══════════ */
+.msg-tag.tg-shp-tag-rich { position: relative; overflow: hidden; isolation: isolate; font-weight: 900; letter-spacing: .5px; color: #fff6c2; text-shadow: 0 1px 2px rgba(0,60,20,.9), 0 0 6px rgba(255,215,0,.7); border: 1.5px solid transparent; background: linear-gradient(110deg,#052e16,#0f6b34,#052e16) padding-box, linear-gradient(110deg,#a16207,#ffd700,#fff7ae,#22c55e,#ffd700,#a16207) border-box; background-size: 100% 100%, 300% 100%; animation: richBorder 3s linear infinite; box-shadow: 0 0 10px rgba(34,197,94,.55), 0 0 4px rgba(255,215,0,.6); }
+.msg-tag.tg-shp-tag-rich::before { content: "$"; margin-right: 3px; color: #ffd700; }
+.msg-tag.tg-shp-tag-rich::after, .msg-tag.tg-shp-tag-kanye::after { content: ""; position: absolute; top: -20%; bottom: -20%; left: -70%; width: 45%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.7), transparent); transform: skewX(-22deg); animation: loadedSweep 3s ease-in-out infinite; pointer-events: none; }
+@keyframes richBorder { 0% { background-position: 0 0, 0% 50%; } 100% { background-position: 0 0, 300% 50%; } }
+.msg-tag.tg-shp-tag-kanye { position: relative; overflow: hidden; isolation: isolate; font-weight: 900; letter-spacing: .6px; color: #fff; text-shadow: 0 0 6px rgba(255,255,255,.55); border: 1.5px solid transparent; background: linear-gradient(#050505,#161616) padding-box, linear-gradient(110deg,#6b21a8,#f5f5f5,#d4a017,#f5f5f5,#6b21a8) border-box; background-size: 100% 100%, 300% 100%; animation: kanyeBorder 3.2s linear infinite; box-shadow: 0 0 12px rgba(168,85,247,.5), inset 0 0 8px rgba(255,255,255,.08); }
+@keyframes kanyeBorder { 0% { background-position: 0 0, 0% 50%; } 100% { background-position: 0 0, 300% 50%; } }
+@media (prefers-reduced-motion: reduce) { .msg-tag.tg-shp-tag-rich, .msg-tag.tg-shp-tag-kanye, .msg-tag.tg-shp-tag-rich::after, .msg-tag.tg-shp-tag-kanye::after { animation: none !important; } }
+
+/* ═══════════ Shop bubbles: materials (texture and effects live INSIDE the bubble, so they never look like a plain custom colour) ═══════════ */
+/* Dirt: crumbly soil with pebbles */
+body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-dirt, .cr-bubprev.bubfx.bub-dirt {
+  background-image: radial-gradient(circle at 12% 30%, #2b1a0c 0 2px, transparent 3px), radial-gradient(circle at 38% 72%, #b39270 0 1.4px, transparent 2.4px), radial-gradient(circle at 63% 25%, #241408 0 2.2px, transparent 3.2px), radial-gradient(circle at 85% 65%, #b39270 0 1.4px, transparent 2.4px), radial-gradient(circle at 74% 90%, #2b1a0c 0 1.6px, transparent 2.6px), linear-gradient(135deg, #6e4724, #4a2f17 55%, #6e4724) !important;
+  background-size: 46px 34px, 38px 30px, 52px 40px, 44px 36px, 40px 28px, 100% 100% !important;
+  background-color: #4a2f17;
+  box-shadow: inset 0 0 0 2px #3a2411, inset 0 3px 0 rgba(255,255,255,.07), inset 0 -4px 0 rgba(0,0,0,.28);
+}
+/* Stone: cracked grey rock with speckles */
+body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-stone, .cr-bubprev.bubfx.bub-stone {
+  background-image: linear-gradient(100deg, transparent 0 46%, rgba(0,0,0,.38) 46.6%, transparent 48.2%), linear-gradient(72deg, transparent 0 60%, rgba(0,0,0,.30) 60.6%, transparent 62%), radial-gradient(circle at 20% 35%, rgba(255,255,255,.22) 0 1px, transparent 1.8px), radial-gradient(circle at 70% 70%, rgba(255,255,255,.18) 0 1px, transparent 1.8px), radial-gradient(circle at 45% 15%, rgba(0,0,0,.28) 0 1.2px, transparent 2px), linear-gradient(135deg, #7b8190, #5a6070 55%, #7b8190) !important;
+  background-size: 78px 100%, 59px 100%, 23px 19px, 31px 23px, 27px 21px, 100% 100% !important;
+  background-color: #5a6070;
+  box-shadow: inset 0 0 0 2px #3f4551, inset 0 3px 0 rgba(255,255,255,.2), inset 0 -4px 0 rgba(0,0,0,.3);
+}
+/* Iron: riveted brushed plate with a slow metallic shine */
+body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-iron, .cr-bubprev.bubfx.bub-iron {
+  background-image: linear-gradient(105deg, transparent 40%, rgba(255,255,255,.38) 50%, transparent 60%), radial-gradient(circle at 8px 8px, #f3f4f6 0 1px, #4b5563 1.8px, transparent 2.8px), radial-gradient(circle at calc(100% - 8px) 8px, #f3f4f6 0 1px, #4b5563 1.8px, transparent 2.8px), radial-gradient(circle at 8px calc(100% - 8px), #f3f4f6 0 1px, #4b5563 1.8px, transparent 2.8px), radial-gradient(circle at calc(100% - 8px) calc(100% - 8px), #f3f4f6 0 1px, #4b5563 1.8px, transparent 2.8px), repeating-linear-gradient(90deg, rgba(255,255,255,.08) 0 1px, rgba(0,0,0,.06) 1px 3px), linear-gradient(180deg, #a1a9b4, #6b7380 50%, #8b93a0) !important;
+  background-size: 260% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100% !important;
+  background-repeat: no-repeat !important;
+  background-color: #6b7380;
+  background-position: 150% 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0;
+  animation: bubIron 5s linear infinite;
+  box-shadow: inset 0 0 0 2px #4b5563, inset 0 3px 0 rgba(255,255,255,.28), inset 0 -4px 0 rgba(0,0,0,.3);
+}
+@keyframes bubIron { 0% { background-position: 150% 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0; } 100% { background-position: -50% 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0; } }
+/* Gold: polished gold, a bright glint sweeping across, warm pulsing glow */
+body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-gold, .cr-bubprev.bubfx.bub-gold {
+  background-image: linear-gradient(110deg, transparent 38%, rgba(255,255,255,.8) 50%, transparent 62%), repeating-linear-gradient(115deg, rgba(255,255,255,.14) 0 2px, transparent 2px 7px), linear-gradient(135deg, #a8740a, #ffd23a 30%, #fff2a0 50%, #ffd23a 70%, #a8740a) !important;
+  background-size: 250% 100%, 100% 100%, 100% 100% !important;
+  background-repeat: no-repeat !important;
+  background-color: #ffd23a;
+  background-position: 150% 0, 0 0, 0 0;
+  animation: bubGoldGlint 3.4s linear infinite, bubGoldGlow 2.4s ease-in-out infinite;
+  box-shadow: 0 0 8px rgba(255,200,40,.45), inset 0 0 0 2px #b8860b, inset 0 -3px 0 rgba(120,70,0,.3);
+  text-shadow: 0 1px 0 rgba(255,255,255,.4);
+}
+@keyframes bubGoldGlint { 0% { background-position: 150% 0, 0 0, 0 0; } 100% { background-position: -50% 0, 0 0, 0 0; } }
+@keyframes bubGoldGlow { 0%, 100% { box-shadow: 0 0 6px rgba(255,200,40,.35), inset 0 0 0 2px #b8860b, inset 0 -3px 0 rgba(120,70,0,.3); } 50% { box-shadow: 0 0 16px 2px rgba(255,210,60,.8), inset 0 0 0 2px #d9a516, inset 0 -3px 0 rgba(120,70,0,.3); } }
+/* Diamond: icy facets, drifting sparkles, a flash that sweeps through and a bright glow */
+body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-diamond, .cr-bubprev.bubfx.bub-diamond {
+  background-image: linear-gradient(105deg, transparent 40%, rgba(255,255,255,.9) 50%, transparent 60%), radial-gradient(circle at 20% 30%, #fff 0 1.2px, rgba(186,230,253,.75) 2px, transparent 5px), radial-gradient(circle at 70% 62%, #fff 0 1.2px, rgba(199,210,254,.75) 2px, transparent 5px), linear-gradient(60deg, transparent 0 28%, rgba(255,255,255,.55) 28.4%, transparent 29.2% 58%, rgba(96,190,255,.35) 58.4%, transparent 59.2%), linear-gradient(120deg, transparent 0 40%, rgba(255,255,255,.5) 40.4%, transparent 41.2% 72%, rgba(147,197,253,.4) 72.4%, transparent 73.2%), linear-gradient(135deg, #e8fbff, #a5eaff 40%, #d6dcff 70%, #eafcff) !important;
+  background-size: 250% 100%, 54px 38px, 41px 30px, 64px 100%, 83px 100%, 100% 100% !important;
+  background-repeat: no-repeat, repeat, repeat, repeat, repeat, no-repeat !important;
+  background-color: #a5eaff;
+  background-position: 150% 0, 0 0, 0 0, 0 0, 0 0, 0 0;
+  animation: bubDiamond 3s linear infinite, bubDiamondGlow 2.2s ease-in-out infinite;
+  box-shadow: 0 0 8px rgba(125,226,255,.5), inset 0 0 0 1.5px rgba(255,255,255,.85), inset 0 -3px 0 rgba(56,189,248,.25);
+  text-shadow: 0 1px 0 rgba(255,255,255,.6);
+}
+@keyframes bubDiamond { 0% { background-position: 150% 0, 0 0, 0 0, 0 0, 0 0, 0 0; } 100% { background-position: -50% 0, 54px 38px, -41px 30px, 0 0, 0 0, 0 0; } }
+@keyframes bubDiamondGlow { 0%, 100% { box-shadow: 0 0 6px rgba(125,226,255,.4), inset 0 0 0 1.5px rgba(255,255,255,.85), inset 0 -3px 0 rgba(56,189,248,.25); } 50% { box-shadow: 0 0 18px 3px rgba(165,243,252,.95), inset 0 0 0 1.5px #fff, inset 0 -3px 0 rgba(56,189,248,.25); } }
+/* Emerald: deep green cut gem with facets and sweeping glints */
+body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-emerald, .cr-bubprev.bubfx.bub-emerald {
+  background-image: linear-gradient(105deg, transparent 40%, rgba(190,255,225,.7) 50%, transparent 60%), conic-gradient(from 30deg at 22% 55%, rgba(255,255,255,.22), transparent 22%, rgba(0,0,0,.22) 48%, transparent 72%, rgba(255,255,255,.16)), conic-gradient(from 200deg at 78% 40%, rgba(255,255,255,.18), transparent 25%, rgba(0,0,0,.2) 55%, transparent 78%, rgba(255,255,255,.12)), linear-gradient(135deg, #044d38, #12b981 48%, #055a40) !important;
+  background-size: 250% 100%, 100% 100%, 100% 100%, 100% 100% !important;
+  background-repeat: no-repeat !important;
+  background-color: #055a40;
+  background-position: 150% 0, 0 0, 0 0, 0 0;
+  animation: bubEmerald 4s linear infinite, bubEmeraldGlow 2.8s ease-in-out infinite;
+  box-shadow: 0 0 8px rgba(16,185,129,.5), inset 0 0 0 2px #34d399, inset 0 -3px 0 rgba(0,40,25,.4);
+}
+@keyframes bubEmerald { 0% { background-position: 150% 0, 0 0, 0 0, 0 0; } 100% { background-position: -50% 0, 0 0, 0 0, 0 0; } }
+@keyframes bubEmeraldGlow { 0%, 100% { box-shadow: 0 0 6px rgba(16,185,129,.35), inset 0 0 0 2px #34d399, inset 0 -3px 0 rgba(0,40,25,.4); } 50% { box-shadow: 0 0 18px 3px rgba(52,211,153,.85), inset 0 0 0 2px #6ee7b7, inset 0 -3px 0 rgba(0,40,25,.4); } }
+/* Ruby: glowing red gem with facets, a hot glint and a heartbeat glow */
+body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-ruby, .cr-bubprev.bubfx.bub-ruby {
+  background-image: linear-gradient(105deg, transparent 40%, rgba(255,200,210,.75) 50%, transparent 60%), conic-gradient(from 30deg at 22% 55%, rgba(255,255,255,.24), transparent 22%, rgba(0,0,0,.25) 48%, transparent 72%, rgba(255,255,255,.18)), conic-gradient(from 200deg at 78% 40%, rgba(255,255,255,.2), transparent 25%, rgba(0,0,0,.22) 55%, transparent 78%, rgba(255,255,255,.14)), linear-gradient(135deg, #5b0b15, #dc2626 48%, #8f1130) !important;
+  background-size: 250% 100%, 100% 100%, 100% 100%, 100% 100% !important;
+  background-repeat: no-repeat !important;
+  background-color: #8f1130;
+  background-position: 150% 0, 0 0, 0 0, 0 0;
+  animation: bubRuby 3.6s linear infinite, bubRubyGlow 1.8s ease-in-out infinite;
+  box-shadow: 0 0 8px rgba(239,68,68,.5), inset 0 0 0 2px #f87171, inset 0 -3px 0 rgba(60,0,10,.45);
+}
+@keyframes bubRuby { 0% { background-position: 150% 0, 0 0, 0 0, 0 0; } 100% { background-position: -50% 0, 0 0, 0 0, 0 0; } }
+@keyframes bubRubyGlow { 0%, 100% { box-shadow: 0 0 6px rgba(239,68,68,.4), inset 0 0 0 2px #f87171, inset 0 -3px 0 rgba(60,0,10,.45); } 50% { box-shadow: 0 0 20px 4px rgba(248,113,113,.95), inset 0 0 0 2px #fecaca, inset 0 -3px 0 rgba(60,0,10,.45); } }
