@@ -1,0 +1,1339 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Divinity</title>
+<style>
+:root{--dock:176px;--accent:#fff;--afg:#000;--fg:var(--accent);--mut:color-mix(in srgb,var(--accent) 55%,#000);--mut2:color-mix(in srgb,var(--accent) 80%,#000);--line:color-mix(in srgb,var(--accent) 16%,transparent);--soft:color-mix(in srgb,var(--accent) 7%,transparent);--hov:color-mix(in srgb,var(--accent) 14%,transparent);--panel:#0b0b0b;--field:#141414;--top:34px}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:#000;color:var(--fg);font:13px/1.45 var(--ui,-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Inter,system-ui,sans-serif);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0}
+#bg{position:fixed;inset:0;background:#000 center/cover no-repeat;z-index:0}
+#snow{position:fixed;inset:0;pointer-events:none;z-index:1}
+#desktop{position:fixed;inset:0;z-index:2;display:none}
+
+/* top bar */
+.top{position:absolute;left:0;right:0;top:0;height:var(--top);display:flex;align-items:center;justify-content:space-between;padding:0 14px;z-index:30;background:rgba(0,0,0,.35);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.brand{font-weight:600;letter-spacing:.14em;font-size:12px;text-transform:uppercase}
+.tr{display:flex;align-items:center;gap:14px}
+#who{color:var(--mut);font-size:12px}
+.lk{color:var(--mut);font-size:12px}.lk:hover{color:var(--fg)}
+#panic{background:#e5282d;color:#fff;font-weight:600;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:4px 12px;border-radius:999px}
+#panic:hover{background:#ff3b40}
+
+/* dock */
+.dock{position:absolute;left:10px;top:calc(var(--top) + 12px);bottom:52px;width:calc(var(--dock) - 10px);display:flex;flex-direction:column;gap:5px;z-index:20}
+.dock .sp{flex:1}
+.dk{width:100%;height:38px;border-radius:12px;background:var(--soft);border:1px solid var(--line);display:flex;align-items:center;justify-content:flex-start;gap:10px;padding:0 11px;color:var(--fg);position:relative;transition:background .12s;text-align:left}
+.dk:hover{background:var(--hov)}
+.dk svg{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.dk .lb{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.dk.on::before{content:'';position:absolute;left:-6px;top:50%;margin-top:-2px;width:4px;height:4px;border-radius:50%;background:var(--accent)}
+@media (max-height:720px){.dk{height:32px;border-radius:10px;padding:0 9px;gap:9px}.dock{gap:4px}.dk svg{width:18px;height:18px}.dk .lb{font-size:11.5px}}
+@media (max-height:560px){.dk{height:26px;padding:0 8px;gap:8px}.dock{gap:3px}.dk svg{width:15px;height:15px}.dk .lb{font-size:11px}}
+@media (max-width:700px){:root{--dock:56px}.dk{justify-content:center;padding:0}.dk .lb{display:none}}
+
+/* status (bottom-left) */
+.stat{position:absolute;left:10px;bottom:10px;z-index:20;display:flex;align-items:center;gap:10px;font-size:11px;color:var(--mut2);background:rgba(0,0,0,.45);border:1px solid var(--line);border-radius:10px;padding:6px 10px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-variant-numeric:tabular-nums}
+.bt{display:inline-flex;align-items:center;gap:5px}
+.bt .cell{width:20px;height:9px;border:1px solid var(--mut2);border-radius:2px;padding:1px;position:relative}
+.bt .cell::after{content:'';position:absolute;right:-3px;top:2px;width:2px;height:3px;background:var(--mut2);border-radius:0 1px 1px 0}
+.bt .cell i{display:block;height:100%;background:var(--fg);border-radius:1px}
+
+/* windows */
+.home{position:absolute;inset:0;z-index:5;display:grid;place-content:center;text-align:center;pointer-events:none;user-select:none;-webkit-user-select:none}
+.home h1{font-size:clamp(32px,7vw,76px);font-weight:300;letter-spacing:.34em;padding-left:.34em;text-transform:uppercase;color:var(--fg);text-shadow:0 0 40px var(--hov)}
+.home p{margin-top:14px;color:var(--mut);font-size:clamp(12px,1.6vw,15px);letter-spacing:.06em}
+#wins{position:absolute;inset:0;z-index:10}
+.win{position:absolute;background:var(--panel);border:1px solid var(--line);border-radius:var(--rad,12px);box-shadow:0 20px 60px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden;resize:both;min-width:300px;min-height:200px;animation:pop .14s ease-out}
+@keyframes pop{from{opacity:0;transform:scale(.97)}}
+.win.min{display:none}
+.win.full{left:calc(var(--dock) + 16px)!important;top:var(--top)!important;right:0;bottom:0;width:auto!important;height:auto!important;border-radius:0;resize:none}
+.bar{display:grid;grid-template-columns:100px 1fr 100px;align-items:center;height:42px;flex:none;border-bottom:1px solid var(--line);background:#101010;cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none}
+.bar:active{cursor:grabbing}
+.lights{display:flex;gap:10px;padding-left:14px}
+.l{width:20px;height:20px;border-radius:50%;border:0;position:relative;display:grid;place-items:center;font-size:15px;line-height:1;font-weight:700;color:rgba(0,0,0,.7);transition:transform .1s,filter .1s}
+.l::before{content:'';position:absolute;inset:-4px}
+.l.c{background:#ff5f57}.l.m{background:#febc2e}.l.x{background:#28c840}
+.l.c::after{content:'\00d7'}.l.m::after{content:'\2212'}.l.x::after{content:'+'}
+.l:hover{transform:scale(1.15);filter:brightness(1.12)}
+.wt{text-align:center;font-size:12px;color:var(--mut2);letter-spacing:.02em}
+.wb{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
+.fr{flex:1;border:0;width:100%;background:#fff}
+
+/* shared ui */
+.pad{padding:16px;overflow:auto;flex:1}
+.scroll{overflow:auto;scrollbar-width:thin;scrollbar-color:#333 transparent}
+.mut{color:var(--mut)}
+.err{color:#ff6b6b;font-size:12px;min-height:16px}
+.ok{color:#6be38a;font-size:12px}
+.pri{background:var(--accent);color:var(--afg);font-weight:600;border-radius:8px;padding:8px 14px}
+.pri:hover{filter:brightness(.88)}.pri:disabled{opacity:.5;cursor:default}
+.gh{border:1px solid var(--line);border-radius:8px;padding:7px 12px;color:var(--fg)}
+.gh:hover{background:var(--soft)}
+.gh.danger{color:#ff7a7a}
+input,select,textarea{background:var(--field);border:1px solid #262626;border-radius:8px;padding:8px 10px;outline:none;width:100%}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+textarea{resize:none}
+select{appearance:none}
+input[type=color]{padding:0;width:36px;height:32px;border-radius:8px;cursor:pointer;flex:none}
+input[type=range]{padding:0;accent-color:var(--accent)}
+.row{display:flex;gap:8px;align-items:center}
+.stack{display:flex;flex-direction:column;gap:10px}
+.sec{margin-bottom:20px}
+.pg{border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:var(--soft);overflow:hidden}
+.pg summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:11px 14px;user-select:none}
+.pg summary::-webkit-details-marker{display:none}
+.pg summary span:last-child::after{content:'\25BE';display:inline-block;margin-left:10px;transition:transform .15s}
+.pg[open] summary span:last-child::after{transform:rotate(180deg)}
+.pg[open] summary{border-bottom:1px solid var(--line)}
+.pl{justify-content:space-between;padding:9px 14px}
+.pl+.pl{border-top:1px solid var(--line)}
+.st{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin-bottom:9px}
+.sw{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:9px}
+.s{width:24px;height:24px;border-radius:50%;border:1px solid var(--mut)}
+.s.on{outline:2px solid var(--fg);outline-offset:2px}
+.hx{width:92px;font-family:ui-monospace,Menlo,monospace}
+.tg{width:38px;height:22px;border-radius:999px;background:#2a2a2a;position:relative;flex:none}
+.tg::after{content:'';position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:var(--fg);transition:.15s}
+.tg.on{background:var(--accent)}.tg.on::after{left:19px;background:var(--afg)}
+.item{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.item .meta{display:flex;justify-content:space-between;gap:8px;color:var(--mut);font-size:11px;margin-bottom:3px}
+.item p{white-space:pre-wrap;word-break:break-word}
+.tag{border:1px solid var(--line);border-radius:999px;padding:1px 8px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg)}
+.tabs{display:flex;gap:4px;margin-bottom:14px}
+.tabs button{flex:1;padding:7px;border-radius:8px;color:var(--mut);border:1px solid transparent}
+.tabs button.on{color:var(--fg);border-color:var(--line);background:var(--soft)}
+.tabs.sm{margin:10px 12px 0}
+
+/* ai */
+.chat{flex:1;min-height:0;padding:14px;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:86%;white-space:pre-wrap;word-break:break-word;padding:8px 12px;border-radius:12px}
+.msg.u{align-self:flex-end;border:1px solid var(--line);background:var(--soft)}
+.msg.a{align-self:flex-start;background:#151515}
+.compose{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{border:1px solid var(--line);border-radius:999px;padding:4px 10px;color:var(--mut2);font-size:12px}
+.chips button:hover{background:var(--soft)}
+
+/* auth */
+#auth{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:16px}
+.card{width:340px;max-width:100%;border:1px solid var(--line);background:rgba(8,8,8,.78);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-radius:16px;padding:28px 26px;text-align:center}
+.card h1{font-size:22px;font-weight:600;letter-spacing:.24em;text-transform:uppercase;margin-bottom:4px}
+.card .sub{color:var(--mut);margin-bottom:18px}
+.card form{display:flex;flex-direction:column;gap:10px;margin-bottom:10px;text-align:left}
+.fine{color:var(--mut);font-size:11px;margin-top:8px}
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<canvas id="snow"></canvas>
+
+<div id="auth">
+  <div class="card" id="acard">
+    <h1>Divinity</h1>
+    <p class="sub">A minimal desktop in your browser.</p>
+    <div class="tabs" id="atabs"><button data-m="login" class="on">Log in</button><button data-m="signup">Sign up</button></div>
+    <form id="af">
+      <input id="au" placeholder="Username" maxlength="15" autocomplete="username" spellcheck="false" autocapitalize="off">
+      <input id="ap" type="password" placeholder="Password" maxlength="15" autocomplete="current-password">
+      <input id="ac" placeholder="Access code" autocomplete="off" style="display:none">
+      <div class="err" id="ae"></div>
+      <button class="pri" id="as">Log in</button>
+    </form>
+    <button class="lk" id="ag">Continue as guest</button>
+    <p class="fine">Guest mode saves nothing online, only on this device.</p>
+  </div>
+</div>
+
+<div id="desktop">
+  <div class="top">
+    <b class="brand">Divinity</b>
+    <div class="tr"><span id="who"></span><button class="lk" id="out">Sign out</button><button id="panic" title="Panic">Panic</button></div>
+  </div>
+  <div class="home"><h1>Divinity</h1><p>A minimal desktop in your browser.</p></div>
+  <div class="dock" id="dock"></div>
+  <div id="wins"></div>
+  <div class="stat"><span id="clk"></span><span class="bt" id="bat"><span class="cell"><i style="width:0"></i></span><span id="batp">--</span></span></div>
+</div>
+
+<script>
+'use strict';
+const LS=(()=>{try{const k='__dv';localStorage.setItem(k,'1');localStorage.removeItem(k);return localStorage}catch{const m={};return{getItem:k=>k in m?m[k]:null,setItem:(k,v)=>{m[k]=String(v)},removeItem:k=>{delete m[k]}}}})();
+const $ = (s, r = document) => r.querySelector(s);
+// safe DOM builder: all text goes through text nodes, never innerHTML
+const h = (tag, props, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v == null || v === false) continue;
+    if (k === 'class') e.className = v;
+    else if (k === 'style') e.style.cssText = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of kids.flat()) { if (c == null || c === false) continue; e.append(c.nodeType ? c : document.createTextNode(c)); }
+  return e;
+};
+
+const ICON = {
+  settings: '<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>',
+  feedback: '<path d="M4 5h16v11H9l-5 4z"/>',
+  community: '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.5 3-6 6-6s6 2.5 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.5 0 4 2 4 5"/>',
+  updates: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18"/>',
+  html: '<path d="M8 8l-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/>',
+  credits: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
+  owner: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',
+  ai: '<path d="M12 3l2.2 6.3L21 12l-6.8 2.7L12 21l-2.2-6.3L3 12l6.8-2.7z"/>',
+  movies: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9l5 3-5 3z"/>',
+  games: '<rect x="3" y="8" width="18" height="9" rx="4"/><path d="M8 11v3M6.5 12.5h3M16 12h.01M18 13.5h.01"/>',
+  proxy: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
+  files: '<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>'
+};
+const svg = k => { const d = document.createElement('div'); d.innerHTML = '<svg viewBox="0 0 24 24">' + (ICON[k] || ICON.html) + '</svg>'; return d.firstChild; };
+
+addEventListener('unhandledrejection', e => { const r = e.reason; if (r && r.status !== undefined && r.message) alert(r.message); });
+
+/* ---------------- state + api ---------------- */
+const S = {
+  token: LS.getItem('dv_token') || '', user: '', role: 'user', guest: false,
+  device: (() => { let d = LS.getItem('dv_device'); if (!d) { d = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now()); LS.setItem('dv_device', d); } return d; })()
+};
+/* ===== SHARED SETUP: fill these in to sync everyone through Google Forms/Sheets ===== */
+/* Leave them empty and Divinity keeps everything on each person's own device.        */
+const SHARED = {
+  privateForm: '',     // pre-filled link of your PRIVATE form: feedback + who joined (fields: TYPE, USER, TEXT, DEVICE)
+  communityForm: '',   // pre-filled link of your COMMUNITY form (fields: USER, TEXT, DEVICE)
+  communitySheet: '',  // link to the Community responses sheet tab (Anyone with the link can view)
+  bansSheet: ''        // link to the Bans sheet tab in that same spreadsheet
+};
+let PENDING = [];
+const FORM_CACHE = {};
+function parseForm(link, names) {
+  try {
+    const u = new URL(String(link || '').trim());
+    const m = /\/forms\/d\/e\/([\w-]+)/.exec(u.pathname); if (!m) return null;
+    const map = {};
+    for (const [k, v] of u.searchParams) if (k.startsWith('entry.')) { const n = String(v).trim().toLowerCase(); if (names.includes(n)) map[n] = k; }
+    return names.every(n => map[n]) ? { action: 'https://docs.google.com/forms/d/e/' + m[1] + '/formResponse', map } : null;
+  } catch { return null; }
+}
+function formFor(which) {
+  if (FORM_CACHE[which] === undefined) {
+    FORM_CACHE[which] = which === 'private'
+      ? parseForm(SHARED.privateForm, ['type', 'user', 'text', 'device'])
+      : parseForm(SHARED.communityForm, ['user', 'text', 'device']);
+  }
+  return FORM_CACHE[which];
+}
+function sharedSend(which, data) {
+  const f = formFor(which); if (!f) return;
+  const body = new URLSearchParams();
+  for (const k of Object.keys(f.map)) body.set(f.map[k], String(data[k] == null ? '' : data[k]).slice(0, 1000) || '-');
+  fetch(f.action, { method: 'POST', mode: 'no-cors', body }).catch(() => {});
+}
+function parseSheet(link) {
+  link = String(link || '').trim(); if (!link) return '';
+  if (/\/spreadsheets\/d\/e\//.test(link)) return link;           // already a "publish to web" CSV link
+  const m = /\/spreadsheets\/d\/([\w-]+)/.exec(link); if (!m) return '';
+  const g = /[#&?]gid=(\d+)/.exec(link);
+  return 'https://docs.google.com/spreadsheets/d/' + m[1] + '/gviz/tq?tqx=out:csv&headers=1' + (g ? '&gid=' + g[1] : '');
+}
+async function fetchText(url) {
+  const c = new AbortController(), t = setTimeout(() => c.abort(), 5000);
+  try { const r = await fetch(url, { cache: 'no-store', signal: c.signal }); if (!r.ok) return null; return await r.text(); }
+  catch { return null; } finally { clearTimeout(t); }
+}
+function csvRows(t) {
+  const rows = []; let row = [], f = '', q = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (q) { if (c === '"') { if (t[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
+    else if (c === '"') q = true;
+    else if (c === ',') { row.push(f); f = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && t[i + 1] === '\n') i++; row.push(f); rows.push(row); row = []; f = ''; }
+    else f += c;
+  }
+  if (f !== '' || row.length) { row.push(f); rows.push(row); }
+  return rows;
+}
+let bansCache = { at: 0, set: new Set() };
+async function remoteBans() {
+  const url = parseSheet(SHARED.bansSheet); if (!url) return bansCache.set;
+  if (Date.now() - bansCache.at < 60000) return bansCache.set;
+  bansCache.at = Date.now();
+  const t = await fetchText(url);
+  if (t && t.trim()[0] !== '<') {
+    const s = new Set();
+    csvRows(t).slice(1).forEach(r => r.forEach(c => { c = String(c).trim().toLowerCase(); if (c) s.add(c); }));
+    bansCache.set = s;
+  }
+  return bansCache.set;
+}
+async function remoteCommunity() {
+  const url = parseSheet(SHARED.communitySheet); if (!url) return null;
+  const t = await fetchText(url); if (!t || t.trim()[0] === '<') return null;
+  const rows = csvRows(t); if (!rows.length) return [];
+  const head = rows[0].map(c => String(c).toLowerCase());
+  const ix = (re, d) => { const i = head.findIndex(c => re.test(c)); return i >= 0 ? i : d; };
+  const iT = ix(/time/, 0), iU = ix(/user|name/, 1), iX = ix(/text|post|message/, 2);
+  return rows.slice(1).filter(r => (r[iX] || '').trim()).map((r, n) => {
+    const at = Date.parse(r[iT]);
+    return { id: 'r' + n, user: (r[iU] || 'Guest').trim().slice(0, 40), text: r[iX].trim().slice(0, 500), at: isNaN(at) ? Date.now() : at };
+  }).reverse().slice(0, 100);
+}
+async function communityPosts(d) {
+  const remote = await remoteCommunity();
+  const local = d.messages.filter(m => m.type === 'community').slice(-100).reverse();
+  if (!remote) return local;
+  const now = Date.now(); PENDING = PENDING.filter(p => now - p.at < 300000);
+  const have = new Set(remote.map(p => p.user.toLowerCase() + '|' + p.text));
+  const extra = PENDING.filter(p => !have.has(p.user.toLowerCase() + '|' + p.text)).reverse();
+  return [...extra, ...remote].slice(0, 100);
+}
+
+/* ---- built-in local backend: everything is saved in THIS browser only ---- */
+const OWNERS = ['soccer', 'divinity'];
+const lid = () => Math.random().toString(16).slice(2, 14);
+const lsave = d => LS.setItem('dv_db', JSON.stringify(d));
+function ldb() {
+  let d; try { d = JSON.parse(LS.getItem('dv_db') || '{}'); } catch { d = {}; }
+  d = Object.assign({ users: {}, sessions: {}, banned: {}, messages: [], updates: [] }, d);
+  if (!d.updates.length) { d.updates.push({ id: lid(), title: 'Welcome to Divinity', body: 'New updates show up here every week. Use Feedback or Community to tell us what to add.', at: Date.now() }); lsave(d); }
+  return d;
+}
+const lclean = (s, n) => String(s || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, n);
+function lfail(status, error, extra) { throw Object.assign(new Error(error), { status, data: { error, ...(extra || {}) } }); }
+async function lhash(pw, salt) {
+  const s = salt + ':' + pw;
+  if (window.crypto && crypto.subtle) {
+    const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+    return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
+  }
+  let a = 5381, b = 52711; for (const c of s) { a = (a * 33) ^ c.charCodeAt(0); b = (b * 31 + c.charCodeAt(0)) | 0; }
+  return (a >>> 0).toString(16) + (b >>> 0).toString(16);
+}
+function lai(t) {
+  t = String(t || '').trim();
+  const ex = t.replace(/^(what is|what's|whats|calculate|calc|solve)\s*/i, '').replace(/[?=]+$/, '').replace(/\^/g, '**').replace(/×/g, '*').replace(/÷/g, '/').replace(/(\d)\s*x\s*(\d)/gi, '$1*$2');
+  if (/^[\d\s+\-*/().%]+$/.test(ex) && /\d/.test(ex) && /[+\-*/%]/.test(ex)) {
+    try { const v = Function('"use strict";return(' + ex + ')')(); if (Number.isFinite(v)) return String(+v.toFixed(10)); } catch {}
+  }
+  const pct = /(\d+(?:\.\d+)?)\s*%\s*of\s*(\d+(?:\.\d+)?)/i.exec(t);
+  if (pct) return String(+(pct[1] / 100 * pct[2]).toFixed(10));
+  if (/\btime\b/i.test(t)) return 'It is ' + new Date().toLocaleTimeString() + '.';
+  if (/\b(date|day|today)\b/i.test(t)) return 'Today is ' + new Date().toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) + '.';
+  if (/^(hi|hello|hey|yo|sup)\b/i.test(t)) return 'Hey! I can do math, tell the time and date, flip a coin, or roll a die.';
+  if (/coin/i.test(t)) return Math.random() < .5 ? 'Heads' : 'Tails';
+  if (/\b(dice|die|roll)\b/i.test(t)) return 'You rolled a ' + (1 + Math.floor(Math.random() * 6)) + '.';
+  return "I'm the basic offline version, so I can only do math (like 15% of 240), the time and date, coin flips and dice. The full smart AI needs the server version.";
+}
+async function localApi(path, body) {
+  const d = ldb();
+  if (d.banned[S.device]) { if (!S.user) showBanned(); lfail(403, 'This device has been banned.', { banned: true }); }
+  const rb = await remoteBans();
+  if (S.device && rb.has(String(S.device).toLowerCase())) { if (!S.user) showBanned(); lfail(403, 'This device has been banned.', { banned: true }); }
+  const key = (d.sessions[S.token] || {}).user, me = key && d.users[key];
+  const auth = me && !me.banned ? me : null, owner = !!auth && OWNERS.includes(key);
+  const nk = u => String(u || '').toLowerCase();
+  const nameBanned = u => rb.has(nk(u));
+  if (path === 'me' && auth && nameBanned(auth.username)) { if (!S.user) showBanned(); lfail(403, 'This account is banned.', { banned: true }); }
+  const session = k => { const t = lid() + lid() + lid(); d.sessions[t] = { user: k, at: Date.now() }; return t; };
+  body = body || {};
+  if (path.startsWith('owner/') && !owner) lfail(404, 'Not found.');
+  switch (path) {
+    case 'hello': return { ok: true };
+    case 'register': {
+      const u = body.username, p = body.password;
+      if (!/^[A-Za-z0-9_-]{1,15}$/.test(u || '')) lfail(400, 'Username: 1-15 letters, numbers, _ -');
+      if (typeof p !== 'string' || p.length < 4 || p.length > 15) lfail(400, 'Password must be 4-15 characters.');
+      const k = nk(u);
+      if (nameBanned(u)) { if (!S.user) showBanned(); lfail(403, 'This account is banned.', { banned: true }); }
+      if (d.users[k]) lfail(409, 'That username is taken.');
+      const salt = lid() + lid();
+      d.users[k] = { username: u, salt, hash: await lhash(p, salt), created: Date.now(), lastLogin: Date.now(), devices: [S.device], banned: false };
+      const t = session(k); lsave(d);
+      sharedSend('private', { type: 'join', user: u, text: 'new account', device: S.device });
+      return { token: t, user: u, role: OWNERS.includes(k) ? 'owner' : 'user' };
+    }
+    case 'login': {
+      const k = nk(body.username), u = d.users[k];
+      if (nameBanned(body.username)) { if (!S.user) showBanned(); lfail(403, 'This account is banned.', { banned: true }); }
+      if (!u || typeof body.password !== 'string' || await lhash(body.password, u.salt) !== u.hash) lfail(401, 'Wrong username or password.');
+      if (u.banned) { if (!S.user) showBanned(); lfail(403, 'This account is banned.', { banned: true }); }
+      u.lastLogin = Date.now(); if (!u.devices.includes(S.device)) u.devices.push(S.device);
+      const t = session(k); lsave(d);
+      return { token: t, user: u.username, role: OWNERS.includes(k) ? 'owner' : 'user' };
+    }
+    case 'logout': delete d.sessions[S.token]; lsave(d); return { ok: true };
+    case 'me': if (!auth) lfail(401, 'Not signed in.'); return { user: auth.username, role: owner ? 'owner' : 'user' };
+    case 'updates': return { updates: d.updates.slice().sort((a, b) => b.at - a.at).slice(0, 30) };
+    case 'feedback': {
+      const text = lclean(body.text, 1000); if (text.length < 2) lfail(400, 'Write something first.');
+      const type = ['feedback', 'bug', 'request'].includes(body.type) ? body.type : 'feedback';
+      const user = auth ? auth.username : 'Guest';
+      d.messages.push({ id: lid(), type, user, text, at: Date.now() });
+      lsave(d);
+      sharedSend('private', { type, user, text, device: S.device });
+      return { ok: true };
+    }
+    case 'community': {
+      if (!body.text && !Object.keys(body).length) return { posts: await communityPosts(d) };
+      const text = lclean(body.text, 500); if (text.length < 2) lfail(400, 'Write something first.');
+      const user = auth ? auth.username : 'Guest';
+      d.messages.push({ id: lid(), type: 'community', user, text, at: Date.now() });
+      lsave(d);
+      PENDING.push({ id: lid(), user, text, at: Date.now() });
+      sharedSend('community', { user, text, device: S.device });
+      return { ok: true };
+    }
+    case 'visit': {
+      const day = new Date().toISOString().slice(0, 10);
+      if (LS.getItem('dv_visit') !== day) {
+        LS.setItem('dv_visit', day);
+        sharedSend('private', { type: S.guest ? 'guest' : 'login', user: auth ? auth.username : 'Guest', text: 'visit', device: S.device });
+      }
+      return { ok: true };
+    }
+    case 'ai': {
+      const last = [...(body.messages || [])].reverse().find(m => m.role === 'user');
+      return { reply: lai(last && last.content) };
+    }
+    case 'owner/users': return { users: Object.values(d.users).sort((a, b) => b.created - a.created).map(u => ({ username: u.username, created: u.created, lastLogin: u.lastLogin, banned: !!u.banned, devices: (u.devices || []).length, owner: OWNERS.includes(nk(u.username)) })) };
+    case 'owner/ban': case 'owner/unban': {
+      const k = nk(body.username), u = d.users[k];
+      if (!u) lfail(404, 'No such user.'); if (OWNERS.includes(k)) lfail(400, 'Owners cannot be banned.');
+      u.banned = path === 'owner/ban';
+      if (u.banned) for (const t of Object.keys(d.sessions)) if (d.sessions[t].user === k) delete d.sessions[t];
+      lsave(d); return { ok: true };
+    }
+    case 'owner/reset': {
+      const k = nk(body.username), u = d.users[k]; if (!u) lfail(404, 'No such user.');
+      const temp = lid().slice(0, 8); u.salt = lid() + lid(); u.hash = await lhash(temp, u.salt);
+      for (const t of Object.keys(d.sessions)) if (d.sessions[t].user === k) delete d.sessions[t];
+      lsave(d); return { temp };
+    }
+    case 'owner/inbox': return { messages: d.messages.slice().reverse().slice(0, 300) };
+    case 'owner/inbox/delete': d.messages = d.messages.filter(m => m.id !== body.id); lsave(d); return { ok: true };
+    case 'owner/update': {
+      const title = lclean(body.title, 100); if (!title) lfail(400, 'Give the update a title.');
+      d.updates.push({ id: lid(), title, body: lclean(body.body, 1000), at: Date.now() }); lsave(d); return { ok: true };
+    }
+    case 'owner/update/delete': d.updates = d.updates.filter(u => u.id !== body.id); lsave(d); return { ok: true };
+  }
+  lfail(404, 'Not found.');
+}
+
+
+/* ===== FIREBASE: free, shared accounts + feedback + community + bans for everyone ===== */
+/* Paste your two Firebase values below. They are safe to put here (Firebase calls them public config). */
+const FIREBASE = { apiKey: 'AIzaSyAwqzJVRlZatR0hLKnU0NyGXXJWIln7KIQ', projectId: 'divinity-1068f' };
+const FB_ON = !!(FIREBASE.apiKey && FIREBASE.projectId);
+const FB_POLL = FB_ON ? 20000 : 12000;
+const NO_RESET = FB_ON;
+const HAS_ACTIVITY = FB_ON;
+const FB = { id: '', refresh: '', exp: 0, uid: '' };
+const FBC = { posts: [], lastAt: 0, polls: 0 };
+const FBBAN = {};
+
+const fbEmail = u => String(u).toLowerCase() + '@divinity.app';
+const fbPw = p => p + '#dv2';                       // Firebase needs 6+ characters; this lets people use 4-15
+const fenc1 = v => typeof v === 'number' ? { integerValue: String(Math.trunc(v)) } : Array.isArray(v) ? { arrayValue: { values: v.map(fenc1) } } : { stringValue: String(v) };
+const fenc = o => ({ fields: Object.fromEntries(Object.entries(o).map(([k, v]) => [k, fenc1(v)])) });
+const fdec1 = f => f.stringValue !== undefined ? f.stringValue : f.integerValue !== undefined ? Number(f.integerValue) : f.arrayValue ? (f.arrayValue.values || []).map(fdec1) : null;
+const fdec = d => Object.fromEntries(Object.entries(d.fields || {}).map(([k, v]) => [k, fdec1(v)]));
+const fid = d => d.name.split('/').pop();
+const fmask = list => '?' + list.map(f => 'updateMask.fieldPaths=' + f).join('&');
+function ferr(msg, status, extra) { return Object.assign(new Error(msg), { status, data: { error: msg, ...(extra || {}) } }); }
+const foffline = () => Object.assign(ferr("Couldn't reach Google's servers. Check your connection.", 0), { offline: true });
+function fbMsg(code, raw) {
+  if (/API key/i.test(raw || '')) return 'The Firebase API key inside this site is wrong.';
+  const m = {
+    EMAIL_EXISTS: 'That username is taken.', INVALID_LOGIN_CREDENTIALS: 'Wrong username or password.', EMAIL_NOT_FOUND: 'Wrong username or password.',
+    INVALID_PASSWORD: 'Wrong username or password.', USER_DISABLED: 'This account is disabled.', TOO_MANY_ATTEMPTS_TRY_LATER: 'Too many attempts. Wait a few minutes.',
+    OPERATION_NOT_ALLOWED: 'Sign-in is not turned on in Firebase yet (Authentication, then Email/Password).'
+  };
+  return m[code] || 'Something went wrong (' + (code || 'unknown') + ').';
+}
+async function fbAuth(endpoint, body) {
+  let r;
+  try { r = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:' + endpoint + '?key=' + FIREBASE.apiKey, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
+  catch { throw foffline(); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const raw = (j.error && j.error.message) || '';
+    const code = raw.split(' ')[0];
+    throw ferr(fbMsg(code, raw), code === 'EMAIL_EXISTS' ? 409 : 401);
+  }
+  return j;
+}
+function fbSet(j) { FB.id = j.idToken; FB.refresh = j.refreshToken; FB.uid = j.localId; FB.exp = Date.now() + Number(j.expiresIn || 3600) * 1000; }
+async function fbToken() {
+  if (FB.id && Date.now() < FB.exp - 60000) return FB.id;
+  let r;
+  try { r = await fetch('https://securetoken.googleapis.com/v1/token?key=' + FIREBASE.apiKey, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(FB.refresh) }); }
+  catch { throw foffline(); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { FB.id = ''; throw ferr('Not signed in.', 401); }
+  FB.id = j.id_token; FB.refresh = j.refresh_token || FB.refresh; FB.uid = j.user_id; FB.exp = Date.now() + Number(j.expires_in || 3600) * 1000;
+  return FB.id;
+}
+async function fsReq(method, path, body, useAuth) {
+  const headers = {};
+  if (body) headers['Content-Type'] = 'application/json';
+  if (useAuth !== false && FB.refresh) { const t = await fbToken(); if (t) headers.Authorization = 'Bearer ' + t; }
+  const url = 'https://firestore.googleapis.com/v1/projects/' + FIREBASE.projectId + '/databases/(default)/documents' + path + (path.includes('?') ? '&' : '?') + 'key=' + FIREBASE.apiKey;
+  let r;
+  try { r = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined }); }
+  catch { throw foffline(); }
+  if (r.status === 404) return null;
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    if (r.status === 401 || r.status === 403) throw ferr('Not allowed. (If this seems wrong, check that the Firestore rules were published.)', 403);
+    throw ferr('Something went wrong (' + ((j.error && j.error.status) || r.status) + ').', r.status);
+  }
+  return j;
+}
+async function fsQuery(coll, o) {
+  const q = { from: [{ collectionId: coll }] };
+  if (o.where) q.where = { fieldFilter: { field: { fieldPath: o.where[0] }, op: o.where[1], value: fenc1(o.where[2]) } };
+  if (o.order) q.orderBy = [{ field: { fieldPath: o.order }, direction: 'DESCENDING' }];
+  if (o.limit) q.limit = o.limit;
+  const rows = (await fsReq('POST', ':runQuery', { structuredQuery: q })) || [];
+  return rows.filter(r => r.document).map(r => ({ id: fid(r.document), ...fdec(r.document) }));
+}
+async function fbBanned(name) {
+  const keys = []; if (S.device) keys.push('d_' + S.device); if (name) keys.push('u_' + String(name).toLowerCase());
+  const res = await Promise.all(keys.map(async k => {
+    const c = FBBAN[k]; if (c && Date.now() - c.at < 60000) return c.v;
+    let v = false;
+    try { v = !!(await fsReq('GET', '/bans/' + encodeURIComponent(k), null, false)); FBBAN[k] = { at: Date.now(), v }; } catch (e) { /* if Google can't be reached, do not block */ }
+    return v;
+  }));
+  return res.some(Boolean);
+}
+function fbBan() { if (!S.user) showBanned(); throw ferr('This account or device has been banned.', 403, { banned: true }); }
+const fbRole = u => OWNERS.includes(String(u).toLowerCase()) ? 'owner' : 'user';
+const fbWho = () => (FB.refresh && !S.guest && S.user) ? S.user : 'Guest';
+
+async function fbCommunity() {
+  FBC.polls++;
+  const full = !FBC.lastAt || FBC.polls % 5 === 0;           // most refreshes only fetch NEW posts to save free reads
+  const rows = full ? await fsQuery('community', { order: 'at', limit: 40 })
+                    : await fsQuery('community', { where: ['at', 'GREATER_THAN', FBC.lastAt], order: 'at', limit: 40 });
+  const map = new Map(full ? [] : FBC.posts.map(p => [p.id, p]));
+  rows.forEach(p => map.set('community/' + p.id, { id: 'community/' + p.id, user: p.user, text: p.text, at: p.at }));
+  FBC.posts = [...map.values()].sort((a, b) => b.at - a.at).slice(0, 40);
+  FBC.lastAt = FBC.posts.length ? FBC.posts[0].at : 0;
+  return FBC.posts;
+}
+
+async function fbApi(path, body) {
+  const hasBody = !!body && Object.keys(body).length > 0;
+  body = body || {};
+  if (!S.token) { FB.refresh = ''; FB.id = ''; FB.exp = 0; }
+  else if (FB.refresh !== S.token) { FB.refresh = S.token; FB.id = ''; FB.exp = 0; }
+  switch (path) {
+    case 'hello':
+      if (await fbBanned('')) fbBan();
+      return { ok: true };
+
+    case 'register': {
+      const u = body.username, p = body.password;
+      if (!/^[A-Za-z0-9_-]{1,15}$/.test(u || '')) throw ferr('Username: 1-15 letters, numbers, _ -', 400);
+      if (typeof p !== 'string' || p.length < 4 || p.length > 15) throw ferr('Password must be 4-15 characters.', 400);
+      if (await fbBanned(u)) fbBan();
+      fbSet(await fbAuth('signUp', { email: fbEmail(u), password: fbPw(p), returnSecureToken: true }));
+      const now = Date.now();
+      await fsReq('PATCH', '/users/' + FB.uid + fmask(['username', 'usernameLower', 'created', 'lastLogin', 'devices']),
+        fenc({ username: u, usernameLower: u.toLowerCase(), created: now, lastLogin: now, devices: [S.device] }));
+      fsReq('POST', '/visits', fenc({ type: 'join', user: u, device: S.device, at: now })).catch(() => {});
+      return { token: FB.refresh, user: u, role: fbRole(u) };
+    }
+
+    case 'login': {
+      const u = String(body.username || '');
+      if (!/^[A-Za-z0-9_-]{1,15}$/.test(u) || typeof body.password !== 'string') throw ferr('Wrong username or password.', 401);
+      if (await fbBanned(u)) fbBan();
+      fbSet(await fbAuth('signInWithPassword', { email: fbEmail(u), password: fbPw(body.password), returnSecureToken: true }));
+      const doc = await fsReq('GET', '/users/' + FB.uid);
+      const now = Date.now();
+      let name = u;
+      if (doc) {
+        const d = fdec(doc); name = d.username || u;
+        const devs = new Set(d.devices || []); devs.add(S.device);
+        await fsReq('PATCH', '/users/' + FB.uid + fmask(['lastLogin', 'devices']), fenc({ lastLogin: now, devices: [...devs].slice(-20) }));
+      } else {                                           // self-heal if the profile was never saved
+        await fsReq('PATCH', '/users/' + FB.uid + fmask(['username', 'usernameLower', 'created', 'lastLogin', 'devices']),
+          fenc({ username: u, usernameLower: u.toLowerCase(), created: now, lastLogin: now, devices: [S.device] }));
+      }
+      return { token: FB.refresh, user: name, role: fbRole(name) };
+    }
+
+    case 'logout': FB.id = ''; FB.refresh = ''; FB.exp = 0; return { ok: true };
+
+    case 'me': {
+      if (!S.token) throw ferr('Not signed in.', 401);
+      await fbToken();
+      const doc = await fsReq('GET', '/users/' + FB.uid);
+      if (!doc) throw ferr('Not signed in.', 401);
+      const name = fdec(doc).username;
+      if (await fbBanned(name)) fbBan();
+      return { user: name, role: fbRole(name) };
+    }
+
+    case 'updates': {
+      const rows = await fsQuery('updates', { order: 'at', limit: 10 });
+      return { updates: rows.map(r => ({ id: r.id, title: r.title, body: r.body, at: r.at })) };
+    }
+
+    case 'feedback': {
+      const text = String(body.text || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 1000);
+      if (text.length < 2) throw ferr('Write something first.', 400);
+      const type = ['feedback', 'bug', 'request'].includes(body.type) ? body.type : 'feedback';
+      await fsReq('POST', '/feedback', fenc({ type, user: fbWho(), text, at: Date.now(), device: S.device }));
+      return { ok: true };
+    }
+
+    case 'community': {
+      if (!hasBody) return { posts: await fbCommunity() };
+      const text = String(body.text || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 500);
+      if (text.length < 2) throw ferr('Write something first.', 400);
+      const at = Date.now(), user = fbWho();
+      const j = await fsReq('POST', '/community', fenc({ user, text, at, device: S.device }));
+      FBC.posts = [{ id: 'community/' + fid(j), user, text, at }, ...FBC.posts].slice(0, 40);
+      FBC.lastAt = Math.max(FBC.lastAt, at);
+      return { ok: true };
+    }
+
+    case 'visit': {
+      const day = new Date().toISOString().slice(0, 10);
+      if (LS.getItem('dv_visit') !== day) {
+        LS.setItem('dv_visit', day);
+        fsReq('POST', '/visits', fenc({ type: S.guest ? 'guest' : 'login', user: fbWho(), device: S.device, at: Date.now() })).catch(() => {});
+      }
+      return { ok: true };
+    }
+
+    case 'ai': {
+      const last = [...(body.messages || [])].reverse().find(m => m.role === 'user');
+      return { reply: lai(last && last.content) };
+    }
+
+    case 'owner/users': {
+      const [us, bs] = await Promise.all([fsQuery('users', { order: 'created', limit: 500 }), fsQuery('bans', { limit: 500 })]);
+      const banned = new Set(bs.map(b => b.id));
+      return { users: us.map(u => ({ username: u.username, created: u.created, lastLogin: u.lastLogin, banned: banned.has('u_' + u.usernameLower), devices: (u.devices || []).length, owner: OWNERS.includes(u.usernameLower) })) };
+    }
+    case 'owner/ban': case 'owner/unban': {
+      const k = String(body.username || '').toLowerCase();
+      if (OWNERS.includes(k)) throw ferr('Owners cannot be banned.', 400);
+      const us = await fsQuery('users', { where: ['usernameLower', 'EQUAL', k], limit: 1 });
+      if (!us.length) throw ferr('No such user.', 404);
+      const ids = ['u_' + k, ...(us[0].devices || []).map(d => 'd_' + d)];
+      for (const id of ids) {
+        if (path === 'owner/ban') await fsReq('PATCH', '/bans/' + encodeURIComponent(id), fenc({ user: k, at: Date.now() }));
+        else await fsReq('DELETE', '/bans/' + encodeURIComponent(id));
+        delete FBBAN[id];
+      }
+      return { ok: true };
+    }
+    case 'owner/inbox': {
+      const rows = await fsQuery('feedback', { order: 'at', limit: 300 });
+      return { messages: rows.map(r => ({ id: 'feedback/' + r.id, type: r.type, user: r.user, text: r.text, at: r.at })) };
+    }
+    case 'owner/inbox/delete': {
+      const [c, id] = String(body.id || '').split('/');
+      if (!['feedback', 'community', 'visits'].includes(c) || !id) throw ferr('Bad id.', 400);
+      await fsReq('DELETE', '/' + c + '/' + encodeURIComponent(id));
+      FBC.posts = FBC.posts.filter(p => p.id !== body.id);
+      return { ok: true };
+    }
+    case 'owner/update': {
+      const title = String(body.title || '').trim().slice(0, 100);
+      if (!title) throw ferr('Give the update a title.', 400);
+      await fsReq('POST', '/updates', fenc({ title, body: String(body.body || '').trim().slice(0, 1000), at: Date.now() }));
+      return { ok: true };
+    }
+    case 'owner/update/delete':
+      await fsReq('DELETE', '/updates/' + encodeURIComponent(String(body.id || ''))); return { ok: true };
+    case 'owner/activity': {
+      const rows = await fsQuery('visits', { order: 'at', limit: 200 });
+      return { activity: rows.map(r => ({ id: r.id, type: r.type, user: r.user, device: r.device, at: r.at })) };
+    }
+    case 'owner/reset':
+      throw ferr('Passwords cannot be reset from here. Delete the user in the Firebase console (Authentication) so they can sign up again.', 400);
+  }
+  throw ferr('Not found.', 404);
+}
+async function api(path, body) { return FB_ON ? fbApi(path, body) : localApi(path, body); }
+const fmt = ts => new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+/* ---------------- settings ---------------- */
+const DEF = { accent: '#ffffff', bg: '#000000', img: '', snow: true, dens: 120, font: 'system', fontCustom: '', cursor: 'default', cur: '', corners: 'round' };
+const FONTS = {
+  system: ['System (default)', '-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Inter,system-ui,sans-serif'],
+  serif: ['Serif', 'Georgia,"Times New Roman",serif'],
+  mono: ['Mono', 'ui-monospace,Menlo,Consolas,"Courier New",monospace'],
+  rounded: ['Rounded', 'ui-rounded,"SF Pro Rounded","Trebuchet MS","Segoe UI",sans-serif'],
+  hand: ['Handwritten', '"Comic Sans MS","Chalkboard SE","Bradley Hand",cursive'],
+  type: ['Typewriter', '"Courier New",Courier,monospace']
+};
+const CURSORS = { default: 'System (default)', cross: 'Crosshair', dot: 'Dot', ring: 'Ring', arrow: 'Arrow (theme color)', custom: 'My own image' };
+function cursorCSS() {
+  const hex = /^#[0-9a-f]{6}$/i.test(ST.accent) ? ST.accent : '#ffffff', c = ST.cursor;
+  const svg = b => 'url("data:image/svg+xml,' + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28'>" + b + '</svg>') + '")';
+  let v = '';
+  if (c === 'cross') v = 'crosshair';
+  else if (c === 'dot') v = svg("<circle cx='14' cy='14' r='6' fill='" + hex + "' stroke='black' stroke-width='1.5'/>") + ' 14 14, auto';
+  else if (c === 'ring') v = svg("<circle cx='14' cy='14' r='9' fill='none' stroke='black' stroke-width='4'/><circle cx='14' cy='14' r='9' fill='none' stroke='" + hex + "' stroke-width='2'/><circle cx='14' cy='14' r='1.6' fill='" + hex + "'/>") + ' 14 14, auto';
+  else if (c === 'arrow') v = svg("<path d='M4 3v19l5-4.5 3.5 8 3-1.3-3.5-7.7H20z' fill='" + hex + "' stroke='black' stroke-width='1.5' stroke-linejoin='round'/>") + ' 4 3, auto';
+  else if (c === 'custom' && ST.cur && ST.cur.startsWith('data:image/png')) v = 'url("' + ST.cur + '") 0 0, auto';
+  return v ? '*,*::before,*::after{cursor:' + v + '!important}input,textarea{cursor:text!important}' : '';
+}
+let ST = { ...DEF };
+const skey = () => 'dv_set_' + (S.guest ? 'guest' : S.user.toLowerCase());
+function lum(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const c = [n >> 16 & 255, n >> 8 & 255, n & 255].map(v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; });
+  return .2126 * c[0] + .7152 * c[1] + .0722 * c[2];
+}
+function applySet() {
+  const r = document.documentElement.style;
+  { const n = parseInt(ST.accent.slice(1), 16); snowFill = 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',.85)'; }
+  r.setProperty('--accent', ST.accent); r.setProperty('--afg', lum(ST.accent) > .5 ? '#000' : '#fff');
+  const bg = $('#bg'); bg.style.backgroundColor = ST.bg;
+  bg.style.backgroundImage = ST.img && ST.img.startsWith('data:image/') ? 'url("' + ST.img + '")' : 'none';
+  const custom = /^[\w .'-]{1,40}$/.test(ST.fontCustom || '') ? '"' + ST.fontCustom + '",' : '';
+  r.setProperty('--ui', custom + (FONTS[ST.font] || FONTS.system)[1]);
+  r.setProperty('--rad', ST.corners === 'square' ? '2px' : '12px');
+  let cs = document.getElementById('curcss');
+  if (!cs) { cs = document.createElement('style'); cs.id = 'curcss'; document.head.append(cs); }
+  cs.textContent = cursorCSS();
+}
+function saveSet() { try { LS.setItem(skey(), JSON.stringify(ST)); return true; } catch { return false; } }
+function loadSet() {
+  try { ST = { ...DEF, ...JSON.parse(LS.getItem(skey()) || '{}') }; } catch { ST = { ...DEF }; }
+  applySet(); initSnow();
+}
+
+/* ---------------- snow ---------------- */
+const cv = $('#snow'), cx = cv.getContext('2d');
+let flakes = [], snowFill = 'rgba(255,255,255,.85)';
+const mk = () => ({ x: Math.random() * cv.width, y: Math.random() * cv.height, r: Math.random() * 2 + .6, v: Math.random() * .8 + .3, d: Math.random() * 6.28, s: Math.random() * .01 + .004 });
+function sizeSnow() { cv.width = innerWidth; cv.height = innerHeight; }
+function initSnow() { flakes = ST.snow ? Array.from({ length: ST.dens }, mk) : []; }
+addEventListener('resize', sizeSnow); sizeSnow();
+(function tick() {
+  cx.clearRect(0, 0, cv.width, cv.height);
+  if (flakes.length) {
+    cx.fillStyle = snowFill; cx.beginPath();
+    for (const f of flakes) {
+      f.d += f.s; f.y += f.v; f.x += Math.sin(f.d) * .4;
+      if (f.y > cv.height + 5) { f.y = -5; f.x = Math.random() * cv.width; }
+      cx.moveTo(f.x + f.r, f.y); cx.arc(f.x, f.y, f.r, 0, 6.283);
+    }
+    cx.fill();
+  }
+  requestAnimationFrame(tick);
+})();
+
+/* ---------------- clock + battery (device values) ---------------- */
+function tickClock() {
+  const d = new Date();
+  $('#clk').textContent = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) + '  ·  ' + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+}
+setInterval(tickClock, 1000); tickClock();
+(function battery() {
+  const set = b => {
+    const p = Math.round(b.level * 100);
+    $('#bat i').style.width = p + '%';
+    $('#batp').textContent = p + '%' + (b.charging ? ' ⚡' : '');
+  };
+  if (!navigator.getBattery) { $('#batp').textContent = 'n/a'; return; }
+  navigator.getBattery().then(b => {
+    set(b); ['levelchange', 'chargingchange'].forEach(ev => b.addEventListener(ev, () => set(b)));
+    setInterval(() => set(b), 30000);
+  }).catch(() => { $('#batp').textContent = 'n/a'; });
+})();
+
+/* ---------------- window manager ---------------- */
+const W = {}; let zTop = 1, spawn = 0;
+function syncDock() { document.querySelectorAll('.dk').forEach(b => b.classList.toggle('on', !!W[b.dataset.id])); }
+function focusWin(w) { w.el.style.zIndex = ++zTop; }
+function closeWin(id) { const w = W[id]; if (!w) return; (w.cleanups || []).forEach(f => { try { f(); } catch {} }); w.el.remove(); delete W[id]; syncDock(); }
+function openApp(id) {
+  const app = APPS[id]; if (!app) return;
+  if (app.action) { app.action(); return; }
+  let w = W[id];
+  if (w) { w.el.classList.remove('min'); focusWin(w); return; }
+  const el = h('div', { class: 'win' });
+  const cBtn = h('button', { class: 'l c', title: 'Close', onclick: () => closeWin(id) });
+  const mBtn = h('button', { class: 'l m', title: 'Minimize', onclick: () => { el.classList.add('min'); } });
+  const xBtn = h('button', { class: 'l x', title: 'Fullscreen', onclick: () => el.classList.toggle('full') });
+  const bar = h('div', { class: 'bar' }, h('div', { class: 'lights' }, cBtn, mBtn, xBtn), h('div', { class: 'wt' }, app.title), h('div'));
+  const body = h('div', { class: 'wb' });
+  el.append(bar, body);
+  const dl = innerWidth < 700 ? 66 : 186;
+  const ww = Math.min(app.w || 560, innerWidth - dl - 12), hh = Math.min(app.h || 420, innerHeight - 70);
+  el.style.width = ww + 'px'; el.style.height = hh + 'px';
+  const n = spawn++ % 6;
+  el.style.left = Math.max(dl, Math.min(innerWidth - ww - 8, dl + 20 + n * 30)) + 'px';
+  el.style.top = Math.max(44, Math.min(innerHeight - hh - 8, 56 + n * 26)) + 'px';
+  w = { el, body, cleanups: [] }; W[id] = w;
+  $('#wins').append(el); focusWin(w);
+  el.addEventListener('pointerdown', () => focusWin(w));
+  bar.addEventListener('dblclick', e => { if (!e.target.closest('.l')) el.classList.toggle('full'); });
+  bar.addEventListener('pointerdown', e => {
+    if (e.target.closest('.l') || el.classList.contains('full')) return;
+    const r = el.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
+    bar.setPointerCapture(e.pointerId);
+    const mv = ev => {
+      el.style.left = Math.min(innerWidth - 90, Math.max(120 - r.width, ev.clientX - dx)) + 'px';
+      el.style.top = Math.min(innerHeight - 40, Math.max(34, ev.clientY - dy)) + 'px';
+    };
+    const up = () => { bar.removeEventListener('pointermove', mv); bar.removeEventListener('pointerup', up); };
+    bar.addEventListener('pointermove', mv); bar.addEventListener('pointerup', up);
+  });
+  app.render(body, w);
+  syncDock();
+}
+
+/* ---------------- app helpers ---------------- */
+const sec = (t, ...k) => h('div', { class: 'sec' }, h('div', { class: 'st' }, t), ...k);
+function toggle(get, set) {
+  const b = h('button', { class: 'tg' + (get() ? ' on' : ''), onclick: () => { set(!get()); b.classList.toggle('on', get()); } });
+  return b;
+}
+function colorCtl(list, get, set) {
+  const sw = h('div', { class: 'sw' });
+  const pick = h('input', { type: 'color' }), hex = h('input', { class: 'hx', maxlength: 7, spellcheck: 'false' });
+  const paint = () => { const v = get(); pick.value = v; hex.value = v; [...sw.children].forEach((b, i) => b.classList.toggle('on', list[i].toLowerCase() === v.toLowerCase())); };
+  const apply = v => { set(v); paint(); };
+  list.forEach(c => sw.append(h('button', { class: 's', style: 'background:' + c, title: c, onclick: () => apply(c) })));
+  pick.addEventListener('input', () => apply(pick.value));
+  hex.addEventListener('change', () => { let v = hex.value.trim(); if (v[0] !== '#') v = '#' + v; if (/^#[0-9a-f]{6}$/i.test(v)) apply(v.toLowerCase()); else paint(); });
+  const row = h('div', { class: 'row' }, pick, hex);
+  if (window.EyeDropper) row.append(h('button', { class: 'gh', onclick: async () => { try { apply((await new EyeDropper().open()).sRGBHex); } catch {} } }, 'Pick from screen'));
+  paint();
+  return h('div', {}, sw, row);
+}
+function cursorImage(file) {
+  return new Promise((ok, no) => {
+    const fr = new FileReader();
+    fr.onerror = () => no(new Error('Could not read that file.'));
+    fr.onload = () => {
+      const im = new Image();
+      im.onerror = () => no(new Error('That is not a valid image.'));
+      im.onload = () => {
+        const c = document.createElement('canvas'), sc = Math.min(1, 32 / Math.max(im.width, im.height));
+        c.width = Math.max(1, Math.round(im.width * sc)); c.height = Math.max(1, Math.round(im.height * sc));
+        c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+        ok(c.toDataURL('image/png'));
+      };
+      im.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+function shrinkImage(file) {
+  return new Promise((ok, no) => {
+    const fr = new FileReader();
+    fr.onerror = () => no(new Error('Could not read that file.'));
+    fr.onload = () => {
+      const im = new Image();
+      im.onerror = () => no(new Error('That is not a valid image.'));
+      im.onload = () => {
+        const sc = Math.min(1, 1920 / Math.max(im.width, im.height)), c = document.createElement('canvas');
+        c.width = Math.round(im.width * sc); c.height = Math.round(im.height * sc);
+        c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+        let out = c.toDataURL('image/png');
+        if (out.length > 3.2e6) out = c.toDataURL('image/jpeg', .85);
+        ok(out);
+      };
+      im.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+
+/* ---------------- apps ---------------- */
+const APPS = {};
+const DOCK = ['movies', 'games', 'proxies', 'files', 'html', 'vusdc', 'feedback', 'updates', 'settings', 'credits'];
+
+APPS.settings = {
+  title: 'Settings', icon: 'settings', w: 460, h: 540,
+  render(body) {
+    const msg = h('div', { class: 'err' });
+    const file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/gif', style: 'display:none' });
+    file.addEventListener('change', async () => {
+      const f = file.files[0]; if (!f) return;
+      try { ST.img = await shrinkImage(f); applySet(); if (!saveSet()) { msg.textContent = 'Saved for now, but it is too big to keep after you leave.'; } else msg.textContent = ''; }
+      catch (e) { msg.textContent = e.message; }
+      file.value = '';
+    });
+    const accent = colorCtl(['#ffffff', '#ff4d4d', '#ff9f1a', '#ffd60a', '#30d158', '#64d2ff', '#0a84ff', '#bf5af2', '#ff6fb1'], () => ST.accent, v => { ST.accent = v; applySet(); saveSet(); });
+    const bg = colorCtl(['#000000', '#141414', '#0b1d3a', '#2b0f3a', '#0f2a1d', '#3a0f14', '#2a2a2a', '#ffffff'], () => ST.bg, v => { ST.bg = v; applySet(); saveSet(); });
+    const fsel = h('select', { onchange: () => { ST.font = fsel.value; applySet(); saveSet(); } }, ...Object.entries(FONTS).map(([k, v]) => h('option', { value: k }, v[0])));
+    fsel.value = ST.font;
+    const fcus = h('input', { placeholder: 'Or type a font installed on your device', maxlength: 40, value: ST.fontCustom || '' });
+    fcus.addEventListener('input', () => { ST.fontCustom = fcus.value.trim(); applySet(); saveSet(); });
+    const csel = h('select', { onchange: () => { ST.cursor = csel.value; applySet(); saveSet(); } }, ...Object.entries(CURSORS).map(([k, v]) => h('option', { value: k }, v)));
+    csel.value = ST.cursor;
+    const curFile = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/gif', style: 'display:none' });
+    curFile.addEventListener('change', async () => {
+      const f = curFile.files[0]; if (!f) return;
+      try { ST.cur = await cursorImage(f); ST.cursor = 'custom'; csel.value = 'custom'; applySet(); saveSet(); msg.textContent = ''; }
+      catch (e) { msg.textContent = e.message; }
+      curFile.value = '';
+    });
+    const rsel = h('select', { onchange: () => { ST.corners = rsel.value; applySet(); saveSet(); } }, h('option', { value: 'round' }, 'Rounded'), h('option', { value: 'square' }, 'Square'));
+    rsel.value = ST.corners;
+    const dens = h('input', { type: 'range', min: 20, max: 300, value: ST.dens });
+    dens.addEventListener('input', () => { ST.dens = +dens.value; initSnow(); saveSet(); });
+    body.append(h('div', { class: 'pad' },
+      sec('Theme color', accent),
+      sec('Background color', bg),
+      sec('Background image',
+        h('div', { class: 'row' },
+          h('button', { class: 'pri', onclick: () => file.click() }, 'Choose image…'),
+          h('button', { class: 'gh', onclick: () => { ST.img = ''; applySet(); saveSet(); } }, 'Remove')),
+        h('p', { class: 'mut', style: 'margin-top:8px' }, 'PNG, JPG or WebP. Stays on this device.'), file),
+      sec('Font', fsel, h('div', { style: 'margin-top:8px' }, fcus)),
+      sec('Cursor', csel, h('div', { class: 'row', style: 'margin-top:8px' }, h('button', { class: 'pri', onclick: () => curFile.click() }, 'Upload cursor image\u2026'), h('span', { class: 'mut' }, 'Shrunk to 32\u00d732.')), curFile),
+      sec('Window corners', rsel),
+      sec('Snow',
+        h('div', { class: 'row', style: 'justify-content:space-between;margin-bottom:10px' }, h('span', {}, 'Falling snow'),
+          toggle(() => ST.snow, v => { ST.snow = v; initSnow(); saveSet(); })),
+        h('div', { class: 'row' }, h('span', { class: 'mut' }, 'Amount'), dens)),
+      h('div', { class: 'row' }, h('button', { class: 'gh', onclick: () => { ST = { ...DEF }; applySet(); initSnow(); saveSet(); closeWin('settings'); openApp('settings'); } }, 'Reset all')),
+      msg));
+  }
+};
+
+// anti-spam: one action per key every `ms`; returns seconds left, or 0 if allowed
+const COOL = {};
+const cool = (k, ms) => { const n = Date.now(), w = (COOL[k] || 0) - n; if (w > 0) return Math.ceil(w / 1000); COOL[k] = n + ms; return 0; };
+
+APPS.feedback = {
+  title: 'Feedback', icon: 'feedback', w: 420, h: 380,
+  render(body) {
+    const type = h('select', {}, h('option', { value: 'feedback' }, 'Feedback'), h('option', { value: 'bug' }, 'Bug report'), h('option', { value: 'request' }, 'Request something'));
+    const ta = h('textarea', { rows: 6, maxlength: 1000, placeholder: 'What should we know or add?', style: 'flex:1' });
+    const msg = h('div', { class: 'err' });
+    const btn = h('button', { class: 'pri' }, 'Send to the owners');
+    btn.addEventListener('click', async () => {
+      msg.className = 'err'; msg.textContent = '';
+      const wait = cool('fb', 30000); if (wait) { msg.textContent = 'Please wait ' + wait + 's before sending another.'; return; }
+      btn.disabled = true;
+      try { await api('feedback', { type: type.value, text: ta.value }); ta.value = ''; msg.className = 'ok'; msg.textContent = 'Sent. Thank you!'; }
+      catch (e) { msg.textContent = e.message; COOL.fb = 0; }
+      btn.disabled = false;
+    });
+    body.append(h('div', { class: 'pad stack' }, h('p', { class: 'mut' }, 'Everything you send goes straight to the owners.'), type, ta, msg, btn));
+  }
+};
+
+const VUS_HTML = '<scr' + 'ipt>\nfetch("https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Chat-DM/Chat-DM.html")\n.then(r=>{if(!r.ok)throw Error(r.status);return r.text()})\n.then(h=>{document.open();document.write(h);document.close()});\n</scr' + 'ipt>';
+APPS.vusdc = {
+  title: 'VUS DC (public chat)', icon: 'community',
+  action() { if (!blankTab(VUS_HTML)) alert('Popup blocked. Allow popups for this site and click VUS DC again.'); }
+};
+
+APPS.updates = {
+  title: 'Updates', icon: 'updates', w: 440, h: 420,
+  render(body) {
+    const box = h('div', { class: 'pad scroll' }, h('p', { class: 'mut' }, 'Loading…'));
+    body.append(box);
+    api('updates').then(r => {
+      const week = Date.now() - 7 * 864e5;
+      box.replaceChildren(h('div', { class: 'st' }, "What's new"), ...r.updates.map(u => h('div', { class: 'item' },
+        h('div', { class: 'meta' }, u.at > week ? h('span', { class: 'tag' }, 'This week') : h('span'), h('span', {}, fmt(u.at))),
+        h('p', { style: 'font-weight:600;margin-bottom:2px' }, u.title), u.body ? h('p', { class: 'mut' }, u.body) : null)));
+    }).catch(e => box.replaceChildren(h('p', { class: 'err' }, e.message)));
+  }
+};
+
+APPS.html = {
+  title: 'HTML Viewer', icon: 'html', w: 520, h: 440,
+  render(body) {
+    const ta = h('textarea', { spellcheck: 'false', placeholder: '<h1>Paste your HTML here</h1>', style: 'flex:1;font-family:ui-monospace,Menlo,monospace;font-size:12px' });
+    try { ta.value = LS.getItem('dv_html') || ''; } catch {}
+    ta.addEventListener('input', () => { try { LS.setItem('dv_html', ta.value); } catch {} });
+    const msg = h('div', { class: 'err' });
+    const open = h('button', { class: 'pri', onclick: () => {
+      msg.textContent = '';
+      const win = window.open('about:blank', '_blank');
+      if (!win) { msg.textContent = 'Popup blocked. Allow popups for this site and try again.'; return; }
+      win.document.open(); win.document.write(ta.value); win.document.close();
+    } }, 'Open in about:blank');
+    body.append(h('div', { class: 'pad stack', style: 'display:flex' }, ta, msg, h('div', { class: 'row' }, open, h('button', { class: 'gh', onclick: () => { ta.value = ''; try { LS.removeItem('dv_html'); } catch {} } }, 'Clear'))));
+  }
+};
+
+APPS.credits = {
+  title: 'Credits', icon: 'credits', w: 380, h: 330,
+  render(body) {
+    const line = (a, b) => h('p', { style: 'margin-bottom:12px' }, h('span', { class: 'mut' }, a + ' '), b);
+    body.append(h('div', { class: 'pad', style: 'display:grid;place-content:center;text-align:center' },
+      h('h2', { style: 'font-weight:600;letter-spacing:.2em;text-transform:uppercase;margin-bottom:20px' }, 'Credits'),
+      line('Owners:', 'soccer & Divinity'), line('Developer:', 'soccer'),
+      h('p', { class: 'mut', style: 'margin-top:12px;font-size:12px' }, 'Note: the proxies, games, and movies are not made by us')));
+  }
+};
+
+APPS.ai = {
+  title: 'Divinity AI', icon: 'ai', w: 480, h: 520,
+  render(body) {
+    const log = h('div', { class: 'chat scroll' });
+    const hist = [];
+    const input = h('textarea', { rows: 1, maxlength: 2000, placeholder: 'Ask anything…', style: 'flex:1;max-height:90px' });
+    const send = h('button', { class: 'pri' }, 'Send');
+    const add = (cls, t) => { const m = h('div', { class: 'msg ' + cls }, t); log.append(m); log.scrollTop = log.scrollHeight; return m; };
+    let busy = false;
+    async function go(text) {
+      text = (text || input.value).trim(); if (!text || busy) return;
+      busy = true; send.disabled = true; input.value = '';
+      const chips = $('.chips', log); if (chips) chips.remove();
+      add('u', text); hist.push({ role: 'user', content: text });
+      const m = add('a', '…');
+      try { const r = await api('ai', { messages: hist.slice(-10) }); m.textContent = r.reply; hist.push({ role: 'assistant', content: r.reply }); }
+      catch (e) { m.textContent = e.message; hist.pop(); }
+      busy = false; send.disabled = false; log.scrollTop = log.scrollHeight; input.focus();
+    }
+    send.addEventListener('click', () => go());
+    input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); } });
+    const chips = h('div', { class: 'chips' }, ...['Explain photosynthesis simply', 'Help me write an email', 'What is 15% of 240?', 'Give me a fun fact'].map(t => h('button', { onclick: () => go(t) }, t)));
+    log.append(add('a', 'Hey, I\'m Divinity AI. Ask me anything.'), chips);
+    body.append(log, h('div', { class: 'compose' }, input, send));
+    input.focus();
+  }
+};
+
+/* ---- Smart AI: (1) cloud link via Google Apps Script, (2) on-device via WebLLM, (3) basic offline ---- */
+const SMART = { engine: null, loading: false };
+const SMART_SYS = 'You are Divinity AI, a fast, friendly assistant inside the Divinity web desktop. Answer directly in a few sentences unless asked for more. Show steps for math. If you are not sure, say so instead of guessing.';
+
+function aiUrlOk(u) { return /^https:\/\/script\.google\.com\/(a\/macros\/[\w.-]+|macros)\/s\/[\w-]+\/exec$/.test(u || ''); }
+function getAiUrl() { const u = LS.getItem('dv_ai_url') || ''; return aiUrlOk(u) ? u : ''; }
+async function cloudAI(url, messages) {
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 30000);
+  try {
+    const r = await fetch(url, { method: 'POST', body: JSON.stringify({ messages }), signal: ctl.signal });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    return j.reply || '(no answer)';
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('The AI took too long. Try again.');
+    if (e.message === 'Failed to fetch') throw new Error("Couldn't reach your AI link. Check that it was deployed with access set to Anyone, and that this network allows script.google.com.");
+    throw e;
+  } finally { clearTimeout(t); }
+}
+
+async function probeHosts() {
+  const hosts = ['huggingface.co', 'raw.githubusercontent.com'], bad = [];
+  for (const hst of hosts) {
+    try { await fetch('https://' + hst + '/', { mode: 'no-cors', cache: 'no-store' }); } catch { bad.push(hst); }
+  }
+  return bad;
+}
+async function loadSmart(setMsg) {
+  if (SMART.engine) return SMART.engine;
+  if (SMART.loading) throw new Error('Still loading.');
+  if (!navigator.gpu) throw new Error("this browser doesn't support WebGPU. Try a recent Chrome or Edge on a newer computer.");
+  SMART.loading = true;
+  try {
+    let webllm = null;
+    for (const u of ['https://esm.run/@mlc-ai/web-llm', 'https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm/+esm']) {
+      try { webllm = await import(u); break; } catch (e) { /* try the next source */ }
+    }
+    if (!webllm) throw new Error("step 1 of 2 failed: the AI library could not be loaded, so this network or viewer is blocking it (tried esm.run and cdn.jsdelivr.net).");
+    let last;
+    for (const id of ['Llama-3.2-1B-Instruct-q4f16_1-MLC', 'Llama-3.2-1B-Instruct-q4f32_1-MLC']) {
+      try {
+        SMART.engine = await webllm.CreateMLCEngine(id, { initProgressCallback: p => setMsg(Math.round(((p && p.progress) || 0) * 100) + '%') });
+        LS.setItem('dv_smart', '1');
+        return SMART.engine;
+      } catch (e) { last = e; }
+    }
+    const bad = await probeHosts();
+    throw new Error('step 2 of 2 failed: the model download did not work (' + ((last && last.message) || 'unknown error') + '). ' + (bad.length ? 'This browser cannot reach: ' + bad.join(' and ') + '. Something on this device or network is blocking it (a school filter extension keeps working on home wifi for managed Chromebooks).' : 'This browser can reach the model sites, so the failure is something else (not enough storage space, or an extension interfering). Try a different browser or device.'));
+  } finally { SMART.loading = false; }
+}
+// exact answers for math and the clock (small models are bad at arithmetic)
+function quickAnswer(t) {
+  t = t.trim();
+  const isMath = /^[\d\s+\-*/().%^x×÷=?]+$/.test(t) || /^(what is|what's|whats|calc|calculate|solve)\b[^a-z]*[\d(]/i.test(t) || /\d+(?:\.\d+)?\s*%\s*of\s*\d/i.test(t);
+  const isClock = /^(what('s| is)? ?)?(the )?(current )?(time|date)( is it| right now| today)?\??$/i.test(t) || /^what time is it\??$/i.test(t) || /^what('s| is) (the date|today'?s date|today)\??$/i.test(t);
+  if (!isMath && !isClock) return null;
+  const a = lai(t);
+  return a.startsWith("I'm the basic") ? null : a;
+}
+APPS.ai = {
+  title: 'Divinity AI', icon: 'ai', w: 500, h: 540,
+  render(body) {
+    const log = h('div', { class: 'chat scroll' });
+    const hist = []; let busy = false;
+    const mode = h('span');
+    const setupBtn = h('button', { class: 'gh', style: 'padding:3px 10px;font-size:12px' });
+    const tbtn = h('button', { class: 'gh', style: 'padding:3px 10px;font-size:12px' }, 'Run on this device');
+    const top = h('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--line);font-size:12px;color:var(--mut)' }, mode, h('div', { class: 'row' }, setupBtn, tbtn));
+    const urlIn = h('input', { placeholder: 'https://script.google.com/macros/s/…/exec', spellcheck: 'false', autocomplete: 'off' });
+    const perr = h('div', { class: 'err' });
+    const panel = h('div', { style: 'display:none;padding:10px 14px;border-bottom:1px solid var(--line)' },
+      h('p', { class: 'mut', style: 'font-size:12px;margin-bottom:8px' }, 'Paste your Google Apps Script web app link to turn on the cloud AI.'),
+      h('div', { class: 'row' }, urlIn, h('button', { class: 'pri', onclick: () => saveUrl() }, 'Save'), h('button', { class: 'gh', onclick: () => removeUrl() }, 'Remove')), perr);
+    const input = h('textarea', { rows: 1, maxlength: 2000, placeholder: 'Ask anything…', style: 'flex:1;max-height:90px' });
+    const send = h('button', { class: 'pri' }, 'Send');
+    const add = (cls, t) => { const m = h('div', { class: 'msg ' + cls }, t); log.append(m); log.scrollTop = log.scrollHeight; return m; };
+    const paint = () => {
+      const cloud = !!getAiUrl();
+      setupBtn.textContent = cloud ? 'Change link' : 'Connect smart AI';
+      if (cloud) { mode.textContent = 'Smart mode · cloud'; tbtn.style.display = 'none'; }
+      else if (SMART.engine) { mode.textContent = 'Smart mode · runs on your device'; tbtn.style.display = 'none'; }
+      else if (SMART.loading) { tbtn.style.display = 'none'; }
+      else { mode.textContent = 'Basic mode · math, time, dice'; tbtn.style.display = ''; tbtn.disabled = false; }
+    };
+    function saveUrl() {
+      const u = urlIn.value.trim();
+      if (!aiUrlOk(u)) { perr.textContent = 'That does not look like a Google Apps Script web app link. It should start with https://script.google.com/macros/s/ and end with /exec'; return; }
+      LS.setItem('dv_ai_url', u); perr.textContent = ''; panel.style.display = 'none'; paint();
+      add('a', 'Connected! Ask me anything.');
+    }
+    function removeUrl() { LS.removeItem('dv_ai_url'); urlIn.value = ''; perr.textContent = ''; paint(); }
+    setupBtn.addEventListener('click', () => { panel.style.display = panel.style.display === 'none' ? 'block' : 'none'; urlIn.value = getAiUrl(); });
+    async function enable() {
+      tbtn.style.display = 'none'; mode.textContent = 'Loading smart mode… 0%';
+      try { await loadSmart(p => { mode.textContent = 'Loading smart mode… ' + p; }); }
+      catch (e) { add('a', 'Smart mode could not start: ' + e.message + ' Basic mode still works.'); }
+      paint();
+    }
+    tbtn.addEventListener('click', () => { if (confirm('This downloads roughly 1 GB the first time, then is saved in your browser. Continue?')) enable(); });
+    async function go(text) {
+      text = (text || input.value).trim(); if (!text || busy) return;
+      busy = true; send.disabled = true; input.value = '';
+      const chips = $('.chips', log); if (chips) chips.remove();
+      add('u', text); hist.push({ role: 'user', content: text });
+      const m = add('a', '…'); let reply = '';
+      try {
+        const quick = quickAnswer(text), url = getAiUrl();
+        if (quick) { reply = quick; m.textContent = reply; }
+        else if (url) { reply = await cloudAI(url, hist.slice(-10)); m.textContent = reply; }
+        else if (SMART.engine) {
+          const chunks = await SMART.engine.chat.completions.create({ messages: [{ role: 'system', content: SMART_SYS }, ...hist.slice(-8)], stream: true, max_tokens: 500, temperature: .6 });
+          for await (const c of chunks) { reply += (c.choices[0] && c.choices[0].delta && c.choices[0].delta.content) || ''; m.textContent = reply || '…'; log.scrollTop = log.scrollHeight; }
+          if (!reply) { reply = '(no answer)'; m.textContent = reply; }
+        } else { const r = await api('ai', { messages: hist.slice(-10) }); reply = r.reply; m.textContent = reply; }
+        hist.push({ role: 'assistant', content: reply });
+      } catch (e) { m.textContent = 'Something went wrong: ' + e.message; hist.pop(); }
+      busy = false; send.disabled = false; log.scrollTop = log.scrollHeight; input.focus();
+    }
+    send.addEventListener('click', () => go());
+    input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); } });
+    const chips = h('div', { class: 'chips' }, ...['Explain photosynthesis simply', 'Help me write an email', 'What is 15% of 240?', 'Give me a fun fact'].map(t => h('button', { onclick: () => go(t) }, t)));
+    log.append(add('a', "Hey, I'm Divinity AI. Tap Connect smart AI for real answers, or ask me quick math and the time right now."), chips);
+    body.append(top, panel, log, h('div', { class: 'compose' }, input, send));
+    paint(); input.focus();
+    if (!getAiUrl() && !SMART.engine && !SMART.loading && LS.getItem('dv_smart') === '1' && navigator.gpu) enable();
+  }
+};
+
+APPS.owner = {
+  title: 'Owner', icon: 'owner', w: 720, h: 500,
+  render(body) {
+    if (S.role !== 'owner') return;
+    const view = h('div', { class: 'pad scroll' });
+    const tb = h('div', { class: 'tabs sm' });
+    const V = {
+      async Accounts() {
+        const r = await api('owner/users');
+        const rows = r.users.map(u => h('div', { class: 'item' },
+          h('div', { class: 'meta' }, h('span', {}, u.username + (u.banned ? ' · BANNED' : '') + (u.owner ? ' · owner' : '')), h('span', {}, 'joined ' + fmt(u.created) + ' · last ' + fmt(u.lastLogin) + ' · ' + u.devices + ' device(s)')),
+          u.owner ? null : h('div', { class: 'row', style: 'margin-top:6px' },
+            u.banned
+              ? h('button', { class: 'gh', onclick: async () => { await api('owner/unban', { username: u.username }); go('Accounts'); } }, 'Unban')
+              : h('button', { class: 'gh danger', onclick: async () => { if (confirm('Ban ' + u.username + '? This also bans their device.')) { await api('owner/ban', { username: u.username }); go('Accounts'); } } }, 'Ban'),
+            (typeof NO_RESET !== 'undefined' && NO_RESET) ? null : h('button', { class: 'gh', onclick: async () => { if (confirm('Reset password for ' + u.username + '?')) { const t = await api('owner/reset', { username: u.username }); prompt('Temporary password for ' + u.username + ' (copy it and send it to them):', t.temp); } } }, 'Reset password'))));
+        view.replaceChildren(h('p', { class: 'mut', style: 'margin-bottom:10px' }, r.users.length + ' accounts' + (typeof SHARED !== 'undefined' ? ' on this device. Everyone else is in your Form responses sheet. To ban someone everywhere, add their username or device ID to the Bans sheet.' : '')), ...rows);
+      },
+      async Inbox() {
+        const r = await api('owner/inbox');
+        view.replaceChildren(...(r.messages.length ? r.messages.map(m => h('div', { class: 'item' },
+          h('div', { class: 'meta' }, h('span', {}, h('span', { class: 'tag' }, m.type), ' ' + m.user), h('span', {}, fmt(m.at), h('button', { class: 'lk', style: 'margin-left:8px', onclick: async () => { await api('owner/inbox/delete', { id: m.id }); go('Inbox'); } }, 'delete'))),
+          h('p', {}, m.text))) : [h('p', { class: 'mut' }, 'Nothing yet.')]));
+      },
+      async Updates() {
+        const r = await api('updates');
+        const t = h('input', { placeholder: 'Update title', maxlength: 100 }), b = h('textarea', { rows: 3, placeholder: 'Details', maxlength: 1000 });
+        view.replaceChildren(h('div', { class: 'stack', style: 'margin-bottom:16px' }, t, b, h('button', { class: 'pri', onclick: async () => { await api('owner/update', { title: t.value, body: b.value }); go('Updates'); } }, 'Post update')),
+          ...r.updates.map(u => h('div', { class: 'item' }, h('div', { class: 'meta' }, h('span', {}, u.title), h('span', {}, fmt(u.at), h('button', { class: 'lk', style: 'margin-left:8px', onclick: async () => { await api('owner/update/delete', { id: u.id }); go('Updates'); } }, 'delete'))), h('p', { class: 'mut' }, u.body))));
+      },
+      async Site() {
+        view.replaceChildren(h('p', { class: 'mut', style: 'margin-bottom:12px' }, 'Download the full HTML of the site.'),
+          h('button', { class: 'pri', onclick: async () => {
+            let txt = ''; try { txt = await (await fetch(location.href)).text(); } catch {}
+            if (txt.indexOf('Divinity') < 0) return alert('Your browser would not let the page read itself. You already have the full code: it is the file you pasted into the viewer.');
+            const a = h('a', { href: URL.createObjectURL(new Blob([txt], { type: 'text/html' })), download: 'divinity.html' }); document.body.append(a); a.click(); a.remove();
+          } }, 'Download HTML'));
+      }
+    };
+    if (typeof HAS_ACTIVITY !== 'undefined' && HAS_ACTIVITY) V.Activity = async function () {
+      const r = await api('owner/activity');
+      view.replaceChildren(h('p', { class: 'mut', style: 'margin-bottom:10px' }, 'Recent visits and sign-ups'), ...r.activity.map(a => h('div', { class: 'item' }, h('div', { class: 'meta' }, h('span', {}, h('span', { class: 'tag' }, a.type), ' ' + a.user), h('span', {}, fmt(a.at))), h('p', { class: 'mut' }, 'device ' + String(a.device).slice(0, 8)))));
+    };
+    async function go(t) {
+      [...tb.children].forEach(b => b.classList.toggle('on', b.textContent === t));
+      try { await V[t](); } catch (e) { view.replaceChildren(h('p', { class: 'err' }, e.message)); }
+    }
+    Object.keys(V).forEach(t => tb.append(h('button', { onclick: () => go(t) }, t)));
+    const note = h('p', { class: 'mut', style: 'padding:8px 16px;font-size:11px;line-height:1.4;border-bottom:1px solid var(--line)' },
+      'Heads up: please don\u2019t open or refresh this app too much. Every tab loads a lot of data from the free database, and each load counts against its daily limit. If the limit runs out, sign-ins, Community and feedback stop working until about 2 AM. Open it only when you need to check something.');
+    body.append(note, tb, view); go('Accounts');
+  }
+};
+
+
+/* open HTML or a page inside a fresh about:blank tab */
+function blankTab(html) {
+  const w = window.open('about:blank', '_blank');
+  if (!w) return false;
+  w.document.open(); w.document.write(html); w.document.close();
+  return true;
+}
+const blankFrame = (url, title) => blankTab('<!doctype html><title>' + title + '</title><body style="margin:0;background:#000"><iframe src="' + url.replace(/"/g, '&quot;') + '" style="position:fixed;inset:0;width:100%;height:100%;border:0"></iframe></body>');
+
+const MOVIES_URL = 'https://docs.google.com/document/d/e/2PACX-1vQvCapctbX_-jYwozTkIsgAOKkEgUcBHD0TVl5FtZNV00XA_T0dJDTg3cpTtP1NdiXxqv2bo5klL3Av/pub';
+APPS.movies = {
+  title: 'Movies', icon: 'movies', w: 820, h: 560,
+  render(body) {
+    const msg = h('span', { class: 'err' });
+    body.append(
+      h('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line)' },
+        h('span', { class: 'mut' }, 'Movies'),
+        h('div', { class: 'row' }, msg, h('button', { class: 'gh', onclick: () => { msg.textContent = blankFrame(MOVIES_URL, 'Movies') ? '' : 'Popup blocked. Allow popups for this site.'; } }, 'Open in about:blank'))),
+      h('iframe', { class: 'fr', src: MOVIES_URL + '?embedded=true' }));
+  }
+};
+
+const GAMES_HTML = "<!DOCTYPE html>\n<html>\n<head>\n    <title>UGS Files</title>\n    <style>\n        body {\n            font-family: Arial, sans-serif;\n            background: linear-gradient(135deg, #2e3244 0%, #36224b 100%);\n            min-height: 100vh;\n            margin: 0;\n            padding: 0;\n            display: flex;\n        }\n\n        .sidebar {\n            position: fixed;\n            left: 0;\n            top: 0;\n            width: 80px;\n            height: 100vh;\n            background: rgba(0, 0, 0, 0.3);\n            backdrop-filter: blur(10px);\n            padding: 20px 10px;\n            display: flex;\n            flex-direction: column;\n            gap: 8px;\n            overflow-y: auto;\n            box-shadow: 2px 0 10px rgba(0,0,0,0.3);\n            z-index: 1000;\n        }\n\n        .sidebar::-webkit-scrollbar {\n            width: 6px;\n        }\n\n        .sidebar::-webkit-scrollbar-track {\n            background: rgba(255,255,255,0.1);\n        }\n\n        .sidebar::-webkit-scrollbar-thumb {\n            background: rgba(255,255,255,0.3);\n            border-radius: 3px;\n        }\n\n        .sidebar-btn {\n            background: rgb(89, 134, 218);\n            border: none;\n            padding: 12px;\n            font-size: 18px;\n            font-weight: 700;\n            border-radius: 8px;\n            cursor: pointer;\n            transition: all 0.2s ease;\n            color: white;\n            text-align: center;\n            min-height: 45px;\n        }\n\n        .sidebar-btn:hover {\n            background: #79aadb;\n            transform: scale(1.05);\n        }\n\n        .sidebar-btn.empty {\n            opacity: 0.4;\n            cursor: default;\n        }\n\n        .sidebar-btn.empty:hover {\n            transform: none;\n            background: rgb(89, 134, 218);\n        }\n\n        .main-content {\n            margin-left: 100px;\n            flex: 1;\n            padding: 20px;\n        }\n\n        h1 {\n            color: white;\n            text-align: center;\n            margin-bottom: 30px;\n            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);\n        }\n\n        .letter-section {\n            margin-bottom: 40px;\n            padding: 0 20px;\n            max-width: 900px;\n            margin-left: auto;\n            margin-right: auto;\n            min-height: 100px;\n        }\n\n        .letter-section.empty {\n            opacity: 0.5;\n        }\n\n        .letter-header {\n            color: white;\n            font-size: 32px;\n            font-weight: bold;\n            margin-bottom: 15px;\n            padding-bottom: 10px;\n            border-bottom: 3px solid rgba(255,255,255,0.3);\n            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);\n        }\n\n        .buttons-container {\n            display: flex;\n            flex-direction: column;\n            gap: 10px;\n            align-items: center;\n        }\n\n        .empty-message {\n            color: rgba(255,255,255,0.6);\n            font-style: italic;\n            text-align: center;\n            padding: 20px;\n        }\n\n        input[type=\"button\"] {\n            background: rgb(89, 134, 218);\n            border: none;\n            padding: 15px 30px;\n            font-size: 16px;\n            font-weight: 500;\n            border-radius: 8px;\n            cursor: pointer;\n            box-shadow: 0 4px 6px rgba(0,0,0,0.1);\n            transition: all 0.3s ease;\n            width: 100%;\n            max-width: 600px;\n            color: white;\n            text-align: left;\n        }\n\n        input[type=\"button\"]:hover {\n            transform: translateY(-2px);\n            box-shadow: 0 6px 12px rgba(0,0,0,0.2);\n            background: #79aadb;\n        }\n\n        input[type=\"button\"]:active {\n            transform: translateY(0);\n            box-shadow: 0 2px 4px rgba(0,0,0,0.1);\n        }\n\n        @media (max-width: 768px) {\n            .sidebar {\n                width: 60px;\n                padding: 15px 5px;\n            }\n            .sidebar-btn {\n                padding: 8px;\n                font-size: 16px;\n            }\n            .main-content {\n                margin-left: 70px;\n            }\n        }\n    </style>\n</head>\n<body>\n    <div class=\"sidebar\" id=\"sidebar\">\n    </div>\n\n    <div class=\"main-content\">\n        <h1>UGS Files</h1>\n    <h2 style=\"color: white; text-align: center; margin-bottom: 30px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); font-weight: normal; font-size: 18px;\">\n    Files from\n    <a href=\"https://docs.google.com/document/d/1_FmH3BlSBQI7FGgAQL59-ZPe8eCxs35wel6JUyVaG8Q/\"\n        target=\"_blank\"\n        style=\"display: inline; color: #79aadb; text-decoration: none; font-size: 18px; text-shadow: 1px 1px 2px rgba(0,0,0,0.2);\">\n        Ultimate Game Stash Google Doc\n    </a>\n    </h2>\n    <h2 style=\"color: white; text-align: center; margin-bottom: 30px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); font-weight: normal; font-size: 18px;\">\n    Discord Server:\n    <a href=\"https://discord.gg/rmVsAqkpkA\"\n        target=\"_blank\"\n        style=\"display: inline; color: #79aadb; text-decoration: none; font-size: 18px; text-shadow: 1px 1px 2px rgba(0,0,0,0.2);\">\n        https://discord.gg/rmVsAqkpkA\n    </a>\n    <h2 style=\"color: white; text-align: center; margin-bottom: 30px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); font-weight: normal; font-size: 18px;\">\n        <input type=\"text\" placeholder=\"Search...\" id=\"searchInput\" style=\"padding: 13px; width: 100%; max-width: 420px; border-radius: 8px; border: none; box-shadow: 0 2px 4px rgba(7, 105, 218, 0.1);\">\n        <script src=\"https://cdn.jsdelivr.net/gh/bubbls/ugs-singlefile@main/searchbut.js\"><\/script>\n    <button id=\"lolbutton\" onclick=\"const script = document.createElement('script');script.src = 'https://cdn.jsdelivr.net/gh/bubbls/ugs-singlefile@latest/game.js';document.body.appendChild(script);\">Click to load if it isnt loading</button>\n    </h2>\n\n       \n        <div id=\"sections-container\">  \n        </div>\n    </div>\n    <script src=\"https://cdn.jsdelivr.net/gh/bubbls/ugs-singlefile@main/games.js\"><\/script>\n   </body>\n   </html>";
+APPS.games = {
+  title: 'Games', icon: 'games',
+  action() { if (!blankTab(GAMES_HTML)) alert('Popup blocked. Allow popups for this site and click Games again.'); }
+};
+
+const PROXIES = [["Fern #1","https://s3.amazonaws.com/deaganfern/index.html"],["Fern #2","https://s3.amazonaws.com/frnbk/index.html"],["Opium #1","https://storage.googleapis.com/gclassroom/study.html"],["Opium #2","https://s3.amazonaws.com/cleverlearning/study"],["Opium #3","https://s3.dualstack.us-east-1.amazonaws.com/cleverlearning/study"],["Opium #4","https://storage.googleapis.com/opiumbest/study.html"],["Aether #1","https://aetherinstitution.storage.googleapis.com/study.html"],["Aether #2","https://storage.googleapis.com/apushistory/index.html"],["Aether #3","https://storage.googleapis.com/apresources/index.html"],["DOGE #1","https://unpkg.com/unblocking@1.0.4/index.html?from=https%3A%2F%2Fstorage.googleapis.com%2Fdogeub%2Findex.html&mid=u1#/search"],["DOGE #2","https://cdn.jsdelivr.net/gh/dogeub/-/index.svg#/search"],["Achroma #1","https://d11cclz3sfvizz.cloudfront.net"],["Achroma #2","https://d19411ec78tn7n.cloudfront.net"],["Truffled #1","https://cdn.jsdelivr.net/gh/obamamegagon/linkmaker@main/truffled.svg?1"],["Truffled #2","https://cdn.jsdelivr.net/gh/obamamegagon/linkmaker@main/truffled.svg?3"],["Truffled #3","https://cdn.jsdelivr.net/gh/obamamegagon/linkmaker@main/truffled.svg?21"],["Truffled #4","https://cdn.jsdelivr.net/gh/obamamegagon/linkmaker@main/truffled.svg?29"]];
+APPS.proxies = {
+  title: 'Proxy Links', icon: 'proxy', w: 440, h: 520,
+  render(body) {
+    const groups = new Map();
+    PROXIES.forEach(([n, u]) => { const g = n.replace(/\s*#?\d+\s*$/, '').trim() || n; if (!groups.has(g)) groups.set(g, []); groups.get(g).push([n, u]); });
+    body.append(h('div', { class: 'pad scroll' }, ...[...groups].map(([g, links]) =>
+      h('details', { class: 'pg' },
+        h('summary', {}, h('span', {}, g), h('span', { class: 'mut' }, links.length + (links.length === 1 ? ' link' : ' links'))),
+        ...links.map(([n, u]) => h('div', { class: 'row pl' }, h('span', {}, n),
+          h('button', { class: 'pri', onclick: () => window.open(u, '_blank', 'noopener,noreferrer') }, 'Launch')))))));
+  }
+};
+
+APPS.files = {
+  title: 'File Viewer', icon: 'files', w: 460, h: 380,
+  render(body) {
+    let text = '';
+    const file = h('input', { type: 'file', accept: '.html,.htm,text/html', style: 'display:none' });
+    const label = h('span', { class: 'mut' }, 'No file selected');
+    const msg = h('div', { class: 'err' });
+    const open = h('button', { class: 'pri', disabled: true }, 'Open in about:blank');
+    file.addEventListener('change', () => {
+      const f = file.files[0]; if (!f) return;
+      const fr = new FileReader();
+      fr.onload = () => { text = String(fr.result); label.textContent = f.name; open.disabled = false; msg.textContent = ''; };
+      fr.onerror = () => { msg.textContent = 'Could not read that file.'; };
+      fr.readAsText(f);
+    });
+    open.addEventListener('click', () => { if (!blankTab(text)) msg.textContent = 'Popup blocked. Allow popups for this site and try again.'; });
+    body.append(
+      h('div', { class: 'pad stack' }, h('div', { class: 'row' }, h('button', { class: 'gh', onclick: () => file.click() }, 'Choose file…'), label), file, msg, open),
+      h('p', { class: 'mut', style: 'padding:10px 16px;border-top:1px solid var(--line);font-size:11px;white-space:pre-line' },
+        'Note: Browsers restrict direct links to local files. Click above to select the offline HTML file from your Google Drive folder or local storage to launch it securely.\nRemember to enable popups for this site!'));
+  }
+};
+
+/* Add your own apps here (games, movies, proxies...). Each entry becomes a dock icon that opens in a window.
+   Example: {id:'games', title:'Games', icon:'html', url:'https://your-site.example/games'} */
+const EXTRA = [];
+EXTRA.forEach(a => {
+  APPS[a.id] = { title: a.title, icon: a.icon || 'html', w: 760, h: 520, render: b => b.append(h('iframe', { class: 'fr', src: a.url })) };
+  DOCK.push(a.id);
+});
+
+/* ---------------- dock, auth, boot ---------------- */
+function dkBtn(id) { const b = h('button', { class: 'dk', title: APPS[id].title, 'data-l': APPS[id].title, 'data-id': id, onclick: () => openApp(id) }); b.append(svg(APPS[id].icon), h('span', { class: 'lb' }, APPS[id].title)); return b; }
+function buildDock() {
+  const d = $('#dock'); d.replaceChildren();
+  const ids = [...DOCK]; if (S.role === 'owner') ids.push('owner');
+  ids.forEach(id => d.append(dkBtn(id)));
+  d.append(h('div', { class: 'sp' }), dkBtn('ai'));
+}
+function enter() {
+  $('#auth').style.display = 'none'; $('#desktop').style.display = 'block';
+  $('#who').textContent = S.guest ? 'Guest · saved on this device only' : S.user;
+  loadSet(); buildDock(); openApp('updates');
+  api('visit', {}).catch(() => {});
+}
+function showBanned() {
+  $('#desktop').style.display = 'none'; $('#auth').style.display = 'grid';
+  $('#acard').replaceChildren(h('h1', {}, 'Divinity'), h('p', { class: 'sub', style: 'margin-top:14px' }, 'This device has been banned.'));
+}
+let mode = 'login';
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('#atabs button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+  $('#as').textContent = m === 'login' ? 'Log in' : 'Create account';
+  $('#ap').autocomplete = m === 'login' ? 'current-password' : 'new-password';
+  $('#ae').textContent = '';
+}
+document.querySelectorAll('#atabs button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.m)));
+const LOCK = { n: 0, until: 0 };
+$('#af').addEventListener('submit', async e => {
+  e.preventDefault();
+  const u = $('#au').value.trim(), p = $('#ap').value, err = $('#ae');
+  err.textContent = '';
+  if (!/^[A-Za-z0-9_-]{1,15}$/.test(u)) return err.textContent = 'Username: 1-15 letters, numbers, _ -';
+  if (p.length < 4 || p.length > 15) return err.textContent = 'Password must be 4-15 characters.';
+  if (Date.now() < LOCK.until) return err.textContent = 'Too many tries. Wait ' + Math.ceil((LOCK.until - Date.now()) / 1000) + 's.';
+  $('#as').disabled = true;
+  try {
+    const r = await api(mode === 'login' ? 'login' : 'register', { username: u, password: p, code: $('#ac').value.trim() });
+    LOCK.n = 0; S.token = r.token; S.user = r.user; S.role = r.role; S.guest = false;
+    LS.setItem('dv_token', r.token); enter();
+  } catch (x) {
+    if (++LOCK.n >= 5) { LOCK.until = Date.now() + 60000; LOCK.n = 0; }
+    if (x.data && x.data.needCode) $('#ac').style.display = '';
+    if (!(x.data && x.data.banned)) err.textContent = x.message;
+  }
+  $('#as').disabled = false;
+});
+$('#ag').addEventListener('click', () => { S.guest = true; S.user = 'Guest'; S.role = 'user'; S.token = ''; enter(); });
+$('#out').addEventListener('click', async () => {
+  try { await api('logout', {}); } catch {}
+  LS.removeItem('dv_token'); location.reload();
+});
+$('#panic').addEventListener('click', () => {
+  const url = 'https://classroom.google.com/h';
+  window.open(url, '_blank');
+  window.close();                                   // works when this tab was opened by a script/link
+  setTimeout(() => location.replace(url), 150);     // fallback: browsers refuse to close other tabs
+});
+
+(async function boot() {
+  try { await api('hello'); } catch (e) { if (e.data && e.data.banned) return showBanned(); }
+  if (S.token) {
+    try { const m = await api('me'); S.user = m.user; S.role = m.role; S.guest = false; return enter(); }
+    catch (e) { if (e.data && e.data.banned) return showBanned(); if (!e.offline) { LS.removeItem('dv_token'); S.token = ''; } }
+  }
+  loadSet();
+})();
+</script>
+</body>
+</html>
