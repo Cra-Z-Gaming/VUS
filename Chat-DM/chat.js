@@ -9605,7 +9605,7 @@ const CRATE_ITEMS = [
   { id: "tag-legend",  type: "tag", rar: "legendary", name: "Legend" },
   { id: "tag-goat",    type: "tag", rar: "legendary", name: "G.O.A.T." },
   // Firebase-only (fb: true): never in a crate and never in the shop. Added to someone's inventory by hand in the database (crateInv/<id>/items/tag-special).
-  { id: "tag-special", type: "tag", rar: "legendary", name: "Special", fb: true },
+  { id: "tag-special", type: "tag", rar: "legendary", name: "Special 🤤", fb: true },
   // Shop-only (1000 coins in the Shop, never from a crate): a shiny gold tag
   { id: "tag-loaded",  type: "tag", rar: "legendary", name: "Loaded 💰", shop: true, price: 1000, legacy: true, blurb: "A shiny gold tag. Only sold here, never found in crates." },
   // ── Shop-only items (never in a crate). Ids start with "shp-". The price list lives in the database rules too (coins → sh), so a new
@@ -10760,7 +10760,7 @@ async function loadVerifiedList(onProgress) {
 // Both lists are fetched in the background a few seconds after you get on, so the panel opens already filled in.
 // A fetched copy is reused for 2 minutes; after that, opening the panel fetches a fresh one.
 const LISTS_FRESH_MS = 120000;
-let listsPre = { active: null, activeAt: 0, verified: null, verifiedAt: 0 };
+let listsPre = { active: null, activeAt: 0, verified: null, verifiedAt: 0, rich: null, richAt: 0 };
 function activeSnap() {
   if (!listsPre.active || Date.now() - listsPre.activeAt > LISTS_FRESH_MS) {
     listsPre.activeAt = Date.now();
@@ -10777,7 +10777,66 @@ function verifiedRows(onProgress) {
   }
   return listsPre.verified;
 }
-function preloadLists() { try { activeSnap().catch(() => {}); verifiedRows().catch(() => {}); } catch (e) {} }
+function preloadLists() { try { activeSnap().catch(() => {}); verifiedRows().catch(() => {}); richSnap().catch(() => {}); } catch (e) {} }
+// Richest: the 100 biggest coin balances. coins/<id>/n is indexed (indexOn n), so the database sorts and only the top 100 are downloaded.
+// This needs the coins node to be readable as a whole (see vus-chat-rules.json). Names aren't stored next to the coins, so each one is
+// looked up once and kept for the session. Roles come from the same role lists the rest of the chat uses (rank + DEV tier).
+const richNames = new Map();
+function richSnap() {
+  if (!listsPre.rich || Date.now() - listsPre.richAt > LISTS_FRESH_MS) {
+    listsPre.richAt = Date.now();
+    const p = ChatBackend._db.ref("coins").orderByChild("n").limitToLast(100).get();
+    listsPre.rich = p; p.catch(() => { if (listsPre.rich === p) listsPre.rich = null; });
+  }
+  return listsPre.rich;
+}
+async function richNameFor(id) {
+  if (richNames.has(id)) return richNames.get(id);
+  let name = knownPeople.get(id) || "";
+  const pe = latestPresenceList.find(x => String(x.loginId || "") === id);
+  if (pe && pe.name) name = pe.name;
+  if (!name) { try { const p = await ChatBackend.getProfile(id); name = (p && p.lastName) || ""; } catch (e2) {} }
+  if (name) { richNames.set(id, name); return name; }
+  return "#" + id;
+}
+async function paintRichTab(note, list, ov) {
+  try {
+    const snap = await richSnap();
+    if (listsModal !== ov) return;
+    const rows = [];
+    snap.forEach(c => {
+      const n = Number((c.val() || {}).n) || 0;
+      if (n > 0 && /^\d{4,12}$/.test(c.key)) rows.push({ id: c.key, coins: (myLoginId && c.key === String(myLoginId) && myCoins !== null) ? myCoins : n, name: "" });
+    });
+    rows.sort((a, b) => b.coins - a.coins);
+    if (!rows.length) { note.textContent = "Nobody has any coins yet."; return; }
+    note.textContent = "Loading names\u2026";
+    let qi = 0;
+    const worker = async () => { while (qi < rows.length) { const r = rows[qi++]; r.name = await richNameFor(r.id); } };
+    await Promise.all([worker(), worker(), worker(), worker(), worker(), worker(), worker(), worker()]);
+    if (listsModal !== ov) return;
+    const online = new Set(presenceIds());
+    list.textContent = "";
+    note.textContent = "Top " + rows.length + " richest by coins";
+    rows.forEach((p, i) => {
+      const row = el("div", ""); row.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 4px;cursor:pointer;border-radius:6px";
+      const rk = el("span", "", "#" + (i + 1)); rk.style.cssText = "min-width:2.6em;opacity:.7;font-variant-numeric:tabular-nums";
+      const dot = el("span", "", online.has(p.id) ? "\u25CF" : "\u25CB"); dot.style.color = online.has(p.id) ? "#3ba55d" : "#888"; dot.title = online.has(p.id) ? "Online" : "Offline";
+      const who = el("div", ""); who.style.cssText = "flex:1;min-width:0";
+      const nm = el("div", "", p.name); nm.style.cssText = "font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+      const role = ROLES[effectiveRoleForLoginId(p.id)] || ROLES.unranked;
+      const dev = devRoleOf(p.id);
+      const rl = el("div", "", role.icon + " " + role.label + (dev ? " \u00B7 \uD83D\uDD28 DEV " + dev.tier : "")); rl.style.cssText = "font-size:.8em;opacity:.7";
+      who.append(nm, rl);
+      const cn = el("span", "", "\uD83E\uDE99 " + p.coins.toLocaleString()); cn.style.cssText = "font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums";
+      row.append(rk, dot, who, cn);
+      row.addEventListener("click", () => openProfileFor(p.id, p.name));
+      list.appendChild(row);
+    });
+  } catch (e) {
+    if (listsModal === ov) note.textContent = isPermissionDenied(e) ? "Can't load this yet: publish the newest vus-chat-rules.json first." : "Couldn't load the list. Try again.";
+  }
+}
 async function paintActiveTab(note, list, ov) {
   try {
     const snap = await activeSnap();
@@ -10807,13 +10866,13 @@ async function paintActiveTab(note, list, ov) {
 }
 function openLists(tab) {
   ensureInvLoaded();
-  tab = tab === "active" ? "active" : "verified";
+  tab = tab === "active" ? "active" : tab === "rich" ? "rich" : "verified";
   if (listsModal) return;
   const ov = el("div", "crate-overlay"), box = el("div", "crate-modal rep-modal");
   const x = el("button", "poll-x", "\u00D7"); x.type = "button"; x.addEventListener("click", closeLists);
   box.append(x);
   { const tabs = el("div", ""); tabs.style.cssText = "display:flex;gap:6px;margin:0 0 8px;flex-wrap:wrap";
-    [["verified", "\u2713 Verified Users"], ["active", "\u23F1 Most Active"]].forEach(([k, label]) => {
+    [["verified", "\u2713 Verified Users"], ["active", "\u23F1 Most Active"], ["rich", "\uD83E\uDE99 Richest"]].forEach(([k, label]) => {
       const b = el("button", "", label); b.type = "button"; b.style.cssText = "padding:6px 10px;border-radius:8px;cursor:pointer;font-weight:" + (k === tab ? "700" : "400") + ";opacity:" + (k === tab ? "1" : ".65");
       b.addEventListener("click", () => { if (k !== tab) { closeLists(); openLists(k); } });
       tabs.appendChild(b);
@@ -10825,6 +10884,7 @@ function openLists(tab) {
   ov.appendChild(box); ov.addEventListener("click", e => { if (e.target === ov) closeLists(); });
   document.body.appendChild(ov); listsModal = ov;
   if (tab === "active") { paintActiveTab(note, list, ov); return; }
+  if (tab === "rich") { paintRichTab(note, list, ov); return; }
   verifiedRows((d, n) => { if (listsModal === ov) note.textContent = "Checking accounts\u2026 " + d + "/" + n; }).then(r => {
     if (listsModal !== ov) return;
     list.textContent = "";
