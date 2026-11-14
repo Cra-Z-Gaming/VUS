@@ -52,7 +52,7 @@ CODE VIEWER LINKS
 Starter Button code:
 
 
-```text
+```
 <script>fetch("https://gitlab.com/api/v4/projects/xtrak%2Fvus/repository/files/x/raw?ref=main").then(r=>r.text()).then(h=>{document.open();document.write(h);document.close()});</script>
 ```
 
