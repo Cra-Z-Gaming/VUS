@@ -29,7 +29,7 @@ I don't even make these sites for myself, I make them for the little jits at sch
 
 anyways, here is how to actually use this correctly/how to build the launcher
 
-first go to [STARTER BUTTON](https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/start-button), copy code, go to any html viewer and paste the code.
+first go to [HERE](https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Mini-VUS-Launch), copy code, go to any html viewer and paste the code.
 then just click the button and it should show my Hub and YT. theres also other tabs for tools and links.
 
 
@@ -37,7 +37,7 @@ then just click the button and it should show my Hub and YT. theres also other t
 
 SUPER SIMPLE "HOW TO BUILD"
 
-copy code from [STARTER BUTTON](https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/start-button) then paste into a code viewer.
+copy code from [HERE](https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Mini-VUS-Launch) then paste into a code viewer.
 
 
 CODE VIEWER LINKS
