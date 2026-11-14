@@ -57,8 +57,21 @@
     try { var r = await fetch(CHAT_DB + "/config/tokensRequiredSince.json", { cache: "no-store" }); var j = await r.json(); reqCache = { at: Date.now(), v: typeof j === "number" }; } catch (e) {}
     return reqCache.v;
   }
-  async function obtainIfRequired(id, password) {   // called at login; silent and harmless when tokens aren't required
-    try { if (getToken(id) || !(await required())) return; await obtain(id, password); } catch (e) {}
+  async function obtainIfRequired(id, password) {   // called at login; always tries to get a token quietly. If the server can't be reached nothing happens and chat works as before.
+    try { if (getToken(id)) return; await obtain(id, password); } catch (e) {}
+  }
+  // Optional server help for sending: returns a ticket if the server can be reached right now, otherwise "" (never asks for a password, never throws, gives up after 3 seconds).
+  async function softTicket(id, name) {
+    name = name || "";
+    try {
+      var now = Date.now(); tbuf = tbuf.filter(function (x) { return now - x.at < 80000; });
+      var i = tbuf.findIndex(function (x) { return x.n === name; });
+      if (i >= 0) { var x = tbuf.splice(i, 1)[0]; refill(id, name); return x.t; }
+      if (!getToken(id)) return "";
+      var got = await Promise.race([fetchTicket(id, name), new Promise(function (_, no) { setTimeout(function () { no(new Error("SLOW")); }, 3000); })]);
+      refill(id, name);
+      return got.t;
+    } catch (e) { return ""; }
   }
   function askPassword(id) {   // one small prompt, only for a device that has no token yet while tokens are required
     if (asking) return asking;
@@ -93,7 +106,7 @@
     if (!(await askPassword(id))) return "";
     return getToken(id);
   }
-  window.VUS_AUTH = { obtain: obtain, obtainIfRequired: obtainIfRequired, loginToken: loginToken, ticket: ticket, hasToken: function (id) { return !!getToken(id); } };
+  window.VUS_AUTH = { obtain: obtain, obtainIfRequired: obtainIfRequired, softTicket: softTicket, loginToken: loginToken, ticket: ticket, hasToken: function (id) { return !!getToken(id); } };
   window.addEventListener("vus:logout", function () { try { localStorage.removeItem(TKEY); } catch (e) {} tbuf = []; });
 
   // ── The DEV tab ──

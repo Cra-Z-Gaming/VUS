@@ -690,7 +690,21 @@ const ChatBackend = {
     if (data && data.system === true) return this._pushRaw(data);   // "X joined / left" lines have no sender
     if (isAiSender(data && data.loginId) && /^ch-ai$/.test(this.currentRoomId || "")) return this._pushRaw(data);
     await tokenConfigReady;
-    if (!tokenCutover) return this._pushRaw(data);   // tickets are switched off (config/tokensRequiredSince not set): send as before
+    if (!tokenCutover) {
+      // Tickets aren't required: use the server when it can be reached (a ticket rides along with the message), otherwise send exactly as before.
+      let soft = "";
+      try {
+        if (data && data.loginId && window.VUS_AUTH && window.VUS_AUTH.softTicket) soft = await window.VUS_AUTH.softTicket(String(data.loginId), String(data.name || ""));
+      } catch (e) { soft = ""; }
+      if (!soft) return this._pushRaw(data);
+      try {
+        const skey = this._pushRaw().key, sup = {};
+        sup[this._msgsPath + "/" + skey] = Object.assign({}, data, { ticket: soft });
+        sup["tickets/" + data.loginId + "/" + soft] = null;
+        await this._db.ref().update(sup);
+        return { key: skey };
+      } catch (e) { return this._pushRaw(data); }   // anything goes wrong: plain send, nobody is blocked
+    }
     let ticket;
     try {
       if (!data || !data.loginId || !window.VUS_AUTH) throw new Error("NO_TOKEN");
@@ -3195,6 +3209,10 @@ function renderMessage(msg) {
     }
   }
 
+  // Messages that look like MINE (same name) get the same check as anyone else's: someone posting in my name from another device,
+  // or using my account ID, has to carry my real equipped items too, or the message stays hidden on this screen.
+  if (mine && /^\d{6}$/.test(String(msg.loginId || "")) && liveSince && Number(msg.ts) >= liveSince) { needsVerify = true; el.classList.add("anon-hidden"); }
+
   if (activeChannelId === "announce") {
     el.classList.add("ann-msg");
     if (msg.id && !msg.poll) { annEls.set(String(msg.id), { el, msg, mine }); paintAnnGate(String(msg.id)); }
@@ -3357,9 +3375,9 @@ function renderMessage(msg) {
       const liveMsg = !!liveSince && Number(msg.ts) >= liveSince;
       let bad = !r.ok || ((isMedia || liveMsg) && !r.nameMatches);   // a new message's name must be the account's real username
       if (!bad && isMedia && !(await senderMayPostImages(String(msg.loginId)))) bad = true;
-      if (!bad && !mine && await liveForgeryCheck(msg)) { el.classList.add("anon-hidden", "forged-hidden"); el.dataset.forged = "1"; return; }   // name/effects don't match the sender's real profile
+      if (!bad && await liveForgeryCheck(msg)) { el.classList.add("anon-hidden", "forged-hidden"); el.dataset.forged = "1"; return; }   // name/effects don't match the sender's real profile (my own messages too)
       if (bad && !(r.unknown && !isMedia)) { el.classList.add("anon-hidden"); }
-      else { el.classList.remove("anon-hidden"); if (r.ok && r.nameMatches) rememberPerson(msg.loginId, msg.name); firePing(); }
+      else { el.classList.remove("anon-hidden"); if (r.ok && r.nameMatches) rememberPerson(msg.loginId, msg.name); if (!mine) firePing(); }
       if (autoScroll && stickToBottom) scrollToBottom();
     }).catch(() => { if (msg.imageData || msg.video || msg.gif) el.classList.add("anon-hidden"); else { el.classList.remove("anon-hidden"); firePing(); } });
   } else {
