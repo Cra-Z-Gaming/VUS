@@ -9552,7 +9552,8 @@ const RARITY = {
   common:    { label: "Common",    color: "#94a3b8", weight: 70 },
   rare:      { label: "Rare",      color: "#38bdf8", weight: 22 },
   epic:      { label: "Epic",      color: "#a855f7", weight: 6 },
-  legendary: { label: "Legendary", color: "#f59e0b", weight: 2 }
+  legendary: { label: "Legendary", color: "#f59e0b", weight: 2 },
+  impossible: { label: "Impossible", color: "#ff2fd0", weight: 0 }   // above Legendary. A normal crate never rolls it (weight 0): only the Impossible crate and items given by hand are this tier
 };
 const CRATE_ITEMS = [
   // rings: solid ones carry a color, the rest are animated (CSS class rfx-<id>)
@@ -9605,13 +9606,13 @@ const CRATE_ITEMS = [
   { id: "tag-legend",  type: "tag", rar: "legendary", name: "Legend" },
   { id: "tag-goat",    type: "tag", rar: "legendary", name: "G.O.A.T." },
   // Firebase-only (fb: true): never in a crate and never in the shop. Added to someone's inventory by hand in the database (crateInv/<id>/items/tag-special).
-  { id: "tag-special", type: "tag", rar: "legendary", name: "Special 🤤", fb: true },
+  { id: "tag-special", type: "tag", rar: "impossible", name: "Special 🤤", fb: true },
   // Shop-only (1000 coins in the Shop, never from a crate): a shiny gold tag
   { id: "tag-loaded",  type: "tag", rar: "legendary", name: "Loaded 💰", shop: true, price: 1000, legacy: true, blurb: "A shiny gold tag. Only sold here, never found in crates." },
   // ── Shop-only items (never in a crate). Ids start with "shp-". The price list lives in the database rules too (coins → sh), so a new
   //    shop item needs: a line here (shop: true, price) AND its id + price added to that list in vus-chat-rules.json. ──
   { id: "shp-tag-rich",  type: "tag", rar: "legendary", name: "Filthy Rich",    shop: true, price: 10000, blurb: "Money green and gold, with a shine that never stops." },
-  { id: "shp-tag-kanye", type: "tag", rar: "legendary", name: "I prefer kanye", shop: true, price: 25000, blurb: "For the real fans. The most expensive tag in the shop." },
+  { id: "shp-tag-kanye", type: "tag", rar: "impossible", name: "I prefer kanye", shop: true, price: 25000, blurb: "For the real fans. The most expensive tag in the shop." },
   { id: "shp-ring-rainbow", type: "ring", rar: "epic",      name: "Rainbow Spin", shop: true, price: 500,   blurb: "A full rainbow that spins around your picture and keeps changing colour." },
   { id: "shp-ring-rod",     type: "ring", rar: "legendary", name: "Ring of Death", shop: true, price: 10000, blurb: "Red blades spinning around your picture." },
   { id: "shp-bub-dirt",    type: "bub", rar: "common",    name: "Dirt",    shop: true, price: 50,   anim: "dirt",    txt: "#ffffff", colors: ["#6e4724", "#4a2f17"], blurb: "Crumbly brown dirt with little pebbles in it." },
@@ -9990,13 +9991,13 @@ function paintCrateModal() {
   const x = el("button", "poll-x", "×"); x.type = "button"; x.addEventListener("click", () => { if (!crateBusy) closeCrateModal(); });
   box.appendChild(x);
   const tabs = el("div", "cr-tabs");
-  [["open", "📦 Crates"], ["collection", "🎨 Collection"]].forEach(([k, t]) => {
+  [["open", "📦 Crates"], ["collection", "🎨 Collection"], ["impossible", "\u267E\uFE0F Impossible"]].forEach(([k, t]) => {
     const b = el("button", "cr-tab" + (crateView === k ? " on" : ""), t); b.type = "button";
     b.addEventListener("click", () => { if (crateBusy) return; crateView = k; crateReveal = null; paintCrateModal(); });
     tabs.appendChild(b);
   });
   box.appendChild(tabs);
-  if (crateView === "collection") paintCollection(box); else paintOpen(box);
+  if (crateView === "collection") paintCollection(box); else if (crateView === "impossible") paintImpossible(box); else paintOpen(box);
   crateModal.querySelectorAll(".cr-side").forEach(n => n.remove());
   if (crateView === "open") crateModal.appendChild(buildOddsBar(crateBarType));
 }
@@ -10096,7 +10097,7 @@ function buildOddsBar(type) {
     pills.appendChild(b);
   });
   bar.append(el("div", "cr-side-h", "Chances"), pills);
-  const pool = cratePool(type), order = { legendary: 0, epic: 1, rare: 2, common: 3 };
+  const pool = cratePool(type), order = { impossible: -1, legendary: 0, epic: 1, rare: 2, common: 3 };
   const list = el("div", "cr-side-list");
   pool.slice().sort((a, b) => order[a.rar] - order[b.rar]).forEach(it => {
     const row = el("div", "cr-side-row r-" + it.rar + (crateOwned.has(it.id) ? " own" : ""));
@@ -10155,7 +10156,7 @@ function buildWheel(type) {
 }
 function revealCard(item, heading, sub) {
   const c = el("div", "cr-reveal-card r-" + item.rar);
-  c.append(el("div", "cr-reveal-h", heading), itemPreview(item), el("b", "", item.name), el("div", "cr-rar", RARITY[item.rar].label + " " + ({ ring: "ring", tag: "tag", fx: "text effect" })[item.type]));
+  c.append(el("div", "cr-reveal-h", heading), itemPreview(item), el("b", "", item.name), el("div", "cr-rar", RARITY[item.rar].label + " " + ({ ring: "ring", tag: "tag", fx: "text effect", font: "font", bub: "bubble" })[item.type]));
   if (sub) c.appendChild(el("div", "cr-note", sub));
   return c;
 }
@@ -10261,7 +10262,7 @@ async function openCrate(type, count) {
   } else {
     done.appendChild(el("h3", "cr-h", "Opened " + count + " crates"));
     if (saved.length) {
-      const ord = { legendary: 0, epic: 1, rare: 2, common: 3 };
+      const ord = { impossible: -1, legendary: 0, epic: 1, rare: 2, common: 3 };
       saved.sort((x, y) => ord[x.rar] - ord[y.rar]);
       const best = saved[0];
       done.appendChild(el("div", "cr-best r-" + best.rar, "Best pull: " + best.name.replace(/ \(animated\)/, "") + " · " + RARITY[best.rar].label));
@@ -10282,15 +10283,19 @@ function paintCollection(box) {
   // a seasonal item shows up while its season runs, or once you own it (past seasons you missed stay hidden)
   const shown = i => (!i.season && !i.shop && !i.fb) || crateOwned.has(i.id) || (act && act.id === i.season);   // shop-only items appear once you own them
   [["ring", "Rings"], ["tag", "Tags"], ["fx", "Text effects"], ["font", "Fonts"], ["bub", "Bubbles"]].forEach(([k, t]) => {
-    const own = CRATE_ITEMS.filter(i => i.type === k && shown(i) && crateOwned.has(i.id)).length, all = CRATE_ITEMS.filter(i => i.type === k && shown(i)).length;
+    let own = CRATE_ITEMS.filter(i => i.type === k && shown(i) && crateOwned.has(i.id)).length, all = CRATE_ITEMS.filter(i => i.type === k && shown(i)).length;
+    if (k === "tag") { const dv = DEV_CARDS.filter(devCardOwned).length; own += dv; all += dv; }   // DEV Gold / Diamond show up in Tags for the people who hold them
     const b = el("button", "cr-subtab" + (collectionType === k ? " on" : ""), t + " " + own + "/" + all); b.type = "button";
     b.addEventListener("click", () => { collectionType = k; paintCrateModal(); });
     tabs.appendChild(b);
   });
   box.appendChild(tabs);
   const grid = el("div", "cr-grid");
-  const order = { legendary: 0, epic: 1, rare: 2, common: 3 };
-  CRATE_ITEMS.filter(i => i.type === collectionType && shown(i)).sort((a, b) => (a.season ? 1 : 0) - (b.season ? 1 : 0) || order[a.rar] - order[b.rar]).forEach(it => {
+  const order = { impossible: -1, legendary: 0, epic: 1, rare: 2, common: 3 };
+  const cards = CRATE_ITEMS.filter(i => i.type === collectionType && shown(i)).sort((a, b) => (a.season ? 1 : 0) - (b.season ? 1 : 0) || order[a.rar] - order[b.rar]);
+  if (collectionType === "tag") { const at = cards.findIndex(i => i.rar !== "impossible"); cards.splice(at < 0 ? cards.length : at, 0, ...DEV_CARDS.filter(devCardOwned)); }   // Impossible tier first
+  cards.forEach(it => {
+    if (it.devCard) { grid.appendChild(devCollectionCard(it)); return; }
     const own = crateOwned.has(it.id), isFont = it.type === "font";
     const onName = !!(myCosm && myCosm.font === it.id), onText = !!(myCosm && myCosm.tfont === it.id);
     const on = isFont ? (onName || onText) : !!(myCosm && myCosm[it.type] === it.id);
@@ -10382,11 +10387,13 @@ function ensureCoinWatch() {
   flushCoinPending().catch(() => {});   // and any crate coins that couldn't be saved earlier
   settleLoadedTag().catch(() => {});    // and a Loaded tag that was paid for but not delivered
   settleShopItems().catch(() => {});    // and any other Shop item that was paid for but not delivered
+  settleImpossibleWins().catch(() => {});   // and an Impossible crate win that wasn't handed over yet
 }
 function paintCoinBits() {
   const b = document.getElementById("navShop");
   if (b) b.title = "Shop" + (myCoins === null ? "" : " \u00B7 " + myCoins + " coins");
   if (shopModal && !shopBusy) paintShop();
+  if (crateModal && crateView === "impossible" && !crateBusy) paintCrateModal();   // the Impossible tab shows your balance
 }
 lpInterval(ensureCoinWatch, 3000, 4);   // follows logins and logouts
 
@@ -10499,6 +10506,176 @@ async function sellCrates(count) {
 // ── The Loaded 💰 tag: sold only in the Shop for 1000 coins, never from a crate. ──
 // Step 1 pays (coins `ld` goes 0 → 1 and the balance drops by exactly 1000 in the same write). Step 2 hands over the tag: the rules only accept
 // crateInv/<id>/items/tag-loaded once `ld` is 1, so it can't come from anywhere else.
+/* ══════════ Impossible crate ══════════
+   100 coins a spin, 1x / 3x / 5x only, no skipping. Nearly every spin is a 20 coin refund. The four prizes are shop items; the database
+   rules (coins `ic` = spins, `iw/<item>` = prizes won) take exactly 80 coins per spin + 20 more per NEW prize, and only then accept the
+   item into crateInv. So the price, the refund and the prize list can't be changed from the browser. The odds themselves are rolled here
+   (like every other crate). The wheel is NOT drawn to scale: each prize gets a visible slice. */
+const IMP_PRICE = 100, IMP_REFUND = 20, IMP_COUNTS = [1, 3, 5], IMP_SLICE_DEG = 7;
+const IMP_PRIZES = [   // odds are a fraction: 0.0001 = 1 in 10,000 each. `at` = where its slice sits on the wheel (degrees)
+  { id: "shp-tag-kanye", odds: 0.0001, color: "#ff2fd0", at: 40 },
+  { id: "shp-tag-rich",  odds: 0.0001, color: "#22c55e", at: 130 },
+  { id: "shp-ring-rod",  odds: 0.0001, color: "#f97316", at: 220 },
+  { id: "shp-bub-ruby",  odds: 0.0001, color: "#e11d48", at: 310 }
+];
+// DEV Gold / Diamond: Impossible-tier badge cards for the people who hold those roles (given by hand in Firebase, never from a crate)
+const DEV_CARDS = [
+  { id: "dev-gold",    devCard: true, type: "tag", rar: "impossible", name: "DEV Gold",    level: 2 },
+  { id: "dev-diamond", devCard: true, type: "tag", rar: "impossible", name: "DEV Diamond", level: 3 }
+];
+function devCardOwned(c) { return devLevelOf(myLoginId) === c.level; }
+function devCollectionCard(it) {
+  const c = el("div", "cr-item r-impossible"); c.style.cursor = "default";
+  c.append(devBadgeEl(DEV_ROLES[it.level]), el("b", "", it.name), el("small", "", "Impossible \u00B7 shown automatically"));
+  return c;
+}
+let impWheel = null;
+function impRollOne() { const r = Math.random(); let acc = 0; for (const p of IMP_PRIZES) { acc += p.odds; if (r < acc) return p; } return null; }
+function buildImpossibleWheel() {
+  const slices = IMP_PRIZES.map(p => ({ p, a0: p.at - IMP_SLICE_DEG / 2, w: IMP_SLICE_DEG })).sort((a, b) => a.a0 - b.a0);
+  const gaps = slices.map((s, i) => { const end = i === slices.length - 1 ? slices[0].a0 + 360 : slices[i + 1].a0; return { a0: s.a0 + s.w, w: end - (s.a0 + s.w) }; });
+  const SIZE = 300, dpr = Math.min(2, window.devicePixelRatio || 1);
+  const wrap = el("div", "cr-wheel-wrap");
+  const cv = document.createElement("canvas"); cv.className = "cr-wheel"; cv.width = SIZE * dpr; cv.height = SIZE * dpr;
+  const ctx = cv.getContext("2d");
+  if (ctx) {
+    ctx.scale(dpr, dpr);
+    const cx = SIZE / 2, cy = SIZE / 2, R = SIZE / 2 - 4, rad = d => (d - 90) * Math.PI / 180;
+    const arc = (a0, w, fill) => { ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, rad(a0), rad(a0 + w)); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); };
+    gaps.forEach(g => {   // the refund area: dark, split into a few arcs so it still looks like a wheel
+      const parts = 4;
+      for (let k = 0; k < parts; k++) arc(g.a0 + g.w * k / parts, g.w / parts, k % 2 ? "#16213a" : "#1f2d4d");
+      const mid = g.a0 + g.w / 2;
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(rad(mid) + Math.PI / 2); ctx.fillStyle = "#64748b"; ctx.font = "700 15px sans-serif"; ctx.textAlign = "center";
+      ctx.fillText("+" + IMP_REFUND, 0, -R * 0.66); ctx.restore();
+    });
+    slices.forEach(s => {
+      arc(s.a0, s.w, s.p.color);
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, rad(s.a0), rad(s.a0 + s.w)); ctx.closePath(); ctx.lineWidth = 1.5; ctx.strokeStyle = "#fff"; ctx.stroke();
+    });
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.lineWidth = 4; ctx.strokeStyle = "#0b1220"; ctx.stroke();
+  }
+  wrap.append(cv, el("div", "cr-pointer"), el("div", "cr-hub", "\u267E\uFE0F"));
+  let rot = Math.random() * 360;
+  cv.style.transform = "rotate(" + rot + "deg)";
+  const spinTo = (prize, ms) => {   // prize = an IMP_PRIZES entry, or null to land in the refund area
+    let target;
+    if (prize) { const s = slices.find(x => x.p === prize); target = s.a0 + s.w * (0.2 + Math.random() * 0.6); }
+    else { const g = gaps[Math.floor(Math.random() * gaps.length)]; target = g.a0 + g.w * (0.15 + Math.random() * 0.7); }
+    const need = (((-target - rot) % 360) + 360) % 360;
+    rot += 360 * 5 + need;
+    cv.style.transition = "transform " + ms + "ms cubic-bezier(.12,.62,.08,1)";
+    cv.style.transform = "rotate(" + rot + "deg)";
+  };
+  return { wrap, spinTo };
+}
+function paintImpossible(box) {
+  if (crateReveal) { box.appendChild(crateReveal); return; }
+  ensureCoinWatch();
+  box.appendChild(el("h3", "cr-h", "\u267E\uFE0F Impossible crate"));
+  const bal = el("div", "cr-inv"); bal.append(el("span", "cr-inv-ic", "\uD83E\uDE99"), el("b", "", (myCoins === null ? "\u2026" : String(myCoins)) + (myCoins === 1 ? " coin" : " coins")));
+  box.appendChild(bal);
+  box.appendChild(el("div", "cr-note", "\u201CImpossible\u201D costs " + IMP_PRICE + " coins a spin. Almost every spin lands on nothing and pays " + IMP_REFUND + " coins back. The prizes are the rarest items in the game."));
+  if (!impWheel) impWheel = buildImpossibleWheel();
+  const holder = el("div", "cr-shake"); holder.appendChild(impWheel.wrap); box.appendChild(holder);
+  const odds = el("div", "imp-odds");
+  IMP_PRIZES.forEach(p => {
+    const it = ITEM_BY_ID[p.id]; if (!it) return;
+    const row = el("div", "imp-row" + (crateOwned.has(p.id) ? " own" : ""));
+    const dot = el("i", "cr-dot"); dot.style.background = p.color;
+    row.append(dot, el("span", "cr-side-n", it.name), el("b", "", "1 in " + Math.round(1 / p.odds).toLocaleString() + " (" + fmtPct(p.odds * 100) + ")"));
+    odds.appendChild(row);
+  });
+  box.appendChild(odds);
+  box.appendChild(el("div", "cr-note", "Nothing: everything else, " + IMP_REFUND + " coins back. The wheel is not to scale: each prize is drawn bigger than its real chance so you can see it. A prize you already own counts as nothing (" + IMP_REFUND + " coins back). Every spin plays out in full: no skipping."));
+  const row = el("div", "shop-buys");
+  IMP_COUNTS.forEach(n => {
+    const cost = n * IMP_PRICE;
+    const b = el("button", "cr-count-b", "Spin " + n + "\u00D7 \u00B7 " + cost + " \uD83E\uDE99"); b.type = "button";
+    b.disabled = crateBusy || !myLoginId || myCoins === null || myCoins < cost;
+    b.addEventListener("click", () => openImpossible(n));
+    row.appendChild(b);
+  });
+  box.appendChild(row);
+}
+async function settleImpossibleWins() {   // won (coins iw/<item> = 1) but not in the inventory yet
+  if (!myLoginId || !ChatBackend._db) return 0;
+  const id = String(myLoginId), db = ChatBackend._db;
+  const [iw, inv] = await Promise.all([db.ref("coins/" + id + "/iw").get(), db.ref("crateInv/" + id + "/items").get()]);
+  const have = inv.val() || {};
+  let given = 0;
+  for (const k of Object.keys(iw.val() || {})) {
+    if (!/^shp-/.test(k) || !itemOf(k) || have[k]) continue;
+    await db.ref("crateInv/" + id + "/items/" + k).set(firebase.database.ServerValue.TIMESTAMP);
+    given++;
+  }
+  return given;
+}
+async function openImpossible(count) {
+  if (crateBusy || !IMP_COUNTS.includes(count) || !myLoginId || !ChatBackend._db) return;
+  crateBusy = true;
+  let res = null;
+  try {
+    const db = ChatBackend._db, id = String(myLoginId), ref = db.ref("coins/" + id);
+    await settleImpossibleWins().catch(() => {});
+    const raw = []; for (let i = 0; i < count; i++) raw.push(impRollOne());   // rolled once, before any money moves
+    for (let attempt = 0; attempt < 3 && !res; attempt++) {
+      const rec = (await ref.get()).val() || {}, have = Number(rec.n) || 0;   // re-read each try: a message coin may have changed the balance
+      if (have < IMP_PRICE * count) throw new Error("You need " + (IMP_PRICE * count) + " coins. You have " + have + ".");
+      const taken = new Set();
+      const spins = raw.map(p => {
+        if (!p) return { p: null, win: false };
+        const dup = crateOwned.has(p.id) || !!(rec.iw && rec.iw[p.id]) || !!(rec.sh && rec.sh[p.id]) || taken.has(p.id);
+        if (!dup) taken.add(p.id);
+        return { p, win: !dup };
+      });
+      const W = taken.size, cost = (IMP_PRICE - IMP_REFUND) * count + IMP_REFUND * W;   // pay 100 a spin, refund 20 for every spin without a new prize
+      const upd = { n: have - cost, ic: (Number(rec.ic) || 0) + count };
+      taken.forEach(k => { upd["iw/" + k] = 1; });
+      try { await ref.update(upd); res = { spins, W, cost }; }
+      catch (e1) { if (!isPermissionDenied(e1) || attempt >= 2) throw e1; await annSleep(400); }
+    }
+  } catch (e) {
+    crateBusy = false; paintCrateModal();
+    showComposerNotice(isPermissionDenied(e) ? "The Impossible crate needs the updated database rules. Publish the new chat rules." : ((e && e.message) || "Couldn't open the crate \u2014 check your connection."));
+    return;
+  }
+  // paid. From here nothing can be lost: any prize is delivered by settleImpossibleWins (also on the next login).
+  const wheel = buildImpossibleWheel();
+  const status = el("div", "cr-note", "Spinning\u2026"), tray = count > 1 ? el("div", "cr-tray") : null;
+  const spinBox = el("div", "cr-shake"); spinBox.append(wheel.wrap, status); if (tray) spinBox.appendChild(tray);
+  crateReveal = spinBox; paintCrateModal();
+  await annSleep(400);
+  const PER = count === 1 ? 5200 : 3200;
+  for (let n = 0; n < res.spins.length; n++) {
+    const s = res.spins[n];
+    status.textContent = count > 1 ? "Spin " + (n + 1) + " of " + count + "\u2026" : "Spinning\u2026";
+    wheel.spinTo(s.p, PER);
+    await annSleep(PER + 250);
+    if (tray) {
+      const chip = el("span", "cr-chip" + (s.win ? " r-" + ITEM_BY_ID[s.p.id].rar : " dud"), s.p ? ITEM_BY_ID[s.p.id].name : "+" + IMP_REFUND);
+      if (s.win) { chip.style.color = s.p.color; chip.style.borderColor = s.p.color; }
+      tray.appendChild(chip);
+    }
+    if (s.p) { status.textContent = s.win ? "\uD83C\uDF89 " + ITEM_BY_ID[s.p.id].name + "!" : "You already own " + ITEM_BY_ID[s.p.id].name + " \u2014 " + IMP_REFUND + " coins back."; await annSleep(1300); }
+  }
+  let delivered = true;
+  try { await settleImpossibleWins(); } catch (e) { try { await annSleep(700); await settleImpossibleWins(); } catch (e2) { delivered = false; } }
+  const wins = res.spins.filter(s => s.win).map(s => ITEM_BY_ID[s.p.id]);
+  const done = el("div", "cr-shake");
+  done.appendChild(wheel.wrap);
+  if (tray) done.appendChild(tray);
+  if (wins.length) {
+    done.appendChild(el("h3", "cr-h", "\uD83C\uDF89 IMPOSSIBLE!"));
+    wins.forEach(it => done.appendChild(revealCard(it, "You got", delivered ? "Open the Collection tab to equip it." : "It's paid for and will be delivered the next time the chat connects.")));
+  }
+  const back = (count - res.W) * IMP_REFUND;
+  done.appendChild(el("div", "cr-note", (wins.length ? "" : "Nothing this time. ") + "Spent " + (count * IMP_PRICE) + " coins" + (back ? ", " + back + " coins back" : "") + " (net \u2212" + res.cost + ")."));
+  const again = el("button", "pm-go", "Back"); again.type = "button"; again.addEventListener("click", () => { crateReveal = null; paintCrateModal(); });
+  done.appendChild(again);
+  crateReveal = done; crateBusy = false; paintCrateModal();
+}
+
 const LOADED_ID = "tag-loaded", LOADED_PRICE = 1000;
 async function settleLoadedTag() {   // paid for (ld = 1) but not in the inventory yet
   if (!myLoginId || !ChatBackend._db) return false;
@@ -11060,7 +11237,7 @@ async function openInventoryOf(loginId, name) {
   body.appendChild(el("div", "uinv-sec", "\uD83D\uDDC2\uFE0F Collection \u00B7 " + owned.size + " / " + count));
   previewNameOverride = name || "";
   try {
-    const order = { legendary: 0, epic: 1, rare: 2, common: 3 };
+    const order = { impossible: -1, legendary: 0, epic: 1, rare: 2, common: 3 };
     let any = false;
     [["ring", "Rings"], ["tag", "Tags"], ["fx", "Text effects"], ["font", "Fonts"], ["bub", "Bubbles"]].forEach(([k, title]) => {
       const list = CRATE_ITEMS.filter(i => i.type === k && owned.has(i.id)).sort((a, b) => (a.season ? 1 : 0) - (b.season ? 1 : 0) || order[a.rar] - order[b.rar]);
