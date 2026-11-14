@@ -687,7 +687,7 @@ const ChatBackend = {
   },
 
   watchMessages(onMessage) {
-    if (window.VUS_LOADQ) window.VUS_LOADQ.startSoon(2500);   // background loading starts once the main chat has had its turn
+    if (window.VUS_LOADQ) window.VUS_LOADQ.startSoon(chatPrefs.chatFirst === false ? 1 : 2500);   // background loading starts once the main chat has had its turn (at once when Settings > Loading > Chat first is off)
     this._ref.limitToLast(MAX_MESSAGES).on("child_added", snap => {
       onMessage({ id: snap.key, ...snap.val() });
     });
@@ -1144,24 +1144,43 @@ const ChatBackend = {
     }
   },
 
-  watchPresenceCount(onCount) {
-    this._presenceRef.on("value", snap => {
+  // Presence changes are shown with a short delay when someone DISAPPEARS: if a hacker wipes the whole online list, nobody vanishes from
+  // the screen and pops back a moment later. An entry that is gone for good leaves the list after PRESENCE_GRACE_MS; one that comes
+  // back in time never leaves. New people and changes show immediately.
+  _watchPresenceGraced(onList) {
+    const PRESENCE_GRACE_MS = 3000;
+    const ref = this._presenceRef;
+    const live = () => this._presenceRef === ref;   // switched to another room: stop
+    const shown = new Map(), gone = new Map();
+    const emit = () => { if (live()) onList(Array.from(shown.values())); };
+    ref.on("value", snap => {
       const val = snap.val() || {};
-      onCount(Object.keys(val).length);
+      const now = {};
+      Object.entries(val).forEach(([key, v]) => {
+        now[key] = {
+          name: key,
+          loginId: (v && typeof v === "object" && v.loginId) ? String(v.loginId) : null,
+          joinedAt: (v && typeof v === "object") ? (v.joinedAt || null) : null,
+          afk: !!(v && typeof v === "object" && v.afk === true)
+        };
+      });
+      Object.keys(now).forEach(k => {
+        if (gone.has(k)) { clearTimeout(gone.get(k)); gone.delete(k); }
+        shown.set(k, now[k]);
+      });
+      Array.from(shown.keys()).forEach(k => {
+        if (!now[k] && !gone.has(k)) gone.set(k, setTimeout(() => { gone.delete(k); shown.delete(k); emit(); }, PRESENCE_GRACE_MS));
+      });
+      emit();
     });
   },
 
+  watchPresenceCount(onCount) {
+    this._watchPresenceGraced(list => onCount(list.length));
+  },
+
   watchPresenceList(onList) {
-    this._presenceRef.on("value", snap => {
-      const val = snap.val() || {};
-      const list = Object.entries(val).map(([key, v]) => ({
-        name: key,
-        loginId: (v && typeof v === "object" && v.loginId) ? String(v.loginId) : null,
-        joinedAt: (v && typeof v === "object") ? (v.joinedAt || null) : null,
-        afk: !!(v && typeof v === "object" && v.afk === true)
-      }));
-      onList(list);
-    });
+    this._watchPresenceGraced(onList);
   },
 
   setTyping(name) {
@@ -2116,19 +2135,117 @@ function scheduleRoleBadgeRefresh() {
 }
 
 /* Profile picture (from the account's profile in vus-dm), with the first letter as a placeholder. */
-function paintAvatar(container, loginId, name) {
-  container.textContent = (name || "?").trim().slice(0, 1).toUpperCase();
-  if (!loginId || !window.VUS_DM || !window.VUS_DM.getAvatarByLoginId) return;
-  window.VUS_DM.getAvatarByLoginId(loginId).then(url => {
-    if (!url) return;
-    const img = document.createElement("img");
-    img.src = url;
-    img.alt = "";
-    container.textContent = "";
-    container.appendChild(img);
-  }).catch(() => {});
+/* ══════════ Profile pictures: loaded last, online people first ══════════
+   A picture is a big database read, so it never competes with the chat. Until a picture arrives (or when it isn't set to load by itself)
+   the circle shows the person's first letter. Settings > Loading decides what loads on its own: pictures of ONLINE people (on by
+   default) and of OFFLINE people (off by default). Clicking someone's profile always loads theirs. One read per person however many
+   messages they have on screen, and only the picture is read (not their banner, bio and the rest of the profile). */
+const pfpUrl = new Map();      // loginId -> picture ("" = has none) once it has loaded
+const pfpWait = new Map();     // loginId -> circles waiting for that picture
+const pfpQ = [[], []];         // [online, offline]: ids waiting for their turn
+const pfpBusy = new Set();     // ids being read right now
+let pfpActive = 0, pfpGate = false, pfpGateAsked = false, pfpTimer = null, pfpHoldUntil = 0, pfpScanT = null;
+function pfpFast() { return chatPrefs.chatFirst === false; }   // Settings > Loading > Chat first (off = load everything at once)
+function pfpAllowed(online) { return online ? chatPrefs.pfpOnline !== false : chatPrefs.pfpOffline === true; }
+function isOnlineId(id) { id = String(id || ""); return !!id && (latestPresenceList || []).some(e => String(e.loginId || "") === id); }
+if (window.VUS_LOADQ && !window.VUS_LOADQ.__pfpHold) {   // sending a message or opening a DM pauses picture loading too
+  const h0 = window.VUS_LOADQ.hold;
+  window.VUS_LOADQ.__pfpHold = true;
+  window.VUS_LOADQ.hold = function (ms) { pfpHoldUntil = Math.max(pfpHoldUntil, Date.now() + (ms || 2500)); return h0.apply(this, arguments); };
 }
-function openProfileFor(loginId, name) { if (window.VUS_DM) window.VUS_DM.openChatUserProfile(loginId, name); }
+async function pfpRead(id) {
+  const db = window.VUS_DM_DB;
+  if (!db) return (window.VUS_DM && window.VUS_DM.getAvatarByLoginId) ? ((await window.VUS_DM.getAvatarByLoginId(id)) || "") : "";
+  const k = await db.ref("idIndex/" + id).get();
+  if (!k.exists()) return "";
+  const v = (await db.ref("users/" + k.val() + "/avatar").get()).val();
+  return typeof v === "string" && /^(data:image\/|https:\/\/)/.test(v) ? v : "";
+}
+function pfpShow(c, url) {
+  if (!c.isConnected) return;
+  delete c.dataset.pfpId;
+  const img = document.createElement("img");
+  img.src = url; img.alt = "";
+  c.textContent = ""; c.appendChild(img);
+}
+function pfpDone(id, url) {
+  pfpUrl.set(id, url);
+  const set = pfpWait.get(id); pfpWait.delete(id);
+  if (set) set.forEach(c => { if (url) pfpShow(c, url); else delete c.dataset.pfpId; });
+}
+function pfpAskGate() {   // picture loading only starts after the chat has had its turn (the same background queue as everything else)
+  if (pfpGate || pfpGateAsked) return;
+  pfpGateAsked = true;
+  if (pfpFast()) { pfpGate = true; return; }
+  if (window.VUS_LOADQ) window.VUS_LOADQ.add(() => { pfpGate = true; pfpKick(); });
+  else setTimeout(() => { pfpGate = true; pfpKick(); }, 3000);
+}
+function pfpKick() { if (!pfpTimer) pfpTimer = setTimeout(pfpPump, 30); }
+function pfpPump() {
+  pfpTimer = null;
+  if (!pfpGate || (!window.VUS_DM && !window.VUS_DM_DB)) return;
+  const max = pfpFast() ? 6 : 2;   // a couple at a time, so they never swamp the connection the chat uses
+  while (pfpActive < max) {
+    const wait = pfpFast() ? 0 : pfpHoldUntil - Date.now();   // you're typing / sending / opening a DM: wait
+    if (wait > 0) { pfpTimer = setTimeout(pfpPump, wait + 50); return; }
+    const id = pfpQ[0].shift() || pfpQ[1].shift();
+    if (!id) return;
+    pfpBusy.add(id); pfpActive++;
+    pfpRead(id).then(u => pfpDone(id, u || ""), () => {}).then(() => { pfpBusy.delete(id); pfpActive--; pfpKick(); });
+  }
+}
+function pfpQueue(id, prio, front) {   // prio 0 = online, 1 = offline
+  if (pfpBusy.has(id) || pfpUrl.has(id)) return;
+  const a = pfpQ[0].indexOf(id), b = pfpQ[1].indexOf(id);
+  if (a >= 0) { if (front) { pfpQ[0].splice(a, 1); pfpQ[0].unshift(id); } return; }
+  if (b >= 0) { if (prio === 0) pfpQ[1].splice(b, 1); else return; }
+  if (front) pfpQ[prio].unshift(id); else pfpQ[prio].push(id);
+  pfpAskGate(); pfpKick();
+}
+function paintAvatar(container, loginId, name, online) {
+  container.textContent = (name || "?").trim().slice(0, 1).toUpperCase();
+  if (!loginId) return;
+  const id = String(loginId);
+  if (pfpUrl.has(id)) {   // already loaded once: showing it costs nothing, whatever the settings say
+    const u = pfpUrl.get(id);
+    if (u) { const img = document.createElement("img"); img.src = u; img.alt = ""; container.textContent = ""; container.appendChild(img); }
+    return;
+  }
+  if (!window.VUS_DM && !window.VUS_DM_DB) return;
+  container.dataset.pfpId = id;   // marks a circle that is still waiting for its picture
+  let set = pfpWait.get(id);
+  if (!set) pfpWait.set(id, set = new Set());
+  if (set.size > 60) set.forEach(c => { if (!c.isConnected) set.delete(c); });
+  set.add(container);
+  const on = online === undefined ? isOnlineId(id) : !!online;
+  if (pfpAllowed(on)) pfpQueue(id, on ? 0 : 1);
+}
+function pfpRescan() {   // someone came online, or a setting changed: queue what is now allowed
+  const seen = new Set();
+  document.querySelectorAll("[data-pfp-id]").forEach(c => {
+    const id = c.dataset.pfpId;
+    if (seen.has(id)) return; seen.add(id);
+    if (pfpUrl.has(id)) { pfpDone(id, pfpUrl.get(id)); return; }
+    const on = isOnlineId(id);
+    if (pfpAllowed(on)) pfpQueue(id, on ? 0 : 1);
+  });
+}
+function pfpRescanSoon() { clearTimeout(pfpScanT); pfpScanT = setTimeout(pfpRescan, 400); }
+function pfpLoadNow(id) {   // someone opened this person's profile: theirs goes first, whatever the settings say
+  id = String(id || "");
+  if (!id) return;
+  if (pfpUrl.has(id)) { if (pfpWait.has(id)) pfpDone(id, pfpUrl.get(id)); return; }
+  if (!pfpWait.has(id)) return;
+  pfpGate = true; pfpHoldUntil = 0;
+  pfpQueue(id, 0, true); pfpKick();
+}
+function pfpLoadAllNow() {   // Settings > Loading > Load all profile pictures now (online people first)
+  pfpGate = true; pfpHoldUntil = 0;
+  const seen = new Set();
+  document.querySelectorAll("[data-pfp-id]").forEach(c => { const id = c.dataset.pfpId; if (seen.has(id)) return; seen.add(id); pfpQueue(id, isOnlineId(id) ? 0 : 1); });
+  pfpKick();
+}
+function openProfileFor(loginId, name) { try { pfpLoadNow(loginId); } catch (e) {} if (window.VUS_DM) window.VUS_DM.openChatUserProfile(loginId, name); }
 
 // Text with @mentions drawn as chips. Messages from older tabs (no markers) fall back to the single `mention` field.
 /* ══════════ Word filter ══════════
@@ -3482,6 +3599,7 @@ function showStatusCard(title, message, buttons) {
     btn.addEventListener("click", def.onClick);
     $joinCard.appendChild(btn);
   });
+  if (!myName) { $chatScreen.style.display = "none"; pendingJoinText = ""; }   // the chat is shown early while joining; a failed join goes back to this card
   $joinScreen.style.display = "flex";
 }
 
@@ -3568,6 +3686,7 @@ function renderNicknamePrompt(session, message) {
      account that no longer validates (deleted/changed), or a fresh browser.
    ══════════════════════════════════════════════════════════ */
 let chatJoinInFlight = false;
+let pendingJoinText = "";   // a message typed while the join was still finishing; sent the moment it completes
 let roomListenersLive = false;
 async function autoLoginOrPrompt() {
   if (chatJoinInFlight || myName) return;
@@ -3577,14 +3696,16 @@ async function autoLoginOrPrompt() {
   chatJoinInFlight = true;
   try {
     if (!roomListenersLive) { attachRoomListeners(); roomListenersLive = true; }
-    showStatusCard("Joining chat…", "");
+    // Show the chat straight away so it can be read (and typed in) while the join finishes in the background.
+    $joinScreen.style.display = "none"; $chatScreen.style.display = "flex";
+    $msgInput.disabled = false; $sendBtn.disabled = false; $msgInput.placeholder = "Joining... you can type now";
     // On a plain page refresh, our previous tab's presence can linger for a
     // second or two before onDisconnect clears it. Wait it out once rather
     // than bouncing the person to an error on every refresh.
     // Leaving the site and coming back leaves a ghost entry until the old connection times
     // out, so give it a few seconds to clear before offering "Join from this tab".
-    for (let i = 0; i < 12 && (await ChatBackend.isAccountOnline(session.id)); i++) {   // checks every half second and goes in the moment the old entry clears (still waits at most about 6 seconds)
-      await new Promise(r => setTimeout(r, 500));
+    for (let i = 0; i < 24 && (await ChatBackend.isAccountOnline(session.id)); i++) {   // checks four times a second and goes in the moment the old entry clears (still waits at most about 6 seconds)
+      await new Promise(r => setTimeout(r, 250));
     }
     await joinWithDmSession(session, session.username);
   } catch (e) {
@@ -3717,6 +3838,7 @@ async function joinWithDmSession(session, nickname) {
   safely("notifications", requestNotificationPermissionIfNeeded);
   safely("composer state", () => { updateComposerLockState(); updateUploadButtonVisibility(); });
   safely("focus", () => { $msgInput.focus(); scrollToBottom(); });
+  safely("send held message", () => { if (pendingJoinText) { const held = pendingJoinText; pendingJoinText = ""; $msgInput.value = held; sendMessage(); } });
 }
 
 // Keeps image access + rank live for this ID (someone can grant/revoke while
@@ -4580,7 +4702,10 @@ async function handleModerationCommand(text) {
 async function sendMessage() {
   try { if (window.VUS_LOADQ && window.VUS_LOADQ.hold) window.VUS_LOADQ.hold(4000); } catch (e) {}   // your message goes first; queued background loading waits a moment
   const text = $msgInput.value.trim();
-
+  if (!myName) {   // still joining: hold the message and send it the moment the join finishes
+    if (text) { pendingJoinText = text; $msgInput.value = ""; autosizeInput(); updateCharCounter(); showComposerNotice("Joining chat... your message will send in a moment."); }
+    return;
+  }
   // Moderation commands must run before timeout and send-cooldown guards so
   // an Owner/Admin can always issue them and receives a useful response.
   if (await handleModerationCommand(text)) {
@@ -5245,6 +5370,18 @@ function renderChatSettings(container) {
    ["Text effects", "Animated and gradient text effects", "showTextFx"],
    ["Avatar rings", "Rings around profile pictures", "showRings"]
   ].forEach(([lbl, hint, key]) => toggle("Show " + lbl.toLowerCase(), hint + ". Turn off to see plain names and bubbles.", () => chatPrefs[key] !== false, v => { chatPrefs[key] = v; saveChatPrefs(); applyAppearance(); }));
+  card("\u26A1", "Loading", "What loads first, and what waits until you ask");
+  toggle("Chat first", "Loads the chat and lets you send messages before anything else; everything else loads in the background after it. Turn off to load everything at once.", () => chatPrefs.chatFirst !== false, v => { chatPrefs.chatFirst = v; saveChatPrefs(); });
+  toggle("Pictures of online people", "Loads the profile pictures of people who are online, after the chat. Until then (and for everyone else) the circle shows their first letter.", () => chatPrefs.pfpOnline !== false, v => { chatPrefs.pfpOnline = v; saveChatPrefs(); pfpRescanSoon(); });
+  toggle("Pictures of offline people", "Also loads pictures of people who are offline, after the online ones. Off by default: opening someone's profile always loads theirs.", () => chatPrefs.pfpOffline === true, v => { chatPrefs.pfpOffline = v; saveChatPrefs(); pfpRescanSoon(); });
+  toggle("Inventory and Lists data", "Loads in the background after the chat. Off: it loads the first time you open Inventory or Lists.", () => chatPrefs.ldInv !== false, v => { chatPrefs.ldInv = v; saveChatPrefs(); if (v) ensureInvLoaded(); });
+  toggle("What members are listening to", "The song line under names in the online list. Off saves a live connection for every person online.", () => chatPrefs.ldSongs !== false, v => { chatPrefs.ldSongs = v; saveChatPrefs(); scheduleMembersRender(); });
+  {
+    const lb = document.createElement("button");
+    lb.type = "button"; lb.className = "cs-action"; lb.textContent = "Load all profile pictures now";
+    lb.addEventListener("click", (e) => { e.stopPropagation(); pfpLoadAllNow(); lb.textContent = "Loading pictures\u2026"; setTimeout(() => { lb.textContent = "Load all profile pictures now"; }, 2500); });
+    host.appendChild(lb);
+  }
   card("\uD83E\uDDF0", "Tools", "Quick actions");
 
   const action = (label, onClick, danger) => {
@@ -5767,6 +5904,10 @@ function loginIdForName(name) {
 }
 const PROTECTION_EMOJI = "⚕️";
 let inventoryData = {}; // loginId -> { itemId: quantity }, kept live from the database
+let invWatchStarted = false, listsPreloaded = false;
+function startInvWatch() { if (invWatchStarted || !ChatBackend._db) return; invWatchStarted = true; ChatBackend.watchInventory(data => { inventoryData = data; if ($inventoryOverlay.style.display === "flex") renderInventory(); }); }
+function preloadListsOnce() { if (listsPreloaded) return; listsPreloaded = true; preloadLists(); }
+function ensureInvLoaded() { startInvWatch(); preloadListsOnce(); }   // safe to call any time; does nothing once loaded
 function isProtected(loginId) {
   return !!(loginId && Number((inventoryData[String(loginId)] || {}).protection) > 0);
 }
@@ -5894,7 +6035,7 @@ function renderInventory() {
     $inventoryList.appendChild(row);
   });
 }
-document.getElementById("inventoryBtn").addEventListener("click", () => { renderInventory(); $inventoryOverlay.style.display = "flex"; });
+document.getElementById("inventoryBtn").addEventListener("click", () => { ensureInvLoaded(); renderInventory(); $inventoryOverlay.style.display = "flex"; });
 document.getElementById("inventoryCloseBtn").addEventListener("click", () => { $inventoryOverlay.style.display = "none"; });
 $inventoryOverlay.addEventListener("click", e => { if (e.target === $inventoryOverlay) $inventoryOverlay.style.display = "none"; });
 
@@ -8774,7 +8915,7 @@ function renderMembersPane() {
     wrap.className = "member-av-wrap";
     const av = document.createElement("div");
     av.className = "member-av";
-    paintAvatar(av, p.id, p.name);
+    paintAvatar(av, p.id, p.name, p.online);
     wrap.appendChild(av);
     if (p.online) {
       const dot = document.createElement("div");
@@ -8796,7 +8937,7 @@ function renderMembersPane() {
       if (cos.font) applyNameFont(nameEl, cos.font);
       if (cos.fx) { nameEl.dataset.fx = cos.fx; wrapFx(nameEl); }
     }
-    if (p.online && p.id && window.VUS_DM && window.VUS_DM.watchSongByLoginId) {
+    if (p.online && p.id && chatPrefs.ldSongs !== false && window.VUS_DM && window.VUS_DM.watchSongByLoginId) {   // Settings > Loading can switch the per-person song connections off
       const songEl = document.createElement("div");
       songEl.className = "member-song";
       songEl.style.display = "none";
@@ -8812,7 +8953,7 @@ function renderMembersPane() {
     row.appendChild(wrap);
     row.appendChild(textEl);
     if (p.id) {
-      row.addEventListener("click", () => { if (window.VUS_DM) window.VUS_DM.openChatUserProfile(p.id, p.name); });
+      row.addEventListener("click", () => { try { pfpLoadNow(p.id); } catch (e) {} if (window.VUS_DM) window.VUS_DM.openChatUserProfile(p.id, p.name); });
     }
     frag.appendChild(row);
   });
@@ -8857,6 +8998,7 @@ function attachRoomListeners() {
     latestPresenceList = list;
     rebuildRoleHolders();
     renderMembersPane();
+    pfpRescanSoon();   // people who just came online get their picture loaded
     if ($onlineListPanel.style.display === "block") renderOnlineListPanel();
     refreshMentionDropdownIfOpen();
     checkSoleSurvivorAutoOwnership(list);
@@ -8954,9 +9096,10 @@ function bootChat() {
   ChatBackend.watchAllBans((id, val) => { if (val) bansAll[id] = val; else delete bansAll[id]; refreshSilencedMessages(); });
   // The whole inventory tree is only needed for protection checks (the database rules check those too) and the Inventory window,
   // so it, and the Lists panel data, load after the chat has had its turn instead of competing with your first message.
-  { const startInv = () => ChatBackend.watchInventory(data => { inventoryData = data; if ($inventoryOverlay.style.display === "flex") renderInventory(); });
-    if (window.VUS_LOADQ) { window.VUS_LOADQ.add(startInv); window.VUS_LOADQ.add(preloadLists); }
-    else { setTimeout(startInv, 3000); setTimeout(preloadLists, 6000); } }
+  // Settings > Loading > "Inventory and Lists data": when it's off, these wait until Inventory or Lists is first opened (ensureInvLoaded).
+  if (chatPrefs.ldInv === false) { /* loads on first open */ }
+  else if (window.VUS_LOADQ) { window.VUS_LOADQ.add(startInvWatch); window.VUS_LOADQ.add(preloadListsOnce); }
+  else { setTimeout(startInvWatch, 3000); setTimeout(preloadListsOnce, 6000); }
   watchPublicRoomsList();
   restoreSidebarRoomList();
   openRoomsSidebar();
@@ -9461,6 +9604,8 @@ const CRATE_ITEMS = [
   { id: "tag-ascended", type: "tag", rar: "legendary", name: "Ascended" },
   { id: "tag-legend",  type: "tag", rar: "legendary", name: "Legend" },
   { id: "tag-goat",    type: "tag", rar: "legendary", name: "G.O.A.T." },
+  // Firebase-only (fb: true): never in a crate and never in the shop. Added to someone's inventory by hand in the database (crateInv/<id>/items/tag-special).
+  { id: "tag-special", type: "tag", rar: "legendary", name: "Special", fb: true },
   // Shop-only (1000 coins in the Shop, never from a crate): a shiny gold tag
   { id: "tag-loaded",  type: "tag", rar: "legendary", name: "Loaded 💰", shop: true, price: 1000, legacy: true, blurb: "A shiny gold tag. Only sold here, never found in crates." },
   // ── Shop-only items (never in a crate). Ids start with "shp-". The price list lives in the database rules too (coins → sh), so a new
@@ -9929,7 +10074,7 @@ function paintOpen(box) {
 // ── true odds: the weight of a rarity is split evenly between the items of that rarity in the crate ──
 function cratePool(type) {
   if (type === "season") { const a = activeSeason(); return a ? CRATE_ITEMS.filter(i => i.season === a.id) : []; }
-  return CRATE_ITEMS.filter(i => !i.season && !i.shop && (type === "mixed" || i.type === type));
+  return CRATE_ITEMS.filter(i => !i.season && !i.shop && !i.fb && (type === "mixed" || i.type === type));
 }
 function crateChance(it, pool) { return RARITY[it.rar].weight / pool.filter(i => i.rar === it.rar).length; }
 // chance that opening this crate ends with something you don't own yet (up to 4 rolls, 50% retry on a duplicate)
@@ -10135,7 +10280,7 @@ function paintCollection(box) {
   const tabs = el("div", "cr-subtabs");
   const act = activeSeason();
   // a seasonal item shows up while its season runs, or once you own it (past seasons you missed stay hidden)
-  const shown = i => (!i.season && !i.shop) || crateOwned.has(i.id) || (act && act.id === i.season);   // shop-only items appear once you own them
+  const shown = i => (!i.season && !i.shop && !i.fb) || crateOwned.has(i.id) || (act && act.id === i.season);   // shop-only items appear once you own them
   [["ring", "Rings"], ["tag", "Tags"], ["fx", "Text effects"], ["font", "Fonts"], ["bub", "Bubbles"]].forEach(([k, t]) => {
     const own = CRATE_ITEMS.filter(i => i.type === k && shown(i) && crateOwned.has(i.id)).length, all = CRATE_ITEMS.filter(i => i.type === k && shown(i)).length;
     const b = el("button", "cr-subtab" + (collectionType === k ? " on" : ""), t + " " + own + "/" + all); b.type = "button";
@@ -10223,7 +10368,7 @@ async function equipItemLegacyUnused(it, on) {
    who is really behind an ID (the chat has no Firebase login), so see the notes about impersonation. */
 const SHOP_CRATE_PRICE = 50;
 const COIN_GAP_MS = 2000;
-const COIN_WINDOW_MS = 6 * 60 * 60 * 1000, COIN_WINDOW_MAX = 200;   // at most 200 message coins per fixed 6-hour block (00:00, 06:00, 12:00, 18:00 UTC); the database rules enforce the same numbers
+const COIN_WINDOW_MS = 60 * 60 * 1000, COIN_WINDOW_MAX = 500;   // at most 500 message coins per fixed 1-hour block (on the hour, UTC); the database rules enforce the same numbers
 let myCoins = null, myCoinRec = null, coinWatchId = "", coinWatchRef = null, coinBusy = false;
 function ensureCoinWatch() {
   const id = myLoginId ? String(myLoginId) : "";
@@ -10257,7 +10402,7 @@ function coinClaim(room, mid, data) {
   const nowS = ChatBackend.serverNowSync();
   if (nowS - (Number(rec.last) || 0) < COIN_GAP_MS) return;   // too soon: the database would refuse it
   const win = Math.floor(nowS / COIN_WINDOW_MS), used = Number(rec.bw) === win ? (Number(rec.bc) || 0) : 0;
-  if (used >= COIN_WINDOW_MAX) return;   // this 6-hour block's coins are used up; the next block starts on its own
+  if (used >= COIN_WINDOW_MAX) return;   // this hour's coins are used up; the next hour starts on its own
   coinBusy = true;
   ChatBackend._db.ref("coins/" + myLoginId).update({ n: (Number(rec.n) || 0) + 1, bw: win, bc: used + 1, last: firebase.database.ServerValue.TIMESTAMP, mid: String(mid), room: String(room) })
     .catch(() => {}).then(() => { coinBusy = false; });
@@ -10549,9 +10694,7 @@ async function buyShop(item, qty) {
 const COMMUNITY_RULES = [
   "No hate speech, racism, or hate against religions.",
   "No spamming.",
-  "No begging for ranks or crates.",
-  "No doxxing",
-  "again NO BEGGING FOR RANKS gyad dayum"
+  "No begging for ranks or crates."
 ];
 let rulesModal = null;
 function openRules() {
@@ -10663,6 +10806,7 @@ async function paintActiveTab(note, list, ov) {
   }
 }
 function openLists(tab) {
+  ensureInvLoaded();
   tab = tab === "active" ? "active" : "verified";
   if (listsModal) return;
   const ov = el("div", "crate-overlay"), box = el("div", "crate-modal rep-modal");
@@ -10809,7 +10953,7 @@ function pvName() { return previewNameOverride || myName; }   // item previews s
 async function openInventoryOf(loginId, name) {
   loginId = String(loginId || "");
   if (!/^\d{4,12}$/.test(loginId) || !ChatBackend._db) return;
-  if (myLoginId && loginId === String(myLoginId)) { renderInventory(); $inventoryOverlay.style.display = "flex"; return; }   // your own: the normal screen
+  if (myLoginId && loginId === String(myLoginId)) { ensureInvLoaded(); renderInventory(); $inventoryOverlay.style.display = "flex"; return; }   // your own: the normal screen
   if (!userInvOverlay) {
     userInvOverlay = el("div", "chat-modal-overlay");
     userInvOverlay.addEventListener("click", e => { if (e.target === userInvOverlay) userInvOverlay.style.display = "none"; });
@@ -10824,10 +10968,11 @@ async function openInventoryOf(loginId, name) {
   box.append(head, body);
   userInvOverlay.replaceChildren(box);
   userInvOverlay.style.display = "flex";
-  let inv, items, claim, prof;
+  let inv, coinN, items, claim, prof;
   try {
-    [inv, items, claim, prof] = await Promise.all([
+    [inv, coinN, items, claim, prof] = await Promise.all([
       ChatBackend._db.ref("inventory/" + loginId).get().then(s => s.val() || {}),
+      ChatBackend._db.ref("coins/" + loginId + "/n").get().then(s => Number(s.val()) || 0).catch(() => 0),
       ChatBackend._db.ref("crateInv/" + loginId + "/items").get().then(s => s.val() || {}),
       ChatBackend._db.ref("crateClaims/" + loginId).get().then(s => s.val() || {}),
       ChatBackend.getProfile(loginId).catch(() => null)
@@ -10838,6 +10983,7 @@ async function openInventoryOf(loginId, name) {
   const cos = (prof && prof.cosm) || {};
   // 1. inventory: unopened crates, then items
   body.appendChild(el("div", "uinv-sec", "\uD83C\uDF92 Inventory"));
+  { const cr = el("div", "room-member-row"); cr.append(el("span", "room-member-name", "\uD83E\uDE99 Coins"), el("span", "", Number(coinN).toLocaleString())); body.appendChild(cr); }
   const stock = Math.max(0, (Number(claim.n) || 0) - (Number(claim.o) || 0));
   const rows = Object.entries(inv).filter(([, q]) => Number(q) > 0);
   if (stock > 0) { const r = el("div", "room-member-row"); r.append(el("span", "room-member-name", "\uD83D\uDCE6 Crates"), el("span", "", "\u00D7" + stock)); body.appendChild(r); }
@@ -10850,7 +10996,7 @@ async function openInventoryOf(loginId, name) {
   if (!stock && !rows.length) body.appendChild(el("div", "rooms-empty", "No items"));
   // 2. collection: everything they own, grouped by kind, with what they have equipped marked
   const owned = new Set(Object.keys(items).filter(k => itemOf(k)));
-  const count = CRATE_ITEMS.filter(i => (!i.season && !i.shop) || owned.has(i.id)).length;
+  const count = CRATE_ITEMS.filter(i => (!i.season && !i.shop && !i.fb) || owned.has(i.id)).length;
   body.appendChild(el("div", "uinv-sec", "\uD83D\uDDC2\uFE0F Collection \u00B7 " + owned.size + " / " + count));
   previewNameOverride = name || "";
   try {
@@ -10860,7 +11006,7 @@ async function openInventoryOf(loginId, name) {
       const list = CRATE_ITEMS.filter(i => i.type === k && owned.has(i.id)).sort((a, b) => (a.season ? 1 : 0) - (b.season ? 1 : 0) || order[a.rar] - order[b.rar]);
       if (!list.length) return;
       any = true;
-      body.appendChild(el("div", "uinv-sub", title + " " + list.length + "/" + CRATE_ITEMS.filter(i => i.type === k && ((!i.season && !i.shop) || owned.has(i.id))).length));
+      body.appendChild(el("div", "uinv-sub", title + " " + list.length + "/" + CRATE_ITEMS.filter(i => i.type === k && ((!i.season && !i.shop && !i.fb) || owned.has(i.id))).length));
       const grid = el("div", "cr-grid");
       list.forEach(it => {
         const isFont = it.type === "font", onName = cos.font === it.id, onText = cos.tfont === it.id;
@@ -10881,6 +11027,11 @@ async function openInventoryOf(loginId, name) {
 (function wireMembersToggle() {
   const b = document.getElementById("membersToggleBtn");
   if (!b) return;
+  // Dock the button on the edge of the online list (it used to sit up in the header, far from it) so it reads as that list's opener/closer.
+  document.body.appendChild(b); b.classList.add("dock");
+  const label = () => { const hidden = document.body.classList.contains("hide-members"); b.textContent = hidden ? "\u25C0 Show online list" : "Hide online list \u25B6"; b.title = hidden ? "Show the online list" : "Hide the online list"; };
+  label();
+  new MutationObserver(label).observe(document.body, { attributes: true, attributeFilter: ["class"] });
   b.addEventListener("click", () => { chatPrefs.hideMembers = !(chatPrefs.hideMembers === true); saveChatPrefs(); applyAppearance(); });
 })();
 

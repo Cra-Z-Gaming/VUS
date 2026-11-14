@@ -354,6 +354,7 @@ async function cancelOutgoingRequest(toAccountKey) {
 }
 
 async function unfriend(otherAccountKey) {
+  if (getRelationshipStatus(otherAccountKey) !== "friends") return { ok: false, error: "You're not friends with this person." };
   if (!currentSession) return { ok: false, error: "Not logged in." };
   const updates = {};
   updates["users/" + currentSession.accountKey + "/friends/" + otherAccountKey] = null;
@@ -1498,6 +1499,99 @@ $tabChatRoom.addEventListener("click", () => closeDmSidebar());
 $tabChats.addEventListener("click", () => openDmSidebar("chats"));
 $tabFind.addEventListener("click", () => openDmSidebar(uiMode === "dm" && dmSidebarView === "find" ? "chats" : "find"));
 $tabBlocked.addEventListener("click", () => openDmSidebar(uiMode === "dm" && dmSidebarView === "blocked" ? "chats" : "blocked"));
+
+/* ── Parallel lists: double-click the DM icon to swap the open chat for Pinned | Groups | Friends | Other chats side by side,
+   each with its own search bar. The left list also gets one search bar that filters all of its sections. Double-click again to go back. ── */
+(function parallelDmLists() {
+  const view = document.getElementById("viewChats"), chatPane = document.getElementById("chatPane");
+  if (!view || !chatPane) return;
+  const css = document.createElement("style");
+  css.textContent = "#dmParallel{display:none;flex:1;min-width:0;min-height:0;gap:10px;padding:12px;background:#0f172a;overflow:hidden}" +
+    "#appShell.mode-dm.parallel-open #dmParallel{display:flex}#appShell.mode-dm.parallel-open #chatPane{display:none !important}" +
+    ".pcol{flex:1;min-width:0;display:flex;flex-direction:column;background:#111827;border:1px solid #1f2937;border-radius:12px;overflow:hidden}" +
+    ".pcol-h{padding:10px 12px 6px;font-weight:700;color:#e2e8f0}" +
+    ".pcol-s{margin:0 10px 8px;padding:7px 9px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:13px;outline:none}" +
+    ".pcol-b{flex:1;min-height:0;overflow-y:auto}.pcol-empty{padding:12px;color:#64748b;font-size:13px}" +
+    ".dm-left-search{display:block;margin:8px 10px;width:calc(100% - 20px);box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:14px;outline:none}";
+  document.head.appendChild(css);
+
+  const me = () => (currentSession ? currentSession.accountKey : "");
+  const friendsOf = () => Object.entries((currentUserData && currentUserData.friends) || {});
+  const cols = [
+    { title: "Pinned", q: "", items() {
+      const out = [];
+      myGroupChats.forEach(gc => { const v = pinValue(true, gc.gcId); if (v) out.push({ v, name: gc.name, build: () => buildDmRow(groupRowOpts(gc, true)) }); });
+      friendsOf().forEach(([k, d]) => { const v = pinValue(false, k); if (v) out.push({ v, name: d.username, build: () => buildDmRow(friendRowOpts(k, d, true)) }); });
+      return out.sort((a, b) => b.v - a.v);
+    } },
+    { title: "Groups", q: "", items() {
+      return myGroupChats.slice().sort((a, b) => byRecent(a.gcId, b.gcId, a.name, b.name))
+        .map(gc => ({ name: gc.name, build: () => buildDmRow(groupRowOpts(gc, isPinned(true, gc.gcId))) }));
+    } },
+    { title: "Friends", q: "", items() {
+      return friendsOf().sort(([ka, a], [kb, b]) => byRecent(threadIdFor(me(), ka), threadIdFor(me(), kb), a.username, b.username))
+        .map(([k, d]) => ({ name: d.username, build: () => buildDmRow(friendRowOpts(k, d, isPinned(false, k))) }));
+    } },
+    { title: "Other chats", q: "", items() {
+      return otherChatKeys.filter(o => otherChatNames[o.other]).map(({ key, other }) => {
+        const name = otherChatNames[other];
+        return { name, build: () => buildDmRow({ name, avatarKey: other, isGroup: false, threadKey: key, pinned: false, selected: openChatAccountKey === other,
+          sub: getRelationshipStatus(other) === "outgoing" ? "friend request sent" : "not friends",
+          open: () => openChatWith(other, name), menu: () => otherMenuItems(key, other, name) }) };
+      });
+    } }
+  ];
+
+  const host = document.createElement("div"); host.id = "dmParallel";
+  cols.forEach(c => {
+    const col = document.createElement("div"); col.className = "pcol";
+    const hd = document.createElement("div"); hd.className = "pcol-h"; hd.textContent = c.title;
+    const inp = document.createElement("input"); inp.type = "text"; inp.className = "pcol-s"; inp.placeholder = "Search " + c.title.toLowerCase() + "..."; inp.autocomplete = "off";
+    c.body = document.createElement("div"); c.body.className = "pcol-b";
+    inp.addEventListener("input", () => { c.q = inp.value.trim().toLowerCase(); fillCol(c); });
+    col.append(hd, inp, c.body); host.appendChild(col);
+  });
+  chatPane.parentNode.insertBefore(host, chatPane);
+
+  function fillCol(c) {
+    c.body.innerHTML = "";
+    let list = [];
+    try { list = c.items().filter(i => !c.q || String(i.name || "").toLowerCase().includes(c.q)); } catch (e) { list = []; }
+    if (!list.length) { const e = document.createElement("div"); e.className = "pcol-empty"; e.textContent = c.q ? "No matches." : "Nothing here yet."; c.body.appendChild(e); return; }
+    list.forEach(i => c.body.appendChild(i.build()));
+  }
+  const isOpen = () => $appShell.classList.contains("parallel-open");
+  const renderAll = () => { if (isOpen()) cols.forEach(fillCol); };
+  const closeParallel = () => $appShell.classList.remove("parallel-open");
+
+  // Picking a chat in the parallel view opens it and goes back to the normal view.
+  host.addEventListener("click", e => { if (e.target.closest && e.target.closest(".dm-row") && !e.target.closest(".list-row-menu-btn")) closeParallel(); });
+  $tabChats.addEventListener("dblclick", () => {
+    if (uiMode !== "dm" || dmSidebarView !== "chats") openDmSidebar("chats");
+    if ($appShell.classList.toggle("parallel-open")) cols.forEach(fillCol);
+  });
+  [$tabChatRoom, $tabFind, $tabBlocked].forEach(b => b.addEventListener("click", closeParallel));
+
+  // One search bar on the left list that filters every section of it.
+  const left = document.createElement("input"); left.type = "text"; left.className = "dm-left-search"; left.placeholder = "Search all chats..."; left.autocomplete = "off";
+  view.insertBefore(left, view.firstChild);
+  function applyLeftFilter() {
+    const q = left.value.trim().toLowerCase();
+    view.querySelectorAll(".dm-row").forEach(r => {
+      const wrap = (r.parentElement && r.parentElement.parentElement && r.parentElement.parentElement.id === "otherChatsList") ? r.parentElement : r;   // other chats sit in a wrapper with their action links
+      const n = ((r.querySelector(".list-row-name") || {}).textContent || "").toLowerCase();
+      wrap.style.display = !q || n.includes(q) ? "" : "none";
+    });
+  }
+  left.addEventListener("input", applyLeftFilter);
+
+  // The lists are rebuilt often (new messages, pins, presence): keep the filter and the parallel view up to date after each rebuild.
+  let queued = false;
+  new MutationObserver(() => {
+    if (queued) return; queued = true;
+    requestAnimationFrame(() => { queued = false; applyLeftFilter(); renderAll(); });
+  }).observe(view, { childList: true, subtree: true });
+})();
 $navBackdrop.addEventListener("click", () => $appShell.classList.remove("nav-open"));
 document.addEventListener("click", (e) => {
   if (e.target.closest && e.target.closest(".mobile-menu-btn")) $appShell.classList.toggle("nav-open");
@@ -2820,10 +2914,19 @@ function renderDmProfile() {
       }
       if (mzkSourceOf(prof)) dmpSongUnsub = mountSong(songBox, mzkSourceOf(prof));
     });
+    const relSt = getRelationshipStatus(key);
     info.appendChild(h("div", { className: "dmp-actions" },
-      h("button", { className: "dmp-btn", onclick: async () => {
-        const r = await unfriend(key); if (!r.ok) showComposerNotice(r.error);
-      } }, "Unfriend"),
+      relSt === "friends"
+        ? h("button", { className: "dmp-btn", onclick: async () => {
+            const r = await unfriend(key); if (!r.ok) showComposerNotice(r.error);
+          } }, "Unfriend")
+        : relSt === "outgoing"
+          ? h("button", { className: "dmp-btn", disabled: true }, "Request sent")
+          : relSt === "incoming"
+            ? h("button", { className: "dmp-btn", onclick: async () => {
+                const r = await acceptFriendRequest(key, name); if (!r.ok) showComposerNotice(r.error);
+              } }, "Accept request")
+            : h("button", { className: "dmp-btn", onclick: () => addFriendFromChat(key, name) }, "Add friend"),
       h("button", { className: "dmp-btn danger", onclick: async () => {
         const r = await blockUser(key, name); if (!r.ok) showComposerNotice(r.error);
       } }, "Block")

@@ -139,6 +139,29 @@
   if (!shell || !rail) return;
 
   function el(tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+  // Custom confirm popup (replaces the browser's confirm()). Enter confirms, Escape cancels.
+  function gmConfirm(title, msg, okLabel, onOk) {
+    var ov = el("div"); ov.style.cssText = "position:fixed;inset:0;background:rgba(2,6,23,.7);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px";
+    var box = el("div"); box.style.cssText = "background:#1e293b;border:1.5px solid #334155;border-radius:14px;padding:20px;max-width:360px;width:100%;color:#e2e8f0;text-align:center";
+    var ttl = el("h3", "", title); ttl.style.margin = "0 0 8px";
+    var p = el("p", "", msg); p.style.cssText = "margin:0 0 16px;color:#94a3b8;font-size:15px";
+    var row = el("div"); row.style.cssText = "display:flex;gap:10px;justify-content:center";
+    var no = el("button", "gm-btn", "Stay"); no.type = "button";
+    var yes = el("button", "gm-btn d", okLabel); yes.type = "button";
+    function close() { document.removeEventListener("keydown", onKey, true); if (ov.parentNode) ov.parentNode.removeChild(ov); }
+    function onKey(e) {
+      if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); close(); onOk(); }
+      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
+    }
+    no.onclick = close;
+    yes.onclick = function () { close(); onOk(); };
+    ov.onclick = function (e) { if (e.target === ov) close(); };
+    row.appendChild(no); row.appendChild(yes);
+    box.appendChild(ttl); box.appendChild(p); box.appendChild(row); ov.appendChild(box);
+    document.body.appendChild(ov);
+    document.addEventListener("keydown", onKey, true);
+    yes.focus();
+  }
   function chat() { return window.VUS_CHAT || {}; }
   function me() { return chat().myId ? String(chat().myId() || "") : ""; }
   function myName() { return chat().myName ? String(chat().myName() || "Player").slice(0, 40) : "Player"; }
@@ -534,7 +557,7 @@
       card.appendChild(el("div", "gm-banner", banner));
       card.appendChild(el("div", "gm-note gm-center", (type === "c4" ? "One game" : "Round " + g.round) + (g.draws ? " \u00B7 " + g.draws + (g.draws === 1 ? " tie" : " ties") : "") + ". Keep this tab open: if you are disconnected for 15 seconds your bet goes to " + oppName + "."));
       var lv = el("button", "gm-btn d", "Leave game"); lv.type = "button"; var lw = el("div", "gm-center"); lw.appendChild(lv); card.appendChild(lw);
-      lv.onclick = function () { if (confirm("Leave this game? Your bet of " + crates(g.bet) + " goes to " + oppName + ".")) act(function () { return g.mode === "direct" ? dLeave(myGid) : call("leave", { gid: myGid }); }); };
+      lv.onclick = function () { gmConfirm("Leave this game?", "Your bet of " + crates(g.bet) + " goes to " + oppName + ".", "Leave game", function () { act(function () { return g.mode === "direct" ? dLeave(myGid) : call("leave", { gid: myGid }); }); }); };
       paintTimer(g);
     } else {   // done
       var r = g.result || {}, won = r.winner === side, refund = !r.winner;

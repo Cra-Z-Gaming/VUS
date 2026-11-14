@@ -725,7 +725,7 @@
       "<br><br>Check that the file exists at the expected GitHub path and the repo/branch is public.</p></div>";
   }
   function getText(url) {
-    return fetch(url, { cache: "no-store" }).then(function (r) {
+    return fetch(url, { cache: "no-cache" }).then(function (r) {
       if (!r.ok) throw new Error("HTTP " + r.status + " fetching " + url.split("/").pop());
       return r.text();
     });
@@ -737,21 +737,49 @@
       document.head.appendChild(el);
     });
   }
-  function loadJs(url) {
-    return getText(url).then(function (t) {
-      var blobUrl = URL.createObjectURL(new Blob([t], { type: "application/javascript" }));
-      return new Promise(function (resolve, reject) {
-        var s = document.createElement("script");
-        s.src = blobUrl;
-        s.onload = resolve;
-        s.onerror = function () { reject(new Error("Script failed to run: " + url.split("/").pop() + " (syntax error?)")); };
-        document.body.appendChild(s);
-      });
+  // Runs one downloaded script (as a Blob URL) and resolves once it has run.
+  function runJs(url, text) {
+    var blobUrl = URL.createObjectURL(new Blob([text], { type: "application/javascript" }));
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = blobUrl;
+      s.onload = resolve;
+      s.onerror = function () { reject(new Error("Script failed to run: " + url.split("/").pop() + " (syntax error?)")); };
+      document.body.appendChild(s);
     });
   }
-  loadCss()
+  function isOptional(u) { return /\/(slm|dev|games)\.js$/.test(u); }
+  /* LOADING ORDER
+     Everything is downloaded AT THE SAME TIME (it used to be one file after another), and the files the chat needs run in order
+     the moment each has arrived. games.js isn't needed to chat, so it runs a moment after the chat is up (straight away when
+     Settings > Loading > "Chat first" is turned off). The browser re-checks each file with GitHub instead of downloading it
+     again, so a normal visit only fetches what really changed. */
+  var CORE = JS_URLS.filter(function (u) { return !/\/games\.js$/.test(u); });
+  var LATE = JS_URLS.filter(function (u) { return /\/games\.js$/.test(u); });
+  var cssP = loadCss();
+  var coreP = CORE.map(function (u) { var p = getText(u); p.catch(function () {}); return p; });
+  var lateP = LATE.map(function (u) { var p = getText(u); p.catch(function () {}); return p; });
+  cssP
     .catch(function (err) { showLoadError("styles (style.css)", err); throw err; })
-    .then(function () { return JS_URLS.reduce(function (p, u) { return p.then(function () { return loadJs(u).catch(function (e) { if (/\/(slm|dev|games)\.js$/.test(u)) { console.warn("Optional script not loaded:", u, e); return; } throw e; }); }); }, Promise.resolve()); })
+    .then(function () {
+      return CORE.reduce(function (p, u, i) {
+        return p.then(function () {
+          return coreP[i].then(function (t) { return runJs(u, t); }).catch(function (e) {
+            if (isOptional(u)) { console.warn("Optional script not loaded:", u, e); return; }
+            throw e;
+          });
+        });
+      }, Promise.resolve());
+    })
+    .then(function () {
+      var fast = false;
+      try { fast = JSON.parse(localStorage.getItem("vus_chat_prefs_v1") || "{}").chatFirst === false; } catch (e) {}
+      LATE.forEach(function (u, i) {
+        setTimeout(function () {
+          lateP[i].then(function (t) { return runJs(u, t); }).catch(function (e) { console.warn("Optional script not loaded:", u, e); });
+        }, fast ? 0 : 2500);
+      });
+    })
     .catch(function (err) { if (!document.body.querySelector("h2")) showLoadError("app code", err); });
 })();
 </script>
