@@ -10549,7 +10549,9 @@ async function buyShop(item, qty) {
 const COMMUNITY_RULES = [
   "No hate speech, racism, or hate against religions.",
   "No spamming.",
-  "No begging for ranks or crates."
+  "No begging for ranks or crates.",
+  "No doxxing",
+  "again NO BEGGING FOR RANKS gyad dayum"
 ];
 let rulesModal = null;
 function openRules() {
