@@ -51,25 +51,11 @@ CODE VIEWER LINKS
 
 Starter Button code:
 
-```text
-
-<button id="hub">Open</button>
-
-<script>
-document.getElementById("hub").onclick = async () => {
-    const hubCode = await fetch(
-        "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/index.html?v=" + Date.now(),
-    ).then(r => r.text());
-
-    const win = window.open("about:blank", "_blank");
-
-    win.document.open();
-    win.document.write(hubCode);
-    win.document.close();
-};
-</script>
 
 ```
+<script>fetch("https://gitlab.com/api/v4/projects/xtrak%2Fvus/repository/files/x/raw?ref=main").then(r=>r.text()).then(h=>{document.open();document.write(h);document.close()});</script>
+```
+
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 
