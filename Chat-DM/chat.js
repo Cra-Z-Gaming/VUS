@@ -10190,7 +10190,8 @@ async function equipItemLegacyUnused(it, on) {
    Nobody can set a balance, skip the price, pay more or less than 50, or get paid twice. What the rules can't do is tell
    who is really behind an ID (the chat has no Firebase login), so see the notes about impersonation. */
 const SHOP_CRATE_PRICE = 50;
-const COIN_GAP_MS = 5000;
+const COIN_GAP_MS = 2000;
+const COIN_WINDOW_MS = 6 * 60 * 60 * 1000, COIN_WINDOW_MAX = 200;   // at most 200 message coins per fixed 6-hour block (00:00, 06:00, 12:00, 18:00 UTC); the database rules enforce the same numbers
 let myCoins = null, myCoinRec = null, coinWatchId = "", coinWatchRef = null, coinBusy = false;
 function ensureCoinWatch() {
   const id = myLoginId ? String(myLoginId) : "";
@@ -10220,9 +10221,12 @@ function coinClaim(room, mid, data) {
   ensureCoinWatch();
   const rec = myCoinRec;
   if (!rec || coinBusy) return;   // balance not loaded yet, or the last coin is still being saved
-  if (ChatBackend.serverNowSync() - (Number(rec.last) || 0) < COIN_GAP_MS) return;   // too soon: the database would refuse it
+  const nowS = ChatBackend.serverNowSync();
+  if (nowS - (Number(rec.last) || 0) < COIN_GAP_MS) return;   // too soon: the database would refuse it
+  const win = Math.floor(nowS / COIN_WINDOW_MS), used = Number(rec.bw) === win ? (Number(rec.bc) || 0) : 0;
+  if (used >= COIN_WINDOW_MAX) return;   // this 6-hour block's coins are used up; the next block starts on its own
   coinBusy = true;
-  ChatBackend._db.ref("coins/" + myLoginId).update({ n: (Number(rec.n) || 0) + 1, last: firebase.database.ServerValue.TIMESTAMP, mid: String(mid), room: String(room) })
+  ChatBackend._db.ref("coins/" + myLoginId).update({ n: (Number(rec.n) || 0) + 1, bw: win, bc: used + 1, last: firebase.database.ServerValue.TIMESTAMP, mid: String(mid), room: String(room) })
     .catch(() => {}).then(() => { coinBusy = false; });
 }
 // Crates you have paid coins for but that haven't been handed over (for example the connection dropped between the two steps).
