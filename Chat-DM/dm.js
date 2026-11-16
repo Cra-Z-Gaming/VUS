@@ -779,6 +779,32 @@ function isVerifiedLoginId(loginId) {
   return p;
 }
 
+/* Staff sign-in check (chat.js, /staff). The person types their MZK email + password. We sign in to MZK to prove it is theirs,
+   check the email is verified and that this MZK account is the one linked to their chat ID (the "Verified" tag), then sign out
+   of MZK again. Nothing is stored. */
+async function verifyMzkStaffLogin(email, password, loginId) {
+  const id = String(loginId || "");
+  email = String(email || "").trim();
+  if (!email || !password) return { ok: false, error: "Enter your MZK email and password." };
+  if (!/^\d{6}$/.test(id)) return { ok: false, error: "Join the chat with your VUS account first." };
+  let auth;
+  try { auth = await loadMzkAuth(); } catch (e) { return { ok: false, error: mzkAuthMessage(e) }; }
+  try {
+    const cred = await auth.signInWithEmailAndPassword(email, password);
+    const user = cred.user;
+    try {
+      if (!user.emailVerified) return { ok: false, error: "Verify your email in MZK first (check your inbox), then try again." };
+      const key = await accountKeyForLoginId(id);
+      const prof = key ? await fetchAccountProfile(key) : null;
+      if (!prof || String(prof.id) !== id || String(prof.mzkUid || "") !== user.uid) return { ok: false, error: "This MZK account isn't linked to your chat account. Link it in your profile first." };
+      const fs = await loadMzkDb();
+      const snap = await fs.collection("links").doc(user.uid).get();
+      if (!snap.exists || String((snap.data() || {}).vusId) !== id) return { ok: false, error: "This MZK account isn't verified for your chat account yet." };
+      return { ok: true, uid: user.uid, email: String(user.email || email).toLowerCase() };
+    } finally { await auth.signOut().catch(() => {}); }
+  } catch (e) { return { ok: false, error: mzkAuthMessage(e) }; }
+}
+
 function friendlyDbError(e, prefix) {
   const code = String((e && (e.code || e.message)) || "");
   if (/permission/i.test(code)) return prefix + ": the database rules don't allow it yet.";
@@ -4235,6 +4261,7 @@ window.VUS_DM = {
   },
   searchUsernames: async (q) => { try { return (await searchByUsernamePrefix(q)).map(a => ({ username: a.username, id: a.id })); } catch (e) { return []; } },
   isVerified: isVerifiedLoginId,
+  verifyMzkStaffLogin,
   verifiedCached,
   getSession: () => currentSession ? { accountKey: currentSession.accountKey, username: currentSession.username, id: currentSession.id } : null,
   logout: () => doLogout()

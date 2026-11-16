@@ -87,7 +87,7 @@ const PING_SOUND_URL = "https://github.com/Cra-Z-Gaming/VUS/raw/refs/heads/main/
    Only an explicit removal (/remove, or a temporary grant expiring) does.
 
    THERE IS NO WAY TO CLAIM A ROLE. No codes, no Discord. A role can only be
-   given by someone ranked ABOVE it (/grant), or added by hand in the database:
+   added by hand in the Firebase console (chat can no longer give or remove ranks):
        roleIds/crown/<loginId>   = true      (Owner)
        roleIds/coowner/<loginId> = true      (Co-owner)   ...and so on.
    ROLES is the single place to add ranks -- badges, delays, permissions and
@@ -179,6 +179,7 @@ function banLimitsForRank(rank) {
 }
 // What a rank may hand out / take away with /grant and /remove: Mods only Normie, Admins and up Mod and below.
 function canGrantRole(rank, roleId) {
+  return false;   // Ranks are no longer handed out or taken away from chat (not even by the Owner). Firebase console only.
   const r = ROLES[roleId];
   if (!r || r.implicit || roleId === "crown") return false;
   if (r.rank >= rank) return false;
@@ -1268,7 +1269,17 @@ const ChatBackend = {
     }
   },
 
+  // Once the Owner turns on staff-only moderation (config/staffEnforced = true in the Firebase console), bans and mutes need a staff sign-in (/staff).
+  _needStaff() {
+    VUS_STAFF.start();
+    if (VUS_STAFF.enforced() && !VUS_STAFF.signedIn()) {
+      showComposerNotice("Staff sign-in needed. Type /staff to sign in with your MZK email and password.");
+      throw new Error("Staff sign-in needed. Type /staff.");
+    }
+  },
+
   async banUser(loginId, username, byLoginId, durationMs, reason, opts) {
+    this._needStaff();
     if (!loginId) throw new Error("Missing login ID");
     opts = opts || {};
     // Server time, not this device's clock (see _serverOffset above).
@@ -1391,6 +1402,7 @@ const ChatBackend = {
   },
 
   async grantRoleToId(roleId, loginId) {
+    throw new Error("Ranks can only be changed in the Firebase console.");
     if (!ROLES[roleId] || ROLES[roleId].implicit || !loginId) throw new Error("Invalid role grant");
     if (roleId === "mod" || roleId === "normie") await this.issue("grants", { k: "role", t: loginId, v: roleId });
     await this._roleIdRefs[roleId].child(this._pid(loginId)).set(true);
@@ -1411,6 +1423,7 @@ const ChatBackend = {
   },
 
   async grantTemporaryRoleToId(roleId, loginId, durationMs, byLoginId) {
+    throw new Error("Ranks can only be changed in the Firebase console.");
     if (!ROLES[roleId] || ROLES[roleId].implicit || roleId === "crown" || !loginId || durationMs <= 0) {
       throw new Error("Invalid temporary role grant");
     }
@@ -1426,6 +1439,7 @@ const ChatBackend = {
   },
 
   async removeRoleFromId(roleId, loginId) {
+    throw new Error("Ranks can only be changed in the Firebase console.");
     if (!ROLES[roleId] || ROLES[roleId].implicit || !loginId) throw new Error("Invalid role removal");
     clearTimeout(this._temporaryRoleTimers[roleId + ":" + loginId]);
     if (roleId === "mod" || roleId === "normie") await this.issue("grants", { k: "unrole", t: loginId, v: roleId });
@@ -1433,6 +1447,7 @@ const ChatBackend = {
   },
 
   async unbanUser(identifier) {
+    this._needStaff();
     const clean = String(identifier || "").trim();
     if (!clean) throw new Error("Missing username or login ID");
 
@@ -1513,6 +1528,7 @@ const ChatBackend = {
   // set it can clear it early" for mod-issued timeouts — see
   // canClearTimeout below.
   async setTimeout_(targetLoginId, durationMs, byLoginId, reason) {
+    this._needStaff();
     await this.issue("actions", { k: "mute", t: targetLoginId, d: durationMs });
     const serverNow = await this._serverNow();
     const rec = {
@@ -1528,6 +1544,7 @@ const ChatBackend = {
   // any timeout) and internally once ownership of a clear request has
   // already been checked (see canClearTimeout).
   async clearTimeout_(targetLoginId) {
+    this._needStaff();
     await this._timeoutsRef.child(this._safeKey(String(targetLoginId))).remove();
   },
 
@@ -3013,12 +3030,59 @@ function snippetOf(m) {
   return cap ? (label + " \u00b7 " + cap).slice(0, 80) : label;
 }
 
+function flashMessage(el) {
+  el.scrollIntoView({ block: "center", behavior: "smooth" });
+  el.classList.add("msg-flash");
+  setTimeout(() => el.classList.remove("msg-flash"), 1400);
+}
+// A row the spam filter hid on this screen may be shown again when somebody replied to it. Muted, banned, forged and
+// untokened rows are never shown this way.
+function canRevealHidden(rec) {
+  const id = String(rec.loginId || "");
+  const cl = rec.el.classList;
+  return !!id && !isMuted(id) && !isSilenced(id) && !cl.contains("muted-hidden") && !cl.contains("silenced-hidden") && !cl.contains("untokened-hidden") && !cl.contains("forged-hidden");
+}
 function jumpToMessage(id) {
-  const m = msgEls.get(id);
-  if (!m || !m.el.isConnected) { showComposerNotice("That message is no longer on screen."); return; }
-  m.el.scrollIntoView({ block: "center", behavior: "smooth" });
-  m.el.classList.add("msg-flash");
-  setTimeout(() => m.el.classList.remove("msg-flash"), 1400);
+  id = String(id);
+  const rec = msgEls.get(id);
+  if (rec && rec.el.isConnected && !rec.el.matches(HIDDEN_MSG_SEL)) { flashMessage(rec.el); return; }
+  revealReplyTarget(id).then(res => {
+    const r2 = msgEls.get(id);
+    if (res === "ok" && r2 && r2.el.isConnected && !r2.el.matches(HIDDEN_MSG_SEL)) flashMessage(r2.el);
+    else showComposerNotice(res === "muted" ? "That message is from someone you muted." : res === "hidden" ? "That message is hidden on your screen (sender not verified, or removed by the spam filter)." : "That message is no longer available.");
+  }).catch(() => showComposerNotice("Couldn't open that message."));
+}
+// Makes the message a reply points at show up: loads it from the database when it isn't on screen (older than the last
+// messages, or never loaded), and un-hides it when only the spam filter or a slow sender check hid it on this screen.
+async function revealReplyTarget(id) {
+  if (!/^[-A-Za-z0-9_]{10,30}$/.test(id)) return "gone";
+  let rec = msgEls.get(id);
+  if (rec && !rec.el.isConnected) { msgEls.delete(id); rec = null; }
+  if (!rec) {
+    let val = null;
+    const room = ChatBackend.currentRoomId;
+    try { val = (await ChatBackend._ref.child(id).get()).val(); } catch (e) {}
+    if (!val || typeof val !== "object" || val.system || ChatBackend.currentRoomId !== room) return "gone";
+    renderMessage(Object.assign({ id }, val, { _ctx: true }));
+    rec = msgEls.get(id);
+    if (!rec) return "gone";
+    await new Promise(r => setTimeout(r, 600));   // let the sender check finish
+  }
+  const el = rec.el, cl = el.classList;
+  if (!el.isConnected) return "gone";
+  if (!el.matches(HIDDEN_MSG_SEL)) return "ok";
+  if (cl.contains("muted-hidden") || (rec.loginId && isMuted(rec.loginId))) return "muted";
+  if (!canRevealHidden(rec)) return "hidden";
+  if (cl.contains("spam-hidden")) cl.remove("spam-hidden");
+  if (cl.contains("anon-hidden")) {
+    // only plain text from a real account whose name matches the message
+    if (rec.isImage || !/^\d{6}$/.test(String(rec.loginId)) || !(window.VUS_DM && window.VUS_DM.verifySender)) return "hidden";
+    let v = null;
+    try { v = await window.VUS_DM.verifySender(rec.loginId, el.dataset.senderName || ""); } catch (e) {}
+    if (!v || !v.ok || !v.nameMatches) return "hidden";
+    cl.remove("anon-hidden");
+  }
+  return el.matches(HIDDEN_MSG_SEL) ? "hidden" : "ok";
 }
 function updateReplyBar() {
   const bar = document.getElementById("chatReplyBar"), txt = document.getElementById("chatReplyText");
@@ -3387,6 +3451,7 @@ function renderMessage(msg) {
   const el = document.createElement("div");
   el.className = "msg has-av" + (mine ? " mine" : "") + (aiPost ? " ai-post" : "");
   if (msg.loginId) el.dataset.senderId = String(msg.loginId);
+  el.dataset.senderName = String(msg.name || "").slice(0, 60);
   if (msg.bot === true) el.dataset.bot = "1";
   if (msg.id) el.dataset.msgId = String(msg.id);
   if (msg.ts) el.dataset.ts = String(msg.ts);
@@ -3397,9 +3462,9 @@ function renderMessage(msg) {
   else if (tokenCutover && Number(msg.ts) >= tokenCutover) { el.classList.add("untokened-hidden"); hiddenForMe = true; }
   if (!mine) {
     if (msg.loginId && msg.ts >= liveSince && isSilenced(msg.loginId)) { el.classList.add("silenced-hidden"); hiddenForMe = true; }   // muted/banned: a modified client's posts stay invisible here
-    else if (!isAiSender(msg.loginId) && (isSpamDuplicate(msg) || violatesRateLimit(msg))) { el.classList.add("spam-hidden"); hiddenForMe = true; }
+    else if (!msg._ctx && !isAiSender(msg.loginId) && (isSpamDuplicate(msg) || violatesRateLimit(msg))) { el.classList.add("spam-hidden"); hiddenForMe = true; }
     else if (msg.loginId && (isMuted(msg.loginId) || (msg.bot === true && isBotMuted(msg.loginId)))) { el.classList.add("muted-hidden"); hiddenForMe = true; }
-    if (activeChannelId !== "announce" && !isAiSender(msg.loginId)) trackNewAccountBurst(msg);
+    if (activeChannelId !== "announce" && !isAiSender(msg.loginId) && !msg._ctx) trackNewAccountBurst(msg);
     if (!hiddenForMe && msg.loginId && isMuted(msg.loginId)) hiddenForMe = true;
     // No real login id or no name = not a real account (forged client): hidden for everyone else.
     if (!/^\d{6}$/.test(String(msg.loginId || "")) || !String(msg.name || "").trim()) { el.classList.add("anon-hidden"); hiddenForMe = true; }
@@ -3526,22 +3591,32 @@ function renderMessage(msg) {
   }
   if (msg.loginId && !mine) gateChannelEl(el, msg.loginId);
   $messages.appendChild(el);
+  if (msg._ctx) {
+    // a message loaded only because a reply points at it: put it where it belongs in time
+    const tsv = Number(msg.ts) || 0;
+    const nxt = tsv ? Array.from($messages.children).find(c => c !== el && c.classList.contains("msg") && Number(c.dataset.ts) > tsv) : null;
+    if (nxt) $messages.insertBefore(el, nxt);
+  } else if (msg.replyTo && typeof msg.replyTo === "object" && msg.replyTo.id && !hiddenForMe && !el.classList.contains("anon-hidden")) {
+    // a reply to a message the spam filter hid on this screen: show that message so the reply makes sense
+    const tr = msgEls.get(String(msg.replyTo.id));
+    if (tr && tr.el.classList.contains("spam-hidden") && canRevealHidden(tr)) tr.el.classList.remove("spam-hidden");
+  }
   if (msg.id) {
     if (pendingEdits[msg.id]) applyEdit(String(msg.id), pendingEdits[msg.id]);
     renderReactions(String(msg.id));
   }
 
-  messageCount++;
-  trimShownMessages();
+  if (!msg._ctx) { messageCount++; trimShownMessages(); }
 
-  if (mine) scrollToBottom();
+  if (msg._ctx) { /* loaded for a reply: never moves the view */ }
+  else if (mine) scrollToBottom();
   else if (autoScroll && stickToBottom) followIfPinned();
   else if (!isNearBottom()) {
     $jumpToBottomBtn.style.display = "block";
   }
 
   const firePing = () => {
-    if (hiddenForMe || el.classList.contains("anon-hidden") || msg.name === myName || (msg.loginId && isMuted(msg.loginId))) return;
+    if (msg._ctx || hiddenForMe || el.classList.contains("anon-hidden") || msg.name === myName || (msg.loginId && isMuted(msg.loginId))) return;
     const recent = !msg.ts || Date.now() - msg.ts < 2 * 86400000;
     const mm = mentionInfoFor(msg);
     if (mm.me) {
@@ -4238,10 +4313,12 @@ const SLASH_COMMANDS = [
     desc: rank => "Ban the account ID, so a new name won't get around it. " + (rank >= ROLES.crown.rank ? "Permanent." : "Lasts " + formatDurationShort(banLimitsForRank(rank).max) + " (the longest your rank can do).") + " A 6-digit ID works even if they're offline.", insert: "/ban " },
   { name: "/tempban", args: "time username or ID [reason]", minRank: ROLES.admin.rank,
     desc: () => "Ban the account ID for a while (" + limitsText(banLimitsForRank(myRank())) + ").", insert: "/tempban " },
-  { name: "/grant",   args: "rank perm|time username", minRank: ROLES.mod.rank,
+  { name: "/grant",   args: "rank perm|time username", minRank: 99,
     desc: rank => "Give a rank below yours. perm = permanent, or a time (" + limitsText(TIME_LIMITS.tempGrant) + "). " + (rank >= ROLES.admin.rank ? "Ranks: normie, mod, admin, coowner." : "Mods can give Normie."), insert: "/grant " },
-  { name: "/remove",  args: "rank username",          minRank: ROLES.mod.rank,
+  { name: "/remove",  args: "rank username",          minRank: 99,
     desc: rank => rank >= ROLES.admin.rank ? "Take away a rank below yours." : "Take away Normie from someone.", insert: "/remove " },
+  { name: "/staff",   args: "", minRank: ROLES.mod.rank,
+    desc: "Sign in as staff with your MZK email and password. Needed for bans and mutes once the Owner turns on staff-only moderation.", insert: "/staff" },
   { name: "/image",   args: "on|off username",        minRank: ROLES.admin.rank,
     desc: "Give or take away image access for someone below your rank.", insert: "/image " },
   { name: "/afk", args: "", minRank: 0,
@@ -4518,6 +4595,7 @@ async function handleModerationCommand(text) {
   if (!text.startsWith("/")) return false;
   const parts = text.trim().split(/\s+/);
   let command = parts[0].toLowerCase();
+  if (command === "/staff") { VUS_STAFF.open(); return true; }
   if (command === "/timeout") command = "/mute";   // old name still works
   const rank = myRank();
 
@@ -4674,6 +4752,8 @@ async function handleModerationCommand(text) {
 
   // ── /remove ──
   if (command === "/remove") {
+    showComposerNotice("Ranks can only be changed in the Firebase console.");
+    return true;
     if (parts.length < 3) { showComposerNotice("Use /remove rank username, such as /remove mod alex"); return true; }
     const roleToRemove = ROLES[parts[1].toLowerCase()];
     if (!roleToRemove || roleToRemove.implicit || roleToRemove.id === "crown") {
@@ -4703,6 +4783,8 @@ async function handleModerationCommand(text) {
 
   // ── /grant rank perm|time username ──
   if (command === "/grant") {
+    showComposerNotice("Ranks can only be changed in the Firebase console.");
+    return true;
     if (parts.length < 3) {
       showComposerNotice("Use /grant rank perm username, or /grant rank 2h username (" + limitsText(TIME_LIMITS.tempGrant) + ").");
       return true;
@@ -6245,7 +6327,7 @@ function openAdminMenuStaff() {
   staffMenuMode = "admin";
   closeClearPanel();
   $ownerMenuTitle.textContent = "🛡️ Admin Menu";
-  $ownerMenuSubtitle.textContent = "Online now. Press Refresh to update the list. Use /grant to give ranks.";
+  $ownerMenuSubtitle.textContent = "Online now. Press Refresh to update the list. Ranks are changed in the Firebase console.";
   renderOwnerMenuList();
   $ownerMenuOverlay.style.display = "flex";
 }
@@ -6736,13 +6818,13 @@ function rankGuideLines(role) {
   const lines = [];
   lines.push(["How you get it", role.implicit ? "Everyone starts here."
     : byHand ? "Added by hand in the database. It can't be given out in chat."
-    : "Given to you by a higher rank."]);
+    : "Added by hand in the Firebase console."]);
   lines.push(["Chatting", "One message every " + msgEvery + "."]);
   lines.push(["Images", gated
     ? "One every " + imgEvery + ", but only after a higher rank turns image access on for you."
     : "You can post images, one every " + imgEvery + "."]);
   lines.push(["Bubble color", role.rank >= COLOR_MIN_RANK ? "You can pick your own colors in Settings." : "Unlocks at " + ROLES.normie.icon + " " + ROLES.normie.label + "."]);
-  if (menu) lines.push(["Menu", menu + (role.id === "mod" ? " (mutes, temp bans up to " + formatDurationShort(TIME_LIMITS.modTempban.max) + ", give Normie)" : "") + " in Settings."]);
+  if (menu) lines.push(["Menu", menu + (role.id === "mod" ? " (mutes, temp bans up to " + formatDurationShort(TIME_LIMITS.modTempban.max) + ")" : "") + " in Settings."]);
   if (canGrant) lines.push(["Can give out", grantable.map(r => r.icon + " " + r.label).join(", ") + ", permanently or for a set time."]);
   if (role.id === "coowner") lines.push(["Commands", "The same as " + ROLES.admin.icon + " " + ROLES.admin.label + "."]);
   return { lines, newCommands, notes: [
@@ -6850,6 +6932,7 @@ function addBanButtons(actions, entry) {
 }
 
 async function renderOwnerMenuList() {
+  try { VUS_STAFF.mountBar(); } catch (e) {}
   // Re-check the relevant gate every refresh too — if the role backing
   // whichever menu is open gets lost while it's open (timeout, disconnect,
   // another owner revokes it, etc.) the menu should close itself rather
@@ -11760,6 +11843,165 @@ window.VUS_CHAT = {
       .map(r => ({ id: r.id, label: r.label, icon: r.icon }));
   }
 };
+
+/* ══════════════════════════════════════════════════════════
+   STAFF SIGN-IN  (/staff, and a bar at the top of the staff menus)
+   Staff use the SAME email + password as their MZK account. We check it against MZK (real, verified, and linked to this
+   chat account: the "Verified" tag), then sign into this chat database's own Firebase Auth with the same email + password
+   (the account is created the first time). Then:
+     - the sign-in is recorded at staffRequests/<uid> = { email, loginId, mzkUid, ts }, readable only in the Firebase console;
+     - the Owner approves it by adding  staff/<uid> = { role, loginId, email }  by hand in the console;
+     - when the Owner sets  config/staffEnforced = true  the database rules only let approved staff ban, unban, mute or
+       unmute (expired bans and mutes can still be cleaned up by anyone). Until then nothing changes for anyone.
+   ══════════════════════════════════════════════════════════ */
+const VUS_STAFF = (function () {
+  let auth = null, user = null, entry = undefined, enforced = false, entryRef = null;
+  const subs = [];
+  const notify = () => { subs.forEach(fn => { try { fn(); } catch (e) {} }); };
+  const appOf = () => firebase.apps.find(a => a.name === FIREBASE_APP_NAME) || null;
+  function start() {
+    if (auth) return;
+    const a = appOf();
+    if (!a || !firebase.auth) return;
+    auth = a.auth();
+    try { a.database().ref("config/staffEnforced").on("value", s => { enforced = s.val() === true; notify(); }, () => {}); } catch (e) {}
+    auth.onAuthStateChanged(u => {
+      user = u || null;
+      if (entryRef) { try { entryRef.off(); } catch (e) {} entryRef = null; }
+      entry = undefined;
+      if (user) {
+        try {
+          entryRef = a.database().ref("staff/" + user.uid);
+          entryRef.on("value", s => { entry = s.val() || null; notify(); }, () => { entry = null; notify(); });
+        } catch (e) { entry = null; }
+      }
+      notify();
+    });
+  }
+  function status() {
+    if (!user) return { state: "out" };
+    if (entry === undefined) return { state: "checking", uid: user.uid };
+    if (!entry) return { state: "pending", uid: user.uid };
+    return { state: "staff", role: entry.role, uid: user.uid };
+  }
+  function authError(e) {
+    const c = String((e && e.code) || "");
+    if (/operation-not-allowed/.test(c)) return "Email sign-in isn't switched on in the vus-chat Firebase project yet (Authentication > Sign-in method > Email/Password).";
+    if (/too-many-requests/.test(c)) return "Too many tries. Wait a bit and try again.";
+    if (/network/.test(c)) return "Couldn't reach Firebase. Check your connection.";
+    return (e && e.message) || "Couldn't sign in.";
+  }
+  async function signIn(email, password) {
+    start();
+    if (!auth) return { ok: false, error: "Sign-in isn't ready yet. Try again in a moment." };
+    const id = String(myLoginId || "");
+    if (!/^\d{6}$/.test(id)) return { ok: false, error: "Join the chat with your VUS account first." };
+    if (!window.VUS_DM || !window.VUS_DM.verifyMzkStaffLogin) return { ok: false, error: "MZK sign-in isn't ready. Reload the page." };
+    const mz = await window.VUS_DM.verifyMzkStaffLogin(email, password, id);
+    if (!mz || !mz.ok) return mz || { ok: false, error: "Couldn't check your MZK account." };
+    let cred;
+    try { cred = await auth.signInWithEmailAndPassword(mz.email, password); }
+    catch (e) {
+      if (!/user-not-found|invalid-credential|invalid-login/.test(String((e && e.code) || ""))) return { ok: false, error: authError(e) };
+      try { cred = await auth.createUserWithEmailAndPassword(mz.email, password); }
+      catch (e2) {
+        if (/email-already-in-use/.test(String((e2 && e2.code) || ""))) return { ok: false, error: "A staff account for this email already exists with a different password (did you change your MZK password?). Ask the Owner to reset it in the Firebase console." };
+        return { ok: false, error: authError(e2) };
+      }
+    }
+    try { await appOf().database().ref("staffRequests/" + cred.user.uid).set({ email: mz.email, loginId: id, mzkUid: mz.uid, ts: firebase.database.ServerValue.TIMESTAMP }); } catch (e) {}
+    return { ok: true, uid: cred.user.uid };
+  }
+  async function signOut() { start(); if (auth) { try { await auth.signOut(); } catch (e) {} } }
+
+  function paintBar() {
+    const t = document.getElementById("staffBarText"), b = document.getElementById("staffBarBtn");
+    if (!t || !b) return;
+    const s = status();
+    t.textContent = s.state === "staff" ? "\uD83D\uDD10 Staff sign-in active" + (enforced ? " (staff-only moderation is on)" : "")
+      : s.state === "pending" ? "\uD83D\uDD10 Signed in, waiting for the Owner to approve you"
+      : s.state === "checking" ? "\uD83D\uDD10 Checking staff sign-in..."
+      : "\uD83D\uDD10 Not signed in as staff" + (enforced ? " (bans and mutes need it)" : "");
+    b.textContent = s.state === "out" ? "Staff sign-in" : "Staff...";
+  }
+  subs.push(paintBar);
+  function mountBar() {
+    start();
+    let bar = document.getElementById("staffBar");
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.id = "staffBar";
+      bar.style.cssText = "display:flex;align-items:center;gap:8px;margin:0 0 10px;font-size:12.5px;color:#94a3b8";
+      const txt = document.createElement("span"); txt.id = "staffBarText"; txt.style.flex = "1";
+      const btn = document.createElement("button"); btn.type = "button"; btn.id = "staffBarBtn"; btn.className = "chat-modal-btn-secondary";
+      btn.style.cssText = "flex:none;padding:5px 12px;font-size:12.5px";
+      btn.addEventListener("click", openModal);
+      bar.append(txt, btn);
+      $ownerMenuSubtitle.insertAdjacentElement("afterend", bar);
+    }
+    paintBar();
+  }
+
+  let modalSub = null;
+  function closeModal() {
+    const ov = document.getElementById("staffSignInOverlay");
+    if (ov) ov.remove();
+    const i = subs.indexOf(modalSub); if (i >= 0) subs.splice(i, 1);
+    modalSub = null;
+  }
+  function openModal() {
+    start();
+    closeModal();
+    const inp = "width:100%;box-sizing:border-box;padding:8px 11px;margin-bottom:8px;background:#0f172a;border:1.5px solid #334155;border-radius:9px;color:#f1f5f9;font-size:14px;outline:none";
+    const ov = document.createElement("div");
+    ov.className = "chat-modal-overlay"; ov.id = "staffSignInOverlay"; ov.style.display = "flex";
+    const box = document.createElement("div"); box.className = "chat-modal";
+    const h = document.createElement("h3"); h.textContent = "\uD83D\uDD10 Staff sign-in";
+    const p = document.createElement("p");
+    p.style.cssText = "color:#94a3b8;font-size:13px;line-height:1.5;margin:0 0 10px";
+    p.textContent = "Use the same email and password as your MZK account. It has to be the MZK account linked to your chat account. Your password only goes to Firebase.";
+    const st = document.createElement("div");
+    st.style.cssText = "font-size:13px;margin-bottom:10px;color:#cbd5e1;word-break:break-all";
+    const em = document.createElement("input"); em.type = "email"; em.placeholder = "MZK email"; em.autocomplete = "username"; em.style.cssText = inp;
+    const pw = document.createElement("input"); pw.type = "password"; pw.placeholder = "MZK password"; pw.autocomplete = "current-password"; pw.style.cssText = inp;
+    const err = document.createElement("div"); err.className = "chat-modal-err";
+    const row = document.createElement("div"); row.className = "chat-modal-row";
+    const closeB = document.createElement("button"); closeB.className = "chat-modal-btn-secondary"; closeB.textContent = "Close";
+    const outB = document.createElement("button"); outB.className = "chat-modal-btn-secondary"; outB.textContent = "Sign out";
+    const inB = document.createElement("button"); inB.className = "chat-modal-btn-primary"; inB.textContent = "Sign in";
+    row.append(closeB, outB, inB);
+    box.append(h, p, st, em, pw, err, row);
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+    const render = () => {
+      const s = status();
+      const signedIn = s.state !== "out";
+      em.style.display = pw.style.display = inB.style.display = signedIn ? "none" : "";
+      outB.style.display = signedIn ? "" : "none";
+      p.style.display = signedIn ? "none" : "";
+      st.textContent = s.state === "staff" ? "Signed in as staff" + (s.role ? " (" + s.role + ")" : "") + "."
+        : s.state === "pending" ? "Signed in, but the Owner hasn't approved this account yet. Send them this staff ID: " + s.uid
+        : s.state === "checking" ? "Signed in. Checking approval..." : "";
+    };
+    modalSub = render; subs.push(render); render();
+    const go = async () => {
+      err.textContent = ""; inB.disabled = true;
+      const r = await signIn(em.value, pw.value);
+      inB.disabled = false;
+      if (!r.ok) { err.textContent = r.error || "Couldn't sign in."; return; }
+      pw.value = "";
+      render();
+    };
+    inB.addEventListener("click", go);
+    pw.addEventListener("keydown", e => { if (e.key === "Enter") go(); });
+    outB.addEventListener("click", async () => { await signOut(); render(); });
+    closeB.addEventListener("click", () => { pw.value = ""; closeModal(); });
+    ov.addEventListener("click", e => { if (e.target === ov) { pw.value = ""; closeModal(); } });
+    setTimeout(() => { if (em.style.display !== "none") em.focus(); }, 30);
+  }
+  setTimeout(start, 1500);
+  return { start, open: openModal, mountBar, status, enforced: () => enforced, signedIn: () => !!user };
+})();
 
 init();
 
