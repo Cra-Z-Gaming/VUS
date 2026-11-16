@@ -686,11 +686,13 @@ const ChatBackend = {
     this._connectedRef.on("value", snap => onStatus(snap.val() === true));
   },
 
-  watchMessages(onMessage) {
+  watchMessages(onMessage, onGone) {
     if (window.VUS_LOADQ) window.VUS_LOADQ.startSoon(chatPrefs.chatFirst === false ? 1 : 2500);   // background loading starts once the main chat has had its turn (at once when Settings > Loading > Chat first is off)
-    this._ref.limitToLast(MAX_MESSAGES).on("child_added", snap => {
+    const q = this._ref.limitToLast(isLowPower() ? LOW_POWER_MESSAGES : MAX_MESSAGES);   // Low Power Mode only loads the newest 15
+    q.on("child_added", snap => {
       onMessage({ id: snap.key, ...snap.val() });
     });
+    if (onGone) q.on("child_removed", snap => onGone(snap.key));   // lets a message that was deleted while it waited never show
   },
 
   // A message needs a one-time ticket issued to its sender's ID (api/chat/ticket, which checks the login token).
@@ -1833,6 +1835,66 @@ let autoScroll = chatPrefs.autoScroll !== false;
 function isLowPower() { return chatPrefs.lowPower === true; }
 function lpInterval(fn, ms, every) { let n = 0; return setInterval(() => { if (isLowPower() && (++n % (every || 4)) !== 0) return; fn(); }, ms); }
 function lpDelay(ms, factor) { return isLowPower() ? ms * (factor || 5) : ms; }
+const LOW_POWER_MESSAGES = 15;   // Low Power Mode keeps only the newest 15 messages on screen: every message carries effects, and they add up
+const HIDDEN_MSG_SEL = ".spam-hidden,.muted-hidden,.silenced-hidden,.untokened-hidden,.anon-hidden";   // rows that take no room on screen
+// Takes old rows off the top: at most MAX_MESSAGES, and in Low Power Mode only the newest LOW_POWER_MESSAGES that are really shown
+// (hidden spam doesn't use up the 15, so a flood can't push real messages out).
+function trimShownMessages() {
+  while (messageCount > MAX_MESSAGES) {
+    const first = $messages.querySelector(".msg");
+    if (!first) break;
+    // Trimming old rows from the top must not shove what you're reading upward.
+    const removed = first.offsetHeight;
+    first.remove();
+    if (!(autoScroll && stickToBottom) && removed) $messages.scrollTop = Math.max(0, $messages.scrollTop - removed);
+    messageCount--;
+  }
+  if (!isLowPower()) return;
+  const shown = $messages.querySelectorAll(".msg:not(.spam-hidden):not(.muted-hidden):not(.silenced-hidden):not(.untokened-hidden):not(.anon-hidden)");
+  if (shown.length <= LOW_POWER_MESSAGES) return;
+  const keepFrom = shown[shown.length - LOW_POWER_MESSAGES];
+  let removedH = 0;
+  for (let c = $messages.firstElementChild; c && c !== keepFrom;) {
+    const next = c.nextElementSibling;
+    if (c.classList.contains("msg")) { removedH += c.offsetHeight; c.remove(); messageCount--; }
+    c = next;
+  }
+  if (!(autoScroll && stickToBottom) && removedH) $messages.scrollTop = Math.max(0, $messages.scrollTop - removedH);
+}
+// Hold new messages (Settings > Chat, on by default): other people's new messages wait half a second (a second in Low Power Mode)
+// and then show together, so a flood of messages or fake joins is cleaned up first and the screen doesn't jump up and down.
+// Your own messages never wait, and messages that were already there when the room was opened show at once.
+const SETTLE_MS = 500;
+let incomingQ = [], incomingTimer = 0;
+function settleOn() { return chatPrefs.settleDelay !== false; }
+function onIncoming(msg) {
+  const live = liveSince > 0 && Number(msg && msg.ts) >= liveSince;
+  const mineMsg = !!msg && msg.system !== true && myLoginId && String(msg.loginId || "") === String(myLoginId) && msg.name === myName;
+  const hold = settleOn() && live && !mineMsg;
+  if (!hold && !incomingQ.length) { renderMessage(msg); return; }
+  incomingQ.push({ msg, room: ChatBackend.currentRoomId, live });
+  if (!hold) { flushIncoming(); return; }   // mine (or old history) while others wait: everything goes out now, in order
+  if (!incomingTimer) incomingTimer = setTimeout(flushIncoming, lpDelay(SETTLE_MS, 2));   // one window from the first waiting message, so a flood can't keep postponing the screen
+}
+function dropIncoming(id) { incomingQ.forEach(it => { if (it.msg && it.msg.id === id) it.gone = true; }); }   // deleted while it waited: it never shows
+// "X joined" while X isn't online: a made-up line, never shown
+function fakeJoinLine(msg) {
+  if (!msg || msg.system !== true || Array.isArray(msg.leftNames) || !latestPresenceList.length) return false;
+  const m = /^(.{1,60}) joined$/.exec(String(msg.text || ""));
+  if (!m) return false;
+  const k = ChatBackend._safeKey(m[1]);
+  return !latestPresenceList.some(e => e.name === k);
+}
+function flushIncoming() {
+  clearTimeout(incomingTimer); incomingTimer = 0;
+  const batch = incomingQ; incomingQ = [];
+  const room = ChatBackend.currentRoomId;
+  for (const it of batch) {
+    if (it.gone || it.room !== room) continue;   // deleted, or I changed rooms while it waited
+    if (it.live && fakeJoinLine(it.msg)) continue;
+    try { renderMessage(it.msg); } catch (e) { console.error("[VUS Chat] message failed to show:", e); }
+  }
+}
 let stickToBottom = true;      // true while the view is pinned to the newest message
 document.body.classList.toggle("hide-joinleave", chatPrefs.showJoinLeave === false);
 // Looks: text size, bubble size and bold text. Client-side only, remembered on this device.
@@ -3254,25 +3316,38 @@ function renderMessage(msg) {
         }).catch(() => {});
       } catch (e) {}
     }
-    // Several people joining in a row become ONE line ("Bob and John joined", or "Several people joined" for more than 4).
-    const joinOnly = !Array.isArray(msg.leftNames) && /^.{1,60} joined$/.test(text);
-    const joinName = joinOnly ? text.slice(0, -7) : "";
-    if (joinOnly) {
-      const lastEl = [...$messages.children].filter(c => c.classList && c.classList.contains("msg")).pop();
-      if (lastEl && lastEl.dataset.joinNames && Math.abs((Number(msg.ts) || Date.now()) - Number(lastEl.dataset.joinTs)) <= 30000) {
-        let names = []; try { names = JSON.parse(lastEl.dataset.joinNames) || []; } catch (e) {}
-        if (!names.includes(joinName)) names.push(joinName);
-        lastEl.dataset.joinNames = JSON.stringify(names);
-        lastEl.dataset.joinTs = String(Number(msg.ts) || Date.now());
-        const joined = names.length > 4 ? "Several people joined" : names.length === 1 ? names[0] + " joined" : names.slice(0, -1).join(", ") + " and " + names[names.length - 1] + " joined";
-        lastEl.dataset.sysKey = joined;
-        const jb = lastEl.querySelector(".msg-bubble"); if (jb) jb.textContent = joined;
-        return;
-      }
+    // Join / leave lines in a row become ONE line ("Bob and John joined", "Several people joined" for more than 4, same for "left").
+    // Hidden rows (spam, muted, not yet verified) take no room on screen, so they don't break a group apart: a hacker can't keep
+    // join lines separate by sending spam between them. This looks only at what is really shown, and also reaches back over
+    // other join / leave lines, so "A joined / B left / C joined" becomes "A and C joined / B left".
+    const kind = (Array.isArray(msg.leftNames) || / left$/.test(text)) ? "left" : "joined";
+    const grpNames = kind === "left"
+      ? (Array.isArray(msg.leftNames) ? msg.leftNames.slice(0, 50).map(n => String(n).slice(0, 60)) : [text.slice(0, -5).slice(0, 60)])
+      : [text.slice(0, -7)];
+    const tsNow = Number(msg.ts) || Date.now();
+    const shownRecent = [];   // newest first
+    for (let c = $messages.lastElementChild; c && shownRecent.length < 8; c = c.previousElementSibling) {
+      if (c.classList.contains("msg") && !c.matches(HIDDEN_MSG_SEL)) shownRecent.push(c);
     }
-    // Same line again within the last 5 messages: count it ("X joined x2" ... "x9+") instead of adding another one.
-    const lastFive = [...$messages.children].filter(c => c.classList && c.classList.contains("msg")).slice(-5);
-    const dup = lastFive.reverse().find(c => c.dataset.sysKey === text);
+    const sysRun = [];       // the unbroken run of join / leave lines at the bottom
+    for (const c of shownRecent) { if (!c.classList.contains("sys-joinleave")) break; sysRun.push(c); }
+    const grpTarget = sysRun.find(c => c.dataset.grpKind === kind && Math.abs(tsNow - Number(c.dataset.grpTs)) <= 30000);
+    if (grpTarget) {
+      let list = []; try { list = JSON.parse(grpTarget.dataset.grpNames) || []; } catch (e) {}
+      let changed = false;
+      for (const nm of grpNames) if (!list.includes(nm) && list.length < 50) { list.push(nm); changed = true; }
+      grpTarget.dataset.grpNames = JSON.stringify(list);
+      grpTarget.dataset.grpTs = String(tsNow);
+      if (changed) {
+        const grouped = list.length === 1 ? list[0] + " " + kind : list.length > 4 ? "Several people " + kind : list.slice(0, -1).join(", ") + " and " + list[list.length - 1] + " " + kind;
+        grpTarget.dataset.sysKey = grouped;
+        delete grpTarget.dataset.sysN;
+        const gb = grpTarget.querySelector(".msg-bubble"); if (gb) gb.textContent = grouped;
+      }
+      return;
+    }
+    // Same line again within the last 5 shown messages: count it ("X joined x2" ... "x9+") instead of adding another one.
+    const dup = shownRecent.slice(0, 5).find(c => c.dataset.sysKey === text);
     if (dup) {
       const n = (Number(dup.dataset.sysN) || 1) + 1;
       dup.dataset.sysN = String(n);
@@ -3290,13 +3365,14 @@ function renderMessage(msg) {
     const sysEl = document.createElement("div");
     sysEl.className = "msg system sys-joinleave";
     sysEl.dataset.sysKey = text;
-    if (joinOnly) { sysEl.dataset.joinNames = JSON.stringify([joinName]); sysEl.dataset.joinTs = String(Number(msg.ts) || Date.now()); }
+    sysEl.dataset.grpKind = kind; sysEl.dataset.grpNames = JSON.stringify(grpNames); sysEl.dataset.grpTs = String(tsNow);
     const sysBubble = document.createElement("div");
     sysBubble.className = "msg-bubble";
     sysBubble.textContent = text;
     sysEl.appendChild(sysBubble);
     $messages.appendChild(sysEl);
     messageCount++;
+    trimShownMessages();
     followIfPinned();
     return;
   }
@@ -3456,15 +3532,7 @@ function renderMessage(msg) {
   }
 
   messageCount++;
-  while (messageCount > MAX_MESSAGES) {
-    const first = $messages.querySelector(".msg");
-    if (!first) break;
-    // Trimming old rows from the top must not shove what you're reading upward.
-    const removed = first.offsetHeight;
-    first.remove();
-    if (!(autoScroll && stickToBottom) && removed) $messages.scrollTop = Math.max(0, $messages.scrollTop - removed);
-    messageCount--;
-  }
+  trimShownMessages();
 
   if (mine) scrollToBottom();
   else if (autoScroll && stickToBottom) followIfPinned();
@@ -5270,7 +5338,8 @@ function renderChatSettings(container) {
 
   card("\uD83D\uDCAC", "Chat", "How the conversation behaves");
   toggle("Auto scroll", "Keeps the newest message in view", () => autoScroll, v => setAutoScroll(v));
-  toggle("Low Power Mode", "Turns off animations and effects and refreshes lists less often. Everything comes back when it's off.", () => isLowPower(), v => { chatPrefs.lowPower = v; saveChatPrefs(); applyAppearance(); if (typeof renderMembersPane === "function") scheduleMembersRender(); });
+  toggle("Low Power Mode", "Turns off animations and effects, refreshes lists less often and keeps only the newest 15 messages on screen. Older ones come back when you open the room again with it off.", () => isLowPower(), v => { chatPrefs.lowPower = v; saveChatPrefs(); applyAppearance(); if (v) trimShownMessages(); if (typeof renderMembersPane === "function") scheduleMembersRender(); });
+  toggle("Hold new messages", "Waits half a second (a second in Low Power Mode) before showing other people's new messages, so floods and fake joins are cleaned up first and the screen doesn't jump around. Your own messages show at once.", () => settleOn(), v => { chatPrefs.settleDelay = v; saveChatPrefs(); if (!v) flushIncoming(); });
   toggle("Verified tag", "Show the green \u201cVerified\u201d tag next to verified people", () => chatPrefs.showVerified !== false, v => {
     chatPrefs.showVerified = v; saveChatPrefs(); applyAppearance();
   });
@@ -9021,7 +9090,8 @@ function attachRoomListeners() {
   ChatBackend.watchEdits(applyEdit);
   reactBootUntil = Date.now() + 3000;   // the burst of existing reactions at attach isn't news
   ChatBackend.watchReactions(onReactions);
-  ChatBackend.watchMessages(renderMessage);
+  clearTimeout(incomingTimer); incomingTimer = 0; incomingQ = [];   // nothing from the room I just left is still waiting
+  ChatBackend.watchMessages(onIncoming, dropIncoming);
   ChatBackend.watchLeaveEvents();
   ChatBackend.watchTyping(renderTyping, () => myName);
 }
