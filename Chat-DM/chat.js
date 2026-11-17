@@ -25,7 +25,7 @@ let dmAuthDb = null; // accounts database (vus-dm), shared with dm.js
 // (dm.js has the same block; whichever file loads first creates it.)
 window.VUS_LOADQ = window.VUS_LOADQ || (function () {
   const q = []; let started = false, t = null, holds = 0, startT = null;
-  function pump() { t = null; if (!started || holds > 0) return; const job = q.shift(); if (!job) return; try { job(); } catch (e) {} t = setTimeout(pump, 40); }
+  function pump() { t = null; if (!started || holds > 0) return; const job = q.shift(); if (!job) return; try { job(); } catch (e) {} t = setTimeout(pump, 150); }   // one background job every 150 ms: the rest of the app loads slowly so the chat keeps the connection
   function kick() { if (!t) t = setTimeout(pump, 0); }
   function start() { started = true; kick(); }
   startT = setTimeout(start, 6000);   // safety: never leave the queue waiting forever
@@ -108,7 +108,7 @@ const ROLES = {
 /* Highest-ranked role a person holds is their "effective" role. */
 const ROLE_ORDER = Object.values(ROLES).sort((a, b) => a.rank - b.rank).map(r => r.id);
 /* Lowest rank allowed to lift a ban (the /unban command and the profile card's Unban button both use this). */
-const UNBAN_MIN_RANK = ROLES.crown.rank;
+const UNBAN_MIN_RANK = ROLES.coowner.rank;   // Co-owner and Owner
 
 /* Bubble color: was write-once, now changeable every 10s. */
 const COLOR_CHANGE_COOLDOWN_MS = 10 * 1000;
@@ -179,11 +179,8 @@ function banLimitsForRank(rank) {
 }
 // What a rank may hand out / take away with /grant and /remove: Mods only Normie, Admins and up Mod and below.
 function canGrantRole(rank, roleId) {
-  return false;   // Ranks are no longer handed out or taken away from chat (not even by the Owner). Firebase console only.
-  const r = ROLES[roleId];
-  if (!r || r.implicit || roleId === "crown") return false;
-  if (r.rank >= rank) return false;
-  return rank >= ROLES.admin.rank || (rank >= ROLES.mod.rank && roleId === "normie");
+  // Only Normie can be given or taken away from chat, by Mod and above. Mod, Admin, Co-owner and Owner are set by hand in the Firebase console.
+  return roleId === "normie" && rank >= ROLES.mod.rank;
 }
 // Returns "" when ms is fine, otherwise a message telling the person exactly why not.
 function checkDurationLimits(ms, limits) {
@@ -666,17 +663,19 @@ const ChatBackend = {
   // ── Edits: edits/<messageId> = { text, by, ts }. Readers only apply an edit whose `by` is the message's author. ──
   watchEdits(cb) {
     const h = snap => cb(snap.key, snap.val());
-    this._editsRef.on("child_added", h);
-    this._editsRef.on("child_changed", h);
+    const ref = this._firstKey ? this._editsRef.orderByKey().startAt(this._firstKey) : this._editsRef;   // only edits of the messages on screen, not every edit ever made
+    ref.on("child_added", h);
+    ref.on("child_changed", h);
   },
   async editMessage(msgId, text, loginId) {
     await this._editsRef.child(msgId).set({ text, by: String(loginId), ts: firebase.database.ServerValue.TIMESTAMP });
   },
   // ── Reactions: reactions/<messageId>/<emoji>/<loginId> = true ──
   watchReactions(cb) {
-    this._reactionsRef.on("child_added", s => cb(s.key, s.val()));
-    this._reactionsRef.on("child_changed", s => cb(s.key, s.val()));
-    this._reactionsRef.on("child_removed", s => cb(s.key, null));
+    const ref = this._firstKey ? this._reactionsRef.orderByKey().startAt(this._firstKey) : this._reactionsRef;   // same: only the messages on screen
+    ref.on("child_added", s => cb(s.key, s.val()));
+    ref.on("child_changed", s => cb(s.key, s.val()));
+    ref.on("child_removed", s => cb(s.key, null));
   },
   async setReaction(msgId, emoji, loginId, on) {
     const ref = this._reactionsRef.child(msgId).child(emoji).child(String(loginId));
@@ -688,16 +687,22 @@ const ChatBackend = {
   },
 
   watchMessages(onMessage, onGone) {
-    if (window.VUS_LOADQ) window.VUS_LOADQ.startSoon(chatPrefs.chatFirst === false ? 1 : 2500);   // background loading starts once the main chat has had its turn (at once when Settings > Loading > Chat first is off)
+    if (window.VUS_LOADQ) window.VUS_LOADQ.startSoon(chatPrefs.chatFirst === false ? 1 : 7000);   // safety only: the real start is below, once the first batch of messages has arrived   // background loading starts once the main chat has had its turn (at once when Settings > Loading > Chat first is off)
     const q = this._ref.limitToLast(isLowPower() ? LOW_POWER_MESSAGES : MAX_MESSAGES);   // Low Power Mode only loads the newest 15
+    this._firstKey = null;
     q.on("child_added", snap => {
+      if (!this._firstKey) this._firstKey = snap.key;   // the oldest message on screen: edits and reactions only need to be read from here on
       onMessage({ id: snap.key, ...snap.val() });
     });
+    // "value" fires once the first batch of messages has been delivered: only now does the background loading start.
+    q.once("value", () => { if (window.VUS_LOADQ) window.VUS_LOADQ.startSoon(chatPrefs.chatFirst === false ? 1 : 900); });
     if (onGone) q.on("child_removed", snap => onGone(snap.key));   // lets a message that was deleted while it waited never show
   },
 
   // A message needs a one-time ticket issued to its sender's ID (api/chat/ticket, which checks the login token).
   // The ticket is spent in the same write, and the database rules refuse messages without a valid one.
+  // A plain send that remembers its own key BEFORE the local copy of the message shows up.
+  _pushKeyed(data) { const ref = this._pushRaw(); noteMySend(ref.key); return ref.set(data).then(() => ({ key: ref.key })); },
   async _signedPush(data) {
     if (data && data.system === true) return this._pushRaw(data);   // "X joined / left" lines have no sender
     if (isAiSender(data && data.loginId) && /^ch-ai$/.test(this.currentRoomId || "")) return this._pushRaw(data);
@@ -708,14 +713,14 @@ const ChatBackend = {
       try {
         if (data && data.loginId && window.VUS_AUTH && window.VUS_AUTH.softTicket) soft = await window.VUS_AUTH.softTicket(String(data.loginId), String(data.name || ""));
       } catch (e) { soft = ""; }
-      if (!soft) return this._pushRaw(data);
+      if (!soft) return this._pushKeyed(data);
       try {
-        const skey = this._pushRaw().key, sup = {};
+        const skey = this._pushRaw().key, sup = {}; noteMySend(skey);
         sup[this._msgsPath + "/" + skey] = Object.assign({}, data, { ticket: soft });
         sup["tickets/" + data.loginId + "/" + soft] = null;
         await this._db.ref().update(sup);
         return { key: skey };
-      } catch (e) { return this._pushRaw(data); }   // anything goes wrong: plain send, nobody is blocked
+      } catch (e) { return this._pushKeyed(data); }   // anything goes wrong: plain send, nobody is blocked
     }
     let ticket;
     try {
@@ -726,7 +731,7 @@ const ChatBackend = {
       showComposerNotice(m === "NO_TOKEN" ? "Messages need a one-time password confirmation on this device." : m === "OFFLINE" ? "Couldn't reach the chat server. Check your connection." : m);
       throw e;
     }
-    const key = this._pushRaw().key, updates = {};
+    const key = this._pushRaw().key, updates = {}; noteMySend(key);
     updates[this._msgsPath + "/" + key] = Object.assign({}, data, { ticket });
     updates["tickets/" + data.loginId + "/" + ticket] = null;
     await this._db.ref().update(updates);
@@ -1402,7 +1407,7 @@ const ChatBackend = {
   },
 
   async grantRoleToId(roleId, loginId) {
-    throw new Error("Ranks can only be changed in the Firebase console.");
+    if (roleId !== "normie") throw new Error("Only Normie can be changed from chat. Other ranks are set in the Firebase console.");
     if (!ROLES[roleId] || ROLES[roleId].implicit || !loginId) throw new Error("Invalid role grant");
     if (roleId === "mod" || roleId === "normie") await this.issue("grants", { k: "role", t: loginId, v: roleId });
     await this._roleIdRefs[roleId].child(this._pid(loginId)).set(true);
@@ -1423,7 +1428,7 @@ const ChatBackend = {
   },
 
   async grantTemporaryRoleToId(roleId, loginId, durationMs, byLoginId) {
-    throw new Error("Ranks can only be changed in the Firebase console.");
+    if (roleId !== "normie") throw new Error("Only Normie can be changed from chat. Other ranks are set in the Firebase console.");
     if (!ROLES[roleId] || ROLES[roleId].implicit || roleId === "crown" || !loginId || durationMs <= 0) {
       throw new Error("Invalid temporary role grant");
     }
@@ -1439,7 +1444,7 @@ const ChatBackend = {
   },
 
   async removeRoleFromId(roleId, loginId) {
-    throw new Error("Ranks can only be changed in the Firebase console.");
+    if (roleId !== "normie") throw new Error("Only Normie can be changed from chat. Other ranks are set in the Firebase console.");
     if (!ROLES[roleId] || ROLES[roleId].implicit || !loginId) throw new Error("Invalid role removal");
     clearTimeout(this._temporaryRoleTimers[roleId + ":" + loginId]);
     if (roleId === "mod" || roleId === "normie") await this.issue("grants", { k: "unrole", t: loginId, v: roleId });
@@ -2601,6 +2606,10 @@ function toggleMute(loginId, name) {
   renderMembersPane();
   return isMuted(id);
 }
+// Keys of messages THIS tab just sent. They are remembered from the moment the key exists (before the database even confirms the write),
+// so my own messages are never held back by the sender checks below and can't vanish if a lookup stalls or fails.
+const mySentKeys = new Set();
+function noteMySend(k) { if (!k) return; mySentKeys.add(String(k)); if (mySentKeys.size > 300) mySentKeys.delete(mySentKeys.values().next().value); }
 let liveSince = 0;                     // messages stamped after this arrived while we were here
 /* Read-side rules: this version refuses to SHOW what the sender's role would not have let them send.
    The send box already enforces this for honest clients; this makes a modified client's messages invisible
@@ -3478,7 +3487,7 @@ function renderMessage(msg) {
 
   // Messages that look like MINE (same name) get the same check as anyone else's: someone posting in my name from another device,
   // or using my account ID, has to carry my real equipped items too, or the message stays hidden on this screen.
-  if (mine && /^\d{6}$/.test(String(msg.loginId || "")) && liveSince && Number(msg.ts) >= liveSince) { needsVerify = true; el.classList.add("anon-hidden"); }
+  if (mine && /^\d{6}$/.test(String(msg.loginId || "")) && liveSince && Number(msg.ts) >= liveSince && !(msg.id && mySentKeys.has(String(msg.id)))) { needsVerify = true; el.classList.add("anon-hidden"); }
 
   if (activeChannelId === "announce") {
     el.classList.add("ann-msg");
@@ -3636,8 +3645,17 @@ function renderMessage(msg) {
       if (toMe) pushNotif({ id: "p:" + (msg.id || msg.ts), type: "replies", from: msg.name, text: stripMentionMarks(msg.text), ts: msg.ts, msgId: msg.id });
     }
   };
+  // If the sender check stalls (a busy connection), plain text is shown after 8 seconds instead of staying hidden for good.
+  // A check that finishes later and says the message is fake still hides it again. Pictures and videos always wait for the check.
+  const failOpenT = needsVerify ? setTimeout(() => {
+    if (!el.isConnected || el.dataset.forged || !el.classList.contains("anon-hidden") || msg.imageData || msg.video || msg.gif) return;
+    el.classList.remove("anon-hidden");
+    if (!mine) firePing();
+    if (autoScroll && stickToBottom) scrollToBottom();
+  }, 8000) : 0;
   if (needsVerify && window.VUS_DM && window.VUS_DM.verifySender) {
     window.VUS_DM.verifySender(msg.loginId, msg.name).then(async r => {
+      clearTimeout(failOpenT);
       // Text: hidden only if the id isn't a real account. Images: the account must be real, the name must match it,
       // and the sender must actually have image access (rank above Normie, or granted by a higher-up).
       const isMedia = !!(msg.imageData || msg.video || msg.gif);
@@ -4159,7 +4177,7 @@ function applyMyMute() {
    nothing else -- refreshing, closing and reopening the tab, or trying the
    login form directly all land back here as long as the ban is active. A
    temporary ban counts down live and clears itself the instant it expires;
-   a permanent ban stays until an Owner runs /unban.
+   a permanent ban stays until an Owner or Co-owner runs /unban.
    ══════════════════════════════════════════════════════════ */
 let banCountdownTimer = null;
 
@@ -4313,10 +4331,10 @@ const SLASH_COMMANDS = [
     desc: rank => "Ban the account ID, so a new name won't get around it. " + (rank >= ROLES.crown.rank ? "Permanent." : "Lasts " + formatDurationShort(banLimitsForRank(rank).max) + " (the longest your rank can do).") + " A 6-digit ID works even if they're offline.", insert: "/ban " },
   { name: "/tempban", args: "time username or ID [reason]", minRank: ROLES.admin.rank,
     desc: () => "Ban the account ID for a while (" + limitsText(banLimitsForRank(myRank())) + ").", insert: "/tempban " },
-  { name: "/grant",   args: "rank perm|time username", minRank: 99,
-    desc: rank => "Give a rank below yours. perm = permanent, or a time (" + limitsText(TIME_LIMITS.tempGrant) + "). " + (rank >= ROLES.admin.rank ? "Ranks: normie, mod, admin, coowner." : "Mods can give Normie."), insert: "/grant " },
-  { name: "/remove",  args: "rank username",          minRank: 99,
-    desc: rank => rank >= ROLES.admin.rank ? "Take away a rank below yours." : "Take away Normie from someone.", insert: "/remove " },
+  { name: "/grant",   args: "normie perm|time username", minRank: ROLES.mod.rank,
+    desc: () => "Give Normie to someone. perm = permanent, or a time (" + limitsText(TIME_LIMITS.tempGrant) + "). Other ranks are set in the Firebase console.", insert: "/grant normie " },
+  { name: "/remove",  args: "normie username",        minRank: ROLES.mod.rank,
+    desc: () => "Take Normie away from someone.", insert: "/remove normie " },
   { name: "/staff",   args: "", minRank: ROLES.mod.rank,
     desc: "Sign in as staff with your MZK email and password. Needed for bans and mutes once the Owner turns on staff-only moderation.", insert: "/staff" },
   { name: "/image",   args: "on|off username",        minRank: ROLES.admin.rank,
@@ -4613,7 +4631,7 @@ async function handleModerationCommand(text) {
   }
   if (command !== "/afk") ChatBackend.logCommand(text);   // /afk isn't worth tracking
 
-  // ── /unban (Owner) ──
+  // ── /unban (Co-owner and Owner) ──
   if (command === "/unban") {
     if (parts.length < 2) { showComposerNotice("Use /unban username or /unban loginID"); return true; }
     try {
@@ -4750,22 +4768,16 @@ async function handleModerationCommand(text) {
     return true;
   }
 
-  // ── /remove ──
+  // ── /remove (Normie only) ──
   if (command === "/remove") {
-    showComposerNotice("Ranks can only be changed in the Firebase console.");
-    return true;
     if (parts.length < 3) { showComposerNotice("Use /remove rank username, such as /remove mod alex"); return true; }
     const roleToRemove = ROLES[parts[1].toLowerCase()];
     if (!roleToRemove || roleToRemove.implicit || roleToRemove.id === "crown") {
-      showComposerNotice("Rank must be one of: normie, mod, admin, coowner.");
-      return true;
-    }
-    if (roleToRemove.rank >= rank) {
-      showComposerNotice("You can only remove ranks below your own.");
+      showComposerNotice("Only Normie can be removed from chat: /remove normie username");
       return true;
     }
     if (!canGrantRole(rank, roleToRemove.id)) {
-      showComposerNotice("Mods can only remove Normie.");
+      showComposerNotice("Only Normie can be removed from chat. Other ranks are changed in the Firebase console.");
       return true;
     }
     const target = await resolveModerationTarget(parts.slice(2).join(" "), { allowOfflineId: true });
@@ -4781,26 +4793,19 @@ async function handleModerationCommand(text) {
     return true;
   }
 
-  // ── /grant rank perm|time username ──
+  // ── /grant normie perm|time username (Normie only) ──
   if (command === "/grant") {
-    showComposerNotice("Ranks can only be changed in the Firebase console.");
-    return true;
     if (parts.length < 3) {
       showComposerNotice("Use /grant rank perm username, or /grant rank 2h username (" + limitsText(TIME_LIMITS.tempGrant) + ").");
       return true;
     }
     const roleToGrant = ROLES[parts[1].toLowerCase()];
     if (!roleToGrant || roleToGrant.implicit || roleToGrant.id === "crown") {
-      showComposerNotice("Rank must be one of: normie, mod, admin, coowner.");
-      return true;
-    }
-    // You can only hand out ranks strictly below your own.
-    if (roleToGrant.rank >= rank) {
-      showComposerNotice("You can only grant ranks below your own.");
+      showComposerNotice("Only Normie can be given from chat: /grant normie perm username");
       return true;
     }
     if (!canGrantRole(rank, roleToGrant.id)) {
-      showComposerNotice("Mods can only give Normie.");
+      showComposerNotice("Only Normie can be given from chat. Other ranks are changed in the Firebase console.");
       return true;
     }
     // Third word is "perm" or a time only when a name follows it, so someone
@@ -6252,7 +6257,7 @@ async function renderModList() {
     $modListBody.appendChild(empty);
     return;
   }
-  const isOwner = myRank() >= ROLES.crown.rank;
+  const isOwner = myRank() >= ROLES.crown.rank, canUnban = myRank() >= UNBAN_MIN_RANK;
   rows.sort((a, b) => a.name.localeCompare(b.name)).forEach(r => {
     const row = document.createElement("div");
     row.className = "room-member-row";
@@ -6273,7 +6278,7 @@ async function renderModList() {
     if (modListTab !== "bans") {
       addBtn(modListTab === "temp" ? "Make permanent" : "Ban", "kick", () => { if (guardModerationTarget(target, "ban")) openBanConfirm(target, 0, "", true); });
     }
-    if (isOwner) {
+    if (modListTab === "timeouts" ? isOwner : canUnban) {
       addBtn(modListTab === "timeouts" ? "Clear" : "Unban", "", async () => {
         try {
           if (modListTab === "timeouts") { await ChatBackend.clearTimeout_(r.id); logClickCommand("/unmute " + r.id + " (" + r.name + ")"); }
@@ -6828,7 +6833,7 @@ function rankGuideLines(role) {
   if (canGrant) lines.push(["Can give out", grantable.map(r => r.icon + " " + r.label).join(", ") + ", permanently or for a set time."]);
   if (role.id === "coowner") lines.push(["Commands", "The same as " + ROLES.admin.icon + " " + ROLES.admin.label + "."]);
   return { lines, newCommands, notes: [
-    role.id === "crown" ? "The only rank that can /unban." : null,
+    role.rank >= UNBAN_MIN_RANK ? "Owner and Co-owner can /unban." : null,
     byHand ? "Can't be banned or muted." : null
   ].filter(Boolean) };
 }
@@ -6954,7 +6959,7 @@ async function renderOwnerMenuList() {
   $ownerMenuList.innerHTML = "";
   renderStaffCommands();
 
-  if (staffMenuMode === "owner") {
+  if ((staffMenuMode === "owner" || staffMenuMode === "admin") && myRank() >= UNBAN_MIN_RANK) {
     const staffTools = document.createElement("div");
     staffTools.className = "staff-tools";
     const unbanBtn = document.createElement("button");
@@ -9169,14 +9174,20 @@ function attachRoomListeners() {
   Object.keys(timeoutsAll).forEach(k => delete timeoutsAll[k]);
   ChatBackend.watchAllTimeouts((id, val) => { if (val) timeoutsAll[id] = val; else delete timeoutsAll[id]; refreshSilencedMessages(); });
   Object.keys(mediaExp).forEach(k => delete mediaExp[k]);
-  ChatBackend.watchMedia(onMediaMeta);
-  ChatBackend.watchEdits(applyEdit);
-  reactBootUntil = Date.now() + 3000;   // the burst of existing reactions at attach isn't news
-  ChatBackend.watchReactions(onReactions);
+  // CHAT FIRST: the messages are requested before anything else. Edits, reactions and clips of the room load afterwards, one at a time
+  // through the background queue (and only if you are still in the same room by then).
   clearTimeout(incomingTimer); incomingTimer = 0; incomingQ = [];   // nothing from the room I just left is still waiting
   ChatBackend.watchMessages(onIncoming, dropIncoming);
   ChatBackend.watchLeaveEvents();
   ChatBackend.watchTyping(renderTyping, () => myName);
+  const roomNow = ChatBackend.currentRoomId;
+  const later = fn => {
+    const job = () => { if (ChatBackend.currentRoomId === roomNow) { try { fn(); } catch (e) { console.error("[VUS Chat] background load failed:", e); } } };
+    if (window.VUS_LOADQ) window.VUS_LOADQ.add(job); else setTimeout(job, 3000);
+  };
+  later(() => ChatBackend.watchMedia(onMediaMeta));
+  later(() => ChatBackend.watchEdits(applyEdit));
+  later(() => { reactBootUntil = Date.now() + 3000; ChatBackend.watchReactions(onReactions); });
 }
 
 let chatBooted = false;
@@ -9242,11 +9253,17 @@ function bootChat() {
     scheduleVerifyRefresh();
     if (on && !was) setTimeout(reportUnverifiedHolders, 2500);
   });
-  recsWatchAt = Date.now();
-  ChatBackend.watchRecs("actions", onRec);
-  ChatBackend.watchRecs("grants", onRec);
-  setTimeout(startAnnouncementWatch, 2500);
-  ChatBackend.watchAllBans((id, val) => { if (val) bansAll[id] = val; else delete bansAll[id]; refreshSilencedMessages(); });
+  // The approval records and the full ban list are not needed to show messages: they load in the background after the chat.
+  {
+    const lateStart = () => {
+      recsWatchAt = Date.now();
+      ChatBackend.watchRecs("actions", onRec);
+      ChatBackend.watchRecs("grants", onRec);
+    };
+    const lateBans = () => ChatBackend.watchAllBans((id, val) => { if (val) bansAll[id] = val; else delete bansAll[id]; refreshSilencedMessages(); });
+    if (window.VUS_LOADQ) { window.VUS_LOADQ.add(lateStart); window.VUS_LOADQ.add(lateBans); } else { setTimeout(lateStart, 3000); setTimeout(lateBans, 3500); }
+    setTimeout(startAnnouncementWatch, 4500);
+  }
   // The whole inventory tree is only needed for protection checks (the database rules check those too) and the Inventory window,
   // so it, and the Lists panel data, load after the chat has had its turn instead of competing with your first message.
   // Settings > Loading > "Inventory and Lists data": when it's off, these wait until Inventory or Lists is first opened (ensureInvLoaded).

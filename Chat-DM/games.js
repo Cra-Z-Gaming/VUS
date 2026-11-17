@@ -363,7 +363,7 @@
   }
 
   // ── game state (live from the database) ──
-  var games = {}, pgames = {}, listenRef = null, pgRef = null, myGid = "", myMode = "", loop = null, lastId = "", lastSig = "", myPicks = {}, lastPing = 0;
+  var games = {}, pgames = {}, listenRef = null, pgRef = null, myGid = "", myMode = "", loop = null, lastId = "", lastSig = "", myPicks = {}, lastPing = 0, spectate = null;
   function startListening() {
     var d = db(); if (!d) return;
     if (!listenRef) { listenRef = d.ref("games"); listenRef.on("value", function (s) { games = s.val() || {}; onGames(); }, function () {}); }
@@ -386,12 +386,15 @@
     var mine = findMine();
     if (mine && (mine.gid !== myGid || mine.mode !== myMode)) { myGid = mine.gid; myMode = mine.mode; startLoop(); }
     if (myGid && !viewOf(myGid, myMode)) { myGid = ""; stopLoop(); }
+    if (spectate && (myGid || !viewOf(spectate.gid, spectate.mode))) spectate = null;   // started playing, or the watched game was removed
     badge();
     if (!open) return;
     // only redraw when something you can see changed (the players' heartbeats change the data every few seconds)
     var g = myGid ? viewOf(myGid, myMode) : null;
     var waiting = waitingList().map(function (w) { return [w.gid, w.mode, w.type, w.bet, w.host]; });
-    var sig = JSON.stringify([me(), stock(), serverUp, modePref, myGid, g ? [g.status, g.board, g.turn, g.score, g.round, g.rn, g.picked, g.draws, g.result, g.overtime, g.deadline, g.lastRound, g.winCells, g.p] : waiting]);
+    var sg = (!g && spectate) ? viewOf(spectate.gid, spectate.mode) : null;
+    var live = liveList().map(function (w) { return [w.gid, w.mode, w.type, w.bet, w.a, w.b, w.score]; });
+    var sig = JSON.stringify([me(), stock(), serverUp, modePref, myGid, spectate && spectate.gid, g ? [g.status, g.board, g.turn, g.score, g.round, g.rn, g.picked, g.draws, g.result, g.overtime, g.deadline, g.lastRound, g.winCells, g.p] : sg ? [sg.status, sg.board, sg.turn, sg.score, sg.round, sg.rn, sg.picked, sg.draws, sg.result, sg.overtime, sg.lastRound, sg.winCells] : [waiting, live]]);
     if (sig !== lastSig) { lastSig = sig; render(); }
   }
   function badge() { var g = myGid ? viewOf(myGid, myMode) : null; btn.style.color = g && g.status !== "done" ? "#4ade80" : ""; }
@@ -435,7 +438,7 @@
     errBox = el("div", "gm-err"); wrap.appendChild(errBox);
     if (!me()) { wrap.appendChild(el("div", "gm-note", "Log in to play games.")); return; }
     var g = myGid ? viewOf(myGid, myMode) : null;
-    if (g) renderGame(wrap, g); else renderLobby(wrap);
+    if (g) renderGame(wrap, g); else if (spectate && viewOf(spectate.gid, spectate.mode)) renderSpectate(wrap, viewOf(spectate.gid, spectate.mode)); else renderLobby(wrap);
   }
 
   function renderLobby(wrap) {
@@ -480,6 +483,73 @@
       row.append(info, j); l.appendChild(row);
     });
     wrap.appendChild(l);
+    renderLiveGames(wrap);
+  }
+
+  // ── Spectating: anyone can watch a running 1v1 game (read-only). Spectators never write anything. ──
+  function liveList() {
+    var out = [];
+    Object.keys(games).forEach(function (k) {
+      var g = games[k];
+      if (g && g.status === "playing" && g.p && g.p.a && g.p.b) out.push({ gid: k, mode: "secure", type: g.type || "ttt", bet: g.bet, a: g.p.a.name, b: g.p.b.name, score: g.score || { a: 0, b: 0 }, started: g.startedAt || 0 });
+    });
+    Object.keys(pgames).forEach(function (k) {
+      var r = pgames[k]; if (!r || !r.a || !r.b) return;
+      var st = derive(r); if (st.status !== "playing") return;
+      out.push({ gid: k, mode: "direct", type: r.type, bet: r.bet, a: r.a.name, b: r.b.name, score: st.score, started: st.startT || 0 });
+    });
+    return out.sort(function (x, y) { return y.started - x.started; });
+  }
+  function renderLiveGames(wrap) {
+    var list = liveList();
+    var c = el("div", "gm-card"); c.appendChild(el("h3", "", "Live games (watch)"));
+    if (!list.length) c.appendChild(el("div", "gm-note", "No games are being played right now."));
+    list.forEach(function (w) {
+      var row = el("div", "gm-row"), info = el("div", "grow"), b = el("b", "", w.a + " vs " + w.b);
+      b.appendChild(el("span", "gm-tag " + (w.mode === "secure" ? "s" : "d"), w.mode === "secure" ? "Secure" : "Direct"));
+      info.appendChild(b);
+      info.appendChild(el("span", "", (NAMES[w.type] || "Game") + " \u00B7 bet " + w.bet + "x" + (w.type === "c4" ? "" : " \u00B7 score " + w.score.a + "\u2013" + w.score.b)));
+      var v = el("button", "gm-btn p", "Watch"); v.type = "button";
+      v.onclick = function () { spectate = { gid: w.gid, mode: w.mode }; lastSig = ""; showErr(""); render(); };
+      row.append(info, v); c.appendChild(row);
+    });
+    wrap.appendChild(c);
+  }
+  function renderSpectate(wrap, g) {
+    var type = g.type || "ttt", sc = g.score || { a: 0, b: 0 }, A = g.p.a.name, B = g.p.b ? g.p.b.name : "";
+    var top = el("div", "gm-top");
+    var left = el("div"); left.appendChild(el("div", "gm-pl", A));
+    var mid = el("div", "gm-center"); mid.appendChild(el("div", "gm-score", type === "c4" ? "vs" : sc.a + " \u2013 " + sc.b));
+    var sub = el("div", "gm-note", "\uD83D\uDC41 Watching \u00B7 " + (NAMES[type] || "Game") + " \u00B7 pot " + crates(g.bet * 2));
+    sub.appendChild(el("span", "gm-tag " + (g.mode === "direct" ? "d" : "s"), g.mode === "direct" ? "Direct" : "Secure")); mid.appendChild(sub);
+    var right = el("div"); right.style.textAlign = "right"; right.appendChild(el("div", "gm-pl", B));
+    top.append(left, mid, right); wrap.appendChild(top);
+    var card = el("div", "gm-card");
+    if (g.status === "playing") {
+      timerEl = el("div", "gm-timer"); var tw = el("div", "gm-center"); tw.appendChild(timerEl); card.appendChild(tw);
+      if (type === "rps") {
+        var pk = g.picked || {};
+        card.appendChild(el("div", "gm-status", "Round " + g.round + ": " + A + (pk.a ? " has picked" : " is choosing") + ", " + B + (pk.b ? " has picked" : " is choosing")));
+        var lr = g.lastRound;
+        if (lr && lr.a) card.appendChild(el("div", "gm-banner", "Last round: " + A + " " + ICON[lr.a] + " vs " + B + " " + ICON[lr.b] + " \u2014 " + (lr.winner ? (lr.winner === "a" ? A : B) + " won it." : "a tie.")));
+      } else {
+        var first = type === "c4" ? ["Red", "Yellow"] : ["X", "O"], starter = g.starter || "a";
+        card.appendChild(el("div", "gm-status", (g.turn === "a" ? A : B) + "'s turn"));
+        card.appendChild(type === "c4" ? c4Board(g, false, false) : tttBoard(g, false, false));
+        card.appendChild(el("div", "gm-note gm-center", first[0] + ": " + (starter === "a" ? A : B) + " \u00B7 " + first[1] + ": " + (starter === "a" ? B : A)));
+      }
+    } else {
+      var r = g.result || {};
+      var d = el("div", "gm-done");
+      d.appendChild(el("h3", "", r.winner ? (r.winner === "a" ? A : B) + " won!" : "No winner (refunded)"));
+      d.appendChild(el("div", "gm-note", r.msg || "The game ended."));
+      if (type === "c4" && g.board) d.appendChild(c4Board(g, false, false));
+      if (type === "ttt" && g.board) d.appendChild(tttBoard(g, false, false));
+      card.appendChild(d);
+    }
+    var stop = el("button", "gm-btn", "Stop watching"); stop.type = "button"; var sw = el("div", "gm-center"); sw.appendChild(stop); card.appendChild(sw);
+    stop.onclick = function () { spectate = null; lastSig = ""; render(); };
+    wrap.appendChild(card);
   }
 
   async function act(fn) {
@@ -578,7 +648,7 @@
     timerEl.textContent = (g.overtime ? "Overtime " : "Time left ") + fmt(left);
     timerEl.classList.toggle("ot", !!g.overtime);
   }
-  setInterval(function () { var g = myGid ? viewOf(myGid, myMode) : null; if (open && g && g.status === "playing") paintTimer(g); }, 500);
+  setInterval(function () { var g = myGid ? viewOf(myGid, myMode) : (spectate ? viewOf(spectate.gid, spectate.mode) : null); if (open && g && g.status === "playing") paintTimer(g); }, 500);
 
   // A finished result should also be noticed when the panel is closed.
   var shown = {};
