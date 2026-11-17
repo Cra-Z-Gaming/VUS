@@ -11022,9 +11022,13 @@ async function buyShop(item, qty) {
 
 /* ══════════ Community rules and Reports ══════════ */
 const COMMUNITY_RULES = [
-  "No hate speech, racism, or hate against religions.",
-  "No spamming.",
-  "No begging for ranks or crates."
+  "No hate speech",
+  "No spam",
+  "No begging for additions to your account (coins, crates, or effects)",
+  "No LGBTQIA+ slander",
+  "Staff gets the last word",
+  "Respect higher ranks",
+  "No hacking/client usage unless given permission by @Owna (using vus api is allowed)"
 ];
 let rulesModal = null;
 function openRules() {
