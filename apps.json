@@ -1,6 +1,6 @@
 {
-"updated":"November 15, 2026 - 6:48 PM",
-"message":"",
+"updated":"November 17, 2026 - 4:37 PM",
+"message":"added leafy's cool app (check it out its actualy good)",
 "apps":[
 {"name":"VUS-OS","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS-OS/refs/heads/main/index.html","desc":"Desktop version of VUS Hub","icon":"OS","color":"white"},
 {"name":"VUS Launcher","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL","desc":"Main game hub — V17.4","icon":"🎮","color":"green"},
@@ -17,8 +17,8 @@
 {"name":"VUS Zoom","url":"https://us05web.zoom.us/j/2711738491?pwd=pb0mpLVhlFOv5kpE0hm0DCqe2HuvFl.1","desc":"zoom meeting that should stay alive 24/7 with a timeout of 30 minutes per sesh","icon":"Zoom","color":"blue"},
 {"name":"VUS jitsi meet","url":"https://meet.mixp.org/VUS","desc":"alternative to zoom","icon":"JM","color":"blue"},
 {"name":"Google Meet","url":"https://meet.google.com/nzg-xquv-mgk","desc":"i lowk dont know how to do ts so here u go fr","icon":"GM","color":""},
-{"name":"multiple hubs test","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Multi-Hub","desc":"","icon":"","color":""},
-{"name":"","url":"","desc":"","icon":"","color":""},
+{"name":"multiple hubs test","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Multi-Hub","desc":"super clean app, built in opium","icon":"","color":""},
+{"name":"LEAFY","url":"https://raw.githubusercontent.com/SOCCERURP11/Leafy/refs/heads/main/leafy.html","desc":"","icon":"","color":""},
 {"name":"ixxl OS","url":"https://raw.githubusercontent.com/weirdsimplegames/My-os/main/launcher.html","desc":"","icon":"","color":""},
 {"name":"Nebula Chat","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/other/STH.html","desc":"Nebula Chat / Sal The Healer's Chat","icon":"STH","color":""},
 {"name":"EDN Terminal","url":"https://raw.githubusercontent.com/EdenVRCC/EdenVRCC.github.io/refs/heads/main/index.html","desc":"","icon":"","color":""},
