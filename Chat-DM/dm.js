@@ -1487,6 +1487,8 @@ function applyUiMode() {
   $friendsTitle.textContent = DM_VIEW_TITLES[dmSidebarView] || "";
   // chat.js listens for this to start/stop the rooms list's live countdowns.
   window.dispatchEvent(new CustomEvent("vus:mode", { detail: { mode: dm ? "dm" : "chat" } }));
+  if (dm) setTimeout(markOpenThreadSeen, 0);   // coming back to a thread that stayed open: it is read now
+  scheduleUnread();
 }
 
 // Lets chat.js (rooms rail) leave DM mode without reaching into this file.
@@ -2244,7 +2246,7 @@ let myGroupChats = [];
    account to say "this thread exists" -- that is how "Other chats" finds people you haven't added.
    ══════════════════════════════════════════════════════════ */
 let unreadCounts = {}, lastReadMap = {}, localLastRead = {}, threadMsgs = {}, unreadRefs = {};
-let serverOffset = 0, unreadTimer = null, lastUnreadSig = "", otherChatKeys = [];
+let serverOffset = 0, unreadTimer = null, lastUnreadSig = "", otherChatKeys = [], unreadBase = 0;
 const badgeText = n => (n > 99 ? "99+" : String(n));
 function serverNow() { return Date.now() + serverOffset; }
 
@@ -2257,14 +2259,28 @@ function currentOpenThreadKey() {
 const markReadTimers = {};
 function markLastRead(key) {
   if (!currentSession || !key) return;
-  localLastRead[key] = serverNow();
+  localLastRead[key] = Math.max(serverNow(), lastActivity(key));   // never earlier than the newest message, so a small clock difference can't leave a phantom "1 unread"
   clearTimeout(markReadTimers[key]);
   const uid = currentSession.accountKey;
   markReadTimers[key] = setTimeout(() => {
     try { usersRef.child(uid).child("lastRead").child(key).set(firebase.database.ServerValue.TIMESTAMP).catch(() => {}); } catch (e) {}
   }, 400);
   scheduleUnread();
+  try { window.dispatchEvent(new CustomEvent("vus:dm-read", { detail: { key } })); } catch (e) {}   // chat.js clears that conversation's bell entries
 }
+
+// Am I really looking at my DMs right now? An open conversation only counts as read while the DM screen is showing and the tab is visible.
+// (Before this, a message that arrived while the thread was open but you were in Chat, or in another tab, was marked read and never alerted.)
+function viewingDm() { return uiMode === "dm" && document.visibilityState === "visible"; }
+function markOpenThreadSeen() {
+  const k = currentOpenThreadKey();
+  if (!k || !currentSession || !viewingDm()) return;
+  const els = $chatMessages ? $chatMessages.querySelectorAll(".chat-msg") : [];
+  const last = els.length ? els[els.length - 1].dataset.msgId : "";
+  if (last) markThreadRead(k, last, !!openChatGcId); else markLastRead(k);
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") markOpenThreadSeen(); scheduleUnread(); });
+window.addEventListener("focus", () => markOpenThreadSeen());
 
 // Load order (same block as in chat.js; whichever file loads first creates it): DM/group names show first, the unread/last-message
 // loading of every thread runs afterwards one at a time, and it pauses while you open a DM or group so that one loads first.
@@ -2288,11 +2304,19 @@ function ensureUnreadWatch(key, isGroup) {
 }
 function ensureUnreadWatchNow(key, isGroup) {
   if (!currentSession || !dmsRef || unreadRefs[key]) return;
-  if (lastReadMap[key] === undefined && localLastRead[key] === undefined) markLastRead(key);   // first time: start from "now"
+  if (lastReadMap[key] === undefined && localLastRead[key] === undefined) {
+    // First time this thread is seen: only messages from now on count. "Now" is when this login started (not when the background queue got
+    // round to this thread), so a message that arrived while the queue was still busy isn't swallowed.
+    localLastRead[key] = unreadBase || serverNow();
+    try { usersRef.child(currentSession.accountKey).child("lastRead").child(key).set(localLastRead[key]).catch(() => {}); } catch (e) {}
+  }
   const ref = (isGroup ? groupChatsRef.child(key) : dmsRef.child(key)).child("messages").limitToLast(100);
   threadMsgs[key] = [];
+  let live = false;   // false while the existing history is delivered, true for everything that arrives afterwards
+  ref.once("value", () => { live = true; });
   ref.on("child_added", snap => {
     const v = snap.val() || {};
+    if (live) announceIncoming(key, isGroup, snap.key, v);
     threadMsgs[key].push({ ts: v.ts || 0, from: v.fromAccountKey, text: v.text ? String(v.text).slice(0, 80) : (v.imageData ? "\uD83D\uDCF7 Photo" : (v.mediaId ? (v.mediaKind === "audio" ? "\uD83C\uDFB5 Audio" : "\uD83C\uDFAC Video") : "")) });
     scheduleUnread();
   });
@@ -2303,7 +2327,7 @@ function stopAllUnread() {
   Object.values(unreadRefs).forEach(r => { try { r.off("child_added"); } catch (e) {} });
   Object.values(markReadTimers).forEach(clearTimeout);
   Object.keys(unreadQueued).forEach(k => delete unreadQueued[k]);
-  unreadRefs = {}; threadMsgs = {}; unreadCounts = {}; lastReadMap = {}; localLastRead = {}; otherChatKeys = []; lastUnreadSig = "";
+  unreadRefs = {}; threadMsgs = {}; unreadCounts = {}; lastReadMap = {}; localLastRead = {}; otherChatKeys = []; lastUnreadSig = ""; unreadBase = 0;
   clearTimeout(unreadTimer); unreadTimer = null;
   updateDmBadge();
 }
@@ -2317,11 +2341,11 @@ function recomputeUnread() {
   if (!currentSession) return;
   const open = currentOpenThreadKey();
   Object.keys(threadMsgs).forEach(k => {
-    if (k === open) { unreadCounts[k] = 0; return; }
+    if (k === open && viewingDm()) { unreadCounts[k] = 0; return; }
     const lr = Math.max(lastReadMap[k] || 0, localLastRead[k] || 0);
     unreadCounts[k] = threadMsgs[k].filter(m => m.ts > lr && m.from !== currentSession.accountKey).length;
   });
-  const sig = JSON.stringify(unreadCounts) + "|" + open + "|" + Object.keys(threadMsgs).map(k => lastActivity(k)).join(",");
+  const sig = JSON.stringify(unreadCounts) + "|" + open + "|" + viewingDm() + "|" + Object.keys(threadMsgs).map(k => lastActivity(k)).join(",");
   if (sig !== lastUnreadSig) {
     lastUnreadSig = sig;
     if (currentUserData) renderFriendsList(currentUserData);
@@ -2340,6 +2364,71 @@ function updateDmBadge() {
   $dmRailDot.textContent = total > 0 ? badgeText(total) : "";
   $dmRailDot.classList.toggle("show", total > 0);
   $dmRailDot.title = total > 0 ? (sum + " unread" + (reqs ? ", " + reqs + " friend request" + (reqs === 1 ? "" : "s") : "")) : "";
+  document.title = (total > 0 ? "(" + badgeText(total) + ") " : "") + "VUS";   // the tab shows the count too, so you notice from another tab
+  try { window.dispatchEvent(new CustomEvent("vus:unread", { detail: { count: sum } })); } catch (e) {}
+}
+
+/* ── Incoming-message alerts and the Unread spot ──
+   announceIncoming() tells chat.js (window event "vus:dm-incoming") about a message that just arrived while you are NOT looking at that
+   conversation; chat.js puts it in the bell, plays the sound and shows the toast. unreadThreads()/openThread() feed the bell's
+   "Unread messages" list, and renderUnread() draws the "Unread" section at the top of the DM list. */
+function dmPreviewText(v) {
+  return v.text ? String(v.text).slice(0, 80) : (v.imageData ? "📷 Photo" : (v.mediaId ? (v.mediaKind === "audio" ? "🎵 Audio" : "🎬 Video") : ""));
+}
+function threadInfo(key) {
+  if (!currentSession || !key) return null;
+  const gc = myGroupChats.find(g => g.gcId === key);
+  if (gc) return { name: gc.name, isGroup: true, open: () => openGroupChat(gc.gcId), rowOpts: () => groupRowOpts(gc, false) };
+  const friends = (currentUserData && currentUserData.friends) || {};
+  for (const f of Object.keys(friends)) {
+    if (threadIdFor(currentSession.accountKey, f) === key) {
+      const d = friends[f];
+      return { name: d.username, isGroup: false, open: () => openChatWith(f, d.username), rowOpts: () => friendRowOpts(f, d, false) };
+    }
+  }
+  const o = otherChatKeys.find(x => x.key === key);
+  if (o && otherChatNames[o.other]) {
+    const nm = otherChatNames[o.other];
+    return { name: nm, isGroup: false, open: () => openChatWith(o.other, nm),
+      rowOpts: () => ({ name: nm, avatarKey: o.other, isGroup: false, threadKey: key, pinned: false, selected: openChatAccountKey === o.other, sub: "not friends", open: () => openChatWith(o.other, nm), menu: () => otherMenuItems(key, o.other, nm) }) };
+  }
+  return null;
+}
+function announceIncoming(key, isGroup, id, v) {
+  try {
+    if (!currentSession || !v || v.deleted || v.fromAccountKey === currentSession.accountKey) return;
+    if (currentUserData && currentUserData.blockedUsers && currentUserData.blockedUsers[v.fromAccountKey]) return;
+    if (viewingDm() && currentOpenThreadKey() === key) return;   // you are reading it right now
+    const info = threadInfo(key);
+    let label = info ? info.name : (v.fromUsername || "New message");
+    if (isGroup && v.fromUsername) label = v.fromUsername + " · " + label;
+    window.dispatchEvent(new CustomEvent("vus:dm-incoming", { detail: { key, id: String(id), label, text: dmPreviewText(v) || "New message", ts: Number(v.ts) || Date.now(), isGroup: !!isGroup } }));
+  } catch (e) {}
+}
+function unreadThreads() {
+  const out = [];
+  Object.keys(unreadCounts).forEach(k => {
+    const n = unreadCounts[k]; if (!(n > 0)) return;
+    const info = threadInfo(k); if (!info) return;
+    out.push({ key: k, count: n, name: info.name, isGroup: info.isGroup, preview: lastPreview(k) || "", ts: lastActivity(k) });
+  });
+  return out.sort((a, b) => b.ts - a.ts);
+}
+function openThread(key) { const info = threadInfo(key); if (info) info.open(); }
+function renderUnread() {
+  const host = document.getElementById("viewChats"), anchor = document.getElementById("pinnedLabel");
+  if (!host || !anchor) return;
+  let label = document.getElementById("unreadLabel"), list = document.getElementById("unreadList");
+  if (!label || !list) {
+    label = document.createElement("div"); label.id = "unreadLabel"; label.className = "list-section-label"; label.style.display = "none"; label.style.color = "#4ade80";
+    list = document.createElement("div"); list.id = "unreadList";
+    host.insertBefore(label, anchor); host.insertBefore(list, anchor);
+  }
+  list.innerHTML = "";
+  const items = unreadThreads();
+  label.style.display = items.length ? "block" : "none";
+  label.textContent = "Unread · " + items.reduce((a, t) => a + t.count, 0);
+  items.forEach(t => { const info = threadInfo(t.key); if (info) list.appendChild(buildDmRow(info.rowOpts())); });
 }
 
 // Threads with people who aren't friends: found through lastRead keys (see the note above).
@@ -2524,6 +2613,7 @@ function renderPinned() {
   items.sort((a, b) => b.v - a.v);   // newest pin first
   label.style.display = items.length ? "block" : "none";
   items.forEach(it => list.appendChild(it.build()));
+  renderUnread();
 }
 
 function renderOtherChats() {
@@ -2593,6 +2683,7 @@ function renderBlockedList(userData) {
 }
 
 function renderAllRelationshipUI(userData) {
+  if (!unreadBase && currentSession) unreadBase = serverNow();
   lastReadMap = Object.assign({}, (userData && userData.lastRead) || {});
   otherChatKeys = currentSession ? deriveOtherChats(userData) : [];
   otherChatKeys.forEach(o => ensureUnreadWatch(o.key, false));
@@ -3134,7 +3225,7 @@ function renderChatMessage(msg) {
     requestAnimationFrame(() => { $chatMessages.scrollTop = $chatMessages.scrollHeight; });
   }
 
-  if (!mine && (openChatGcId || openThreadId)) markThreadRead(openChatGcId || openThreadId, msg.id, !!openChatGcId);
+  if (!mine && (openChatGcId || openThreadId) && viewingDm()) markThreadRead(openChatGcId || openThreadId, msg.id, !!openChatGcId);
 }
 
 function updateRenderedMessage(msg) {
@@ -4260,6 +4351,8 @@ window.VUS_DM = {
     return prof ? prof.createdAt : 0;
   },
   searchUsernames: async (q) => { try { return (await searchByUsernamePrefix(q)).map(a => ({ username: a.username, id: a.id })); } catch (e) { return []; } },
+  unreadThreads,
+  openThread,
   isVerified: isVerifiedLoginId,
   verifyMzkStaffLogin,
   verifiedCached,

@@ -2916,6 +2916,7 @@ const NOTIF_TYPES = [
   ["mentions", "notifMentions", "Mentions", "When someone @mentions you"],
   ["replies", "notifReplies", "Replies", "When someone replies to your message"],
   ["reactions", "notifReactions", "Reactions", "When someone reacts to your message"],
+  ["dms", "notifDMs", "Direct messages", "When a friend or group sends you a DM while you aren't reading it"],
   ["staff", "notifStaff", "Moderation", "When you are muted or removed from a room"]
 ];
 let notifList = [];
@@ -2925,7 +2926,7 @@ function notifOn(type) { const t = NOTIF_TYPES.find(x => x[0] === type); return 
 function myNotifs() { return notifList.filter(n => n.uid === String(myLoginId || "")); }
 function pushNotif(n) {
   if (!myLoginId || !notifOn(n.type) || notifList.some(x => x.id === n.id && x.uid === String(myLoginId))) return false;
-  notifList.unshift({ id: n.id, type: n.type, text: String(n.text || "").slice(0, 140), from: String(n.from || "").slice(0, 40), emoji: n.emoji || "", ts: Number(n.ts) || Date.now(), msgId: n.msgId ? String(n.msgId) : "", uid: String(myLoginId), read: !!n.read });
+  notifList.unshift({ id: n.id, type: n.type, text: String(n.text || "").slice(0, 140), from: String(n.from || "").slice(0, 40), emoji: n.emoji || "", ts: Number(n.ts) || Date.now(), msgId: n.msgId ? String(n.msgId) : "", dmKey: n.dmKey ? String(n.dmKey).slice(0, 100) : "", uid: String(myLoginId), read: !!n.read });
   notifList = notifList.slice(0, 60);
   saveNotifs(); paintNotifBadge(); renderNotifPanel();
   return true;
@@ -2964,6 +2965,7 @@ function notifLine(n) {
     case "mentions": return [n.from + " mentioned you", n.text];
     case "replies": return [n.from + " replied to you", n.text];
     case "reactions": return [n.from + " reacted " + (n.emoji || "") + " to your message", n.text];
+    case "dms": return [n.from, n.text];
     default: return [n.text, ""];
   }
 }
@@ -2972,13 +2974,33 @@ function renderNotifPanel() {
   const list = notifPanel.querySelector("#npList");
   list.textContent = "";
   const items = myNotifs();
-  if (!items.length) { const e = document.createElement("div"); e.className = "np-empty"; e.textContent = "Nothing yet. Mentions, replies and reactions show up here, even ones from while you were away."; list.appendChild(e); return; }
+  // Unread direct messages (from the DM side) get their own spot at the top.
+  let unreadDm = [];
+  try { unreadDm = (window.VUS_DM && window.VUS_DM.unreadThreads) ? window.VUS_DM.unreadThreads() : []; } catch (e) { unreadDm = []; }
+  if (unreadDm.length) {
+    const head = document.createElement("div"); head.className = "np-empty"; head.style.cssText = "text-align:left;padding:8px 12px 2px;font-weight:700;color:#4ade80";
+    head.textContent = "Unread messages · " + unreadDm.reduce((a, t) => a + t.count, 0);
+    list.appendChild(head);
+    unreadDm.slice(0, 12).forEach(t => {
+      const row = document.createElement("button"); row.type = "button"; row.className = "np-row unread";
+      const ico = document.createElement("span"); ico.className = "np-ico"; ico.textContent = "💬";
+      const body = document.createElement("span"); body.className = "np-body";
+      const a = document.createElement("span"); a.className = "np-t1"; a.textContent = t.name + " · " + t.count + " unread"; body.appendChild(a);
+      if (t.preview) { const b = document.createElement("span"); b.className = "np-t2"; b.textContent = t.preview; body.appendChild(b); }
+      const tm = document.createElement("span"); tm.className = "np-time"; tm.textContent = notifAgo(t.ts);
+      row.append(ico, body, tm);
+      row.addEventListener("click", () => { closeNotifPanel(); if (window.VUS_DM && window.VUS_DM.openThread) window.VUS_DM.openThread(t.key); });
+      list.appendChild(row);
+    });
+  }
+  if (!items.length && !unreadDm.length) { const e = document.createElement("div"); e.className = "np-empty"; e.textContent = "Nothing yet. Mentions, replies, reactions and new DMs show up here, even ones from while you were away."; list.appendChild(e); return; }
   items.slice(0, 30).forEach(n => {
     const row = document.createElement("button");
     row.type = "button";
     row.className = "np-row" + (n.read ? "" : " unread");
     const ico = document.createElement("span"); ico.className = "np-ico"; ico.textContent = n.type === "mentions" ? "@" : n.type === "replies" ? "↩" : n.type === "reactions" ? (n.emoji || "❤") : "🛡️";
     const body = document.createElement("span"); body.className = "np-body";
+    if (n.type === "dms") ico.textContent = "💬";
     const [t1, t2] = notifLine(n);
     const a = document.createElement("span"); a.className = "np-t1"; a.textContent = t1;
     body.appendChild(a);
@@ -2989,6 +3011,7 @@ function renderNotifPanel() {
       n.read = true; saveNotifs(); paintNotifBadge();
       closeNotifPanel();
       if (n.msgId) jumpToMessage(n.msgId);
+      else if (n.dmKey && window.VUS_DM && window.VUS_DM.openThread) window.VUS_DM.openThread(n.dmKey);
     });
     list.appendChild(row);
   });
@@ -3004,6 +3027,32 @@ document.addEventListener("click", e => { if (notifPanel && notifPanel.style.dis
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeNotifPanel(); });
 window.addEventListener("vus:logout", () => { closeNotifPanel(); paintNotifBadge(); });
 paintNotifBadge();
+// Direct messages: one that arrives while you aren't reading that conversation (you're in Chat, in another tab, or in another thread)
+// lands in the bell with a toast and a sound, and the DM side lists it under "Unread".
+let lastDmSoundAt = 0;
+window.addEventListener("vus:dm-incoming", ev => {
+  const d = ev.detail || {};
+  if (!myLoginId || !d.key) return;
+  if (!pushNotif({ id: "d:" + d.key + ":" + d.id, type: "dms", from: d.label, text: d.text, ts: d.ts, dmKey: d.key })) return;   // off in settings, or already shown
+  showPingToast(d.label, d.text, "New message");
+  if (pingSoundReady && chatPrefs.dmSound !== false && Date.now() - lastDmSoundAt > 3000) {
+    lastDmSoundAt = Date.now();
+    try { $pingSound.currentTime = 0; $pingSound.play().catch(() => {}); } catch (e) {}
+  }
+  if (document.visibilityState === "hidden" && "Notification" in window && Notification.permission === "granted") {
+    try {
+      const nt = new Notification(d.label, { body: d.text, tag: "vus-dm-" + d.key });
+      nt.onclick = () => { try { window.focus(); if (window.VUS_DM && window.VUS_DM.openThread) window.VUS_DM.openThread(d.key); nt.close(); } catch (e) {} };
+    } catch (e) {}
+  }
+});
+window.addEventListener("vus:dm-read", ev => {
+  const k = ev.detail && ev.detail.key; if (!k) return;
+  let changed = false;
+  notifList.forEach(n => { if (n.type === "dms" && n.dmKey === k && !n.read) { n.read = true; changed = true; } });
+  if (changed) { saveNotifs(); paintNotifBadge(); renderNotifPanel(); }
+});
+window.addEventListener("vus:unread", () => renderNotifPanel());
 // reactions on my messages
 const reactSeen = {};
 let reactBootUntil = 0;
@@ -5465,6 +5514,7 @@ function renderChatSettings(container) {
   };
   card("\uD83D\uDD14", "Notifications", "What gets your attention", "csNotifSection");
   NOTIF_TYPES.forEach(([type, key, label, hint]) => toggle(label, hint, () => chatPrefs[key] !== false, v => { chatPrefs[key] = v; saveChatPrefs(); }));
+  toggle("DM sound", "Play a sound when a new DM arrives", () => chatPrefs.dmSound !== false, v => { chatPrefs.dmSound = v; saveChatPrefs(); });
   card("\uD83D\uDEE1\uFE0F", "Safety", "Filters and staff-action checks");
   toggle("Peer verification", verifyFlagOn ? "Checks that bans, mutes and grants come from someone allowed to do them" : "Off in this room until the Owner runs /verify on", () => chatPrefs.peerVerify !== false, v => {
     chatPrefs.peerVerify = v; saveChatPrefs(); scheduleVerifyRefresh();
@@ -8144,7 +8194,8 @@ function requestNotificationPermissionIfNeeded() {
   } catch (e) {}
 }
 
-function showPingToast(fromName, note) {
+function showPingToast(fromName, note, title) {
+  if ($pingToastTitle) $pingToastTitle.textContent = title || "You were pinged";
   $pingToastBody.textContent = fromName + (note ? ": " + note : " pinged you.");
   $pingToast.style.display = "block";
   clearTimeout(showPingToast._timer);
