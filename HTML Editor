@@ -1,19 +1,22 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HTML Editor</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; }
-body { margin: 0; font-family: Arial, sans-serif; background: #0f172a; color: white; display: flex; height: 100vh; flex-direction: column; overflow: hidden; }
+body { margin: 0; font-family: Arial, sans-serif; background: #0f172a; color: white; display: flex; height: 100vh; height: 100dvh; flex-direction: column; overflow: hidden; }
 
 /* TAB BAR */
-.tab-bar { display: flex; align-items: center; background: #0a1120; border-bottom: 1px solid #334155; overflow-x: auto; flex-shrink: 0; scrollbar-width: thin; scrollbar-color: #334155 transparent; position: relative; }
-.tab-bar::-webkit-scrollbar { height: 4px; }
-.tab-bar::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
-.tab { display: flex; align-items: center; gap: 6px; padding: 0 14px; height: 36px; font-size: 12px; color: #94a3b8; cursor: pointer; border-right: 1px solid #1e293b; white-space: nowrap; flex-shrink: 0; user-select: none; transition: background .15s; position: relative; }
+.tab-bar { display: flex; align-items: stretch; background: #0a1120; border-bottom: 1px solid #334155; flex-shrink: 0; position: relative; }
+.tab-scroll { display: flex; align-items: center; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: thin; scrollbar-color: #334155 transparent; }
+.tab-scroll::-webkit-scrollbar { height: 4px; }
+.tab-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+.tab-actions { display: flex; align-items: center; flex-shrink: 0; border-left: 1px solid #1e293b; }
+.tab { display: flex; align-items: center; gap: 6px; padding: 0 14px; height: 36px; font-size: 12px; color: #94a3b8; cursor: pointer; border-right: 1px solid #1e293b; border-top: 2px solid transparent; white-space: nowrap; flex-shrink: 0; user-select: none; transition: background .15s; position: relative; }
 .tab:hover { background: #1e293b; }
-.tab.active { background: #0f172a; color: white; border-top: 2px solid #22c55e; }
+.tab.active { background: #0f172a; color: white; border-top-color: #22c55e; }
 .tab.drag-over { background: #1e3a5f; }
 .tab .tab-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
 .tab .tab-name-input { background: transparent; border: none; border-bottom: 1px solid #22c55e; color: white; font-size: 12px; outline: none; width: 90px; padding: 0; }
@@ -23,7 +26,7 @@ body { margin: 0; font-family: Arial, sans-serif; background: #0f172a; color: wh
 .tab .close-btn:hover { color: white; background: #ef4444; }
 .tab-add-btn { padding: 0 14px; height: 36px; font-size: 18px; color: #64748b; cursor: pointer; display: flex; align-items: center; transition: color .15s; flex-shrink: 0; }
 .tab-add-btn:hover { color: #22c55e; }
-.tab-search-btn { padding: 0 10px; height: 36px; font-size: 13px; color: #64748b; cursor: pointer; display: flex; align-items: center; transition: color .15s; flex-shrink: 0; margin-left: auto; border-left: 1px solid #1e293b; }
+.tab-search-btn { padding: 0 10px; height: 36px; font-size: 13px; color: #64748b; cursor: pointer; display: flex; align-items: center; transition: color .15s; flex-shrink: 0; border-left: 1px solid #1e293b; }
 .tab-search-btn:hover { color: #22c55e; }
 .tab-search-dropdown { position: absolute; top: 36px; right: 0; background: #1e293b; border: 1px solid #334155; border-radius: 6px; z-index: 100; min-width: 200px; display: none; flex-direction: column; box-shadow: 0 8px 24px rgba(0,0,0,.5); overflow: hidden; }
 .tab-search-dropdown.open { display: flex; }
@@ -33,6 +36,7 @@ body { margin: 0; font-family: Arial, sans-serif; background: #0f172a; color: wh
 .tab-search-item:hover { background: #334155; color: white; }
 .tab-search-item.active-item { color: #22c55e; }
 .tab-session-btn { padding: 0 10px; height: 36px; font-size: 11px; color: #64748b; cursor: pointer; display: flex; align-items: center; transition: color .15s; flex-shrink: 0; border-left: 1px solid #1e293b; gap: 4px; }
+.tab-session-btn:first-child { border-left: none; }
 .tab-session-btn:hover { color: #22c55e; }
 
 /* CONTEXT MENU */
@@ -50,27 +54,85 @@ body { margin: 0; font-family: Arial, sans-serif; background: #0f172a; color: wh
 .divider:hover, .divider.dragging { background: #22c55e; }
 .editor-wrap { display: flex; flex: 1; overflow: hidden; }
 .line-numbers { background: #0a1120; color: #475569; font-family: monospace; font-size: 13px; line-height: 1.5; padding: 12px 6px 12px 8px; text-align: right; user-select: none; overflow: hidden; min-width: 36px; border-right: 1px solid #1e293b; white-space: pre; }
-textarea { flex: 1; background: #0f172a; color: white; border: none; outline: none; padding: 12px; font-family: monospace; font-size: 13px; line-height: 1.5; resize: none; overflow-y: auto; tab-size: 2; }
+textarea { flex: 1; min-width: 0; background: #0f172a; color: white; border: none; outline: none; padding: 12px; font-family: monospace; font-size: 13px; line-height: 1.5; resize: none; overflow: auto; tab-size: 2; white-space: pre; }
 .status-bar { padding: 4px 10px; font-size: 11px; color: #94a3b8; background: #0a1120; border-top: 1px solid #1e293b; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 iframe { flex: 1; border: none; background: white; }
 .bar { display: flex; gap: 8px; padding: 8px; background: #111827; border-bottom: 1px solid #334155; align-items: center; flex-wrap: wrap; }
-button { padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; background: #22c55e; color: black; font-weight: bold; }
+button { padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; background: #22c55e; color: black; font-weight: bold; touch-action: manipulation; transition: filter .15s, background .15s; }
+button:hover { filter: brightness(1.1); }
+button:active { transform: translateY(1px); }
 button.secondary { background: #1e293b; color: white; border: 1px solid #334155; }
+button.secondary:hover { background: #273449; filter: none; }
+button:focus-visible, .switch:focus-visible { outline: 2px solid #22c55e; outline-offset: 2px; }
 .toggle { padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; background: #1e293b; border: 1px solid #334155; user-select: none; }
 .on { background: #22c55e !important; color: black; }
 .label { font-size: 12px; color: #94a3b8; margin-left: auto; }
 #fileInput, #sessionImportInput { display: none; }
 .main.is-resizing iframe { pointer-events: none; }
+
+/* HTML / CSS / JS SWITCHER */
+.file-switch { display: none; gap: 4px; padding: 6px 8px 0; background: #0a1120; border-bottom: 1px solid #1e293b; flex-shrink: 0; }
+.file-switch.show { display: flex; }
+.file-pill { padding: 5px 14px; font-size: 12px; color: #94a3b8; cursor: pointer; user-select: none; border-radius: 6px 6px 0 0; border-top: 2px solid transparent; transition: color .15s, background .15s; }
+.file-pill:hover { color: white; background: #1e293b; }
+.file-pill.active { background: #0f172a; color: white; border-top-color: #22c55e; }
+
+/* OVERLAYS (settings + dialog) */
+.overlay { position: fixed; inset: 0; background: rgba(2, 6, 23, .65); display: none; align-items: center; justify-content: center; padding: 16px; }
+.overlay.open { display: flex; }
+#settingsOverlay { z-index: 10000; }
+#dialogOverlay { z-index: 10001; }
+.panel, .dialog { background: #1e293b; border: 1px solid #334155; border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,.6); }
+.dialog { width: 100%; max-width: 360px; padding: 20px; }
+.dialog h3 { margin: 0 0 8px; font-size: 16px; }
+.dialog p { margin: 0 0 18px; font-size: 13px; color: #cbd5e1; line-height: 1.5; word-break: break-word; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.dialog-actions button { padding: 9px 16px; font-size: 13px; }
+.danger-btn { background: #ef4444; color: white; }
+.panel { width: 100%; max-width: 440px; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #334155; }
+.panel-head h2 { margin: 0; font-size: 16px; }
+.icon-btn { background: transparent; color: #94a3b8; font-size: 20px; line-height: 1; padding: 2px 8px; }
+.icon-btn:hover { color: white; background: #334155; filter: none; }
+.panel-body { padding: 4px 18px 14px; overflow-y: auto; }
+.group-title { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #64748b; margin: 16px 0 4px; }
+.setting { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid #2a3850; cursor: pointer; }
+.group .setting:last-child { border-bottom: none; }
+.s-title { display: block; font-size: 13px; color: white; }
+.s-desc { display: block; font-size: 11px; color: #94a3b8; margin-top: 2px; line-height: 1.4; }
+.switch { appearance: none; -webkit-appearance: none; flex-shrink: 0; width: 40px; height: 22px; margin: 0; border-radius: 11px; background: #334155; position: relative; cursor: pointer; transition: background .2s; }
+.switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: white; transition: transform .2s; }
+.switch:checked { background: #22c55e; }
+.switch:checked::after { transform: translateX(18px); }
+.panel-foot { padding: 10px 18px; font-size: 11px; color: #64748b; border-top: 1px solid #334155; }
+
+/* MOBILE */
+@media (max-width: 700px) {
+  .main { flex-direction: column; }
+  .left, .right { width: 100% !important; flex: 1 1 0; min-width: 0; min-height: 0; }
+  .divider { display: none; }
+  .lbl { display: none; }
+  textarea, .line-numbers { font-size: 16px; }
+  .tab .close-btn { font-size: 18px; padding: 4px 9px; }
+  .overlay { padding: 0; }
+  .panel { max-width: none; max-height: none; height: 100%; border-radius: 0; border: none; }
+  .dialog { margin: 16px; }
+}
 </style>
 </head>
 <body>
 
 <div class="tab-bar" id="tabBar">
-  <div class="tab-add-btn" onclick="addTab()" title="New tab">+</div>
-  <div class="tab-session-btn" onclick="exportSession()" title="Export all tabs as JSON">⬇ Export All</div>
-  <input type="file" id="sessionImportInput" accept=".json" onchange="importSession(event)">
-  <label for="sessionImportInput" class="tab-session-btn" title="Import tabs from JSON">⬆ Import All</label>
-  <div class="tab-search-btn" id="tabSearchBtn" onclick="toggleTabSearch()" title="Find tab">🔍</div>
+  <div class="tab-scroll" id="tabScroll">
+    <div class="tab-add-btn" onclick="addTab()" title="New tab">+</div>
+  </div>
+  <div class="tab-actions">
+    <div class="tab-session-btn" onclick="exportSession()" title="Export all tabs as JSON">⬇<span class="lbl"> Export All</span></div>
+    <input type="file" id="sessionImportInput" accept=".json" onchange="importSession(event)">
+    <label for="sessionImportInput" class="tab-session-btn" title="Import tabs from JSON">⬆<span class="lbl"> Import All</span></label>
+    <div class="tab-search-btn" id="tabSearchBtn" onclick="toggleTabSearch()" title="Find tab">🔍</div>
+    <div class="tab-session-btn" onclick="openSettings()" title="Settings" style="font-size:14px;">⚙</div>
+  </div>
   <div class="tab-search-dropdown" id="tabSearchDropdown">
     <input type="text" id="tabSearchInput" placeholder="Search tabs…" oninput="filterTabSearch()">
     <div class="tab-search-list" id="tabSearchList"></div>
@@ -95,9 +157,10 @@ button.secondary { background: #1e293b; color: white; border: 1px solid #334155;
       <div class="toggle on" id="autoToggle" onclick="toggleAuto()">Auto Refresh</div>
       <div class="label">HTML Editor</div>
     </div>
+    <div class="file-switch" id="fileSwitch"></div>
     <div class="editor-wrap">
       <div class="line-numbers" id="lineNumbers">1</div>
-      <textarea id="code"></textarea>
+      <textarea id="code" wrap="off" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
     </div>
     <div class="status-bar" id="statusBar"></div>
   </div>
@@ -107,19 +170,161 @@ button.secondary { background: #1e293b; color: white; border: 1px solid #334155;
   </div>
 </div>
 
+<!-- SETTINGS -->
+<div class="overlay" id="settingsOverlay">
+  <div class="panel" role="dialog" aria-label="Settings">
+    <div class="panel-head">
+      <h2>Settings</h2>
+      <button class="icon-btn" onclick="closeSettings()" title="Close">×</button>
+    </div>
+    <div class="panel-body">
+      <div class="group">
+        <div class="group-title">Editor</div>
+        <label class="setting">
+          <span><span class="s-title">CSS editor</span><span class="s-desc">Adds a CSS tab. It's applied to the preview automatically, no &lt;link&gt; needed.</span></span>
+          <input type="checkbox" class="switch" data-setting="css">
+        </label>
+        <label class="setting">
+          <span><span class="s-title">JS editor</span><span class="s-desc">Adds a JS tab. It runs in the preview automatically, no &lt;script src&gt; needed.</span></span>
+          <input type="checkbox" class="switch" data-setting="js">
+        </label>
+      </div>
+      <div class="group">
+        <div class="group-title">Confirmations</div>
+        <label class="setting">
+          <span><span class="s-title">Confirm delete tab</span><span class="s-desc">Ask before closing a tab with the ×.</span></span>
+          <input type="checkbox" class="switch" data-setting="confirmDelete">
+        </label>
+        <label class="setting">
+          <span><span class="s-title">Confirm reset</span><span class="s-desc">Ask before the Reset button clears your code.</span></span>
+          <input type="checkbox" class="switch" data-setting="confirmReset">
+        </label>
+      </div>
+    </div>
+    <div class="panel-foot">Saved in this browser. Turning CSS or JS off hides it but keeps your code.</div>
+  </div>
+</div>
+
+<!-- CONFIRM / ALERT DIALOG -->
+<div class="overlay" id="dialogOverlay">
+  <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dlgTitle" aria-describedby="dlgMsg">
+    <h3 id="dlgTitle"></h3>
+    <p id="dlgMsg"></p>
+    <div class="dialog-actions">
+      <button class="secondary" id="dlgCancel">Cancel</button>
+      <button id="dlgOk">OK</button>
+    </div>
+  </div>
+</div>
+
 <script>
-/* TAB STATE */
+const $ = id => document.getElementById(id);
+
+/* ELEMENTS + STATE */
+const iframe = $('preview');
+const codeBox = $('code');
+let auto = true;
 let tabs = [];
 let activeId = null;
+let curFile = 'html'; // which file is showing in the editor: html | css | js
+
 const STORAGE_TABS = 'html_editor_tabs';
 const STORAGE_ACTIVE = 'html_editor_active';
+const STORAGE_SETTINGS = 'html_editor_settings';
 
+const FILES = {
+  html: { field: 'code', label: 'HTML', placeholder: '' },
+  css:  { field: 'css',  label: 'CSS',  placeholder: '/* Applied to the preview automatically */' },
+  js:   { field: 'js',   label: 'JS',   placeholder: '// Runs in the preview automatically' }
+};
+
+/* SETTINGS (basic editor by default) */
+const DEFAULT_SETTINGS = { css: false, js: false, confirmDelete: true, confirmReset: true };
+let settings = { ...DEFAULT_SETTINGS };
+
+function loadSettings() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORAGE_SETTINGS));
+    if (raw && typeof raw === 'object') settings = { ...DEFAULT_SETTINGS, ...raw };
+  } catch (e) {}
+}
+
+function saveSettings() {
+  try { localStorage.setItem(STORAGE_SETTINGS, JSON.stringify(settings)); } catch (e) {}
+}
+
+function openSettings() {
+  document.querySelectorAll('[data-setting]').forEach(cb => { cb.checked = !!settings[cb.dataset.setting]; });
+  $('settingsOverlay').classList.add('open');
+}
+function closeSettings() { $('settingsOverlay').classList.remove('open'); }
+
+document.querySelectorAll('[data-setting]').forEach(cb => {
+  cb.addEventListener('change', () => {
+    settings[cb.dataset.setting] = cb.checked;
+    saveSettings();
+    applySettings();
+  });
+});
+$('settingsOverlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeSettings(); });
+
+function applySettings() {
+  const hidden = (curFile === 'css' && !settings.css) || (curFile === 'js' && !settings.js);
+  if (hidden) {
+    flushActiveCode();
+    curFile = 'html';
+    loadActiveCode();
+  }
+  renderFileSwitch();
+  renderTabs();
+  updateLineNumbers();
+  run();
+}
+
+/* CUSTOM DIALOG (works on mobile, unlike confirm()/alert()) */
+let dialogDone = null;
+
+function showDialog({ title, message, confirmText = 'OK', danger = false, alertOnly = false }) {
+  return new Promise(resolve => {
+    if (dialogDone) dialogDone(false);
+    $('dlgTitle').textContent = title;
+    $('dlgMsg').textContent = message;
+    const ok = $('dlgOk'), cancel = $('dlgCancel');
+    ok.textContent = confirmText;
+    ok.classList.toggle('danger-btn', danger);
+    cancel.style.display = alertOnly ? 'none' : '';
+    $('dialogOverlay').classList.add('open');
+    dialogDone = v => {
+      dialogDone = null;
+      $('dialogOverlay').classList.remove('open');
+      resolve(v);
+    };
+    (danger ? cancel : ok).focus();
+  });
+}
+
+$('dlgOk').addEventListener('click', () => { if (dialogDone) dialogDone(true); });
+$('dlgCancel').addEventListener('click', () => { if (dialogDone) dialogDone(false); });
+$('dialogOverlay').addEventListener('click', e => { if (e.target === e.currentTarget && dialogDone) dialogDone(false); });
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  closeCtxMenu();
+  if (dialogDone) dialogDone(false);
+  else closeSettings();
+});
+
+/* TAB STATE */
 function genId() { return 't' + Date.now() + Math.random().toString(36).slice(2, 6); }
 
 function nextTabName() {
   let n = tabs.length + 1;
   while (tabs.some(t => t.name === 'Tab ' + n)) n++;
   return 'Tab ' + n;
+}
+
+function normalizeTabs() {
+  tabs.forEach(t => { t.code = t.code || ''; t.css = t.css || ''; t.js = t.js || ''; });
 }
 
 function saveTabs() {
@@ -135,12 +340,12 @@ function loadTabs() {
     if (raw) {
       tabs = JSON.parse(raw);
       activeId = localStorage.getItem(STORAGE_ACTIVE) || tabs[0]?.id || null;
-      if (tabs.length) return;
+      if (tabs.length) { normalizeTabs(); return; }
     }
   } catch (e) {}
   const legacy = localStorage.getItem('html_code') || '<h1>Hello World</h1>';
   const id = genId();
-  tabs = [{ id, name: 'Tab 1', code: legacy }];
+  tabs = [{ id, name: 'Tab 1', code: legacy, css: '', js: '' }];
   activeId = id;
   saveTabs();
 }
@@ -150,22 +355,39 @@ function activeTab() { return tabs.find(t => t.id === activeId) || null; }
 /* STATS (lines + chars) */
 function statText(code) { return `${code.split('\n').length} L · ${code.length} C`; }
 
+// Size of a whole tab: HTML plus CSS/JS when those editors are enabled
+function tabSize(t) {
+  const parts = [t.code || ''];
+  if (settings.css) parts.push(t.css || '');
+  if (settings.js) parts.push(t.js || '');
+  return {
+    lines: parts.reduce((n, p, i) => n + (i === 0 || p ? p.split('\n').length : 0), 0),
+    chars: parts.reduce((n, p) => n + p.length, 0)
+  };
+}
+
+function tabStatText(t) {
+  const s = tabSize(t);
+  return `${s.lines} L · ${s.chars} C`;
+}
+
 function updateStats() {
   const t = activeTab();
   if (!t) return;
-  t.code = codeBox.value;
+  flushActiveCode();
   const meta = document.querySelector(`.tab[data-id="${t.id}"] .tab-meta`);
-  if (meta) meta.textContent = statText(t.code);
-  const total = tabs.reduce((n, x) => n + x.code.length, 0);
-  document.getElementById('statusBar').textContent =
-    `${t.name}: ${statText(t.code)}  |  All tabs: ${tabs.length} tabs, ${total} chars`;
+  if (meta) meta.textContent = tabStatText(t);
+  const total = tabs.reduce((n, x) => n + tabSize(x).chars, 0);
+  const multi = settings.css || settings.js;
+  $('statusBar').textContent =
+    `${t.name}${multi ? ' · ' + FILES[curFile].label : ''}: ${statText(codeBox.value)}  |  All tabs: ${tabs.length} tabs, ${total} chars`;
 }
 
 /* TAB UI + DRAG-TO-REORDER */
 let dragSrcId = null;
 
 function renderTabs() {
-  const bar = document.getElementById('tabBar');
+  const bar = $('tabScroll');
   const addBtn = bar.querySelector('.tab-add-btn');
   Array.from(bar.querySelectorAll('.tab')).forEach(el => el.remove());
 
@@ -205,7 +427,7 @@ function renderTabs() {
 
     const meta = document.createElement('span');
     meta.className = 'tab-meta';
-    meta.textContent = statText(tab.code);
+    meta.textContent = tabStatText(tab);
 
     const closeBtn = document.createElement('span');
     closeBtn.className = 'close-btn';
@@ -222,6 +444,9 @@ function renderTabs() {
 
     bar.insertBefore(el, addBtn);
   });
+
+  const activeEl = bar.querySelector('.tab.active');
+  if (activeEl) activeEl.scrollIntoView({ inline: 'nearest', block: 'nearest' });
 }
 
 function startRename(id, nameSpanOrNull) {
@@ -256,7 +481,7 @@ function startRename(id, nameSpanOrNull) {
 
 /* CONTEXT MENU */
 let ctxTargetId = null;
-const ctxMenu = document.getElementById('ctxMenu');
+const ctxMenu = $('ctxMenu');
 
 function openCtxMenu(e, id) {
   e.preventDefault();
@@ -275,7 +500,6 @@ function openCtxMenu(e, id) {
 
 function closeCtxMenu() { ctxMenu.classList.remove('open'); ctxTargetId = null; }
 document.addEventListener('click', closeCtxMenu);
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCtxMenu(); });
 
 function ctxRename() { const id = ctxTargetId; closeCtxMenu(); startRename(id, null); }
 function ctxDupe() { const id = ctxTargetId; closeCtxMenu(); duplicateTab(id); }
@@ -295,7 +519,7 @@ function switchTab(id) {
 function addTab() {
   flushActiveCode();
   const id = genId();
-  tabs.push({ id, name: nextTabName(), code: '<h1>Hello World</h1>' });
+  tabs.push({ id, name: nextTabName(), code: '<h1>Hello World</h1>', css: '', js: '' });
   activeId = id;
   saveTabs();
   loadActiveCode();
@@ -310,7 +534,7 @@ function duplicateTab(id) {
   if (!src) return;
   const newId = genId();
   const idx = tabs.findIndex(t => t.id === id);
-  tabs.splice(idx + 1, 0, { id: newId, name: src.name + ' (copy)', code: src.code });
+  tabs.splice(idx + 1, 0, { id: newId, name: src.name + ' (copy)', code: src.code, css: src.css || '', js: src.js || '' });
   activeId = newId;
   saveTabs();
   loadActiveCode();
@@ -319,12 +543,22 @@ function duplicateTab(id) {
   run();
 }
 
-function closeTabById(id) {
+async function closeTabById(id) {
   if (tabs.length <= 1) return;
-  const t = tabs.find(t => t.id === id);
-  if (!confirm(`Close "${t ? t.name : 'this tab'}"? This can't be undone.`)) return;
+  const target = tabs.find(t => t.id === id);
+  if (settings.confirmDelete) {
+    const ok = await showDialog({
+      title: 'Close tab?',
+      message: `"${target ? target.name : 'This tab'}" will be deleted. This can't be undone.`,
+      confirmText: 'Delete',
+      danger: true
+    });
+    if (!ok) return;
+  }
+  if (tabs.length <= 1) return;
   flushActiveCode();
   const idx = tabs.findIndex(t => t.id === id);
+  if (idx === -1) return;
   tabs.splice(idx, 1);
   if (activeId === id) {
     activeId = tabs[Math.min(idx, tabs.length - 1)].id;
@@ -336,38 +570,103 @@ function closeTabById(id) {
   updateLineNumbers();
 }
 
+// Write the editor box back into whichever file (HTML/CSS/JS) is showing
 function flushActiveCode() {
   const tab = activeTab();
-  if (tab) tab.code = codeBox.value;
+  if (tab) tab[FILES[curFile].field] = codeBox.value;
 }
 
 function loadActiveCode() {
   const tab = activeTab();
-  if (tab) codeBox.value = tab.code;
+  if (tab) codeBox.value = tab[FILES[curFile].field] || '';
+}
+
+/* HTML / CSS / JS SWITCHER */
+function renderFileSwitch() {
+  const sw = $('fileSwitch');
+  const avail = ['html'];
+  if (settings.css) avail.push('css');
+  if (settings.js) avail.push('js');
+  sw.classList.toggle('show', avail.length > 1);
+  sw.innerHTML = '';
+  avail.forEach(f => {
+    const pill = document.createElement('div');
+    pill.className = 'file-pill' + (f === curFile ? ' active' : '');
+    pill.textContent = FILES[f].label;
+    pill.addEventListener('click', () => setCurFile(f));
+    sw.appendChild(pill);
+  });
+  codeBox.placeholder = FILES[curFile].placeholder;
+}
+
+function setCurFile(f) {
+  if (f === curFile) return;
+  flushActiveCode();
+  curFile = f;
+  loadActiveCode();
+  codeBox.scrollTop = 0;
+  renderFileSwitch();
+  updateLineNumbers();
+}
+
+/* BUILD PREVIEW / EXPORT OUTPUT: CSS + JS are injected automatically when enabled */
+function injectHead(html, text) {
+  const i = html.search(/<\/head\s*>/i);
+  if (i !== -1) return html.slice(0, i) + text + '\n' + html.slice(i);
+  for (const re of [/<head(\s[^>]*)?>/i, /<html(\s[^>]*)?>/i, /<!doctype[^>]*>/i]) {
+    const m = re.exec(html);
+    if (m) {
+      const p = m.index + m[0].length;
+      return html.slice(0, p) + '\n' + text + html.slice(p);
+    }
+  }
+  return text + '\n' + html;
+}
+
+function injectBody(html, text) {
+  let i = -1, m;
+  let re = /<\/body\s*>/gi;
+  while ((m = re.exec(html))) i = m.index;
+  if (i === -1) {
+    re = /<\/html\s*>/gi;
+    while ((m = re.exec(html))) i = m.index;
+  }
+  if (i === -1) return html + '\n' + text;
+  return html.slice(0, i) + text + '\n' + html.slice(i);
+}
+
+function buildOutput(tab) {
+  if (!tab) return '';
+  let html = tab.code || '';
+  if (settings.css && tab.css && tab.css.trim()) {
+    html = injectHead(html, '<style>\n' + tab.css.replace(/<\/style/gi, '<\\/style') + '\n</style>');
+  }
+  if (settings.js && tab.js && tab.js.trim()) {
+    html = injectBody(html, '<script>\n' + tab.js.replace(/<\/script/gi, '<\\/script') + '\n<\/script>');
+  }
+  return html;
 }
 
 /* TAB SEARCH */
 function toggleTabSearch() {
-  const dd = document.getElementById('tabSearchDropdown');
+  const dd = $('tabSearchDropdown');
   if (dd.classList.toggle('open')) {
     filterTabSearch();
-    document.getElementById('tabSearchInput').focus();
+    $('tabSearchInput').focus();
   }
 }
 
 function filterTabSearch() {
-  const q = document.getElementById('tabSearchInput').value.toLowerCase();
-  const list = document.getElementById('tabSearchList');
+  const q = $('tabSearchInput').value.toLowerCase();
+  const list = $('tabSearchList');
   list.innerHTML = '';
   tabs.filter(t => t.name.toLowerCase().includes(q)).forEach(t => {
     const item = document.createElement('div');
     item.className = 'tab-search-item' + (t.id === activeId ? ' active-item' : '');
     item.textContent = t.name;
     item.addEventListener('click', () => {
-      document.getElementById('tabSearchDropdown').classList.remove('open');
+      $('tabSearchDropdown').classList.remove('open');
       switchTab(t.id);
-      const el = document.querySelector(`.tab[data-id="${t.id}"]`);
-      if (el) el.scrollIntoView({ inline: 'nearest' });
     });
     list.appendChild(item);
   });
@@ -381,8 +680,8 @@ function filterTabSearch() {
 }
 
 document.addEventListener('click', e => {
-  const btn = document.getElementById('tabSearchBtn');
-  const dd = document.getElementById('tabSearchDropdown');
+  const btn = $('tabSearchBtn');
+  const dd = $('tabSearchDropdown');
   if (!btn.contains(e.target) && !dd.contains(e.target)) dd.classList.remove('open');
 });
 
@@ -405,6 +704,7 @@ function importSession(event) {
       const bundle = JSON.parse(e.target.result);
       if (!Array.isArray(bundle.tabs) || !bundle.tabs.length) throw new Error('bad');
       tabs = bundle.tabs;
+      normalizeTabs();
       activeId = bundle.activeId || tabs[0].id;
       saveTabs();
       loadActiveCode();
@@ -412,7 +712,7 @@ function importSession(event) {
       updateLineNumbers();
       run();
     } catch {
-      alert('Invalid session file.');
+      showDialog({ title: 'Import failed', message: 'That is not a valid session file.', alertOnly: true });
     }
   };
   reader.readAsText(file);
@@ -422,7 +722,7 @@ function importSession(event) {
 /* LINE NUMBERS */
 function updateLineNumbers() {
   const lines = codeBox.value.split('\n').length;
-  const ln = document.getElementById('lineNumbers');
+  const ln = $('lineNumbers');
   let out = '';
   for (let i = 1; i <= lines; i++) out += i + '\n';
   ln.textContent = out;
@@ -432,9 +732,9 @@ function updateLineNumbers() {
 
 /* DRAGGABLE DIVIDER */
 (function () {
-  const divider = document.getElementById('divider');
-  const mainArea = document.getElementById('mainArea');
-  const leftPane = document.getElementById('leftPane');
+  const divider = $('divider');
+  const mainArea = $('mainArea');
+  const leftPane = $('leftPane');
   let dragging = false, startX = 0, startLeftW = 0;
 
   const savedPct = parseFloat(localStorage.getItem('html_editor_split'));
@@ -468,10 +768,6 @@ function updateLineNumbers() {
 })();
 
 /* EDITOR CORE */
-let auto = true;
-const iframe = document.getElementById('preview');
-const codeBox = document.getElementById('code');
-
 let saveTimer;
 function save() {
   flushActiveCode();
@@ -484,7 +780,7 @@ function run() {
   save();
   const doc = iframe.contentDocument || iframe.contentWindow.document;
   doc.open();
-  doc.write(codeBox.value);
+  doc.write(buildOutput(activeTab()));
   doc.close();
 }
 
@@ -507,18 +803,32 @@ codeBox.addEventListener('input', () => {
 });
 
 codeBox.addEventListener('scroll', () => {
-  document.getElementById('lineNumbers').scrollTop = codeBox.scrollTop;
+  $('lineNumbers').scrollTop = codeBox.scrollTop;
 });
 
 function openTab() {
+  flushActiveCode();
   const win = window.open('about:blank', '_blank');
+  if (!win) return;
   win.document.open();
-  win.document.write(codeBox.value);
+  win.document.write(buildOutput(activeTab()));
   win.document.close();
 }
 
-function resetCode() {
-  if (!confirm('Reset this tab? All its code will be cleared.')) return;
+async function resetCode() {
+  if (settings.confirmReset) {
+    const multi = settings.css || settings.js;
+    const name = activeTab()?.name || 'this tab';
+    const ok = await showDialog({
+      title: multi ? `Reset ${FILES[curFile].label}?` : 'Reset this tab?',
+      message: multi
+        ? `This clears the ${FILES[curFile].label} code in "${name}". This can't be undone.`
+        : `All the code in "${name}" will be cleared. This can't be undone.`,
+      confirmText: 'Reset',
+      danger: true
+    });
+    if (!ok) return;
+  }
   codeBox.value = '';
   updateLineNumbers();
   run();
@@ -526,18 +836,20 @@ function resetCode() {
 
 function toggleAuto() {
   auto = !auto;
-  document.getElementById('autoToggle').classList.toggle('on', auto);
+  $('autoToggle').classList.toggle('on', auto);
 }
 
 function exportCode() {
+  flushActiveCode();
   const name = (activeTab()?.name || 'index').replace(/[^a-z0-9_\-]/gi, '_');
-  const blob = new Blob([codeBox.value], { type: 'text/html' });
+  const blob = new Blob([buildOutput(activeTab())], { type: 'text/html' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = name + '.html';
   a.click();
 }
 
+// Import goes into whichever file (HTML/CSS/JS) is currently showing
 function importCode(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -552,8 +864,10 @@ function importCode(event) {
 }
 
 /* INIT */
+loadSettings();
 loadTabs();
 loadActiveCode();
+renderFileSwitch();
 renderTabs();
 updateLineNumbers();
 run();
