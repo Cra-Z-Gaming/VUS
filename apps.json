@@ -1,6 +1,6 @@
 {
-"updated":"November 17, 2026 - 4:37 PM",
-"message":"added leafy's cool app (check it out its actualy good)",
+"updated":"November 19, 2026 - 7:55 PM",
+"message":"you can now edit your github by adding a git token in vus github app",
 "apps":[
 {"name":"VUS-OS","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS-OS/refs/heads/main/index.html","desc":"Desktop version of VUS Hub","icon":"OS","color":"white"},
 {"name":"VUS Launcher","url":"https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/main/VUSL","desc":"Main game hub — V17.4","icon":"🎮","color":"green"},
