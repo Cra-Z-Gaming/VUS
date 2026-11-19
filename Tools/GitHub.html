@@ -74,23 +74,39 @@ details{position:relative}summary{list-style:none}summary::-webkit-details-marke
 .tg{appearance:none;-webkit-appearance:none;flex:none;width:34px;height:20px;border-radius:20px;background:var(--btn);border:1px solid var(--bd);position:relative;cursor:pointer;margin:0}.tg::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--mu);transition:left .15s}.tg:checked{background:var(--gr)}.tg:checked::after{left:16px;background:#fff}
 .sr{display:flex;gap:12px;align-items:center;padding:8px 4px;border-bottom:1px solid var(--bd);cursor:pointer}.sr>span:first-child{flex:1}.cc{font-size:12px;color:var(--mu);border:1px solid var(--bd);border-radius:2em;padding:0 8px;white-space:nowrap}
 .sh{margin:16px 4px 4px;font-size:12px;text-transform:uppercase;color:var(--mu);letter-spacing:.04em}.tt{margin:12px 4px;padding:10px 12px;background:var(--btn);border-radius:6px}
+header{position:sticky;top:0;z-index:30}button{transition:background .12s,border-color .12s}.rr{transition:background .12s;padding-left:8px;padding-right:8px;border-radius:6px}.rr:hover{background:var(--hov)}
+.home h1{font-size:40px;background:linear-gradient(90deg,var(--ac),var(--en));-webkit-background-clip:text;background-clip:text;color:transparent}
+.danger{background:#da3633;border-color:#ffffff1a;color:#fff}.danger:hover{background:#f85149}
+.me{display:inline-flex;gap:6px;align-items:center;color:var(--fg);font-size:12px;font-weight:500}
+.fo>div{animation:pp .15s}@keyframes pp{from{opacity:0;transform:translateY(-8px)}}.fo.wide>div{width:min(900px,95vw);max-height:85vh}
+.fo textarea.in{height:45vh;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;white-space:pre;tab-size:4;resize:vertical}.fo label.ck{display:flex;gap:8px;align-items:center;margin:6px 4px}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--gr);color:#fff;padding:10px 18px;border-radius:8px;z-index:99;box-shadow:0 8px 24px #0006}.toast.bad{background:#da3633}
+html[data-gh] header{position:static;padding:16px 32px;gap:16px}html[data-gh] #q{height:32px;background:transparent;border-color:#6e768166;flex:0 1 272px}html[data-gh] #q:focus{background:var(--bg)}
+html[data-gh] button,html[data-gh] .btn{height:28px;line-height:26px;padding:0 12px;box-shadow:0 1px 0 #1f23280a}html[data-gh] .tabs .badge,html[data-gh] .btn .badge{background:#656c7633;border:0;color:var(--fg);line-height:18px}
+html[data-gh] .wrap{padding:24px 32px;max-width:1344px}html[data-gh] .tabs a{height:48px;padding:0 8px;margin-bottom:-1px}html[data-gh] .rt a.mu{color:var(--ac)}
+html[data-gh] .ro{min-height:40px;padding:0 16px}html[data-gh] .ro .n a:hover{color:var(--ac)}html[data-gh] .bh.cm{min-height:48px}
+html[data-gh] .rr{padding:24px 0;border-radius:0}html[data-gh] .rr:hover{background:none}html[data-gh] .home h1{background:none;color:var(--fg);font-size:32px}
+.gi{display:none;fill:none;color:var(--mu);flex:none}html[data-gh] .gi{display:inline-block}.ft{display:none}html[data-gh] .ft{display:flex;justify-content:center;gap:16px;flex-wrap:wrap;padding:40px 16px;border-top:1px solid var(--bd);margin-top:40px;color:var(--mu);font-size:12px}
+html[data-gh] #q{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'><rect x='.5' y='.5' width='19' height='19' rx='4' fill='none' stroke='%238b949e'/><text x='10' y='14' font-size='12' text-anchor='middle' fill='%238b949e' font-family='sans-serif'>/</text></svg>");background-repeat:no-repeat;background-position:right 6px center}html[data-gh] #q:focus{background-image:none}
+html[data-gh] .tabs{border-bottom-color:var(--bd);background:var(--bg)}html[data-gh] .tabs a{font-size:14px;gap:8px}html[data-gh] .tabs a.on{font-weight:600}html[data-gh] .side h3{font-size:16px}html[data-gh] .cols{gap:32px}html[data-gh] .box{border-radius:6px}html[data-gh] .bh{background:var(--sub)}
+#q{padding-right:36px;text-overflow:ellipsis}header button,header .btn{flex:none}#me{display:inline-flex;align-items:center;gap:8px}.me{gap:8px;white-space:nowrap}.me .av{width:24px;height:24px;flex:none}.pop.r{width:340px}
 </style>
 </head>
 <body>
 <header>
 <a class="mark" href="#/" title="Home"><svg width="32" height="32" viewBox="0 0 16 16"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg></a>
-<input id="q" placeholder="Search users & repos, or jump to owner/repo or a link" autocomplete="off" spellcheck="false">
-<span class="sp"></span><span id="rl" class="mu" style="font-size:12px" title="Remaining GitHub API requests this hour"></span><span id="us" class="mu" style="font-size:12px" title="Requests made by this page so far"></span><button id="st">Settings</button>
+<button id="bk" title="Back (browser back or mouse back)" disabled>←</button><button id="fw" title="Forward (Alt+→ or mouse forward)" disabled>→</button><input id="q" placeholder="Search users & repos or owner/repo" autocomplete="off" spellcheck="false">
+<span class="sp"></span><span id="rl" class="mu" style="font-size:12px" title="Remaining GitHub API requests this hour"></span><span id="us" class="mu" style="font-size:12px" title="Requests made by this page so far"></span><span id="me"></span><button id="st">Settings</button>
 </header>
 <div id="app"></div>
 <script>
 (function(){
-var $=function(s,e){return(e||document).querySelector(s)},app=$('#app'),token='',recent=[],cache={},repos={},raws={},rt=0,cpage=1,warn=true,theme='dark';
+var $=function(s,e){return(e||document).querySelector(s)},app=$('#app'),token='',recent=[],cache={},repos={},raws={},rt=0,cpage=1,warn=true,theme='dark',ghl=true;
 try{token=localStorage.getItem('rb_token')||'';recent=JSON.parse(localStorage.getItem('rb_recent')||'[]');warn=localStorage.getItem('rb_warn')!='0';theme=localStorage.getItem('rb_theme')=='light'?'light':'dark'}catch(e){}
 function save(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 var DEF={branches:1,langs:1,rel:1,commit:1,readme:1,fc:1,sizes:1,sexact:1,suser:1,srepo:1},S=Object.assign({},DEF),net=0,pg=0,COST={branches:1,langs:1,rel:1,commit:1,readme:1,fc:60,sizes:0,sexact:1,suser:1,srepo:1};
 try{Object.assign(S,JSON.parse(localStorage.getItem('rb_fetch')||'{}'))}catch(e){}
-function applySet(){document.documentElement.dataset.t=theme}
+function applySet(){document.documentElement.dataset.t=theme;if(ghl)document.documentElement.dataset.gh='1';else delete document.documentElement.dataset.gh}
 applySet();
 var P={dir:'M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z',
 file:'M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z',
@@ -136,7 +152,7 @@ function askLink(u){
  document.body.appendChild(o);o.onclick=function(e){if(e.target==o)o.remove()};$('#no',o).onclick=function(){o.remove()};
  $('#yes',o).onclick=function(){if($('#nw',o).checked){warn=false;save('rb_warn','0');applySet()}o.remove();window.open(u,'_blank','noopener')};$('#yes',o).focus();
 }
-document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[target=_blank]');if(!a||a.dataset.nw||!warn||e.defaultPrevented||e.button)return;e.preventDefault();askLink(a.href)},true);
+document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[target=_blank]');if(!a||a.dataset.nw||!warn||e.defaultPrevented||e.button||(!a.dataset.ext&&ghRoute(a.href)))return;e.preventDefault();askLink(a.href)},true);
 document.addEventListener('click',function(e){document.querySelectorAll('details[open]').forEach(function(d){if(!d.contains(e.target))d.open=false})});
 document.addEventListener('keydown',function(e){if(e.key=='t'&&!/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)&&window.goFile){e.preventDefault();window.goFile()}if(e.key=='Escape'){var f=$('.fo');if(f)f.remove()}});
 function sk(w,h,m){return'<span class="sk" style="width:'+w+';height:'+(h||14)+'px;margin-bottom:'+(m==null?8:m)+'px"></span>'}
@@ -158,7 +174,7 @@ function openSettings(focus){
  var row=function(k,t,d){var c=COST[k];return'<label class="sr"><span><b>'+t+'</b><span class="mu" style="display:block;font-size:12px">'+d+'</span></span><span class="cc">'+(c===0?'free':k=='fc'?'up to 60 req':c+' req')+'</span><input type="checkbox" class="tg" data-k="'+k+'"'+(S[k]?' checked':'')+'></label>'};
  var sw=function(id,t,d,on){return'<label class="sr"><span><b>'+t+'</b>'+(d?'<span class="mu" style="display:block;font-size:12px">'+d+'</span>':'')+'</span><input type="checkbox" class="tg" id="'+id+'"'+(on?' checked':'')+'></label>'};
  o.innerHTML='<div><h3 style="margin:4px 4px 8px">Settings</h3><p class="mu" style="margin:4px;font-size:12px">GitHub allows 60 requests per hour without a token and 5,000 with one. Each switch shows its cost. Anything switched off shows a Load button instead. Things already loaded are cached and cost nothing again.</p>'+
- '<div class="sh">Account</div><div style="display:flex;gap:6px;margin:0 0 4px"><input class="in" id="tkv" type="password" placeholder="GitHub token (optional)" style="flex:1;margin:0" value="'+esc(token)+'"><button id="tks">Save</button></div>'+
+ '<div class="sh">Account</div><div style="display:flex;gap:6px;margin:0 0 4px"><input class="in" id="tkv" type="password" placeholder="GitHub token (optional, enables edit / create / delete)" style="flex:1;margin:0" value="'+esc(token)+'"><button id="tks">Save</button></div>'+
  sw('thm','Light theme','',theme=='light')+sw('lkw','Link warnings','Ask before opening external links',warn)+
  '<div class="sh">Repository page</div><div class="sr" style="cursor:default"><span><b>Repo info + file tree</b><span class="mu" style="display:block;font-size:12px">Always loaded. Includes description, stars, topics, license and main language.</span></span><span class="cc">2 req</span></div>'+
  row('branches','Branches','Branch list and count')+row('langs','Languages','Full language breakdown')+row('rel','Latest release','Release in the sidebar')+row('commit','Latest commit','Author, message and time above the files')+row('readme','README','Rendered README under the files')+
@@ -170,13 +186,17 @@ function openSettings(focus){
  o.querySelectorAll('input.tg[data-k]').forEach(function(i){i.onchange=function(){S[i.dataset.k]=i.checked?1:0;save('rb_fetch',JSON.stringify(S));upd()}});
  $('#thm',o).onchange=function(){theme=this.checked?'light':'dark';save('rb_theme',theme);applySet()};
  $('#lkw',o).onchange=function(){warn=this.checked;save('rb_warn',warn?'1':'0')};
- $('#tks',o).onclick=function(){token=$('#tkv',o).value.trim();try{token?localStorage.setItem('rb_token',token):localStorage.removeItem('rb_token')}catch(e){}cache={};repos={};this.textContent='Saved';upd();route()};
+ $('#tks',o).onclick=function(){var t=$('#tkv',o).value.trim();if(!t)return;this.textContent='Checking…';addAcct(t).then(function(){o.remove()}).catch(function(e){toast(e.message,1);openSettings('token')})};
  $('#rst',o).onclick=function(){Object.assign(S,DEF);save('rb_fetch',JSON.stringify(S));openSettings()};
  $('#cls',o).onclick=function(){o.remove()};upd();if(focus=='token')$('#tkv',o).focus();
 }
 $('#st').onclick=function(){openSettings()};
 var cur='#/';
-function nav(h){cur=h;route()}
+var hist=[],hi=-1;try{hist=JSON.parse(sessionStorage.getItem('rb_h')||'[]');hi=parseInt(sessionStorage.getItem('rb_hi'),10)}catch(e){}
+if(!hist.length||isNaN(hi)||hi<0||hi>=hist.length){hist=['#/'];hi=0}cur=hist[hi];
+function hsave(){try{sessionStorage.setItem('rb_h',JSON.stringify(hist));sessionStorage.setItem('rb_hi',hi)}catch(e){}var b=$('#bk'),f=$('#fw');if(b)b.disabled=hi<1;if(f)f.disabled=hi>=hist.length-1}
+function nav(h,back){cur=h;if(!back&&hist[hi]!==h){hist=hist.slice(0,hi+1);hist.push(h);if(hist.length>5000)hist.shift();hi=hist.length-1}hsave();route()}
+function go2(d){var n=hi+d;if(n>=0&&n<hist.length){hi=n;nav(hist[n],1)}}
 document.addEventListener('click',function(e){if(e.defaultPrevented||e.button||e.ctrlKey||e.metaKey||e.shiftKey)return;var a=e.target.closest&&e.target.closest('a');if(!a)return;var h=a.getAttribute('href');if(h==null||h.charAt(0)!='#')return;e.preventDefault();if(h.length>1&&!a.dataset.anc)nav(h)},true);
 function dec(s){try{return decodeURIComponent(s)}catch(e){return s}}
 function route(k){if(k!==true){pg=net;var u0=$('#us');if(u0)u0.textContent=''}
@@ -234,13 +254,13 @@ async function user(u){
  var tk=rt;app.innerHTML=skUser();
  try{
   var info=await api('/users/'+encodeURIComponent(u)),all=[],base=info.type=='Organization'?'/orgs/':'/users/';
-  for(var pg=1;pg<=3;pg++){var c=await api(base+encodeURIComponent(u)+'/repos?per_page=100&sort=updated&page='+pg);all=all.concat(c);if(c.length<100)break}
+  for(var pg=1;pg<=3;pg++){var c=await api((me&&me.login.toLowerCase()==u.toLowerCase()?'/user/repos?affiliation=owner&':base+encodeURIComponent(u)+'/repos?')+'per_page=100&sort=updated&page='+pg);all=all.concat(c);if(c.length<100)break}
   if(tk!=rt)return;remember(info.login);
   var st={q:'',type:'all',sort:'updated',page:1};
   var side='<div class="prof"><img src="'+esc(info.avatar_url)+'" alt=""><h1>'+esc(info.name||info.login)+'</h1><div class="l">'+esc(info.login)+'</div>'+(info.bio?'<p>'+esc(info.bio)+'</p>':'')+
    (info.type=='User'?'<p class="mu"><b style="color:var(--fg)">'+num(info.followers)+'</b> followers · <b style="color:var(--fg)">'+num(info.following)+'</b> following</p>':'')+
    [info.company,info.location,info.blog&&'<a href="'+esc(/^http/.test(info.blog)?info.blog:'https://'+info.blog)+'" target="_blank" rel="noopener">'+esc(info.blog)+'</a>',info.twitter_username&&'@'+esc(info.twitter_username)].filter(Boolean).map(function(x){return'<p class="mu" style="margin:4px 0">'+(/^</.test(x)?x:esc(x))+'</p>'}).join('')+
-   '<p><a class="btn" style="width:100%;justify-content:center" href="https://github.com/'+esc(info.login)+'" target="_blank" rel="noopener">View on github.com</a></p></div>';
+   '<p><a class="btn" style="width:100%;justify-content:center" href="https://github.com/'+esc(info.login)+'" target="_blank" rel="noopener" data-ext="1">View on github.com</a></p></div>';
   app.innerHTML='<div class="wrap"><div class="cols" style="margin-top:0">'+side+'<div class="main"><div class="tabs" style="margin-top:0"><a class="on">'+ic('repo')+' Repositories <span class="badge">'+all.length+'</span></a></div>'+
    '<div class="bar" style="margin-top:16px"><input class="in" id="rf" placeholder="Find a repository…" style="flex:1;min-width:160px"><select class="in" id="rty"><option value="all">Type: All</option><option value="src">Sources</option><option value="fork">Forks</option></select><select class="in" id="rso"><option value="updated">Last updated</option><option value="name">Name</option><option value="stars">Stars</option></select></div><div id="rlist"></div><div class="pg" id="rp"></div></div></div></div>';
   var draw=function(){
@@ -252,7 +272,7 @@ async function user(u){
     '<div class="mt">'+(r.language?'<span><span class="dot" style="background:'+lc(r.language)+'"></span>'+esc(r.language)+'</span>':'')+(r.stargazers_count?'<span>'+ic('star',16)+' '+num(r.stargazers_count)+'</span>':'')+(r.forks_count?'<span>'+ic('fork')+' '+num(r.forks_count)+'</span>':'')+(r.license?'<span>'+esc(r.license.spdx_id||r.license.name)+'</span>':'')+'<span>Updated '+ago(r.pushed_at||r.updated_at)+'</span></div></div>'}).join('')||'<p class="mu" style="padding:24px 0">No repositories match.</p>';
    var b='';if(pages>1){b='<button id="pv"'+(st.page==1?' disabled':'')+'>Previous</button>';for(var i=1;i<=pages;i++)b+='<button data-p="'+i+'"'+(i==st.page?' class="on"':'')+'>'+i+'</button>';b+='<button id="nx"'+(st.page==pages?' disabled':'')+'>Next</button>'}
    $('#rp').innerHTML=b;if(pages>1){$('#pv').onclick=function(){st.page--;draw()};$('#nx').onclick=function(){st.page++;draw()};document.querySelectorAll('#rp [data-p]').forEach(function(x){x.onclick=function(){st.page=+x.dataset.p;draw()}})}};
-  $('#rf').oninput=function(){st.q=this.value;st.page=1;draw()};$('#rty').onchange=function(){st.type=this.value;st.page=1;draw()};$('#rso').onchange=function(){st.sort=this.value;draw()};draw();
+  $('#rf').oninput=function(){st.q=this.value;st.page=1;draw()};$('#rty').onchange=function(){st.type=this.value;st.page=1;draw()};$('#rso').onchange=function(){st.sort=this.value;draw()};draw();newBtn(info);
  }catch(e){if(tk==rt)fail(e)}
 }
 /* ---------- repo ---------- */
@@ -274,7 +294,7 @@ function shell(R,ref,inner,tab){
  return'<div style="background:var(--bg)"><div class="wrap" style="padding-bottom:0"><div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><div class="rt">'+ic('repo',16)+'<a href="#/'+esc(R.o)+'" class="mu">'+esc(R.o)+'</a><span class="mu">/</span><b><a href="#/'+esc(R.o+'/'+R.r)+'">'+esc(R.r)+'</a></b><span class="badge">'+(i.private?'Private':'Public')+'</span></div><span class="sp"></span>'+
  '<a class="btn" href="'+x+'" target="_blank" rel="noopener">'+ic('eye')+' Watch <span class="badge">'+num(i.subscribers_count||0)+'</span></a><a class="btn" href="'+x+'/fork" target="_blank" rel="noopener">'+ic('fork')+' Fork <span class="badge">'+num(i.forks_count)+'</span></a><a class="btn" href="'+x+'" target="_blank" rel="noopener">'+ic('star')+' Star <span class="badge">'+num(i.stargazers_count)+'</span></a></div>'+
  (i.fork&&i.parent?'<div class="mu" style="font-size:12px;margin-top:4px">forked from <a href="#/'+esc(i.parent.full_name)+'">'+esc(i.parent.full_name)+'</a></div>':'')+
- '<div class="tabs"><a class="'+(tab=='code'?'on':'')+'" href="#/'+esc(R.o+'/'+R.r)+'">'+ic('repo')+' Code</a><a href="'+x+'/issues" target="_blank" rel="noopener">Issues'+(i.open_issues_count?' <span class="badge">'+num(i.open_issues_count)+'</span>':'')+'</a><a href="'+x+'/pulls" target="_blank" rel="noopener">Pull requests</a><a href="'+x+'/actions" target="_blank" rel="noopener">Actions</a><a href="'+x+'/security" target="_blank" rel="noopener">Security</a><a href="'+x+'/pulse" target="_blank" rel="noopener">Insights</a></div></div></div><div class="wrap" style="padding-top:0">'+inner+'</div>';
+ '<div class="tabs"><a class="'+(tab=='code'?'on':'')+'" href="#/'+esc(R.o+'/'+R.r)+'">'+ic('repo')+' Code</a><a class="'+(tab=='issues'?'on':'')+'" href="#/'+esc(R.o+'/'+R.r)+'/issues">Issues'+(i.open_issues_count?' <span class="badge">'+num(i.open_issues_count)+'</span>':'')+'</a><a class="'+(tab=='pulls'?'on':'')+'" href="#/'+esc(R.o+'/'+R.r)+'/pulls">Pull requests</a><a href="'+x+'/actions" target="_blank" rel="noopener">Actions</a><a href="'+x+'/security" target="_blank" rel="noopener">Security</a><a href="'+x+'/pulse" target="_blank" rel="noopener">Insights</a></div></div></div><div class="wrap" style="padding-top:0">'+inner+'</div>';
 }
 function crumbs(R,ref,path,blob){
  var p=path?path.split('/'):[],h='<a href="'+lnk(R,'tree',ref,'')+'"><b>'+esc(R.r)+'</b></a>',acc='';
@@ -308,7 +328,7 @@ async function repoPage(o,r,type,rest,ln){
  var tk=rt,key=(o+'/'+r).toLowerCase();
  try{
   var R=repos[key];if(!R){app.innerHTML=skRepo();R=await loadRepo(o,r);repos[key]=R}
-  if(tk!=rt)return;remember(R.info.full_name);await ensure(R);if(tk!=rt)return;window.curR=R;
+  if(tk!=rt)return;remember(R.info.full_name);await ensure(R);if(tk!=rt)return;window.curR=R;if(/^(issues|pulls|pull|commit|releases)$/.test(type||''))return extra(R,type,rest,tk);
   var ref=R.info.default_branch,path='',joined=rest.join('/');
   if(type=='tree'||type=='blob'||type=='commits'){
    var best=''; R.branches.forEach(function(b){if((joined==b||joined.indexOf(b+'/')==0)&&b.length>best.length)best=b});
@@ -316,9 +336,9 @@ async function repoPage(o,r,type,rest,ln){
   }
   var T=await getTree(R,ref);if(tk!=rt)return;
   window.goFile=function(){goToFile(R,ref,T)};
-  if(type=='blob')return fileView(R,ref,path,T,ln,tk);
+  if(type=='blob'){fileView(R,ref,path,T,ln,tk);return wr(R,ref,path,1)}
   if(type=='commits')return commitsView(R,ref,path,T,tk);
-  dirView(R,ref,path,T,tk);
+  dirView(R,ref,path,T,tk);zipWire(R,ref,path,T);wr(R,ref,path,0);
  }catch(e){if(tk==rt)fail(e)}
 }
 async function dirView(R,ref,path,T,tk){
@@ -332,7 +352,7 @@ async function dirView(R,ref,path,T,tk){
  if(!ents.length)rows+='<div class="ro mu">This directory is empty.</div>';
  var clone='https://github.com/'+R.info.full_name+'.git',rd=node.f.filter(function(f){return/^readme(\.(md|markdown|txt|rst))?$/i.test(f)})[0];
  var inner='<div class="cols"><div class="main"><div class="bar">'+branchMenu(R,ref,path,T)+(R.done.branches?'<span class="mu"><b style="color:var(--fg)">'+R.branches.length+'</b> branch'+(R.branches.length>1?'es':'')+'</span>':'')+(S.fc&&token?'':'<button id="fcb" title="Needs a token">Load file commit info · up to '+Math.min(60,node.d.length+node.f.length)+' requests</button>')+'<span class="sp"></span><button id="gf">'+ic('search')+' Go to file</button>'+
-  '<details><summary class="btn green">Code '+ic('caret')+'</summary><div class="pop r"><b>Clone</b><div style="display:flex;gap:6px;margin:8px 0"><input class="in" readonly value="'+clone+'" style="flex:1"><button class="cp" data-t="'+clone+'">'+ic('copy')+'</button></div><a href="https://github.com/'+R.info.full_name+'/archive/refs/heads/'+esc(ref)+'.zip">Download ZIP</a><a href="https://github.com/'+R.info.full_name+'/tree/'+esc(ref)+(path?'/'+esc(path):'')+'" target="_blank" rel="noopener">Open on github.com</a></div></details></div>'+
+  '<details><summary class="btn green">Code '+ic('caret')+'</summary><div class="pop r"><b>Clone</b><div style="display:flex;gap:6px;margin:8px 0"><input class="in" readonly value="'+clone+'" style="flex:1"><button class="cp" data-t="'+clone+'">'+ic('copy')+'</button></div><a href="https://github.com/'+R.info.full_name+'/archive/'+encodeURI(ref)+'.zip">Download ZIP</a><a href="#" id="zp" title="Uses the API with your token (works for private repos); builds the ZIP here if the browser blocks it">Download ZIP via API</a><a data-ext="1" href="https://github.com/'+R.info.full_name+'/tree/'+esc(ref)+(path?'/'+esc(path):'')+'" target="_blank" rel="noopener">Open on github.com</a></div></details></div>'+
   (T.trunc?'<div class="err">This repo is very large; GitHub truncated the file list, so some files are missing.</div>':'')+
   '<div style="margin-bottom:12px">'+crumbs(R,ref,path)+'</div><div class="box"><div class="bh cm" id="lc">'+sk('55%',16,0)+'</div>'+rows+'</div>'+
   (rd?'<div class="box" id="rdb"><div class="bh">'+ic('book')+' <b>'+esc(rd)+'</b></div><div class="md">'+sk('90%',16)+sk('70%',16)+sk('80%',16,0)+'</div></div>':'')+'</div>'+sidebar(R,ref)+'</div>';
@@ -425,7 +445,98 @@ async function commitsView(R,ref,path,T,tk){
   $('#np').onclick=function(){cpage--;commitsView(R,ref,path,T,rt)};$('#op').onclick=function(){cpage++;commitsView(R,ref,path,T,rt)};
  }catch(e){if(tk==rt)fail(e)}
 }
-cpage=1;route();
+/* ---------- write access (needs a token with write permission) ---------- */
+var me=null;
+async function gh(m,p,b,tk){var h={Accept:'application/vnd.github+json'};if(tk||token)h.Authorization='Bearer '+(tk||token);if(b)h['Content-Type']='application/json';var r=await fetch('https://api.github.com'+p,{method:m,headers:h,body:b?JSON.stringify(b):undefined}),d=null,rm=r.headers.get('x-ratelimit-remaining');if(rm!=null&&$('#rl'))$('#rl').textContent='API '+rm+'/'+r.headers.get('x-ratelimit-limit');try{d=await r.json()}catch(e){}if(!r.ok){var x=(d&&d.message)||'GitHub returned '+r.status;if(r.status==403||r.status==404)x+=' (does your token have write permission for this?)';throw new Error(x)}return d}
+function toast(m,bad){var t=document.createElement('div');t.className='toast'+(bad?' bad':'');t.textContent=m;document.body.appendChild(t);setTimeout(function(){t.remove()},3500)}
+function b64(by){var o='';for(var i=0;i<by.length;i+=8192)o+=String.fromCharCode.apply(null,by.subarray(i,i+8192));return btoa(o)}
+function enc8(s){return new TextEncoder().encode(s)}
+function fresh(R){cache={};raws={};if(R)delete repos[(R.o+'/'+R.r).toLowerCase()]}
+function dlg(t,body,ok,fn,danger){var o=document.createElement('div');o.className='fo';o.innerHTML='<div><h3 style="margin:4px 4px 8px">'+t+'</h3>'+body+'<div class="er"></div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="x">Cancel</button><button class="'+(danger?'danger':'green')+' ok">'+ok+'</button></div></div>';document.body.appendChild(o);o.onclick=function(e){if(e.target==o)o.remove()};$('.x',o).onclick=function(){o.remove()};var b=$('.ok',o);b.onclick=async function(){b.disabled=true;$('.er',o).innerHTML='';try{await fn(o);o.remove()}catch(e){$('.er',o).innerHTML='<div class="err">'+esc(e.message)+'</div>';b.disabled=false}};var f=$('input,textarea',o);if(f)f.focus();return o}
+async function loadMe(){me=null;if(token){try{var x=await gh('GET','/user');me={login:x.login,av:x.avatar_url};upA(x)}catch(e){toast('Token rejected: '+e.message,1)}}else{try{await gh('GET','/rate_limit')}catch(e){}}var m=$('#me');if(m)m.innerHTML=me?'<a class="me" href="#/'+esc(me.login)+'"><img class="av" src="'+esc(me.av)+'&s=40" alt="">'+esc(me.login)+'</a><button id="sw" title="Switch account">Switch</button><button id="so">Sign out</button>':'<button id="si">Sign in</button>';var s=$('#si');if(s)s.onclick=acctUI;var sw=$('#sw');if(sw)sw.onclick=acctUI;var so=$('#so');if(so)so.onclick=signOut}
+function newBtn(info){var b=$('.bar');if(!me||!b||me.login.toLowerCase()!=info.login.toLowerCase())return;b.insertAdjacentHTML('beforeend','<button class="green" id="nrp">New repository</button>');$('#nrp').onclick=function(){dlg('Create a new repository','<input class="in n" placeholder="Repository name"><input class="in d" placeholder="Description (optional)"><label class="ck"><input type="checkbox" class="pv"> Private</label><label class="ck"><input type="checkbox" class="ai" checked> Add a README</label>','Create repository',async function(o){var n=$('.n',o).value.trim();if(!n)throw new Error('Enter a name');var u=await gh('POST','/user/repos',{name:n,description:$('.d',o).value,private:$('.pv',o).checked,auto_init:$('.ai',o).checked});fresh();toast('Created '+u.full_name);nav('#/'+u.full_name)})}}
+function wr(R,ref,path,isFile){
+ if(!me)return;var i=R.info,pm=i.permissions||{},cp='/repos/'+i.full_name+'/contents/'+encodeURI(path),base=path?path+'/':'',name=path.split('/').pop();
+ if(pm.admin){$('.sp',app).insertAdjacentHTML('afterend','<button id="er">Edit repo</button><button class="danger" id="dr">Delete repo</button>');
+  $('#er').onclick=function(){dlg('Edit repository','<input class="in n" value="'+esc(i.name)+'"><input class="in d" placeholder="Description" value="'+esc(i.description||'')+'"><input class="in h" placeholder="Homepage" value="'+esc(i.homepage||'')+'"><label class="ck"><input type="checkbox" class="pv"'+(i.private?' checked':'')+'> Private</label>','Save changes',async function(o){var u=await gh('PATCH','/repos/'+i.full_name,{name:$('.n',o).value.trim(),description:$('.d',o).value,homepage:$('.h',o).value,private:$('.pv',o).checked});fresh(R);toast('Repository updated');nav('#/'+u.full_name)})};
+  $('#dr').onclick=function(){dlg('Delete repository','<p>This permanently deletes <b>'+esc(i.full_name)+'</b> with all files, issues and history. Type the full name to confirm.</p><input class="in c" placeholder="'+esc(i.full_name)+'">','Delete this repository',async function(o){if($('.c',o).value.trim()!=i.full_name)throw new Error('Name does not match');await gh('DELETE','/repos/'+i.full_name);fresh(R);toast('Repository deleted');nav('#/'+R.o)},1)}}
+ if(!pm.push)return;
+ if(isFile){$('#ld').insertAdjacentHTML('beforebegin','<button id="ed">Edit</button><button class="danger" id="dx">Delete</button>');
+  $('#ed').onclick=async function(){var b=this;b.disabled=true;try{var f=await gh('GET',cp+'?ref='+encodeURIComponent(ref));if(f.encoding!='base64'||!f.content)throw new Error('File is too large to edit here (over 1 MB)');var tx=new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(atob(f.content.replace(/\n/g,'')),function(c){return c.charCodeAt(0)}));
+   dlg('Edit '+esc(path)+' <span class="mu" style="font-size:12px">on '+esc(ref)+'</span>','<textarea class="in tx" spellcheck="false">'+esc(tx)+'</textarea><input class="in m" value="Update '+esc(name)+'">','Commit changes',async function(o){await gh('PUT',cp,{message:$('.m',o).value||'Update '+name,content:b64(enc8($('.tx',o).value)),sha:f.sha,branch:ref});fresh(R);toast('Committed to '+ref);route(true)}).classList.add('wide')}catch(e){toast(e.message=='The encoded data was not valid for encoding utf-8'?'Not a text file':e.message,1)}b.disabled=false};
+  $('#dx').onclick=function(){dlg('Delete file','<p>Delete <b>'+esc(path)+'</b> from <b>'+esc(ref)+'</b>?</p><input class="in m" value="Delete '+esc(name)+'">','Commit deletion',async function(o){var f=await gh('GET',cp+'?ref='+encodeURIComponent(ref));await gh('DELETE',cp,{message:$('.m',o).value||'Delete '+name,sha:f.sha,branch:ref});fresh(R);toast('File deleted');nav(lnk(R,'tree',ref,path.indexOf('/')<0?'':path.slice(0,path.lastIndexOf('/'))))},1)}}
+ else{$('.bar .sp').insertAdjacentHTML('beforebegin','<button id="nf">Add file</button>');
+  $('#nf').onclick=function(){dlg('Add file to '+esc(ref)+(path?'/'+esc(path):''),'<input class="in nm" placeholder="filename.ext (use / to create folders)"><textarea class="in tx" placeholder="File contents"></textarea><label class="mu" style="display:block;margin:4px 4px 8px">…or upload a file: <input type="file" class="up"></label><input class="in m" value="Add file">','Commit new file',async function(o){var nm=$('.nm',o).value.trim().replace(/^\/+/,''),f=$('.up',o).files[0];if(!nm&&f)nm=f.name;if(!nm)throw new Error('Enter a file name');var by=f?new Uint8Array(await f.arrayBuffer()):enc8($('.tx',o).value);await gh('PUT','/repos/'+i.full_name+'/contents/'+encodeURI(base+nm),{message:$('.m',o).value||'Add '+nm,content:b64(by),branch:ref});fresh(R);toast('File created');route(true)}).classList.add('wide')}}
+}
+document.addEventListener('keydown',function(e){if(e.key=='/'&&!/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)){e.preventDefault();$('#q').focus()}});
+var TI={Issues:'<circle cx="8" cy="8" r="6.25"/><circle cx="8" cy="8" r="1" fill="currentColor"/>','Pull requests':'<circle cx="4" cy="3.5" r="1.5"/><circle cx="4" cy="12.5" r="1.5"/><circle cx="12" cy="12.5" r="1.5"/><path d="M4 5v6M12 11V6.5A2.5 2.5 0 0 0 9.5 4H8"/>',Actions:'<circle cx="8" cy="8" r="6.25"/><path d="M6.5 5.5v5l4-2.5z" fill="currentColor"/>',Security:'<path d="M8 1.5 2.5 3.5v4c0 3.2 2.3 5.6 5.5 7 3.2-1.4 5.5-3.8 5.5-7v-4z"/>',Insights:'<path d="M2 14V2M2 14h12M5 11V8m3 3V5m3 6V7"/>'};
+function deco(){document.querySelectorAll('.tabs a:not([data-gi])').forEach(function(a){a.dataset.gi=1;var k=((a.childNodes[0]||{}).textContent||'').trim();if(TI[k])a.insertAdjacentHTML('afterbegin','<svg class="gi" width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">'+TI[k]+'</svg>')})}
+new MutationObserver(deco).observe(app,{childList:true,subtree:true});
+app.insertAdjacentHTML('afterend','<footer class="ft"><span>© 2026 GitHub Browser (unofficial)</span><a href="https://docs.github.com/site-policy/github-terms/github-terms-of-service" target="_blank" rel="noopener">Terms</a><a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener">Privacy</a><a href="https://www.githubstatus.com" target="_blank" rel="noopener">Status</a><a href="https://docs.github.com" target="_blank" rel="noopener">Docs</a><a href="https://github.com/contact" target="_blank" rel="noopener">Contact</a></footer>');
+/* ---------- accounts ---------- */
+var accts=[];try{accts=JSON.parse(localStorage.getItem('rb_accts')||'[]')}catch(e){}
+function savA(){save('rb_accts',JSON.stringify(accts));save('rb_token',token)}
+function upA(x){var a=accts.filter(function(y){return y.login==x.login})[0];if(!a){a={};accts.push(a)}a.token=token;a.login=x.login;a.name=x.name||x.login;a.av=x.avatar_url;savA()}
+async function addAcct(tk,note){var u=await gh('GET','/user',null,tk);token=tk;cache={};repos={};await loadMe();var a=accts.filter(function(y){return y.login==u.login})[0];if(a&&note)a.note=note;savA();route()}
+function signOut(){accts=accts.filter(function(a){return a.token!=token});token='';savA();cache={};repos={};loadMe().then(function(){route()});toast('Signed out')}
+function acctUI(){
+ var rows=accts.map(function(a,i){return'<div class="sr" data-i="'+i+'"><img class="av" style="width:32px;height:32px" src="'+esc(a.av||'')+'&s=64" alt=""><span><b>'+esc(a.name)+'</b> <span class="mu">'+esc(a.login)+'</span>'+(a.token==token?' <span class="badge" style="color:var(--ok);border-color:var(--ok)">Active</span>':'')+(a.note?'<span class="mu" style="display:block;font-size:12px">'+esc(a.note)+'</span>':'')+'</span><button data-e="'+i+'">Note</button><button data-d="'+i+'">Remove</button></div>'}).join('');
+ var o=dlg('Accounts',(rows||'<p class="mu" style="margin:4px">No saved accounts yet.</p>')+'<div class="sh">Add account</div><input class="in tk" type="password" placeholder="Personal access token"><input class="in nt" placeholder="Note (optional), e.g. school account">','Add account',async function(o){var t=$('.tk',o).value.trim();if(!t)throw new Error('Paste a token to add an account');await addAcct(t,$('.nt',o).value.trim())});
+ o.querySelectorAll('.sr[data-i]').forEach(function(r){r.onclick=function(e){if(e.target.closest('button'))return;var a=accts[+r.dataset.i];o.remove();token=a.token;savA();cache={};repos={};loadMe().then(function(){route()})}});
+ o.querySelectorAll('[data-e]').forEach(function(b){b.onclick=function(){var a=accts[+b.dataset.e],n=prompt('Note for '+a.login,a.note||'');if(n!=null){a.note=n;savA();o.remove();acctUI()}}});
+ o.querySelectorAll('[data-d]').forEach(function(b){b.onclick=function(){var a=accts[+b.dataset.d];if(!confirm('Remove '+a.login+' and its saved token from this browser?'))return;var act=a.token==token;accts.splice(+b.dataset.d,1);o.remove();if(act)signOut();else{savA();acctUI()}}});
+}
+/* ---------- open github.com links inside the app ---------- */
+var RS=/^(topics|settings|login|logout|orgs|marketplace|features|about|pricing|explore|notifications|search|sponsors|apps|collections|trending|enterprise|new|signup|join|contact|customer-stories|security|pulls|issues|codespaces|copilot|models|site|resources|solutions|mobile|dashboard|account|users|readme|stars|watching|fork)$/i;
+function ghRoute(h){var m=String(h).match(/^https?:\/\/(?:www\.)?github\.com\/([^\/?#]+)(?:\/([^\/?#]+))?(\/[^?#]*)?(?:\?[^#]*)?(#.*)?$/i);if(!m||RS.test(m[1]))return null;var o=m[1],r=m[2],rest=m[3]||'',hs=m[4]||'';if(!r)return'#/'+o;r=r.replace(/\.git$/,'');var p=rest.split('/').filter(Boolean),t=p[0],b='#/'+o+'/'+r;if(!t)return b;
+ if(/^(tree|blob|commits)$/.test(t)&&p.length>1)return b+rest+(/^#L/.test(hs)?hs:'');
+ if(t=='issues'||t=='pulls')return p[1]&&!/^\d+$/.test(p[1])?null:b+'/'+t+(p[1]?'/'+p[1]:'');
+ if(t=='pull'&&/^\d+$/.test(p[1]||''))return b+'/pull/'+p[1];if(t=='commit'&&p[1])return b+'/commit/'+p[1];if(t=='releases')return b+'/releases';return null}
+document.addEventListener('click',function(e){if(e.defaultPrevented||e.button||e.ctrlKey||e.metaKey||e.shiftKey)return;var a=e.target.closest&&e.target.closest('a[href^="http"]');if(!a||a.dataset.ext)return;var r=ghRoute(a.href);if(r){e.preventDefault();nav(r)}},true);
+/* ---------- ZIP: link first, then API, then build in the browser ---------- */
+function dlBlob(b,n){var u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=n;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},9000)}
+var CT=null;function crc(u){if(!CT){CT=[];for(var n=0;n<256;n++){var c=n;for(var k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;CT[n]=c>>>0}}var c=-1;for(var i=0;i<u.length;i++)c=CT[(c^u[i])&255]^(c>>>8);return(c^-1)>>>0}
+async function getBytes(R,ref,p){var q=p.split('/').map(encodeURIComponent).join('/');try{var r=await fetch('https://raw.githubusercontent.com/'+R.o+'/'+R.r+'/'+encodeURI(ref)+'/'+q);if(r.ok)return new Uint8Array(await r.arrayBuffer())}catch(e){}
+ var h={Accept:'application/vnd.github.raw+json'};if(token)h.Authorization='Bearer '+token;var r2=await fetch('https://api.github.com/repos/'+R.info.full_name+'/contents/'+q+'?ref='+encodeURIComponent(ref),{headers:h});if(!r2.ok)throw new Error('could not fetch '+p);return new Uint8Array(await r2.arrayBuffer())}
+async function buildZip(R,ref,T,btn,nm){var ps=T.paths;if(ps.length>1500)throw new Error('too many files ('+ps.length+') to build here');
+ var u16=function(v){return[v&255,v>>8&255]},u32=function(v){return[v&255,v>>8&255,v>>16&255,v>>24&255]},te=new TextEncoder(),root=nm+'/',parts=[],cd=[],off=0;
+ for(var i=0;i<ps.length;i+=6){btn.textContent='Fetching '+i+'/'+ps.length+'…';var ch=ps.slice(i,i+6),ds=await Promise.all(ch.map(function(p){return getBytes(R,ref,p)}));
+  ch.forEach(function(p,j){var d=ds[j],nb=te.encode(root+p),c=crc(d),lh=new Uint8Array([0x50,0x4b,3,4,20,0,0,8,0,0,0,0,33,0].concat(u32(c),u32(d.length),u32(d.length),u16(nb.length),[0,0]));
+   parts.push(lh,nb,d);cd.push(new Uint8Array([0x50,0x4b,1,2,20,0,20,0,0,8,0,0,0,0,33,0].concat(u32(c),u32(d.length),u32(d.length),u16(nb.length),[0,0,0,0,0,0,0,0,0,0,0,0],u32(off))),nb);off+=lh.length+nb.length+d.length})}
+ var cs=0;cd.forEach(function(x){cs+=x.length});dlBlob(new Blob(parts.concat(cd,[new Uint8Array([0x50,0x4b,5,6,0,0,0,0].concat(u16(ps.length),u16(ps.length),u32(cs),u32(off),[0,0]))]),{type:'application/zip'}),nm+'.zip')}
+function zipWire(R,ref,path,T){var z=$('#zp');if(!z)return;var lbl=z.textContent;z.onclick=async function(e){e.preventDefault();var nm=R.r+'-'+ref.replace(/[^\w.-]+/g,'-');z.textContent='Preparing…';
+  try{var h={Accept:'application/vnd.github+json'};if(token)h.Authorization='Bearer '+token;var r=await fetch('https://api.github.com/repos/'+R.info.full_name+'/zipball/'+encodeURI(ref),{headers:h});if(!r.ok)throw 0;dlBlob(await r.blob(),nm+'.zip')}
+  catch(x){try{await buildZip(R,ref,T,z,nm)}catch(e2){toast('ZIP failed: '+((e2&&e2.message)||'blocked by the browser'),1)}}z.textContent=lbl}}
+/* ---------- issues, pull requests, commits, releases (read-only) ---------- */
+var ist='open';
+function lab(l){var c='#'+esc(l.color||'888');return'<span class="badge" style="border-color:'+c+';color:'+c+'">'+esc(l.name)+'</span>'}
+function stb(s,m){var c=m||s!='open'?'#8957e5':'var(--gr)';return'<span class="badge" style="background:'+c+';border-color:'+c+';color:#fff;font-size:14px;padding:2px 12px">'+(m?'Merged':s=='open'?'Open':'Closed')+'</span>'}
+function diff(fs){return fs.map(function(f){var p=(f.patch||'').split('\n').map(function(l){var c=l[0]=='+'?'#2ea04326':l[0]=='-'?'#f851491a':l[0]=='@'?'#388bfd26':'transparent';return'<div style="background:'+c+';white-space:pre;padding:0 10px">'+esc(l||' ')+'</div>'}).join('');return'<details class="box"><summary class="bh" style="cursor:pointer"><b>'+esc(f.filename)+'</b><span class="sp"></span><span style="color:var(--ok)">+'+f.additions+'</span> <span style="color:#f85149">−'+f.deletions+'</span></summary>'+(f.patch?'<div class="scr" style="font:12px/20px ui-monospace,Menlo,Consolas,monospace">'+p+'</div>':'<p class="mu" style="padding:12px;margin:0">No text diff available.</p>')+'</details>'}).join('')}
+async function hj(p){return JSON.parse(await api(p,'application/vnd.github.html+json'))}
+async function extra(R,type,rest,tk){
+ var full=R.info.full_name,pre='#/'+R.o+'/'+R.r+'/',pr=type=='pulls'||type=='pull',n=rest[0],tab=pr?'pulls':type=='issues'?'issues':'code',db=R.info.default_branch,base='/repos/'+full,
+  sh=function(h){app.innerHTML=shell(R,db,h,tab)},cl=function(h){return clean(h||'<i>No description provided.</i>',R,db,'',{k:{}})},
+  cb=function(u,d,b){u=u||{login:'ghost',avatar_url:''};return'<div class="box"><div class="bh"><img class="av" src="'+esc(u.avatar_url)+'&s=40" alt=""><b>'+esc(u.login)+'</b><span class="mu">commented '+ago(d)+'</span></div><div class="md" style="font-size:14px;padding:16px">'+cl(b)+'</div></div>'};
+ sh('<p class="mu" style="padding:16px 0">Loading…</p>');
+ try{var h='',pg1=cpage;
+  if(type=='commit'){var c=await api(base+'/commits/'+encodeURIComponent(n)),a=c.author,m=c.commit.message.split('\n');
+   h='<div style="margin:16px 0"><h2 style="margin:0 0 8px;font-size:24px;font-weight:400">'+esc(m[0])+'</h2>'+(m.length>1?'<pre class="mu" style="white-space:pre-wrap;font:inherit;margin:8px 0">'+esc(m.slice(1).join('\n').trim())+'</pre>':'')+'<div class="mu">'+(a?'<img class="av" src="'+esc(a.avatar_url)+'&s=40" alt=""> ':'')+'<b style="color:var(--fg)">'+esc(c.commit.author.name)+'</b> committed '+ago(c.commit.author.date)+' · <code>'+c.sha.slice(0,7)+'</code>'+(c.parents[0]?' · parent <a href="'+pre+'commit/'+c.parents[0].sha+'">'+c.parents[0].sha.slice(0,7)+'</a>':'')+' · <a href="'+pre+'tree/'+c.sha+'">Browse files</a></div></div><div class="mu" style="margin-bottom:12px">'+c.files.length+' changed file'+(c.files.length==1?'':'s')+' with <b style="color:var(--ok)">'+c.stats.additions+'</b> additions and <b style="color:#f85149">'+c.stats.deletions+'</b> deletions</div>'+diff(c.files)}
+  else if(type=='releases'){var L=await hj(base+'/releases?per_page=15&page='+cpage);h='<h2 style="margin:16px 0">Releases</h2>'+(L.map(function(r){return'<div class="box"><div class="bh"><b>'+esc(r.name||r.tag_name)+'</b>'+(r.prerelease?'<span class="badge">Pre-release</span>':'')+'<span class="sp"></span><span class="mu">'+ago(r.published_at||r.created_at)+'</span></div><div class="md" style="font-size:14px;padding:16px">'+cl(r.body_html||'<i>No release notes.</i>')+'</div></div>'}).join('')||'<p class="mu">No releases published.</p>')+'<div class="pg"><button id="np"'+(cpage==1?' disabled':'')+'>Newer</button><button id="op"'+(L.length<15?' disabled':'')+'>Older</button></div>'}
+  else if(n&&/^\d+$/.test(n)){var i=await hj(base+(pr?'/pulls/':'/issues/')+n),cm=await hj(base+'/issues/'+n+'/comments?per_page=100'),fl=pr?await api(base+'/pulls/'+n+'/files?per_page=100'):[];
+   h='<div style="margin:16px 0"><h2 style="margin:0 0 8px;font-size:32px;font-weight:400">'+esc(i.title)+' <span class="mu">#'+n+'</span></h2><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+stb(i.state,i.merged)+'<span class="mu"><b style="color:var(--fg)">'+esc((i.user||{}).login)+'</b> opened this '+ago(i.created_at)+' · '+(i.comments||0)+' comment'+(i.comments==1?'':'s')+'</span>'+(pr&&i.head?'<span class="mu">· '+esc(i.head.label)+' → '+esc(i.base.label)+'</span>':'')+'</div></div><div style="margin-bottom:12px">'+(i.labels||[]).map(lab).join(' ')+'</div>'+cb(i.user,i.created_at,i.body_html)+cm.map(function(c){return cb(c.user,c.created_at,c.body_html)}).join('')+(pr?'<h3>'+fl.length+' file'+(fl.length==1?'':'s')+' changed</h3>'+diff(fl):'')+'<p><a class="btn" data-ext="1" href="'+esc(i.html_url)+'" target="_blank" rel="noopener">Open on github.com</a></p>'}
+  else{var L=await api(base+(pr?'/pulls':'/issues')+'?state='+ist+'&per_page=30&page='+cpage),n0=L.length;if(!pr)L=L.filter(function(x){return!x.pull_request});
+   h='<div class="bar" style="margin:16px 0">'+['open','closed','all'].map(function(s){return'<button data-s="'+s+'"'+(s==ist?' style="font-weight:600"':'')+'>'+s[0].toUpperCase()+s.slice(1)+'</button>'}).join('')+'<span class="sp"></span><a class="btn green" href="https://github.com/'+esc(full)+(pr?'/compare':'/issues/new')+'" target="_blank" rel="noopener">'+(pr?'New pull request':'New issue')+'</a></div><div class="box">'+(L.map(function(x){return'<div class="ro" style="padding:10px 16px"><div style="flex:1;min-width:0"><a style="color:var(--fg);font-weight:600" href="'+pre+(pr?'pull/':'issues/')+x.number+'">'+esc(x.title)+'</a> '+(x.labels||[]).map(lab).join(' ')+'<div class="mu" style="font-size:12px">#'+x.number+' '+(x.state=='open'?'opened':'closed')+' '+ago(x.created_at)+' by '+esc((x.user||{}).login)+'</div></div>'+(x.comments?'<span class="mu">'+x.comments+' comments</span>':'')+'</div>'}).join('')||'<div class="ro mu">No '+(pr?'pull requests':'issues')+' found.</div>')+'</div><div class="pg"><button id="np"'+(cpage==1?' disabled':'')+'>Newer</button><button id="op"'+(n0<30?' disabled':'')+'>Older</button></div>'}
+  if(tk!=rt)return;sh(h);app.querySelectorAll('.md').forEach(wireMd);
+  app.querySelectorAll('button[data-s]').forEach(function(b){b.onclick=function(){ist=b.dataset.s;cpage=1;extra(R,type,rest,rt)}});
+  var np=$('#np');if(np){np.onclick=function(){cpage--;extra(R,type,rest,rt)};$('#op').onclick=function(){cpage++;extra(R,type,rest,rt)}}
+ }catch(e){if(tk==rt)fail(e)}
+}
+/* ---------- back / forward ---------- */
+hsave();$('#bk').onclick=function(){go2(-1)};$('#fw').onclick=function(){go2(1)};
+try{history.pushState(null,'');window.addEventListener('popstate',function(){if(hi>0){history.pushState(null,'');go2(-1)}else history.back()})}catch(e){}
+window.addEventListener('mouseup',function(e){if(e.button==4){e.preventDefault();go2(1)}});
+document.addEventListener('keydown',function(e){if(e.altKey&&e.key=='ArrowRight'){e.preventDefault();go2(1)}});
+cpage=1;loadMe().then(function(){route()});
 })();
 </script>
 </body>
