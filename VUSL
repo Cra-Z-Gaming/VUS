@@ -1,20 +1,11 @@
-<!-- Version 17.4 -->
-
-<!--This is a game launcher that requests code from 2 github pages, one being mine, one being from "CoolDude2349"
-<!--once you click a game and it opens, you can reopen that game as many time as you want while offline (as long as the tab is open)
-<!--if you want other versions of this or even other projects ive worked on, i will leave the link here
-<!--/sites.google.com/view/projexe \-->
-<!-- pastebin.com/raw/RM4T5VqY (backup) -->
-
-<!=========================================
-<you can delete everything above this text
-<!=========================================
-
 <!DOCTYPE html>
+<!-- VUSL V17 — game launcher. Pulls games from the Cra-Z-Gaming GitHub repo and caches them for offline reopen.
+     Other versions/projects: sites.google.com/view/projexe  |  backup: pastebin.com/raw/RM4T5VqY -->
 <html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://raw.githubusercontent.com" crossorigin>
 <title>VUSL V17</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800;900&display=swap" rel="stylesheet">
 <style>
@@ -494,1042 +485,610 @@ body::after {
 <input type="file" id="fileInputFolder" webkitdirectory directory multiple style="display:none">
 
 <script>
+"use strict";
 /* ════════════════════════════════════════════════════
-   VUSL V17 — Optimized Multi-Pack Game Launcher
-
-   Changes from V16:
-   ⓐ External tab rebuilt: upload individual files or
-      whole folders (webkitdirectory) instead of a
-      base-URL + filename-list config. Content is read
-      directly into IndexedDB — no network fetch needed.
-   ⓑ New uploads merge with existing external games
-      instead of overwriting. If new filenames collide
-      with already-uploaded ones, a modal asks whether
-      to skip duplicates or overwrite them.
-   ⓒ External tab moved to the far right of the tab bar
-      (pinned via CSS margin-left:auto), Favorites sits
-      just before it.
-   ⓓ New "Refresh" button — re-runs scanCache() on demand
-      so newly-downloaded games show their cached outline
-      immediately without needing a full page reload.
-   ⓔ Clear Cache now warns separately about external
-      uploads, since those can't be re-downloaded from
-      GitHub — clearing purges them permanently.
-   ⓕ Per-card remove (🗑) for external games only.
-   ⓖ Guarded key parsing (packId/filename) against
-      filenames/pack ids that might contain ":" by using
-      a reserved separator lookup instead of naive split.
-
-   Perf improvements carried over from V16:
-   ① cardNodeCache  — O(1) DOM lookups in setCardStatus
-   ② renderGrid     — DocumentFragment batch insert
-   ③ Search debounce — 120 ms, not every keystroke
-   ④ MAX_PAR 25     — two origins → can saturate both
-   ⑤ scanCache      — getAllKeys once; Set lookup O(1)
-   ⑥ Rescan strategy — tab-focus visibilitychange + manual refresh button
-   ⑦ renderStatus   — single cached element refs
+   VUSL V17 — Cra-Z-only launcher, click-first loading
+   • Single source: Cra-Z-Gaming.
+   • Clicked games jump the queue (latest click first) and
+     use a dedicated "manual" lane with high fetch priority.
+   • Bulk (Load All) uses a low-priority lane and backs off
+     to 2 connections while a clicked game is downloading.
+   • Window opens synchronously on click (no popup blocking),
+     filled when the download lands.
+   • Batched IndexedDB writes, fetch timeout + 1 retry,
+     auto-retry on reconnect, event-delegated cards.
 ════════════════════════════════════════════════════ */
 
-/* ── Source Base URLs ─────────────────────────────── */
-const CRA_BASE  = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUSL/main/HTML_Games/";
-const COOL_BASE = "https://raw.githubusercontent.com/CoolDude2349/Offline-HTML-Games-Pack/refs/heads/master/offline/";
+const CRA_BASE = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUSL/main/HTML_Games/";
+const GAMES = "Blackjack.html 1on1tennis.html 1v1.lol.html 3Dflightsimulator.html 8ballclassic.html 10minutestilldawn.html 12minibattles.html 2048.html 2048cupcakes.html agariolite.html ageofwar.html ageofwar2.html agesofconflict.html Alpha_1.2.6.html amongus.html angrybirds.html angrybirdsshowdown.html angrybirdsspace.html awesometanks.html awesometanks2.html backrooms.html baconmaydie.html badicecream.html badicecream2.html badicecream3.html badparenting.html badpiggies.html baldisbasics.html baseballbros.html basketballlegends.html basketballstars.html basketbros.html basketrandom.html Beta_1.3.html bitlife.html bitplanes.htm blockysnakes.html bloonsTD.html bloonsTD2.html bloonsTD3.html bloonsTD4.html bloonsTD5.html bloxorz.html blumgiracers.html blumgirocket.html bobtherobber.html bobtherobber2.html bobtherobber5.html bouncymotors.html bowmasters.html boxingrandom.htm breakingthebank.html bubbleshooter.html candycrush.html capybaraclicker.html cardrawing.html carkingarena.html chess.html choppyorc.html circloO.html circloO2.html clashofvikings.html cleanupio.html clusterrush.html cookieclicker.htm crazycars.html crazycattle3D.html crazycrashlanding.html crazymotorcycle.html crossyroad.htm cuttherope.html dadish.html dadish2.html dadish3.html deathchase.html deathrun3D.html demolitionderbycrashracing.html doodlejump.html drawclimber.html dreadheadparkour.htm driftboss.htm drivemad.htm ducklife.html ducklife2.html ducklife3.html ducklife4.html ducklife5.html ducklingsio.html eagleride.html earntodie.html earntodie2.html eggycar.html elasticface.htm escaperoad.html escaperoad2.html escapingtheprison.html evilglitch.html fancypantsadventure.html fancypantsadventure2.html fireboyandwatergirl.html fireboyandwatergirl2.html fireboyandwatergirl3.html fireboyandwatergirl4.html flappybird.html floodrunner2.html floodrunner3.html floodrunner4.html fnaf.html fnaf2.html fnaf3.html fnaf4.html footballbros.html footballlegends.html freerider3.html fruitninja.html funnybattle.html funnybattle2.html funnymadracing.html funnyshooter2.html geometrydash.html geometrydashlite.html geometryvibes.html getawayshootout.htm getontop.html gladihoppers.html googlebaseball.html googledino.html granny.html granny2.html guesstheiranswer.html hanger2.html happywheels.html helixjump.html highwaytraffic.html hillclimbracinglite.html holeio.html houseofhazards.html hoverracerdrive.html idlebreakout.html Indev.html ironsnout.html jetpackjoyride.html johnnytrigger.html jumpingshell.html karatebros.html kartbros.html learntofly.html learntofly2.html learntofly3.html learntoflyidle.html leveldevil.html madalinstuntcars2.html melonplayground.html mergeroundracers.html minesweeper.html monkeymart.htm monstertracks.html motox3m.htm motox3m2.html motox3m3.html motox3mpoolparty.html motox3mspookyland.html motox3mwinter.html noobminer.html oppositeday.html ovo.html ovo2.html ovo3dimensions.html pacman.html papasbakeria.html papasburgeria.html papascheeseria.html papascupcakeria.html papasdonuteria.html papasfreezeria.html papashotdoggeria.html papaspancakeria.html papaspastaria.html papaspizzeria.html papasscooperia.html papassushiria.html papastacomia.html papaswingeria.html paperio2.htm parkingfury.html parkingfury2.html parkingfury3.html picosschool.html pingpongchaos.html pixelspeedrun.html plantsvszombies.html plonky.html polytrack.html poorbunny.html pou.html ragdollarchers.htm ragdollhit.html ragdollsoccer.html redball4vol1.html redball4vol2.html redball4vol3.html retrobowl.html retrobowlcollege.html retrohighway.html retropingpong.html riddleschool.html riddleschool2.html riddleschool3.html riddleschool4.html riddleschool5.html riddletransfer.html riddletransfer2.html rocketsoccerderby.html rooftopsnipers.htm rooftopsnipers2.html run.html run2.html run3.html sandgame.html shortlife.html slope.html slope2player.html slope3.html slowroads.html sm63.html sm64.html snowballio.html snowrider.htm snowroad.htm soccerbros.html soccerrandom.htm spacebarclicker.html spaceiskey.html spaceiskey2.html spacewaves.html speedstars.html sprunki.html stack.html stacktris.html stateio.html stickarchersbattle.html stickfighter.html stickmanhook.html stickmerge.html subwaysurfersbeijing.html subwaysurfershavana.html subwaysurferssanfrancisco.html superbikethechampion.html superhot.html superliquidsoccer.html superstarcar.html tabletennisworldtour.html tag.html taproad.html templeofboom.html templerun2.htm territorialio.html theimpossiblequiz.html theimpossiblequiz2.html thereisnog.html theyarecoming.html thisistheonlylevel.html thisistheonlyleveltoo.html timeshooter2.html timeshooter3.htm tinyfishing.html tombofthemask.htm trapthecat.html triviacrack.html tubejumpers.html tunnelrush.html unicyclehero.html vex4.html vex5.html vex6.htm vex7.htm vex8.htm vexx3m.html vexx3m2.html volleyrandom.html wartheknights.html webecomewhatwebehold.html wheeliebike.html wheely.html wheely2.html wheely3.html wheely4.html wheely5.html wheely6.html wheely7.html wheely8.html wordleunlimited.html worldshardestgame.html worldshardestgame2.html worldshardestgame3.html wrestlebros.html zombierush.html 1.5.html 1.8.html 1.12.html 1on1soccer.html".split(" ")
+  .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+const GAME_SET = new Set(GAMES);
 
-const CRA_GAMES = new Set([
-  "1.5.html","1.8.html","12minibattles.html","1on1tennis.html","2048cupcakes.html",
-  "8ballclassic.html","ageofwar2.html","amongus.html","angrybirds.html",
-  "angrybirdsshowdown.html","awesometanks2.html","backrooms.html","badicecream.html",
-  "badpiggies.html","baseballbros.html","basketrandom.html","bitplanes.htm",
-  "blockysnakes.html","bloonsTD.html","bloonsTD2.html","bloonsTD5.html",
-  "blumgirocket.html","bobtherobber.html","breakingthebank.html","bubbleshooter.html",
-  "candycrush.html","capybaraclicker.html","carkingarena.html","chess.html",
-  "circloO2.html","clashofvikings.html","cookieclicker.htm","crazycars.html",
-  "dadish2.html","dadish3.html","ducklife4.html","eagleride.html","earntodie2.html",
-  "eggycar.html","escapingtheprison.html","fancypantsadventure.html",
-  "fireboyandwatergirl2.html","fireboyandwatergirl3.html","footballlegends.html",
-  "freerider3.html","fruitninja.html","geometrydash.html","getawayshootout.htm",
-  "hillclimbracinglite.html","holeio.html","houseofhazards.html","hoverracerdrive.html",
-  "idlebreakout.html","johnnytrigger.html","jumpingshell.html","learntofly.html",
-  "learntofly2.html","leveldevil.html","mergeroundracers.html","motox3m.htm",
-  "motox3m2.html","motox3mpoolparty.html","motox3mspookyland.html","motox3mwinter.html",
-  "ovo.html","papasbakeria.html","papasburgeria.html","papascupcakeria.html",
-  "papasdonuteria.html","papasfreezeria.html","papaspancakeria.html","papaspastaria.html",
-  "papaspizzeria.html","parkingfury.html","polytrack.html","poorbunny.html",
-  "ragdollarchers.htm","ragdollsoccer.html","retrobowl.html","retrobowlcollege.html",
-  "retrohighway.html","retropingpong.html","riddleschool.html","riddleschool3.html",
-  "riddleschool4.html","riddleschool5.html","rooftopsnipers2.html","run2.html",
-  "slope.html","sm64.html","snowballio.html","spaceiskey.html","spacewaves.html",
-  "speedstars.html","sprunki.html","stateio.html","stickmerge.html",
-  "superliquidsoccer.html","tabletennisworldtour.html","territorialio.html",
-  "theimpossiblequiz.html","theimpossiblequiz2.html","thisistheonlylevel.html",
-  "timeshooter2.html","tinyfishing.html","vexx3m2.html","wheely.html",
-  "worldshardestgame2.html","wrestlebros.html"
-]);
-
-function resolveSource(filename) {
-  return CRA_GAMES.has(filename) ? CRA_BASE : COOL_BASE;
-}
-
-/* ── Pack Definitions ─────────────────────────────── */
-/* Order here = tab render order. favorites/external are
-   pinned to the right visually via CSS, but we still
-   keep favorites before external in source order so the
-   "pinned-right" class only needs to hit the very last tab. */
-/* ── Popular Games (VUSL tab only) ──────────────────────
- * Add/remove filenames here to control what shows up in the
- * "Popular" section at the top of the VUSL tab. Must match
- * the exact filename as it appears in PACKS.vusl.games below
- * (case-sensitive, including .html/.htm extension).
- * Games listed here still also appear in their normal A–Z
- * letter section — this list only controls the extra
- * "Popular" shortcut group, it doesn't remove them from anywhere.
- * ─────────────────────────────────────────────────────── */
-const POPULAR_GAMES = [
-  "geometrydash.html",
-  "slope.html",
-  "retrobowl.html",
-  "1v1.lol.html",
-  "monkeymart.htm",
-  "eggycar.html",
-  "amongus.html",
-  "bloonsTD5.html",
-  "polytrack.html",
-  "sprunki.html",
-  "footballlegends.html",
-  "ovo.html",
-  "",
-  "",
-  "",
-  "",
-  "",
-  "",
-  "",
-  ""
-];
+const POPULAR_GAMES = ["geometrydash.html","slope.html","retrobowl.html","1v1.lol.html","monkeymart.htm","eggycar.html",
+  "amongus.html","bloonsTD5.html","polytrack.html","sprunki.html","footballlegends.html","ovo.html"].filter(f => GAME_SET.has(f));
 
 const PACKS = {
-  vusl: {
-    id: "vusl", label: "VUSL", emoji: "🎮",
-    games: [
-      "1.12.html","1.5.html","1.8.html","10minutestilldawn.html","12minibattles.html",
-      "1on1soccer.html","1on1tennis.html","1v1.lol.html","2048.html","2048cupcakes.html",
-      "3Dflightsimulator.html","8ballclassic.html","Alpha_1.2.6.html","Beta_1.3.html",
-      "Indev.html","agariolite.html","ageofwar.html","ageofwar2.html","agesofconflict.html",
-      "amongus.html","angrybirds.html","angrybirdsshowdown.html","angrybirdsspace.html",
-      "awesometanks.html","awesometanks2.html","backrooms.html","baconmaydie.html",
-      "badicecream.html","badicecream2.html","badicecream3.html","badparenting.html",
-      "badpiggies.html","baldisbasics.html","baseballbros.html","basketballlegends.html",
-      "basketballstars.html","basketbros.html","basketrandom.html","bitlife.html",
-      "bitplanes.htm","blockysnakes.html","bloonsTD.html","bloonsTD2.html","bloonsTD3.html",
-      "bloonsTD4.html","bloonsTD5.html","bloxorz.html","blumgiracers.html","blumgirocket.html",
-      "bobtherobber.html","bobtherobber2.html","bobtherobber5.html","breakingthebank.html",
-      "bubbleshooter.html","candycrush.html","capybaraclicker.html","carkingarena.html",
-      "chess.html","circloO.html","circloO2.html","clashofvikings.html","cleanupio.html",
-      "cookieclicker.htm","crazycars.html","crazycattle3D.html","crossyroad.htm",
-      "cuttherope.html","dadish.html","dadish2.html","dadish3.html","ducklife.html",
-      "ducklife2.html","ducklife3.html","ducklife4.html","eagleride.html","earntodie.html",
-      "earntodie2.html","eggycar.html","escapingtheprison.html","fancypantsadventure.html",
-      "fireboyandwatergirl.html","fireboyandwatergirl2.html","fireboyandwatergirl3.html",
-      "fireboyandwatergirl4.html","flappybird.html","footballbros.html","footballlegends.html",
-      "freerider3.html","fruitninja.html","geometrydash.html","getawayshootout.htm",
-      "hillclimbracinglite.html","holeio.html","houseofhazards.html","hoverracerdrive.html",
-      "idlebreakout.html","johnnytrigger.html","jumpingshell.html","learntofly.html",
-      "learntofly2.html","leveldevil.html","mergeroundracers.html","motox3m.htm",
-      "motox3m2.html","motox3mpoolparty.html","motox3mspookyland.html","motox3mwinter.html",
-      "ovo.html","papasbakeria.html","papasburgeria.html","papascupcakeria.html",
-      "papasdonuteria.html","papasfreezeria.html","papaspancakeria.html","papaspastaria.html",
-      "papaspizzeria.html","parkingfury.html","polytrack.html","poorbunny.html",
-      "ragdollarchers.htm","ragdollsoccer.html","retrobowl.html","retrobowlcollege.html",
-      "retrohighway.html","retropingpong.html","riddleschool.html","riddleschool3.html",
-      "riddleschool4.html","riddleschool5.html","rooftopsnipers2.html","run2.html",
-      "slope.html","sm64.html","snowballio.html","spaceiskey.html","spacewaves.html",
-      "speedstars.html","sprunki.html","stateio.html","stickmerge.html",
-      "superliquidsoccer.html","tabletennisworldtour.html","territorialio.html",
-      "theimpossiblequiz.html","theimpossiblequiz2.html","thisistheonlylevel.html",
-      "timeshooter2.html","tinyfishing.html","vexx3m2.html","wheely.html",
-      "worldshardestgame2.html","wrestlebros.html",
-      "bouncymotors.html","bowmasters.html","boxingrandom.htm","cardrawing.html",
-      "choppyorc.html","clusterrush.html","crazycrashlanding.html","crazymotorcycle.html",
-      "deathchase.html","deathrun3D.html","demolitionderbycrashracing.html","doodlejump.html",
-      "drawclimber.html","dreadheadparkour.htm","driftboss.htm","drivemad.htm",
-      "ducklife5.html","ducklingsio.html","elasticface.htm","escaperoad.html",
-      "escaperoad2.html","evilglitch.html","fancypantsadventure2.html","floodrunner2.html",
-      "floodrunner3.html","floodrunner4.html","fnaf.html","fnaf2.html",
-      "fnaf3.html","fnaf4.html","funnybattle.html","funnybattle2.html",
-      "funnymadracing.html","funnyshooter2.html","geometrydashlite.html","geometryvibes.html",
-      "getontop.html","gladihoppers.html","googlebaseball.html","googledino.html",
-      "granny.html","granny2.html","guesstheiranswer.html","hanger2.html",
-      "happywheels.html","helixjump.html","highwaytraffic.html","ironsnout.html",
-      "jetpackjoyride.html","karatebros.html","kartbros.html","learntofly3.html",
-      "learntoflyidle.html","madalinstuntcars2.html","melonplayground.html","minesweeper.html",
-      "monkeymart.htm","monstertracks.html","motox3m3.html","noobminer.html",
-      "oppositeday.html","ovo2.html","ovo3dimensions.html","pacman.html",
-      "papascheeseria.html","papashotdoggeria.html","papasscooperia.html","papassushiria.html",
-      "papastacomia.html","papaswingeria.html","paperio2.htm","parkingfury2.html",
-      "parkingfury3.html","picosschool.html","pingpongchaos.html","pixelspeedrun.html",
-      "plantsvszombies.html","plonky.html","pou.html","ragdollhit.html",
-      "redball4vol1.html","redball4vol2.html","redball4vol3.html","riddleschool2.html",
-      "riddletransfer.html","riddletransfer2.html","rocketsoccerderby.html","rooftopsnipers.htm",
-      "run.html","run3.html","sandgame.html","shortlife.html",
-      "slope2player.html","slope3.html","slowroads.html","sm63.html",
-      "snowrider.htm","snowroad.htm","soccerbros.html","soccerrandom.htm",
-      "spacebarclicker.html","spaceiskey2.html","stack.html","stacktris.html",
-      "stickarchersbattle.html","stickfighter.html","stickmanhook.html","subwaysurfersbeijing.html",
-      "subwaysurfershavana.html","subwaysurferssanfrancisco.html","superbikethechampion.html","superhot.html",
-      "superstarcar.html","tag.html","taproad.html","templeofboom.html",
-      "templerun2.htm","thereisnog.html","theyarecoming.html","thisistheonlyleveltoo.html",
-      "timeshooter3.htm","tombofthemask.htm","trapthecat.html","triviacrack.html",
-      "tubejumpers.html","tunnelrush.html","unicyclehero.html","vex4.html",
-      "vex5.html","vex6.htm","vex7.htm","vex8.htm",
-      "vexx3m.html","volleyrandom.html","wartheknights.html","webecomewhatwebehold.html",
-      "wheeliebike.html","wheely2.html","wheely3.html","wheely4.html",
-      "wheely5.html","wheely6.html","wheely7.html","wheely8.html",
-      "wordleunlimited.html","worldshardestgame.html","worldshardestgame3.html",
-      "zombierush.html"
-    ]
-  },
+  vusl:      { id: "vusl",      label: "VUSL",      emoji: "🎮", games: GAMES },
   allgames:  { id: "allgames",  label: "All Games", emoji: "🗂", games: [], isVirtual: true },
-  favorites: { id: "favorites", label: "Favs", emoji: "⭐", games: [] },
-  external:  { id: "external",  label: "External", emoji: "🌐", games: [], isExternal: true }
+  favorites: { id: "favorites", label: "Favs",      emoji: "⭐", games: [] },
+  external:  { id: "external",  label: "External",  emoji: "🌐", games: [] }
 };
 
-/* ── State ─────────────────────────────────────────── */
-let activePack = "vusl";
-let favorites  = new Set(JSON.parse(localStorage.getItem("vusl15-favs") || "[]"));
+/* ── Storage helpers (tolerate corrupt localStorage) ── */
+const lsGet = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+const strArr = v => Array.isArray(v) ? v.filter(x => typeof x === "string") : [];
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// External pack manifest is just filenames — actual HTML content lives in IndexedDB.
-// (localStorage kept small on purpose; never stash game HTML there.)
-PACKS.external.games = JSON.parse(localStorage.getItem("vusl17-ext-manifest") || "[]");
-
-function saveExternalManifest() {
-  localStorage.setItem("vusl17-ext-manifest", JSON.stringify(PACKS.external.games));
-}
-
-// statusMap: "packId:filename" → "unknown"|"loading"|"cached"|"failed"
-// Use a NUL-ish separator that can't appear in filenames/pack ids to avoid
-// ambiguity if either ever contains a colon.
+/* ── Keys ─────────────────────────────────────────── */
 const SEP = "\u0001";
-function idbKey(packId, filename) { return packId + SEP + filename; }
-function splitKey(key) {
-  const i = key.indexOf(SEP);
-  return [key.slice(0, i), key.slice(i + 1)];
+const idbKey = (p, f) => p + SEP + f;
+const splitKey = k => { const i = k.indexOf(SEP); return [k.slice(0, i), k.slice(i + 1)]; };
+
+/* ── State ────────────────────────────────────────── */
+let activePack = "vusl";
+const favorites = new Set(strArr(lsGet("vusl15-favs", [])));
+PACKS.external.games = strArr(lsGet("vusl17-ext-manifest", []));
+const saveExternalManifest = () => lsSet("vusl17-ext-manifest", PACKS.external.games);
+const saveFavs = () => lsSet("vusl15-favs", [...favorites]);
+
+/* Manually clicked games, latest first. */
+let recent = strArr(lsGet("vusl17-recent", []));
+let recentIdx = new Map(recent.map((f, i) => [f, i]));
+function noteRecent(file) {
+  recent = [file, ...recent.filter(f => f !== file)].slice(0, 200);
+  recentIdx = new Map(recent.map((f, i) => [f, i]));
+  lsSet("vusl17-recent", recent);
 }
+const rank = f => recentIdx.has(f) ? recentIdx.get(f) : 1e9;
+const byRecency = pairs => pairs.sort((a, b) => rank(a[1]) - rank(b[1]));
 
-const statusMap = new Map();
+const statusMap = new Map();          // key → unknown | loading | cached | failed
+const cardIndex = new Map();          // key → [card elements] (a game can appear twice)
+const notFound  = new Set();          // keys that 404'd — skip in silent auto-retry
 
-// ① PERF: O(1) card DOM lookup — populated in renderGrid, cleared on re-render
-const cardNodeCache = new Map(); // key → card HTMLElement
+/* ── Element refs ─────────────────────────────────── */
+const $ = id => document.getElementById(id);
+const $statusLine = $("statusLine"), $progressWrap = $("progressWrap"), $progressFill = $("progressFill");
+const $retryBtn = $("retryBtn"), $loadAllBtn = $("loadAllBtn"), $refreshBtn = $("refreshBtn");
+const $gameArea = $("gameArea"), $countLabel = $("countLabel"), $search = $("search"), $packTabs = $("packTabs");
+const $toast = $("toast"), $notifBanner = $("notifBanner");
+const $confirmModal = $("confirmModal"), $confirmTitle = $("confirmTitle"), $confirmBody = $("confirmBody");
+const $confirmSkip = $("confirmSkip"), $confirmOverwrite = $("confirmOverwrite");
+const $fileInputFiles = $("fileInputFiles"), $fileInputFolder = $("fileInputFolder");
 
-// Queue
-const loadQueue   = [];
-const activeLoads = new Set();
-const MAX_PAR     = 25;
+/* ── Helpers ──────────────────────────────────────── */
+const prettyName = f => f.replace(/\.html?$/i, "").replace(/([A-Za-z])(\d+)$/, "$1 $2");
+const statusIcon = s => s === "cached" ? "✔" : s === "loading" ? "⏳" : s === "failed" ? "❌" : "○";
+const esc = (s = "") => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-let loadingAll    = false;
-let loadAllTarget = 0;
-let loadAllSettled = 0;
-let retryTimer    = null;
-
-/* ── Cached element refs (⑦) ──────────────────────── */
-const $statusLine   = document.getElementById("statusLine");
-const $progressWrap = document.getElementById("progressWrap");
-const $progressFill = document.getElementById("progressFill");
-const $retryBtn      = document.getElementById("retryBtn");
-const $loadAllBtn     = document.getElementById("loadAllBtn");
-const $refreshBtn     = document.getElementById("refreshBtn");
-const $gameArea      = document.getElementById("gameArea");
-const $countLabel   = document.getElementById("countLabel");
-const $search        = document.getElementById("search");
-const $packTabs      = document.getElementById("packTabs");
-const $toast          = document.getElementById("toast");
-const $notifBanner   = document.getElementById("notifBanner");
-const $confirmModal  = document.getElementById("confirmModal");
-const $confirmTitle  = document.getElementById("confirmTitle");
-const $confirmBody   = document.getElementById("confirmBody");
-const $confirmSkip   = document.getElementById("confirmSkip");
-const $confirmOverwrite = document.getElementById("confirmOverwrite");
-const $fileInputFiles  = document.getElementById("fileInputFiles");
-const $fileInputFolder = document.getElementById("fileInputFolder");
-
-/* ── Helpers ────────────────────────────────────────── */
-function prettyName(filename) {
-  const base = filename.replace(/\.(html|htm)$/i, "");
-  return base.replace(/(\D)(\d+)$/, "$1 $2");
-}
-
-function statusIcon(s) {
-  return s === "cached"  ? "✔" :
-         s === "loading" ? "⏳" :
-         s === "failed"  ? "❌" : "○";
-}
-
-function esc(s = "") {
-  return String(s)
-    .replace(/&/g,"&amp;").replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-}
-
-/* ── IndexedDB ──────────────────────────────────────── */
-let db;
-async function initDB() {
+/* ── IndexedDB ────────────────────────────────────── */
+let db = null;
+function initDB() {
   return new Promise((res, rej) => {
     const r = indexedDB.open("VUSL_V17_DB", 1);
-    r.onupgradeneeded = e => {
-      const d = e.target.result;
-      if (!d.objectStoreNames.contains("html")) d.createObjectStore("html");
-    };
+    r.onupgradeneeded = e => { if (!e.target.result.objectStoreNames.contains("html")) e.target.result.createObjectStore("html"); };
     r.onsuccess = e => { db = e.target.result; res(); };
-    r.onerror   = e => rej(e);
+    r.onerror = () => rej(r.error);
   });
 }
-
-function dbGet(key) {
+/* One helper for every transaction → { ok, v } */
+function idb(mode, fn) {
   return new Promise(res => {
-    const r = db.transaction("html","readonly").objectStore("html").get(key);
-    r.onsuccess = () => res(r.result || null);
-    r.onerror   = () => res(null);
+    try {
+      const tx = db.transaction("html", mode);
+      const r = fn(tx.objectStore("html"));
+      tx.oncomplete = () => res({ ok: true, v: r && r.result });
+      tx.onerror = tx.onabort = () => res({ ok: false });
+    } catch { res({ ok: false }); }
   });
 }
+const dbGet     = async key => (await idb("readonly", s => s.get(key))).v ?? null;
+const dbKeys    = async () => (await idb("readonly", s => s.getAllKeys())).v || [];
+const dbPutMany = async entries => (await idb("readwrite", s => { for (const [k, h] of entries) s.put(h, k); })).ok;
+const dbDelete  = async keys => (await idb("readwrite", s => { for (const k of keys) s.delete(k); })).ok;
+const dbClear   = async () => (await idb("readwrite", s => s.clear())).ok;
 
-function dbPut(key, html) {
-  return new Promise(res => {
-    const r = db.transaction("html","readwrite").objectStore("html").put(html, key);
-    r.onsuccess = () => res(true);
-    r.onerror   = () => res(false);
-  });
+/* Coalesce writes from many finishing downloads into one transaction. */
+let wbuf = [], wtimer = null;
+function queueWrite(key, html) {
+  return new Promise(res => { wbuf.push([key, html, res]); if (!wtimer) wtimer = setTimeout(flushWrites, 60); });
+}
+async function flushWrites() {
+  wtimer = null;
+  const batch = wbuf; wbuf = [];
+  const ok = await dbPutMany(batch);
+  batch.forEach(b => b[2](ok));
 }
 
-/* Batch write — one transaction for many key/value pairs.
-   Far faster than N separate dbPut() transactions, which is
-   what made multi-file uploads feel slow. */
-function dbPutMany(entries) { // entries: [[key, html], ...]
-  return new Promise((res, rej) => {
-    const tx    = db.transaction("html", "readwrite");
-    const store = tx.objectStore("html");
-    for (const [key, html] of entries) store.put(html, key);
-    tx.oncomplete = () => res(true);
-    tx.onerror    = () => rej(tx.error);
-  });
-}
-
-function dbDelete(key) {
-  return new Promise(res => {
-    const r = db.transaction("html","readwrite").objectStore("html").delete(key);
-    r.onsuccess = () => res(true);
-    r.onerror   = () => res(false);
-  });
-}
-
-function dbGetAllKeys() {
-  return new Promise(res => {
-    const r = db.transaction("html","readonly").objectStore("html").getAllKeys();
-    r.onsuccess = () => res(r.result || []);
-    r.onerror   = () => res([]);
-  });
-}
-
-function dbClearAll() {
-  return new Promise(res => {
-    const tx = db.transaction("html","readwrite");
-    tx.objectStore("html").clear();
-    tx.oncomplete = res;
-  });
-}
-
-/* ── Cache Scan (⑤ O(1) Set lookup) ────────────────── */
+/* ── Cache scan ───────────────────────────────────── */
 async function scanCache() {
-  const cachedKeys = new Set(await dbGetAllKeys());
-  for (const [pid, pack] of Object.entries(PACKS)) {
-    if (pid === "favorites") continue;
-    for (const fn of pack.games) {
+  const keys = new Set(await dbKeys());
+  const orphans = [...keys].filter(k => { const [p, f] = splitKey(k); return p === "vusl" && !GAME_SET.has(f); });
+  if (orphans.length) dbDelete(orphans);            // purge games from the removed source
+  for (const pid of ["vusl", "external"]) {
+    for (const fn of PACKS[pid].games) {
       const k = idbKey(pid, fn);
-      if (statusMap.get(k) === "loading") continue; // never downgrade loading
-      statusMap.set(k, cachedKeys.has(k) ? "cached" : (statusMap.get(k) === "failed" ? "failed" : "unknown"));
+      if (jobs.has(k)) continue;                     // never downgrade in-flight
+      statusMap.set(k, keys.has(k) ? "cached" : statusMap.get(k) === "failed" ? "failed" : "unknown");
     }
   }
 }
 
-/* ⓓ Manual refresh — re-scans IndexedDB and rebuilds the whole screen
- * (tabs + grid + status line) so newly downloaded/uploaded games show
- * their correct outline immediately. Shows a brief full-screen overlay
- * so it's unmistakable that something actually happened, rather than
- * a silent DOM patch a user might miss. */
-let refreshOverlayEl = null;
-function showRefreshOverlay(msg) {
-  if (!refreshOverlayEl) {
-    refreshOverlayEl = document.createElement("div");
-    refreshOverlayEl.id = "refreshOverlay";
-    refreshOverlayEl.style.cssText = `
-      position:fixed; inset:0; background:rgba(10,10,13,.72);
-      display:flex; align-items:center; justify-content:center;
-      z-index:9700; font-family:var(--display); font-size:14px;
-      font-weight:800; letter-spacing:1px; color:var(--accent);
-      flex-direction:column; gap:10px;
-    `;
-    document.body.appendChild(refreshOverlayEl);
+/* ── Overlay / refresh ────────────────────────────── */
+let overlayEl = null;
+function showOverlay(msg) {
+  if (!overlayEl) {
+    overlayEl = document.createElement("div");
+    overlayEl.style.cssText = "position:fixed;inset:0;background:rgba(10,10,13,.72);display:flex;align-items:center;justify-content:center;z-index:9700;font-family:var(--display);font-size:14px;font-weight:800;letter-spacing:1px;color:var(--accent);flex-direction:column;gap:10px";
+    document.body.appendChild(overlayEl);
   }
-  refreshOverlayEl.innerHTML = `<div style="font-size:26px;animation:spin .8s linear infinite">⟳</div><div>${esc(msg)}</div>`;
-  refreshOverlayEl.style.display = "flex";
+  overlayEl.innerHTML = `<div style="font-size:26px;animation:spin .8s linear infinite">⟳</div><div>${esc(msg)}</div>`;
+  overlayEl.style.display = "flex";
 }
-function hideRefreshOverlay() {
-  if (refreshOverlayEl) refreshOverlayEl.style.display = "none";
-}
+const hideOverlay = () => { if (overlayEl) overlayEl.style.display = "none"; };
 
 async function fullScreenRefresh(reason) {
-  showRefreshOverlay(reason || "Refreshing…");
+  showOverlay(reason || "Refreshing…");
   await scanCache();
-  renderPackTabs();
-  renderGrid();
-  refreshStatus();
-  // small delay so the overlay is actually perceptible even when the
-  // scan/render finish near-instantly on a fast machine
-  await new Promise(r => setTimeout(r, 260));
-  hideRefreshOverlay();
+  renderPackTabs(); renderGrid(); refreshStatus();
+  await sleep(260);
+  hideOverlay();
 }
-
 async function manualRefresh() {
-  $refreshBtn.disabled = true;
-  $refreshBtn.textContent = "⟳ …";
+  $refreshBtn.disabled = true; $refreshBtn.textContent = "⟳ …";
   await fullScreenRefresh("Refreshing cache status…");
-  $refreshBtn.disabled = false;
-  $refreshBtn.textContent = "⟳ Refresh";
+  $refreshBtn.disabled = false; $refreshBtn.textContent = "⟳ Refresh";
   toast("Refreshed cache status", "info", 1400);
 }
 
-/* ── Toast & Notif ──────────────────────────────────── */
+/* ── Toast / banner / confirm ─────────────────────── */
 let toastTmr;
 function toast(msg, type = "success", ms = 2400) {
-  $toast.textContent = msg;
-  $toast.className   = "show " + type;
-  clearTimeout(toastTmr);
-  toastTmr = setTimeout(() => { $toast.className = ""; }, ms);
+  $toast.textContent = msg; $toast.className = "show " + type;
+  clearTimeout(toastTmr); toastTmr = setTimeout(() => { $toast.className = ""; }, ms);
 }
-
+let bannerTmr;
 function showBanner(msg, ms = 4000) {
-  $notifBanner.textContent   = msg;
-  $notifBanner.style.display = "block";
-  setTimeout(() => { $notifBanner.style.display = "none"; }, ms);
+  $notifBanner.textContent = msg; $notifBanner.style.display = "block";
+  clearTimeout(bannerTmr); bannerTmr = setTimeout(() => { $notifBanner.style.display = "none"; }, ms);
 }
-
-/* ── Confirm Modal (Promise-based) ─────────────────── */
 function askConfirm(title, body, { confirmLabel = "Overwrite", skipLabel = "Skip duplicates" } = {}) {
   return new Promise(resolve => {
-    $confirmTitle.textContent = title;
-    $confirmBody.textContent  = body;
-    $confirmSkip.textContent  = skipLabel;
-    $confirmOverwrite.textContent = confirmLabel;
+    $confirmTitle.textContent = title; $confirmBody.textContent = body;
+    $confirmSkip.textContent = skipLabel; $confirmOverwrite.textContent = confirmLabel;
     $confirmModal.style.display = "flex";
-
-    function cleanup(result) {
-      $confirmModal.style.display = "none";
-      $confirmSkip.onclick = null;
-      $confirmOverwrite.onclick = null;
-      resolve(result);
-    }
-    $confirmSkip.onclick      = () => cleanup("skip");
-    $confirmOverwrite.onclick = () => cleanup("overwrite");
+    const done = r => { $confirmModal.style.display = "none"; $confirmSkip.onclick = $confirmOverwrite.onclick = null; resolve(r); };
+    $confirmSkip.onclick = () => done("skip");
+    $confirmOverwrite.onclick = () => done("overwrite");
   });
 }
 
-/* ── Progress Bar ───────────────────────────────────── */
+/* ── Progress / status line ───────────────────────── */
 function setProgress(pct) {
   if (pct <= 0) { $progressWrap.style.display = "none"; $progressFill.style.width = "0%"; return; }
   $progressWrap.style.display = "block";
-  $progressFill.style.width   = Math.min(100, pct).toFixed(1) + "%";
+  $progressFill.style.width = Math.min(100, pct).toFixed(1) + "%";
   if (pct >= 100) setTimeout(() => setProgress(0), 600);
 }
-
-/* ── Status Line (⑦ no getElementById per call) ────── */
 function refreshStatus() {
-  const games   = getActiveGames();
-  const total   = games.length;
-  let cached = 0, failed = 0;
+  const games = getActiveGames();
+  let cached = 0, failed = 0, loading = 0;
   for (const [pid, fn] of games) {
     const s = statusMap.get(idbKey(pid, fn));
-    if (s === "cached") cached++;
-    else if (s === "failed") failed++;
+    if (s === "cached") cached++; else if (s === "failed") failed++;
   }
-  const loading = activeLoads.size;
-  const parts   = [`${total} games`, `${cached} cached`];
+  for (const j of jobs.values()) if (j.state === "active") loading++;
+  const parts = [`${games.length} games`, `${cached} cached`];
   if (loading) parts.push(`${loading} loading`);
-  if (failed)  parts.push(`${failed} failed`);
+  if (failed) parts.push(`${failed} failed`);
   $statusLine.textContent = parts.join(" · ");
   $retryBtn.style.display = failed > 0 ? "" : "none";
 }
-
-/* ── Get Games for Active Pack ─────────────────────── */
-function getActiveGames() {
-  if (activePack === "favorites") {
-    return [...favorites].map(k => splitKey(k));
-  }
-  if (activePack === "allgames") {
-    // Combine every real pack (not favorites/allgames itself) into one list.
-    const combined = [];
-    for (const [pid, pack] of Object.entries(PACKS)) {
-      if (pid === "favorites" || pid === "allgames") continue;
-      for (const fn of pack.games) combined.push([pid, fn]);
-    }
-    return combined;
-  }
-  return (PACKS[activePack]?.games || []).map(fn => [activePack, fn]);
+let statusQueued = false;
+function softStatus() {
+  if (statusQueued) return;
+  statusQueued = true;
+  requestAnimationFrame(() => { statusQueued = false; refreshStatus(); });
 }
 
-/* ── Pack Tabs ──────────────────────────────────────── */
-function renderPackTabs() {
-  const frag = document.createDocumentFragment();
-  const ids  = Object.keys(PACKS); // vusl, favorites, external (external renders last => far right)
-  ids.forEach((id, idx) => {
-    const pack  = PACKS[id];
-    const count = id === "favorites" ? favorites.size : (pack.games?.length || 0);
-    const tab   = document.createElement("div");
-    tab.className = "pack-tab"
-      + (id === activePack ? " active" : "")
-      + (idx === ids.length - 1 ? " pinned-right" : "")
-      + (id === "allgames" ? " tab-allgames" : "");
-    tab.innerHTML = `${pack.emoji} ${pack.label} <span class="tab-badge">${count}</span>`;
-    tab.onclick   = () => switchPack(id);
-    frag.appendChild(tab);
+/* ── Game lists ───────────────────────────────────── */
+function validFavs() {
+  return [...favorites].filter(k => {
+    const [p, f] = splitKey(k);
+    return (p === "vusl" && GAME_SET.has(f)) || (p === "external" && PACKS.external.games.includes(f));
   });
-  $packTabs.innerHTML = "";
-  $packTabs.appendChild(frag);
+}
+function getActiveGames() {
+  if (activePack === "favorites") return validFavs().map(splitKey);
+  if (activePack === "allgames") return [...GAMES.map(f => ["vusl", f]), ...PACKS.external.games.map(f => ["external", f])];
+  return (PACKS[activePack]?.games || []).map(f => [activePack, f]);
 }
 
-function switchPack(id) {
-  activePack = id;
-  $search.value = "";
-  renderPackTabs();
-  renderGrid();
-  refreshStatus();
+/* ── Tabs ─────────────────────────────────────────── */
+function renderPackTabs() {
+  const ids = Object.keys(PACKS);
+  $packTabs.innerHTML = ids.map((id, i) => {
+    const p = PACKS[id];
+    const n = id === "favorites" ? validFavs().length : id === "allgames" ? GAMES.length + PACKS.external.games.length : p.games.length;
+    const cls = "pack-tab" + (id === activePack ? " active" : "") + (i === ids.length - 1 ? " pinned-right" : "") + (id === "allgames" ? " tab-allgames" : "");
+    return `<div class="${cls}" data-id="${id}">${p.emoji} ${esc(p.label)} <span class="tab-badge">${n}</span></div>`;
+  }).join("");
 }
-
-/* ── Search Debounce (③) ─────────────────────────────── */
-let searchDebounceTimer = null;
-let searchRafId = null;
-$search.addEventListener("input", () => {
-  clearTimeout(searchDebounceTimer);
-  searchDebounceTimer = setTimeout(() => {
-    if (searchRafId) cancelAnimationFrame(searchRafId);
-    searchRafId = requestAnimationFrame(renderGrid);
-  }, 120);
+$packTabs.addEventListener("click", e => {
+  const t = e.target.closest(".pack-tab");
+  if (t) switchPack(t.dataset.id);
 });
+function switchPack(id) {
+  activePack = id; $search.value = "";
+  renderPackTabs(); renderGrid(); refreshStatus();
+}
 
-/* ── Grid Render (② DocumentFragment, cache clear) ── */
+let searchTimer;
+$search.addEventListener("input", () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderGrid, 120); });
+
+/* ── Grid ─────────────────────────────────────────── */
+function cardHTML(pack, file) {
+  const key = idbKey(pack, file), st = statusMap.get(key) || "unknown", fav = favorites.has(key);
+  return `<div class="game-card ${st}" data-pack="${pack}" data-file="${esc(file)}">`
+    + `<span class="card-status">${statusIcon(st)}</span>`
+    + `<span class="card-name" title="${esc(file)}">${esc(prettyName(file))}</span>`
+    + (activePack === "allgames" ? `<span class="card-source-tag" title="${esc(PACKS[pack].label)}">${PACKS[pack].emoji}</span>` : "")
+    + `<span class="card-star${fav ? " on" : ""}" title="${fav ? "Remove from favorites" : "Add to favorites"}">${fav ? "⭐" : "☆"}</span>`
+    + (pack === "external" ? `<span class="card-remove" title="Remove uploaded game">🗑</span>` : "")
+    + `</div>`;
+}
+const sectionHTML = (title, pairs, cls = "") =>
+  `<div class="section"><div class="section-head ${cls}">${esc(title)}</div><div class="game-grid">${pairs.map(p => cardHTML(...p)).join("")}</div></div>`;
+
+const extBarHTML = () => `<div class="ext-upload-row" style="margin-bottom:14px">
+  <button class="btn btn-secondary" data-act="upFiles">📄 Upload Files</button>
+  <button class="btn btn-secondary" data-act="upFolder">📁 Upload Folder</button></div>`;
+const extPanelHTML = () => `<div class="empty-state"><div class="big">🌐</div><h2>External Pack</h2>
+  <p>Upload your own HTML games from files or an entire folder. They're stored locally and play offline just like the built-in packs.</p>
+  <div class="ext-config"><div class="ext-upload-row">
+    <button class="btn btn-primary" id="btnUploadFilesEmpty" data-act="upFiles">📄 Upload Files</button>
+    <button class="btn btn-primary" id="btnUploadFolderEmpty" data-act="upFolder">📁 Upload Folder</button></div>
+  <p class="ext-note">Accepts .html / .htm files. Uploading again later adds new games — it won't erase what's already here.</p></div></div>`;
+
 function renderGrid() {
-  cardNodeCache.clear();
-
-  const frag  = document.createDocumentFragment();
   const query = $search.value.trim().toLowerCase();
+  const setArea = html => { $gameArea.innerHTML = html; indexCards(); };
 
-  // External pack empty state (upload UI)
   if (activePack === "external" && PACKS.external.games.length === 0) {
-    $gameArea.innerHTML = "";
-    $gameArea.appendChild(makeExtUploadPanel());
-    $countLabel.textContent = "0 games";
-    return;
+    $countLabel.textContent = "0 games"; return setArea(extPanelHTML());
   }
-
-  // Favorites empty state
-  if (activePack === "favorites" && favorites.size === 0) {
-    const e = document.createElement("div");
-    e.className = "empty-state";
-    e.innerHTML = `<div class="big">⭐</div><h2>No favorites yet</h2><p>Click the ☆ on any game to star it.<br>Starred games appear here across all packs.</p>`;
-    $gameArea.innerHTML = "";
-    $gameArea.appendChild(e);
-    $countLabel.textContent = "0 games";
-    return;
-  }
-
   const all = getActiveGames();
-  const filtered = query
-    ? all.filter(([, fn]) => prettyName(fn).toLowerCase().includes(query))
-    : all;
-
+  if (activePack === "favorites" && all.length === 0) {
+    $countLabel.textContent = "0 games";
+    return setArea(`<div class="empty-state"><div class="big">⭐</div><h2>No favorites yet</h2><p>Click the ☆ on any game to star it.<br>Starred games appear here across all packs.</p></div>`);
+  }
+  const filtered = query ? all.filter(([, f]) => prettyName(f).toLowerCase().includes(query)) : all;
   $countLabel.textContent = filtered.length + " game" + (filtered.length !== 1 ? "s" : "");
 
-  // Show upload row above the grid on the external tab even when non-empty
-  if (activePack === "external") {
-    frag.appendChild(makeExtUploadBar());
+  let out = activePack === "external" ? extBarHTML() : "";
+  if (!filtered.length) {
+    return setArea(out + `<div class="empty-state"><div class="big">🔍</div><h2>No results</h2><p>No games match "<strong>${esc(query)}</strong>"</p></div>`);
   }
-
-  if (filtered.length === 0) {
-    const e = document.createElement("div");
-    e.className = "empty-state";
-    e.innerHTML = `<div class="big">🔍</div><h2>No results</h2><p>No games match "<strong>${esc(query)}</strong>"</p>`;
-    $gameArea.innerHTML = "";
-    $gameArea.appendChild(frag);
-    $gameArea.appendChild(e);
-    return;
+  if (activePack === "vusl" && !query && POPULAR_GAMES.length) {
+    const pop = new Set(POPULAR_GAMES);
+    const pairs = filtered.filter(([, f]) => pop.has(f));
+    if (pairs.length) out += sectionHTML("🔥 Popular", pairs, "popular-head");
   }
-
-  // Popular section — VUSL tab only, and only when not actively searching
-  // (keeps search results a single clean list rather than duplicating hits).
-  if (activePack === "vusl" && !query && POPULAR_GAMES.length > 0) {
-    const popularSet = new Set(POPULAR_GAMES);
-    const popularPairs = filtered.filter(([, fn]) => popularSet.has(fn));
-    if (popularPairs.length > 0) {
-      const sec  = document.createElement("div");
-      sec.className = "section";
-      const head = document.createElement("div");
-      head.className   = "section-head popular-head";
-      head.textContent = "🔥 Popular";
-      const grid = document.createElement("div");
-      grid.className   = "game-grid";
-      for (const pair of popularPairs) grid.appendChild(makeCard(...pair));
-      sec.appendChild(head);
-      sec.appendChild(grid);
-      frag.appendChild(sec);
-    }
-  }
-
-  // Group by first letter
   const groups = {};
   for (const pair of filtered) {
-    const letter = (prettyName(pair[1])[0] || "#").toUpperCase();
-    (groups[letter] = groups[letter] || []).push(pair);
+    const l = (prettyName(pair[1])[0] || "#").toUpperCase();
+    (groups[/[A-Z]/.test(l) ? l : "#"] ||= []).push(pair);
   }
-
-  for (const letter of Object.keys(groups).sort()) {
-    const sec  = document.createElement("div");
-    sec.className = "section";
-    const head = document.createElement("div");
-    head.className   = "section-head";
-    head.textContent = letter;
-    const grid = document.createElement("div");
-    grid.className   = "game-grid";
-    for (const pair of groups[letter]) grid.appendChild(makeCard(...pair));
-    sec.appendChild(head);
-    sec.appendChild(grid);
-    frag.appendChild(sec);
-  }
-
-  $gameArea.innerHTML = "";
-  $gameArea.appendChild(frag);
+  for (const l of Object.keys(groups).sort()) out += sectionHTML(l, groups[l]);
+  setArea(out);
 }
 
-/* ── Game Card ──────────────────────────────────────── */
-function makeCard(packId, filename) {
-  const key    = idbKey(packId, filename);
-  const status = statusMap.get(key) || "unknown";
-  const isFav  = favorites.has(key);
-  const isExt  = packId === "external";
-
-  const card = document.createElement("div");
-  card.className   = "game-card " + status;
-  card.dataset.key = key;
-
-  const si = document.createElement("span");
-  si.className   = "card-status";
-  si.textContent = statusIcon(status);
-
-  const nm = document.createElement("span");
-  nm.className   = "card-name";
-  nm.textContent = prettyName(filename);
-  nm.title       = filename;
-
-
-
-  const star = document.createElement("span");
-  star.className   = "card-star" + (isFav ? " on" : "");
-  star.textContent = isFav ? "⭐" : "☆";
-  star.title       = isFav ? "Remove from favorites" : "Add to favorites";
-  star.addEventListener("click", e => { e.stopPropagation(); toggleFav(packId, filename); });
-
-  card.appendChild(si);
-  card.appendChild(nm);
-
-  if (activePack === "allgames") {
-    const tag = document.createElement("span");
-    tag.className   = "card-source-tag";
-    tag.textContent = PACKS[packId]?.emoji || "";
-    tag.title       = PACKS[packId]?.label || packId;
-    card.appendChild(tag);
+function indexCards() {
+  cardIndex.clear();
+  for (const c of $gameArea.querySelectorAll(".game-card")) {
+    const k = idbKey(c.dataset.pack, c.dataset.file);
+    const arr = cardIndex.get(k);
+    arr ? arr.push(c) : cardIndex.set(k, [c]);
   }
-
-  card.appendChild(star);
-
-  if (isExt) {
-    const rm = document.createElement("span");
-    rm.className   = "card-remove";
-    rm.textContent = "🗑";
-    rm.title       = "Remove uploaded game";
-    rm.addEventListener("click", e => { e.stopPropagation(); removeExternalGame(filename); });
-    card.appendChild(rm);
-  }
-
-  card.addEventListener("click", () => launchGame(packId, filename));
-
-  // A game can now appear twice in the DOM (Popular section + its normal
-  // A–Z section), so cardNodeCache stores an array of nodes per key rather
-  // than a single node — otherwise only the last-created copy would ever
-  // get its status/star updated, leaving the other one visually stale.
-  if (!cardNodeCache.has(key)) cardNodeCache.set(key, []);
-  cardNodeCache.get(key).push(card);
-  return card;
 }
-
-/* ① setCardStatus — O(1) via cardNodeCache ──────────── */
-function setCardStatus(key, status) {
-  statusMap.set(key, status);
-  const cards = cardNodeCache.get(key);
-  if (!cards) return;
-  for (const card of cards) {
-    card.className = "game-card " + status;
-    const si = card.querySelector(".card-status");
-    if (si) si.textContent = statusIcon(status);
+function paintCard(key) {
+  const st = statusMap.get(key) || "unknown";
+  for (const c of cardIndex.get(key) || []) {
+    c.className = "game-card " + st;
+    const si = c.querySelector(".card-status"); if (si) si.textContent = statusIcon(st);
   }
-  refreshStatus();
 }
+function setCardStatus(key, status) { statusMap.set(key, status); paintCard(key); softStatus(); }
+function syncCards() { for (const k of cardIndex.keys()) paintCard(k); refreshStatus(); }
 
-/* ── Favorites ──────────────────────────────────────── */
-function toggleFav(packId, filename) {
-  const key    = idbKey(packId, filename);
-  const wasFav = favorites.has(key);
-  if (wasFav) { favorites.delete(key); toast("Removed from favorites", "info"); }
-  else         { favorites.add(key);   toast("⭐ Added to favorites", "success"); }
-  localStorage.setItem("vusl15-favs", JSON.stringify([...favorites]));
+/* One delegated listener for every card. */
+$gameArea.addEventListener("click", e => {
+  const act = e.target.closest("[data-act]");
+  if (act) { (act.dataset.act === "upFiles" ? $fileInputFiles : $fileInputFolder).click(); return; }
+  const card = e.target.closest(".game-card");
+  if (!card) return;
+  const { pack, file } = card.dataset;
+  if (e.target.closest(".card-star"))   return toggleFav(pack, file);
+  if (e.target.closest(".card-remove")) return removeExternalGame(file);
+  launchGame(pack, file);
+});
 
-  const cards = cardNodeCache.get(key);
-  if (cards) {
-    for (const card of cards) {
-      const star = card.querySelector(".card-star");
-      if (star) {
-        star.className   = "card-star" + (favorites.has(key) ? " on" : "");
-        star.textContent = favorites.has(key) ? "⭐" : "☆";
-      }
-    }
+/* ── Favorites ────────────────────────────────────── */
+function toggleFav(pack, file) {
+  const key = idbKey(pack, file);
+  if (favorites.delete(key)) toast("Removed from favorites", "info");
+  else { favorites.add(key); toast("⭐ Added to favorites", "success"); }
+  saveFavs();
+  for (const c of cardIndex.get(key) || []) {
+    const star = c.querySelector(".card-star"), on = favorites.has(key);
+    star.className = "card-star" + (on ? " on" : ""); star.textContent = on ? "⭐" : "☆";
+    star.title = on ? "Remove from favorites" : "Add to favorites";
   }
   renderPackTabs();
+  if (activePack === "favorites") { renderGrid(); refreshStatus(); }
 }
 
-/* ══════════════════════════════════════════════════════
-   ⓐⓑ External Tab — file/folder upload, merge not overwrite
-════════════════════════════════════════════════════════ */
-
-function makeExtUploadBar() {
-  const bar = document.createElement("div");
-  bar.className = "ext-upload-row";
-  bar.style.marginBottom = "14px";
-  bar.innerHTML = `
-    <button class="btn btn-secondary" id="btnUploadFiles">📄 Upload Files</button>
-    <button class="btn btn-secondary" id="btnUploadFolder">📁 Upload Folder</button>
-  `;
-  bar.querySelector("#btnUploadFiles").onclick  = () => $fileInputFiles.click();
-  bar.querySelector("#btnUploadFolder").onclick = () => $fileInputFolder.click();
-  return bar;
-}
-
-function makeExtUploadPanel() {
-  const wrap = document.createElement("div");
-  wrap.className = "empty-state";
-  wrap.innerHTML = `
-    <div class="big">🌐</div>
-    <h2>External Pack</h2>
-    <p>Upload your own HTML games from files or an entire folder. They're stored locally and play offline just like the built-in packs.</p>
-    <div class="ext-config">
-      <div class="ext-upload-row">
-        <button class="btn btn-primary" id="btnUploadFilesEmpty">📄 Upload Files</button>
-        <button class="btn btn-primary" id="btnUploadFolderEmpty">📁 Upload Folder</button>
-      </div>
-      <p class="ext-note">Accepts .html / .htm files. Uploading again later adds new games — it won't erase what's already here.</p>
-    </div>
-  `;
-  wrap.querySelector("#btnUploadFilesEmpty").onclick  = () => $fileInputFiles.click();
-  wrap.querySelector("#btnUploadFolderEmpty").onclick = () => $fileInputFolder.click();
-  return wrap;
-}
-
+/* ── External uploads ─────────────────────────────── */
 async function handleExternalUpload(fileList) {
-  const htmlFiles = [...fileList].filter(f => /\.(html?|HTML?)$/.test(f.name));
-  if (htmlFiles.length === 0) {
-    toast("No .html/.htm files found in selection", "error");
-    return;
-  }
+  const files = [...fileList].filter(f => /\.html?$/i.test(f.name));
+  if (!files.length) { toast("No .html/.htm files found in selection", "error"); return; }
 
   const existing = new Set(PACKS.external.games);
-  const duplicates = htmlFiles.filter(f => existing.has(f.name));
-  let mode = "skip"; // default safe behavior when there are dupes
-  if (duplicates.length > 0) {
-    mode = await askConfirm(
-      "Duplicate files found",
-      `${duplicates.length} of ${htmlFiles.length} file${htmlFiles.length > 1 ? "s" : ""} share a name with games already uploaded. Skip duplicates (keep existing versions) or overwrite them with the new files?`
-    );
+  const dupes = files.filter(f => existing.has(f.name));
+  let mode = "skip";
+  if (dupes.length) {
+    mode = await askConfirm("Duplicate files found",
+      `${dupes.length} of ${files.length} file${files.length > 1 ? "s" : ""} share a name with games already uploaded. Skip duplicates (keep existing versions) or overwrite them with the new files?`);
   }
-
-  // Decide which files actually get written before touching disk at all.
-  const toWrite = [];
+  const toWrite = [], seen = new Set();
   let added = 0, overwritten = 0, skipped = 0;
-  for (const file of htmlFiles) {
-    const isDup = existing.has(file.name);
-    if (isDup && mode === "skip") { skipped++; continue; }
-    toWrite.push(file);
-    if (isDup) overwritten++;
-    else { added++; existing.add(file.name); PACKS.external.games.push(file.name); }
+  for (const f of files) {
+    if (seen.has(f.name)) { skipped++; continue; }
+    seen.add(f.name);
+    const dup = existing.has(f.name);
+    if (dup && mode === "skip") { skipped++; continue; }
+    toWrite.push(f); dup ? overwritten++ : added++;
   }
-
-  showRefreshOverlay(`Storing ${toWrite.length} game${toWrite.length !== 1 ? "s" : ""}…`);
-
-  // Read every file's text in parallel (previously one-at-a-time,
-  // serialized behind each IndexedDB write).
-  const texts = await Promise.all(toWrite.map(f => f.text()));
-
-  // Single IndexedDB transaction for the whole batch instead of one
-  // transaction per file — this is the main reason uploads felt slow.
-  const entries = toWrite.map((file, i) => [idbKey("external", file.name), texts[i]]);
-  await dbPutMany(entries);
-  for (const [key] of entries) statusMap.set(key, "cached");
-
-  saveExternalManifest();
-
-  // ⓔ Always do a full visible refresh after upload — regardless of which
-  // tab the user is currently on — so games show as cached immediately
-  // without needing to click a tab. Previously this silently patched the
-  // DOM, which could look like nothing happened if the user wasn't
-  // already looking at the External tab.
+  showOverlay(`Storing ${toWrite.length} game${toWrite.length !== 1 ? "s" : ""}…`);
+  try {
+    const texts = await Promise.all(toWrite.map(f => f.text()));
+    const ok = await dbPutMany(toWrite.map((f, i) => [idbKey("external", f.name), texts[i]]));
+    if (!ok) throw new Error("write failed");
+    for (const f of toWrite) {
+      if (!existing.has(f.name)) { existing.add(f.name); PACKS.external.games.push(f.name); }
+      statusMap.set(idbKey("external", f.name), "cached");
+    }
+    saveExternalManifest();
+  } catch {
+    hideOverlay(); toast("Upload failed — storage may be full", "error", 3200); return;
+  }
   await fullScreenRefresh("Finishing up…");
-
   const parts = [];
-  if (added)       parts.push(`${added} added`);
+  if (added) parts.push(`${added} added`);
   if (overwritten) parts.push(`${overwritten} overwritten`);
-  if (skipped)     parts.push(`${skipped} skipped`);
+  if (skipped) parts.push(`${skipped} skipped`);
   toast(`✔ Upload complete — ${parts.join(", ")}`, "success", 3200);
 }
-
-$fileInputFiles.addEventListener("change", e => {
-  if (e.target.files.length) handleExternalUpload(e.target.files);
-  e.target.value = ""; // allow re-selecting the same file later
-});
-$fileInputFolder.addEventListener("change", e => {
-  if (e.target.files.length) handleExternalUpload(e.target.files);
-  e.target.value = "";
-});
-
-async function removeExternalGame(filename) {
-  const key = idbKey("external", filename);
-  await dbDelete(key);
-  statusMap.delete(key);
-  PACKS.external.games = PACKS.external.games.filter(f => f !== filename);
-  saveExternalManifest();
-  favorites.delete(key);
-  localStorage.setItem("vusl15-favs", JSON.stringify([...favorites]));
-  renderPackTabs();
-  renderGrid();
-  refreshStatus();
-  toast(`Removed "${prettyName(filename)}"`, "info");
+for (const input of [$fileInputFiles, $fileInputFolder]) {
+  input.addEventListener("change", e => { if (e.target.files.length) handleExternalUpload(e.target.files); e.target.value = ""; });
+}
+async function removeExternalGame(file) {
+  const key = idbKey("external", file);
+  await dbDelete([key]);
+  statusMap.delete(key); favorites.delete(key);
+  PACKS.external.games = PACKS.external.games.filter(f => f !== file);
+  saveExternalManifest(); saveFavs();
+  renderPackTabs(); renderGrid(); refreshStatus();
+  toast(`Removed "${prettyName(file)}"`, "info");
 }
 
-/* ── Launch Game ────────────────────────────────────── */
-async function launchGame(packId, filename) {
-  const key = idbKey(packId, filename);
-
-  // External games have no network fallback — they only exist in IndexedDB.
-  if (packId === "external") {
-    const cached = await dbGet(key);
-    if (cached) { openGame(cached, ""); return; }
-    toast("This uploaded game is missing from storage — try re-uploading it", "error");
-    setCardStatus(key, "failed");
-    return;
-  }
-
-  const cached = await dbGet(key);
-  if (cached) {
-    const base = resolveSource(filename);
-    openGame(cached, base);
-    return;
-  }
-  setCardStatus(key, "loading");
+/* ── Windows ──────────────────────────────────────── */
+function openBlank() {
+  let w = null;
+  try { w = window.open("about:blank"); } catch {}
+  if (w) { try { w.document.write('<title>Loading…</title><body style="background:#0a0a0d;color:#00ff88;font:14px monospace;padding:24px">Loading game…'); } catch {} }
+  return w;
+}
+const closeWin = w => { try { w && w.close(); } catch {} };
+function injectBase(html, base) {
+  if (!base) return html;
+  const tag = `<base href="${base}">`;
+  return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, m => m + tag) : tag + html;
+}
+function writeGame(w, html, base) {
   try {
-    const { html, base } = await fetchGame(packId, filename);
-    await dbPut(key, html);
-    setCardStatus(key, "cached");
-    openGame(html, base);
-  } catch {
-    setCardStatus(key, "failed");
-    toast("Failed to load — check network connection", "error");
-    scheduleAutoRetry();
-  }
+    if (!w || w.closed) return;
+    w.document.open(); w.document.write(injectBase(html, base)); w.document.close();
+  } catch {}
 }
 
-function openGame(html, base) {
-  const w = window.open("about:blank");
-  w.document.open();
-  if (base) w.document.write(`<base href="${base}">`);
-  w.document.write(html);
-  w.document.close();
-}
+/* ── Launch ───────────────────────────────────────── */
+async function launchGame(pack, file) {
+  const w = openBlank();                       // synchronous → survives popup blockers
+  if (!w) toast("Popup blocked — allow popups for this page", "error");
+  const key = idbKey(pack, file);
 
-/* ── Fetch (network packs only) ─────────────────────── */
-async function fetchGame(packId, filename) {
-  const base = resolveSource(filename);
-  const r    = await fetch(base + filename);
-  if (!r.ok) throw new Error("HTTP " + r.status);
-  const html = await r.text();
-  return { html, base };
-}
-
-/* ── Load Queue ─────────────────────────────────────── */
-function enqueue(packId, filename, front = false) {
-  if (packId === "external") return; // external games are already local, never queued
-  const key = idbKey(packId, filename);
-  const s   = statusMap.get(key);
-  if (s === "cached" || s === "loading") return;
-  if (loadQueue.some(q => q.packId === packId && q.filename === filename)) return;
-  const entry = { packId, filename };
-  if (front) loadQueue.unshift(entry); else loadQueue.push(entry);
-}
-
-function processQueue() {
-  while (activeLoads.size < MAX_PAR && loadQueue.length > 0) {
-    const item = loadQueue.shift();
-    const key  = idbKey(item.packId, item.filename);
-    if (statusMap.get(key) === "cached") { processQueue(); return; }
-
-    activeLoads.add(key);
-    setCardStatus(key, "loading");
-
-    fetchGame(item.packId, item.filename)
-      .then(({ html }) => dbPut(key, html).then(() => {
-        setCardStatus(key, "cached");
-        activeLoads.delete(key);
-        tickLoadAll();
-        processQueue();
-      }))
-      .catch(() => {
-        setCardStatus(key, "failed");
-        activeLoads.delete(key);
-        scheduleAutoRetry();
-        tickLoadAll();
-        processQueue();
-      });
-  }
-}
-
-/* ── Load All ───────────────────────────────────────── */
-async function startLoadAll() {
-  if (loadingAll) return;
-
-  if (activePack === "external") {
-    toast("External games are already stored locally — nothing to load", "info");
+  if (pack === "external") {
+    const html = await dbGet(key);
+    if (html) { writeGame(w, html, ""); return; }
+    closeWin(w); setCardStatus(key, "failed");
+    toast("This uploaded game is missing from storage — try re-uploading it", "error");
     return;
   }
-
-  const uncached = getActiveGames().filter(([pid, fn]) =>
-    pid !== "external" && statusMap.get(idbKey(pid, fn)) !== "cached"
-  );
-  if (uncached.length === 0) { toast("✔ All games already cached", "success"); return; }
-
-  loadingAll     = true;
-  loadAllTarget  = uncached.length;
-  loadAllSettled = 0;
-
-  $loadAllBtn.disabled    = true;
-  $loadAllBtn.textContent = "⏳ Loading…";
-  setProgress(1);
-
-  for (const [pid, fn] of uncached) enqueue(pid, fn);
-  processQueue();
-}
-
-function tickLoadAll() {
-  if (!loadingAll) return;
-  loadAllSettled++;
-  setProgress((loadAllSettled / loadAllTarget) * 100);
-  if (loadAllSettled >= loadAllTarget) finishLoadAll();
-}
-
-function finishLoadAll() {
-  loadingAll = false;
-  $loadAllBtn.disabled    = false;
-  $loadAllBtn.textContent = "⬇ Load All";
-  setProgress(100);
-  showBanner("✔ All Games Loaded — Offline Ready!", 4500);
-  refreshStatus();
-}
-
-/* ── Auto Retry ─────────────────────────────────────── */
-function scheduleAutoRetry() {
-  clearTimeout(retryTimer);
-  retryTimer = setTimeout(retryFailed, 30_000);
-}
-
-function retryFailed() {
-  let count = 0;
-  for (const [key, s] of statusMap.entries()) {
-    if (s !== "failed") continue;
-    const [packId, filename] = splitKey(key);
-    if (packId === "external") continue; // nothing to retry — no network source
-    statusMap.set(key, "unknown");
-    enqueue(packId, filename, true);
-    count++;
+  noteRecent(file);
+  if (!jobs.has(key)) {
+    const cached = await dbGet(key);
+    if (cached) { writeGame(w, cached, CRA_BASE); if (statusMap.get(key) !== "cached") setCardStatus(key, "cached"); return; }
   }
-  if (count > 0) {
-    processQueue();
-    toast(`↺ Retrying ${count} failed game${count > 1 ? "s" : ""}…`, "info");
-  } else {
-    toast("Nothing to retry", "info");
-  }
+  request(file, true, w);
 }
 
-/* ── Clear Cache ────────────────────────────────────── */
-async function clearCache() {
-  const hasExternal = PACKS.external.games.length > 0;
-  if (hasExternal) {
-    const mode = await askConfirm(
-      "Clear cache",
-      "This will also permanently delete your uploaded External games, since they can't be re-downloaded. Keep external uploads, or clear everything?",
-      { confirmLabel: "Clear everything", skipLabel: "Keep external uploads" }
-    );
-    if (mode === "skip") {
-      // Clear only non-external entries
-      const keys = await dbGetAllKeys();
-      for (const k of keys) {
-        const [pid] = splitKey(k);
-        if (pid !== "external") await dbDelete(k);
-      }
-      for (const [pid, pack] of Object.entries(PACKS)) {
-        if (pid === "favorites" || pid === "external") continue;
-        for (const fn of pack.games) statusMap.set(idbKey(pid, fn), "unknown");
-      }
-      renderGrid();
-      refreshStatus();
-      toast("Cache cleared (external uploads kept)", "info");
-      return;
+/* ══ Download queue: manual lane (clicked) + bulk lane ══ */
+const MANUAL_MAX = 6, BULK_MAX = 12, BULK_BUSY = 2, FETCH_TIMEOUT = 25000;
+const jobs = new Map();            // key → { key, file, state, lane, manual, wins, ctl, cancelled }
+const manualQ = [], bulkQ = [];    // manualQ: latest click first
+let manualActive = 0, bulkActive = 0;
+
+function request(file, manual, win) {
+  const key = idbKey("vusl", file);
+  let job = jobs.get(key);
+  if (!job) {
+    job = { key, file, state: "queued", lane: null, manual: false, wins: [], ctl: null, cancelled: false };
+    jobs.set(key, job);
+    setCardStatus(key, "loading");
+    bulkQ.push(job);
+  }
+  if (win) job.wins.push(win);
+  if (manual) {
+    if (job.state === "queued") {
+      for (const q of [manualQ, bulkQ]) { const i = q.indexOf(job); if (i >= 0) q.splice(i, 1); }
+      manualQ.unshift(job);                    // latest click goes first
+    } else if (job.lane === "bulk") {          // already downloading in bulk: promote its slot
+      bulkActive--; manualActive++; job.lane = "manual";
     }
+    job.manual = true;
   }
-
-  await dbClearAll();
-  statusMap.clear();
-  PACKS.external.games = [];
-  saveExternalManifest();
-  for (const [pid, pack] of Object.entries(PACKS)) {
-    if (pid === "favorites") continue;
-    for (const fn of pack.games) statusMap.set(idbKey(pid, fn), "unknown");
-  }
-  renderPackTabs();
-  renderGrid();
-  refreshStatus();
-  toast("Cache cleared", "info");
+  pump();
+  return job;
 }
 
-/* ── ⑥ Tab-focus rescan ──────────────────────────────── */
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") {
-    scanCache().then(() => { renderGrid(); refreshStatus(); });
+function pump() {
+  while (manualActive < MANUAL_MAX && manualQ.length) start(manualQ.shift(), "manual");
+  const cap = (manualActive || manualQ.length) ? BULK_BUSY : BULK_MAX;
+  while (bulkActive < cap && bulkQ.length) start(bulkQ.shift(), "bulk");
+}
+function start(job, lane) {
+  job.state = "active"; job.lane = lane;
+  lane === "manual" ? manualActive++ : bulkActive++;
+  softStatus();
+  run(job);
+}
+
+async function run(job) {
+  let html = null, missing = false;
+  for (let attempt = 0; attempt < 2 && html == null && !job.cancelled; attempt++) {
+    job.ctl = new AbortController();
+    const timer = setTimeout(() => job.ctl.abort(), FETCH_TIMEOUT);
+    try {
+      const r = await fetch(CRA_BASE + job.file, { signal: job.ctl.signal, priority: job.lane === "manual" ? "high" : "low" });
+      if (r.status === 404) { missing = true; break; }
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      html = await r.text();
+    } catch {
+      if (job.cancelled) break;
+      if (attempt === 0) await sleep(600);
+    } finally { clearTimeout(timer); }
   }
+  job.lane === "manual" ? manualActive-- : bulkActive--;
+  jobs.delete(job.key);
+  pump();                                       // free the slot before the (batched) cache write
+
+  if (job.cancelled) { job.wins.forEach(closeWin); return; }
+  if (html == null) {
+    setCardStatus(job.key, "failed");
+    job.wins.forEach(closeWin);
+    if (missing) notFound.add(job.key); else scheduleAutoRetry();
+    if (job.manual) toast("Failed to load — check network connection", "error");
+    settle(job.key);
+    return;
+  }
+  notFound.delete(job.key);
+  for (const w of job.wins) writeGame(w, html, CRA_BASE);   // open before the cache write completes
+  const ok = await queueWrite(job.key, html);
+  setCardStatus(job.key, ok ? "cached" : "unknown");
+  settle(job.key);
+}
+
+/* ── Load All ─────────────────────────────────────── */
+let loadingAll = false, loadAllSet = new Set(), loadAllTotal = 0;
+
+function startLoadAll() {
+  if (loadingAll) return;
+  if (activePack === "external") { toast("External games are already stored locally — nothing to load", "info"); return; }
+  const todo = byRecency(getActiveGames().filter(([p, f]) => p === "vusl" && statusMap.get(idbKey(p, f)) !== "cached"));
+  if (!todo.length) { toast("✔ All games already cached", "success"); return; }
+  loadingAll = true; loadAllTotal = todo.length; loadAllSet = new Set(todo.map(([p, f]) => idbKey(p, f)));
+  $loadAllBtn.disabled = true; $loadAllBtn.textContent = "⏳ Loading…";
+  setProgress(1);
+  for (const [, f] of todo) request(f, false);   // already in most-recently-clicked-first order
+}
+function settle(key) {
+  if (!loadingAll || !loadAllSet.delete(key)) return;
+  setProgress(((loadAllTotal - loadAllSet.size) / loadAllTotal) * 100);
+  if (!loadAllSet.size) finishLoadAll();
+}
+function resetLoadAll() {
+  loadingAll = false; loadAllSet.clear();
+  $loadAllBtn.disabled = false; $loadAllBtn.textContent = "⬇ Load All";
+}
+function finishLoadAll() {
+  resetLoadAll(); setProgress(100);
+  const failed = getActiveGames().filter(([p, f]) => statusMap.get(idbKey(p, f)) === "failed").length;
+  showBanner(failed ? `Loaded with ${failed} failed — use ↺ Retry Failed` : "✔ All Games Loaded — Offline Ready!", 4500);
+  refreshStatus();
+}
+
+/* ── Retry ────────────────────────────────────────── */
+let retryTimer = null;
+function scheduleAutoRetry() { clearTimeout(retryTimer); retryTimer = setTimeout(() => retryFailed(true), 30000); }
+
+function retryFailed(quiet = false) {
+  clearTimeout(retryTimer);
+  const failed = [];
+  for (const [k, s] of statusMap) {
+    if (s !== "failed") continue;
+    const [p, f] = splitKey(k);
+    if (p === "vusl" && !(quiet && notFound.has(k))) failed.push(f);
+  }
+  if (!failed.length) { if (!quiet) toast("Nothing to retry", "info"); return; }
+  const clicked = failed.filter(f => recentIdx.has(f)).sort((a, b) => recentIdx.get(b) - recentIdx.get(a)); // oldest first → newest ends up first
+  for (const f of failed) if (!recentIdx.has(f)) request(f, false);
+  for (const f of clicked) request(f, true);
+  if (!quiet) toast(`↺ Retrying ${failed.length} failed game${failed.length > 1 ? "s" : ""}…`, "info");
+}
+window.addEventListener("online", () => retryFailed(true));
+
+/* ── Clear cache ──────────────────────────────────── */
+function cancelAll() {
+  for (const j of [...jobs.values()]) {
+    j.cancelled = true; j.wins.forEach(closeWin);
+    if (j.state === "active") j.ctl && j.ctl.abort(); else jobs.delete(j.key);
+  }
+  manualQ.length = 0; bulkQ.length = 0;
+  clearTimeout(retryTimer);
+  clearTimeout(wtimer); wtimer = null;
+  wbuf.forEach(b => b[2](false)); wbuf = [];
+  if (loadingAll) { resetLoadAll(); setProgress(0); }
+}
+async function clearCache() {
+  let keepExternal = false;
+  if (PACKS.external.games.length) {
+    const mode = await askConfirm("Clear cache",
+      "This will also permanently delete your uploaded External games, since they can't be re-downloaded. Keep external uploads, or clear everything?",
+      { confirmLabel: "Clear everything", skipLabel: "Keep external uploads" });
+    keepExternal = mode === "skip";
+  }
+  cancelAll();
+  if (keepExternal) await dbDelete((await dbKeys()).filter(k => splitKey(k)[0] !== "external"));
+  else { await dbClear(); PACKS.external.games = []; saveExternalManifest(); }
+  statusMap.clear(); notFound.clear();
+  await scanCache();
+  renderPackTabs(); renderGrid(); refreshStatus();
+  toast(keepExternal ? "Cache cleared (external uploads kept)" : "Cache cleared", "info");
+}
+
+/* ── Re-sync on tab focus ─────────────────────────── */
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") scanCache().then(syncCards);
 });
 
-/* ── Init ───────────────────────────────────────────── */
-async function init() {
-  await initDB();
-  for (const [pid, pack] of Object.entries(PACKS)) {
-    if (pid === "favorites") continue;
-    for (const fn of pack.games) statusMap.set(idbKey(pid, fn), "unknown");
-  }
+/* ── Init ─────────────────────────────────────────── */
+(async function init() {
+  try { await initDB(); } catch { db = null; }
   await scanCache();
-  renderPackTabs();
-  renderGrid();
-  refreshStatus();
-}
-
-init();
+  renderPackTabs(); renderGrid(); refreshStatus();
+})();
 </script>
 </body>
 </html>
