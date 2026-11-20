@@ -4370,25 +4370,20 @@ function parseModerationDuration(value) {
    so the min/max shown always matches what YOUR rank is allowed.
    ══════════════════════════════════════════════════════════ */
 // ── /give: people who own a tag can hand it to others. Each entry = the tag's item id, how it's typed (tag_JIH), and who may grant it.
-//    The same ids and granter IDs are in vus-chat-rules.json (tagGrants), which also checks a server ticket so nobody can fake being the granter. ──
+//    The same ids and granter IDs are in vus-chat-rules.json (tagGrants). Firebase only, no Vercel/ticket: the rules only check that the grant names the right granter ID. ──
 const TAG_GRANTS = {
   "tag-jih":     { cmd: "tag_JIH",     granters: ["177601"] },
   "tag-special": { cmd: "tag_special", granters: ["581824"] },
   "tag-div":     { cmd: "tag_div",     granters: ["185920"] }
 };
 function myGrantableTags() { return Object.keys(TAG_GRANTS).filter(id => TAG_GRANTS[id].granters.includes(String(myLoginId || ""))); }
-// Records the grant (needs a server ticket for the granter's ID), then puts the tag in the receiver's inventory. Works for offline people too.
+// Records the grant (tagGrants/<receiver>/<tag> = who gave it and when), then puts the tag in the receiver's inventory. Works for offline people too. Firebase only.
 async function giveTagTo(itemId, targetId) {
   const db = ChatBackend._db, me = String(myLoginId), tid = String(targetId);
   if (!db) throw new Error("Not connected to the database.");
   if ((await db.ref("crateInv/" + tid + "/items/" + itemId).get()).exists()) return "already";
   if (!(await db.ref("tagGrants/" + tid + "/" + itemId).get()).exists()) {
-    if (!window.VUS_AUTH || !window.VUS_AUTH.ticket) throw new Error("NO_TOKEN");
-    const ticket = await window.VUS_AUTH.ticket(me, String(myName || ""));
-    const up = {};
-    up["tagGrants/" + tid + "/" + itemId] = { by: me, ticket, ts: firebase.database.ServerValue.TIMESTAMP };
-    up["tickets/" + me + "/" + ticket] = null;   // the ticket is spent
-    await db.ref().update(up);
+    await db.ref("tagGrants/" + tid + "/" + itemId).set({ by: me, ts: firebase.database.ServerValue.TIMESTAMP });
   }
   await db.ref("crateInv/" + tid + "/items/" + itemId).set(firebase.database.ServerValue.TIMESTAMP);
   return "given";
@@ -4728,7 +4723,7 @@ async function handleModerationCommand(text) {
       showComposerNotice(res === "already" ? (target.name || ("#" + target.loginId)) + " already has " + TAG_GRANTS[tagKey].cmd + "." : "Gave " + TAG_GRANTS[tagKey].cmd + " to " + (target.name || ("#" + target.loginId)) + " (#" + target.loginId + ").");
     } catch (e) {
       const m = String(e && e.message);
-      showComposerNotice(m === "NO_TOKEN" ? "Giving a tag needs a one-time password confirmation on this device first." : isPermissionDenied(e) ? "The database refused that. Publish the newest chat rules first (tagGrants)." : "Couldn't give the tag: " + m);
+      showComposerNotice(isPermissionDenied(e) ? "The database refused that. Publish the newest chat rules first (tagGrants)." : "Couldn't give the tag: " + m);
     }
     return true;
   }
