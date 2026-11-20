@@ -9843,6 +9843,12 @@ const CRATE_ITEMS = [
   { id: "shp-bub-diamond", type: "bub", rar: "legendary", name: "Diamond", shop: true, price: 1000, anim: "diamond", txt: "#0c2d57", colors: ["#a5eaff", "#d6dcff"], blurb: "Icy facets with twinkling sparkles and a bright glow." },
   { id: "shp-bub-emerald", type: "bub", rar: "legendary", name: "Emerald", shop: true, price: 3000, anim: "emerald", txt: "#ffffff", colors: ["#12b981", "#055a40"], blurb: "A deep green cut gem with sweeping glints." },
   { id: "shp-bub-ruby",    type: "bub", rar: "legendary", name: "Ruby",    shop: true, price: 5000, anim: "ruby",    txt: "#ffffff", colors: ["#dc2626", "#6b0f1a"], blurb: "A glowing red gem that pulses." },
+  // ── Bundle pieces: only come with the Yin & Yang Pack (see BUNDLES, Bundle tab in the Shop). shop: true keeps them out of crates; bundle: keeps them out of the per-item Shop tabs. ──
+  { id: "shp-tag-yin",     type: "tag", rar: "epic",      name: "Yin",                    shop: true, bundle: "shp-bundle-yinyang" },
+  { id: "shp-tag-yang",    type: "tag", rar: "epic",      name: "Yang",                   shop: true, bundle: "shp-bundle-yinyang" },
+  { id: "shp-tag-yinyang", type: "tag", rar: "legendary", name: "Yin & Yang",             shop: true, bundle: "shp-bundle-yinyang" },
+  { id: "shp-bub-yinyang", type: "bub", rar: "legendary", name: "Yin & Yang",             shop: true, bundle: "shp-bundle-yinyang", anim: "yinyang", txt: "#ffffff", colors: ["#000000", "#ffffff"] },
+  { id: "shp-fx-yinyang",  type: "fx",  rar: "legendary", name: "Yin & Yang (animated)",  shop: true, bundle: "shp-bundle-yinyang" },
   // text effects (CSS class fxt-<id>)
   { id: "fx-sunset", type: "fx", rar: "common", name: "Sunset Fade" },
   { id: "fx-ocean",  type: "fx", rar: "common", name: "Ocean Fade" },
@@ -10938,8 +10944,49 @@ const SHOP_TABS = [
   { id: "font",  icon: "Aa",           label: "Fonts" },
   { id: "bub",   icon: "\uD83D\uDCAC", label: "Bubbles" }
 ];
+SHOP_TABS.push({ id: "bundle", icon: "\uD83C\uDF81", label: "Bundle" });
 let shopTab = "crate";
-function shopItemsOf(type) { return CRATE_ITEMS.filter(i => i.shop && i.type === type).sort((a, b) => a.price - b.price); }
+// ── Bundles: several items for one price. ONE purchase = ONE write to coins/<id> (takes the price, sets sh/<bundle> = 1, bk = <bundle>);
+//    settleShopItems then hands out every piece. The price also lives in vus-chat-rules.json (coins -> sh) and the pieces are listed in the
+//    crateInv rule there, so a new bundle needs: an entry here, its pieces in CRATE_ITEMS, and its id + price + pieces in the rules. ──
+const BUNDLES = [
+  { id: "shp-bundle-yinyang", name: "Yin & Yang Pack", price: 1000,
+    blurb: "Black and white, in balance. Three tags, an image bubble and an animated text effect that stays readable on both halves.",
+    items: ["shp-tag-yin", "shp-tag-yang", "shp-tag-yinyang", "shp-bub-yinyang", "shp-fx-yinyang"] }
+];
+const BUNDLE_BY_ID = {}; BUNDLES.forEach(b => { BUNDLE_BY_ID[b.id] = b; });
+function bundleOwned(b) {
+  if (myCoinRec && myCoinRec.sh && Number(myCoinRec.sh[b.id]) === 1) return true;
+  return b.items.every(j => crateOwned.has(j));
+}
+function shopBundleCard(b) {
+  const owned = bundleOwned(b);
+  const card = el("div", "shop-item shop-bundle");
+  const pv = el("div", "shop-bundle-pv");
+  const tags = el("div", "shop-bundle-tags");
+  b.items.forEach(id => { if (itemOf(id, "tag")) tags.appendChild(tagEl(id)); });
+  pv.appendChild(tags);
+  const bubIt = b.items.map(j => itemOf(j, "bub")).find(Boolean), fxIt = b.items.map(j => itemOf(j, "fx")).find(Boolean);
+  if (bubIt) {
+    const d = el("div", "cr-bubprev"); applyBubFx(d, bubIt);
+    if (fxIt) d.appendChild(el("span", "fxtext fxt-" + fxIt.id, "Hello there!")); else d.appendChild(document.createTextNode("Hello there!"));
+    pv.appendChild(d);
+  }
+  const info = el("div", "shop-info");
+  info.append(el("b", "", b.name), el("small", "", b.blurb || ""));
+  const ul = el("ul", "shop-bundle-list");
+  b.items.forEach(j => { const it = itemOf(j); if (it) ul.appendChild(el("li", "", it.name + " \u2014 " + ({ tag: "tag", fx: "text effect", bub: "bubble", ring: "ring", font: "font" })[it.type])); });
+  info.appendChild(ul);
+  const side = el("div", "shop-side");
+  side.appendChild(el("div", "shop-price", b.price.toLocaleString() + " \uD83E\uDE99"));
+  const btn = el("button", "cr-count-b", owned ? "Owned \u2713" : "Buy"); btn.type = "button";
+  btn.disabled = owned || shopBusy || myCoins === null || myCoins < b.price;
+  btn.addEventListener("click", () => buyShopItem(b.id));
+  side.appendChild(btn);
+  card.append(pv, info, side);
+  return card;
+}
+function shopItemsOf(type) { return CRATE_ITEMS.filter(i => i.shop && !i.bundle && i.type === type).sort((a, b) => a.price - b.price); }
 function shopOwned(it) {
   if (crateOwned.has(it.id)) return true;
   if (it.legacy) return !!(myCoinRec && Number(myCoinRec.ld) === 1);
@@ -10952,6 +10999,14 @@ async function settleShopItems() {   // paid for (sh/<item> = 1) but not in the 
   const have = inv.val() || {};
   let given = 0;
   for (const k of Object.keys(sh.val() || {})) {
+    if (BUNDLE_BY_ID[k]) {   // a paid bundle: hand out every piece it includes
+      for (const j of BUNDLE_BY_ID[k].items) {
+        if (have[j] || !itemOf(j)) continue;
+        await db.ref("crateInv/" + id + "/items/" + j).set(firebase.database.ServerValue.TIMESTAMP);
+        have[j] = 1; given++;
+      }
+      continue;
+    }
     if (!/^shp-/.test(k) || !itemOf(k) || have[k]) continue;
     await db.ref("crateInv/" + id + "/items/" + k).set(firebase.database.ServerValue.TIMESTAMP);
     given++;
@@ -10959,8 +11014,8 @@ async function settleShopItems() {   // paid for (sh/<item> = 1) but not in the 
   return given;
 }
 async function buyShopItem(itemId) {
-  const it = ITEM_BY_ID[itemId];
-  if (!it || !it.shop || shopBusy || !myLoginId) return;
+  const it = ITEM_BY_ID[itemId] || BUNDLE_BY_ID[itemId];
+  if (!it || (!it.shop && !it.items) || it.bundle || shopBusy || !myLoginId) return;   // bundle pieces are only sold inside their bundle
   if (it.legacy) { buyLoadedTag(); return; }
   shopBusy = true; shopMsg = { t: "Buying…" }; paintShop();
   let paid = false;
@@ -10969,14 +11024,14 @@ async function buyShopItem(itemId) {
     await settleShopItems();   // finish an earlier purchase first
     for (let attempt = 0; ; attempt++) {
       const rec = (await db.ref("coins/" + uid).get()).val() || {}, have = Number(rec.n) || 0;
-      if ((rec.sh && Number(rec.sh[itemId]) === 1) || crateOwned.has(itemId)) throw new Error("You already own " + it.name + ".");
+      if ((rec.sh && Number(rec.sh[itemId]) === 1) || crateOwned.has(itemId) || (it.items && it.items.every(j => crateOwned.has(j)))) throw new Error("You already own " + it.name + ".");
       if (have < it.price) throw new Error("You need " + it.price + " coins. You have " + have + ".");
       const upd = { n: have - it.price, bk: itemId }; upd["sh/" + itemId] = 1;
       try { await db.ref("coins/" + uid).update(upd); paid = true; break; }
       catch (e1) { if (!isPermissionDenied(e1) || attempt >= 2) throw e1; await annSleep(400); }   // a message coin may have landed between the read and the write: read again and retry
     }
     await settleShopItems();
-    shopMsg = { ok: true, t: "You bought " + it.name + "! Equip it in the Collection tab.", coll: it.type };
+    shopMsg = { ok: true, t: "You bought " + it.name + "! Equip it in the Collection tab.", coll: it.type || "tag" };
   } catch (e) {
     shopMsg = { t: paid ? "You paid, but " + it.name + " didn't arrive yet. Close and reopen the shop and it will be delivered." : isPermissionDenied(e) ? "The database refused that purchase. Check that the newest database rules are published, then try again." : ((e && e.message) || "Couldn't buy that.") };
   }
@@ -11040,7 +11095,9 @@ function paintShop() {
   });
   box.appendChild(tabs);
 
-  if (shopTab !== "crate") {
+  if (shopTab === "bundle") {
+    const wrap = el("div", "shop-list"); BUNDLES.forEach(b => wrap.appendChild(shopBundleCard(b))); box.appendChild(wrap);
+  } else if (shopTab !== "crate") {
     const list = shopItemsOf(shopTab);
     if (!list.length) box.appendChild(el("div", "cr-note shop-empty", "Nothing for sale here yet. Check back soon!"));
     else { const wrap = el("div", "shop-list"); list.forEach(it => wrap.appendChild(shopItemCard(it))); box.appendChild(wrap); }

@@ -2928,3 +2928,67 @@ body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-ruby, .cr-bubprev.bubfx.bub-ruby
 }
 @keyframes bubRuby { 0% { background-position: 150% 0, 0 0, 0 0, 0 0; } 100% { background-position: -50% 0, 0 0, 0 0, 0 0; } }
 @keyframes bubRubyGlow { 0%, 100% { box-shadow: 0 0 6px rgba(239,68,68,.4), inset 0 0 0 2px #f87171, inset 0 -3px 0 rgba(60,0,10,.45); } 50% { box-shadow: 0 0 20px 4px rgba(248,113,113,.95), inset 0 0 0 2px #fecaca, inset 0 -3px 0 rgba(60,0,10,.45); } }
+
+/* ═══════════ Yin & Yang Pack (Bundle tab) ═══════════ */
+/* Tags. Yin = black with a white dot, Yang = white with a black dot, Yin & Yang = flowing black/white stripes.
+   On the combined tag the text layer is the exact INVERSE of the stripe layer (same size, same animation), so every letter contrasts with what is behind it. */
+.msg-tag.tg-shp-tag-yin, .msg-tag.tg-shp-tag-yang { position: relative; overflow: hidden; isolation: isolate; font-weight: 800; letter-spacing: .5px; animation: none; background-size: 100% 100%; }
+.msg-tag.tg-shp-tag-yin { background-color: #050505; background-image: none; color: #fff; border: 1.5px solid #fff; box-shadow: 0 0 0 1px #000, 0 0 8px rgba(255,255,255,.4); }
+.msg-tag.tg-shp-tag-yang { background-color: #fafafa; background-image: none; color: #050505; border: 1.5px solid #fafafa; box-shadow: 0 0 0 1px #000, 0 0 8px rgba(255,255,255,.55); }
+.msg-tag.tg-shp-tag-yin::before, .msg-tag.tg-shp-tag-yang::before { content: ""; display: inline-block; width: 5px; height: 5px; border-radius: 50%; margin-right: 4px; vertical-align: middle; position: relative; top: -1px; }
+.msg-tag.tg-shp-tag-yin::before { background: #fff; }
+.msg-tag.tg-shp-tag-yang::before { background: #050505; }
+.msg-tag.tg-shp-tag-yin::after, .msg-tag.tg-shp-tag-yang::after { content: ""; position: absolute; top: -20%; bottom: -20%; left: -70%; width: 45%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.55), transparent); transform: skewX(-22deg); animation: loadedSweep 3s ease-in-out infinite; pointer-events: none; }
+.msg-tag.tg-shp-tag-yang::after { background: linear-gradient(100deg, transparent, rgba(0,0,0,.28), transparent); }
+.msg-tag.tg-shp-tag-yinyang {
+  font-weight: 900; letter-spacing: .5px; border: 1.5px solid #fff; box-shadow: 0 0 0 1px #000, 0 0 8px rgba(255,255,255,.45);
+  background-color: #000;
+  background-image: linear-gradient(90deg, #fff 0 25%, #000 25% 50%, #fff 50% 75%, #000 75% 100%), linear-gradient(90deg, #000 0 25%, #fff 25% 50%, #000 50% 75%, #fff 75% 100%) !important;
+  background-size: 200% 100%, 200% 100% !important;
+  background-repeat: repeat-x, repeat-x;
+  -webkit-background-clip: text, padding-box; background-clip: text, padding-box;
+  color: transparent; -webkit-text-fill-color: transparent;
+  animation: yyTagFlow 4s linear infinite;
+}
+@keyframes yyTagFlow { from { background-position: 0 0, 0 0; } to { background-position: 200% 0, 200% 0; } }
+@media (prefers-reduced-motion: reduce) { .msg-tag.tg-shp-tag-yin::after, .msg-tag.tg-shp-tag-yang::after, .msg-tag.tg-shp-tag-yinyang { animation: none !important; } }
+
+/* Bubble: the supplied image stretched over the bubble. The two dots are drawn here (not in the image) so they stay round at any size. */
+body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-yinyang, .cr-bubprev.bubfx.bub-yinyang {
+  background-image: url("data:image/jpeg;base64,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") !important;
+  background-size: 100% 100% !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-color: #0b0b0b;
+  position: relative;
+  padding-left: 28px !important; padding-right: 28px !important;
+  border-color: #fff !important;
+  box-shadow: 0 0 0 1px #000, 0 0 0 2px #fff, inset 0 0 0 2px #fff, inset 0 0 0 3px #000;
+  color: #fff !important;
+  /* white text with a black outline: readable on the black half AND the white half (a text effect from the pack does this even better) */
+  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 0 4px #000 !important;
+}
+body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-yinyang::before, body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-yinyang::after,
+.cr-bubprev.bubfx.bub-yinyang::before, .cr-bubprev.bubfx.bub-yinyang::after { content: ""; position: absolute; top: 50%; width: 9px; height: 9px; margin-top: -4.5px; border-radius: 50%; pointer-events: none; }
+body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-yinyang::before, .cr-bubprev.bubfx.bub-yinyang::before { left: 11px; background: #fff; box-shadow: 0 0 0 1px #000; }
+body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-yinyang::after, .cr-bubprev.bubfx.bub-yinyang::after { right: 11px; background: #000; box-shadow: 0 0 0 1px #fff; }
+
+/* Text effect: black and white flowing through the letters. Two halos (white inside, black outside) keep every letter readable on the black half
+   and on the white half of the bubble, and on the dark chat background too. */
+.fxt-shp-fx-yinyang {
+  background-image: linear-gradient(90deg, #fff, #000, #fff);
+  background-size: 300% 100%;
+  animation: fxFlow 3.5s linear infinite;
+  font-weight: 700;
+  filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 1.5px #000) drop-shadow(0 0 1.5px #000);
+}
+@media (prefers-reduced-motion: reduce) { .fxt-shp-fx-yinyang { animation: none !important; } }
+
+/* Bundle card in the shop's Bundle tab */
+.shop-bundle { flex-wrap: wrap; align-items: stretch; }
+.shop-bundle-pv { flex: 1 1 100%; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 6px 0 10px; }
+.shop-bundle-tags { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.shop-bundle-tags .msg-tag { margin-left: 0; font-size: 12px; padding: 2px 10px; }
+.shop-bundle-pv .cr-bubprev { font-size: 15px; padding: 9px 30px; }
+.shop-bundle .shop-info { flex: 1 1 200px; }
+.shop-bundle-list { margin: 4px 0 0; padding-left: 16px; color: #94a3b8; font-size: 12.5px; line-height: 1.5; }
