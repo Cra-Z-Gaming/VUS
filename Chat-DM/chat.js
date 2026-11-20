@@ -4369,6 +4369,31 @@ function parseModerationDuration(value) {
    command from anyone who can't use it. `desc` may be a function of your rank
    so the min/max shown always matches what YOUR rank is allowed.
    ══════════════════════════════════════════════════════════ */
+// ── /give: people who own a tag can hand it to others. Each entry = the tag's item id, how it's typed (tag_JIH), and who may grant it.
+//    The same ids and granter IDs are in vus-chat-rules.json (tagGrants), which also checks a server ticket so nobody can fake being the granter. ──
+const TAG_GRANTS = {
+  "tag-jih":     { cmd: "tag_JIH",     granters: ["177601"] },
+  "tag-special": { cmd: "tag_special", granters: ["581824"] },
+  "tag-div":     { cmd: "tag_div",     granters: ["185920"] }
+};
+function myGrantableTags() { return Object.keys(TAG_GRANTS).filter(id => TAG_GRANTS[id].granters.includes(String(myLoginId || ""))); }
+// Records the grant (needs a server ticket for the granter's ID), then puts the tag in the receiver's inventory. Works for offline people too.
+async function giveTagTo(itemId, targetId) {
+  const db = ChatBackend._db, me = String(myLoginId), tid = String(targetId);
+  if (!db) throw new Error("Not connected to the database.");
+  if ((await db.ref("crateInv/" + tid + "/items/" + itemId).get()).exists()) return "already";
+  if (!(await db.ref("tagGrants/" + tid + "/" + itemId).get()).exists()) {
+    if (!window.VUS_AUTH || !window.VUS_AUTH.ticket) throw new Error("NO_TOKEN");
+    const ticket = await window.VUS_AUTH.ticket(me, String(myName || ""));
+    const up = {};
+    up["tagGrants/" + tid + "/" + itemId] = { by: me, ticket, ts: firebase.database.ServerValue.TIMESTAMP };
+    up["tickets/" + me + "/" + ticket] = null;   // the ticket is spent
+    await db.ref().update(up);
+  }
+  await db.ref("crateInv/" + tid + "/items/" + itemId).set(firebase.database.ServerValue.TIMESTAMP);
+  return "given";
+}
+
 const SLASH_COMMANDS = [
   { name: "/mute", args: "time username [reason]",    minRank: ROLES.mod.rank,
     desc: rank => "Mute someone for a while (" + limitsText(timeoutLimitsForRank(rank)) + ").", insert: "/mute " },
@@ -4390,6 +4415,8 @@ const SLASH_COMMANDS = [
     desc: "Give or take away image access for someone below your rank.", insert: "/image " },
   { name: "/afk", args: "", minRank: 0,
     desc: "Mark yourself AFK (yellow dot). Takes effect after 1 second; any click or key press brings you back.", insert: "/afk" },
+  { name: "/give", args: "tag_name username or #ID", minRank: 0, only: () => myGrantableTags().length > 0,
+    desc: () => "Experimental: give a tag you own to someone, online or offline. You can give: " + myGrantableTags().map(id => TAG_GRANTS[id].cmd).join(", ") + ". Example: /give " + (myGrantableTags().map(id => TAG_GRANTS[id].cmd)[0] || "tag_name") + " #123456 or @name", insert: "/give " },
   { name: "/poll", args: "", minRank: ROLES.admin.rank,
     desc: "Open the poll menu: a question with Yes / No (add up to 4 options). Lasts 1 minute.", insert: "/poll" },
   { name: "/verify", args: "[on]",              minRank: ROLES.crown.rank,
@@ -4405,7 +4432,7 @@ function commandDescription(cmd, rank) {
 
 function availableSlashCommands() {
   const rank = myRank();
-  return SLASH_COMMANDS.filter(c => rank >= c.minRank && (c.name !== "/kick" || currentRoomCode)); // /kick only does anything inside a private room
+  return SLASH_COMMANDS.filter(c => rank >= c.minRank && (!c.only || c.only()) && (c.name !== "/kick" || currentRoomCode)); // /kick only does anything inside a private room
 }
 
 // Online-only lookup by exact chat name (case-insensitive).
@@ -4674,11 +4701,37 @@ async function handleModerationCommand(text) {
     showComposerNotice("Unknown command. Type / to see the list.");
     return true;
   }
+  if (def.only && !def.only()) {   // /give only exists for people who own a grantable tag; for everyone else it is just chat
+    if (availableSlashCommands().length === 0) return false;
+    showComposerNotice("You do not have permission to use " + command + ".");
+    return true;
+  }
   if (rank < def.minRank) {
     showComposerNotice("You do not have permission to use " + command + ".");
     return true;
   }
   if (command !== "/afk") ChatBackend.logCommand(text);   // /afk isn't worth tracking
+
+  // ── /give tag_name username|#ID|@username (tag owners) ──
+  if (command === "/give") {
+    const mine = myGrantableTags();
+    const tagKey = String(parts[1] || "").toLowerCase().replace(/_/g, "-");
+    const usage = "Use /give " + (TAG_GRANTS[mine[0]] ? TAG_GRANTS[mine[0]].cmd : "tag_name") + " username, #123456 or @username (you can give: " + mine.map(id => TAG_GRANTS[id].cmd).join(", ") + ").";
+    if (parts.length < 3 || !tagKey) { showComposerNotice(usage); return true; }
+    if (!mine.includes(tagKey)) { showComposerNotice(TAG_GRANTS[tagKey] ? "You are not allowed to give " + TAG_GRANTS[tagKey].cmd + "." : "Unknown tag. " + usage); return true; }
+    const rawTarget = parts.slice(2).join(" ").replace(/^[@#]/, "");
+    let target = null;
+    try { target = await resolveModerationTarget(rawTarget, { allowOfflineId: true }); } catch (e) {}
+    if (!target || !target.loginId) { showComposerNotice("Couldn't find that user. Use their username, @username or #6-digit ID (online or offline)."); return true; }
+    try {
+      const res = await giveTagTo(tagKey, target.loginId);
+      showComposerNotice(res === "already" ? (target.name || ("#" + target.loginId)) + " already has " + TAG_GRANTS[tagKey].cmd + "." : "Gave " + TAG_GRANTS[tagKey].cmd + " to " + (target.name || ("#" + target.loginId)) + " (#" + target.loginId + ").");
+    } catch (e) {
+      const m = String(e && e.message);
+      showComposerNotice(m === "NO_TOKEN" ? "Giving a tag needs a one-time password confirmation on this device first." : isPermissionDenied(e) ? "The database refused that. Publish the newest chat rules first (tagGrants)." : "Couldn't give the tag: " + m);
+    }
+    return true;
+  }
 
   // ── /unban (Co-owner and Owner) ──
   if (command === "/unban") {
@@ -6865,7 +6918,7 @@ function rankGuideLines(role) {
   const imgEvery = formatDurationShort(ROLE_IMAGE_COOLDOWNS_MS[role.id]);
   const gated = role.rank <= IMAGE_GATED_MAX_RANK;
   const byHand = role.id === "crown" || role.id === "coowner";
-  const newCommands = SLASH_COMMANDS.filter(c => c.minRank === role.rank);
+  const newCommands = SLASH_COMMANDS.filter(c => c.minRank === role.rank && !c.only);
   const grantable = Object.values(ROLES).filter(r => !r.implicit && r.id !== "crown" && r.id !== "coowner" && r.rank < role.rank && canGrantRole(role.rank, r.id));
   const canGrant = grantable.length > 0;
   const menu = role.rank >= ROLES.crown.rank ? "Owner Menu" : role.rank >= ROLES.admin.rank ? "Admin Menu" : role.rank >= ROLES.mod.rank ? "Mod Menu" : null;
@@ -9828,6 +9881,9 @@ const CRATE_ITEMS = [
   { id: "tag-goat",    type: "tag", rar: "legendary", name: "G.O.A.T." },
   // Firebase-only (fb: true): never in a crate and never in the shop. Added to someone's inventory by hand in the database (crateInv/<id>/items/tag-special).
   { id: "tag-special", type: "tag", rar: "impossible", name: "Special 🤤", fb: true },
+  // Grant-only tags: never in a crate or the shop; only given with /give by the person allowed to grant them (see TAG_GRANTS).
+  { id: "tag-jih", type: "tag", rar: "legendary", name: "JIH", fb: true },
+  { id: "tag-div", type: "tag", rar: "legendary", name: "<div>", fb: true },
   // Shop-only (1000 coins in the Shop, never from a crate): a shiny gold tag
   { id: "tag-loaded",  type: "tag", rar: "legendary", name: "Loaded 💰", shop: true, price: 1000, legacy: true, blurb: "A shiny gold tag. Only sold here, never found in crates." },
   // ── Shop-only items (never in a crate). Ids start with "shp-". The price list lives in the database rules too (coins → sh), so a new

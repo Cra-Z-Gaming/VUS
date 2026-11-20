@@ -2523,6 +2523,43 @@ body.hide-bubcolors .msg-bubble.bubfx { animation: none !important; box-shadow: 
 .tg-tag-goat { background-image: linear-gradient(110deg,#fde68a,#f59e0b,#ef4444,#f59e0b,#fde68a) !important; }
 .msg-tag.tg-tag-special { background-image: linear-gradient(110deg,#a5f3fc,#c084fc,#f9a8d4,#c084fc,#a5f3fc) !important; border-color: #e9d5ff; color: #2e1065; font-weight: 800; letter-spacing: .4px; }
 @keyframes tagShine { to { background-position: -250% 0; } }
+
+/* JIH tag (grant-only, given with /give tag_JIH): flashes Midnight Blue > Royal Blue > Burgundy, with a spinning swirl in front of the name. */
+.msg-tag.tg-tag-jih {
+  display: inline-flex; align-items: center; gap: 5px;
+  background-image: none !important; background-color: #191970;
+  border: 1.5px solid #4169e1; color: #fff; font-weight: 700; letter-spacing: .6px;
+  animation: jihFlash 3s infinite ease-in-out !important;
+  user-select: none;
+}
+.msg-tag.tg-tag-jih::before { content: "\1F300"; display: inline-block; line-height: 1; font-size: 1em; animation: jihSwirl 3s linear infinite; }
+@keyframes jihFlash {
+  0%, 100% { background-color: #191970; border-color: #4169e1; box-shadow: 0 0 10px rgba(25,25,112,.8); }
+  33%      { background-color: #4169e1; border-color: #800020; box-shadow: 0 0 14px rgba(65,105,225,.9); }
+  66%      { background-color: #800020; border-color: #191970; box-shadow: 0 0 12px rgba(128,0,32,.85); }
+}
+@keyframes jihSwirl { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* <div> tag (grant-only, given with /give tag_div): hacker terminal look. Black-green background with faint scan lines, glowing green code font, blinking cursor. */
+.msg-tag.tg-tag-div {
+  background-color: #02140a !important;
+  background-image: repeating-linear-gradient(0deg, rgba(0,255,65,.10) 0 1px, transparent 1px 3px) !important;
+  background-size: auto !important;
+  border: 1.5px solid #00ff41; color: #39ff14;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace;
+  font-weight: 700; letter-spacing: .3px;
+  text-shadow: 0 0 5px rgba(57,255,20,.85);
+  box-shadow: 0 0 6px rgba(0,255,65,.5), inset 0 0 6px rgba(0,255,65,.18);
+  animation: divGlow 2.6s ease-in-out infinite !important;
+}
+.msg-tag.tg-tag-div::after { content: "_"; margin-left: 1px; animation: divBlink 1s steps(1) infinite; }
+@keyframes divGlow {
+  0%, 100% { box-shadow: 0 0 5px rgba(0,255,65,.4), inset 0 0 5px rgba(0,255,65,.15); border-color: #00c832; }
+  50%      { box-shadow: 0 0 12px rgba(0,255,65,.85), inset 0 0 8px rgba(0,255,65,.3); border-color: #39ff14; }
+}
+@keyframes divBlink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .msg-tag.tg-tag-div, .msg-tag.tg-tag-div::after { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .msg-tag.tg-tag-jih, .msg-tag.tg-tag-jih::before { animation: none !important; } }
 .fxtext { -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; background-size: 200% 100%; }
 .fxt-fx-sunset { background-image: linear-gradient(90deg,#f97316,#ec4899,#a855f7); background-size: 100% 100%; }
 .fxt-fx-ocean { background-image: linear-gradient(90deg,#22d3ee,#3b82f6,#6366f1); background-size: 100% 100%; }
@@ -2983,6 +3020,11 @@ body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-yinyang::after, .cr-bubprev.bubf
   filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 1.5px #000) drop-shadow(0 0 1.5px #000);
 }
 @media (prefers-reduced-motion: reduce) { .fxt-shp-fx-yinyang { animation: none !important; } }
+
+/* Fix: a bubble's text outline/glow (text-shadow) is inherited by a text effect inside it. Because the effect is a gradient clipped to the letters,
+   that inherited shadow paints on top of it and turns the text black and blurry (Yin Yang bubble, but any bubble with a text-shadow did it).
+   Text that has an effect now ignores the bubble's text-shadow, so the effect shows exactly as it does outside a bubble. */
+.bubfx .fxtext, .msg-bubble .fxtext, .cr-bubprev .fxtext { text-shadow: none !important; }
 
 /* Bundle card in the shop's Bundle tab */
 .shop-bundle { flex-wrap: wrap; align-items: stretch; }

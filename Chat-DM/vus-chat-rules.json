@@ -845,7 +845,28 @@
         "items": {
           "$item": {
             ".write": "$id.matches(/^[0-9]{4,12}$/) && !data.exists()",
-            ".validate": "$item.matches(/^[a-z0-9-]{1,24}$/) && $item !== 'tag-special' && ($item !== 'tag-loaded' || root.child('coins/' + $id + '/ld').val() === 1) && (!$item.beginsWith('shp-') || root.child('coins/' + $id + '/sh/' + $item).val() === 1 || root.child('coins/' + $id + '/iw/' + $item).val() === 1 || (root.child('coins/' + $id + '/sh/shp-bundle-yinyang').val() === 1 && ($item === 'shp-tag-yin' || $item === 'shp-tag-yang' || $item === 'shp-tag-yinyang' || $item === 'shp-bub-yinyang' || $item === 'shp-fx-yinyang'))) && newData.val() === now && (!$item.beginsWith('sea-') || $item.beginsWith('sea-' + root.child('crateClaims/' + $id + '/s').val() + '-'))"
+            ".validate": "$item.matches(/^[a-z0-9-]{1,24}$/) && (($item !== 'tag-special' && $item !== 'tag-jih' && $item !== 'tag-div') || root.child('tagGrants/' + $id + '/' + $item + '/by').val() === ($item === 'tag-jih' ? '177601' : ($item === 'tag-special' ? '581824' : '185920'))) && ($item !== 'tag-loaded' || root.child('coins/' + $id + '/ld').val() === 1) && (!$item.beginsWith('shp-') || root.child('coins/' + $id + '/sh/' + $item).val() === 1 || root.child('coins/' + $id + '/iw/' + $item).val() === 1 || (root.child('coins/' + $id + '/sh/shp-bundle-yinyang').val() === 1 && ($item === 'shp-tag-yin' || $item === 'shp-tag-yang' || $item === 'shp-tag-yinyang' || $item === 'shp-bub-yinyang' || $item === 'shp-fx-yinyang'))) && newData.val() === now && (!$item.beginsWith('sea-') || $item.beginsWith('sea-' + root.child('crateClaims/' + $id + '/s').val() + '-'))"
+          }
+        }
+      }
+    },
+    "tagGrants": {
+      ".read": true,
+      "$id": {
+        "$item": {
+          ".write": "$id.matches(/^[0-9]{4,12}$/) && !data.exists() && newData.exists()",
+          ".validate": "($item === 'tag-jih' || $item === 'tag-special' || $item === 'tag-div') && newData.hasChildren(['by','ticket','ts']) && newData.child('by').val() === ($item === 'tag-jih' ? '177601' : ($item === 'tag-special' ? '581824' : '185920')) && newData.child('ticket').isString() && newData.child('ts').val() === now && root.child('tickets/' + newData.child('by').val() + '/' + newData.child('ticket').val() + '/t').val() > now - 120000",
+          "by": {
+            ".validate": "newData.isString()"
+          },
+          "ticket": {
+            ".validate": "newData.isString()"
+          },
+          "ts": {
+            ".validate": "newData.isNumber()"
+          },
+          "$x": {
+            ".validate": false
           }
         }
       }
