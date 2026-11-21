@@ -10004,6 +10004,11 @@ const CRATE_ITEMS = [
   { id: "shp-tag-yinyang", type: "tag", rar: "legendary", name: "Yin & Yang",             shop: true, bundle: "shp-bundle-yinyang" },
   { id: "shp-bub-yinyang", type: "bub", rar: "legendary", name: "Yin & Yang",             shop: true, bundle: "shp-bundle-yinyang", anim: "yinyang", txt: "#ffffff", colors: ["#000000", "#ffffff"] },
   { id: "shp-fx-yinyang",  type: "fx",  rar: "legendary", name: "Yin & Yang (animated)",  shop: true, bundle: "shp-bundle-yinyang" },
+  // ── Dragon Pack pieces: only come with the Dragon Pack (3000 coins). Same rules as the Yin & Yang pieces above. ──
+  { id: "shp-tag-dragonic", type: "tag",  rar: "legendary", name: "Dragonic",           shop: true, bundle: "shp-bundle-dragon" },
+  { id: "shp-bub-dragon",   type: "bub",  rar: "legendary", name: "Dragon Flames",      shop: true, bundle: "shp-bundle-dragon", anim: "dragon", txt: "#fff4d6", colors: ["#751410", "#d0371c", "#f4c942"] },
+  { id: "shp-ring-dragon",  type: "ring", rar: "legendary", name: "Dragon Ring",        shop: true, bundle: "shp-bundle-dragon" },
+  { id: "shp-fx-dragon",    type: "fx",   rar: "legendary", name: "Dragon Fire (animated)", shop: true, bundle: "shp-bundle-dragon" },
   // text effects (CSS class fxt-<id>)
   { id: "fx-sunset", type: "fx", rar: "common", name: "Sunset Fade" },
   { id: "fx-ocean",  type: "fx", rar: "common", name: "Ocean Fade" },
@@ -11107,7 +11112,10 @@ let shopTab = "crate";
 const BUNDLES = [
   { id: "shp-bundle-yinyang", name: "Yin & Yang Pack", price: 1000,
     blurb: "Black and white, in balance. Three tags, an image bubble and an animated text effect that stays readable on both halves.",
-    items: ["shp-tag-yin", "shp-tag-yang", "shp-tag-yinyang", "shp-bub-yinyang", "shp-fx-yinyang"] }
+    items: ["shp-tag-yin", "shp-tag-yang", "shp-tag-yinyang", "shp-bub-yinyang", "shp-fx-yinyang"] },
+  { id: "shp-bundle-dragon", name: "Dragon Pack", price: 3000,
+    blurb: "Fire and scales. A flaming bubble, a dragon that circles your picture, a fading red and orange tag and a dark fire text effect.",
+    items: ["shp-tag-dragonic", "shp-bub-dragon", "shp-ring-dragon", "shp-fx-dragon"] }
 ];
 const BUNDLE_BY_ID = {}; BUNDLES.forEach(b => { BUNDLE_BY_ID[b.id] = b; });
 function bundleOwned(b) {
@@ -11121,6 +11129,8 @@ function shopBundleCard(b) {
   const tags = el("div", "shop-bundle-tags");
   b.items.forEach(id => { if (itemOf(id, "tag")) tags.appendChild(tagEl(id)); });
   pv.appendChild(tags);
+  const ringIt = b.items.map(j => itemOf(j, "ring")).find(Boolean);   // a bundle with a ring shows it around a sample picture
+  if (ringIt) pv.insertBefore(itemPreview(ringIt), pv.firstChild);
   const bubIt = b.items.map(j => itemOf(j, "bub")).find(Boolean), fxIt = b.items.map(j => itemOf(j, "fx")).find(Boolean);
   if (bubIt) {
     const d = el("div", "cr-bubprev"); applyBubFx(d, bubIt);
