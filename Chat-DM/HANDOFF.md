@@ -57,12 +57,14 @@ Fields on `coins/<id>` and who writes them: `qdk/qdm/qwk/qwm` message counters (
 ## Other recent features (details in the code; status not re-verified)
 - 1v1 crate games: bets 1x/2x/3x/5x/10x, disconnect = 15 s then the other player wins, 5-minute limit then overtime/refund. Games: tic-tac-toe, rock-paper-scissors, connect 4 (dice, memory, battleship were rejected). Direct mode `pg/`, secure mode `games/` via `api/game.js`.
 - "Impossible" crate (100 coins, ~99% refund of 20 coins, 1/10000 per prize) and an "Impossible" rarity tier above Legendary.
-- Shop bundles: Yin & Yang Pack (1000 coins) and a Dragon bundle (3000) exist in the rules and `chat.js`.
-- `/give` command: owners of a tag can grant it. `tag-jih` only by #177601, `tag-special` only by #581824, `tag-div` only by #185920 (enforced in the `tagGrants` rules).
+- Shop bundles: Yin & Yang Pack (1000 coins), a Dragon bundle (3000) and the Rainbow Pack (2000: `shp-tag-prism` "🌈Prism", `shp-bub-cloud` cloud bubble, the existing `shp-ring-rainbow`, `shp-fx-rainbow` fading rainbow text effect) exist in the rules and `chat.js`; their CSS is in `style.css` after the Dragon block. The Rainbow ring is still sold alone for 500 in the Rings tab too.
+- `/give` command: owners of a tag can grant it. `tag-jih` only by #177601, `tag-special` only by #581824, `tag-div` only by #185920, `tag-owna` ("owna approved", `/give tag_owna`) only by #822414 (enforced in the `tagGrants` rules; publish the rules and push `chat.js` + `style.css` for it to work).
 - Chat security work (tickets / token requirement against impersonation) is in `rules/tickets`, `config/tokensRequiredSince`, `api/chat/`.
 - Reported bug, status unknown: the Yin & Yang bubble turned text-effect text black; wanted: the bubble must not affect text when a text effect is equipped.
 
 ## Current status / what needs doing
+Done in the Rainbow Pack session (2026-11-21): new bundle `shp-bundle-rainbow` (2000 coins) added in `chat.js` (CRATE_ITEMS + BUNDLES), `style.css` and `vus-chat-rules.json` (price in coins `sh/$k`, pieces in the `crateInv` rule). Rules file checked: parses, no `numChildren` left, only real Firebase rule methods. Not yet tested in the live app: [ ] publish the rules, [ ] push `chat.js` AND `style.css`, [ ] buy the pack with a test account (cloud puffs, fading text, ring and tag all show; check a very long and a very short message).
+
 Done last session: rules now cover all 10 quests, game counters and the welcome bundle; `quests.js` stripped of crate rewards; `games.txt` typo fixed.
 
 To do, in order:
@@ -76,6 +78,7 @@ To do, in order:
 
 ## Session log
 - 2026-11-21: quests audit (rules were out of date), rules + `quests.js` updated, gift crates left out on purpose, `games.txt` fixed.
+- 2026-11-21 (later): Firebase refused the rules with "Line 90: No such method/property 'numChildren'" (the old test simulator had accepted it); the rules file on disk is fixed. Added the Rainbow Pack bundle (see above). Also added the grant-only tag "owna approved" (`tag-owna`, only #822414 can give it) in `chat.js`, `style.css` and the rules.
 
 ## How the owner starts a new chat
 "Read E:\Claude\VUS D.C\HANDOFF.md first, then help me with ...". At the end of a session ask Claude to update "Current status" and "Session log" in this file.

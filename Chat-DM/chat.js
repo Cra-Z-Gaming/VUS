@@ -4391,7 +4391,8 @@ function parseModerationDuration(value) {
 const TAG_GRANTS = {
   "tag-jih":     { cmd: "tag_JIH",     granters: ["177601"] },
   "tag-special": { cmd: "tag_special", granters: ["581824"] },
-  "tag-div":     { cmd: "tag_div",     granters: ["185920"] }
+  "tag-div":     { cmd: "tag_div",     granters: ["185920"] },
+  "tag-owna":    { cmd: "tag_owna",    granters: ["822414"] }
 };
 function myGrantableTags() { return Object.keys(TAG_GRANTS).filter(id => TAG_GRANTS[id].granters.includes(String(myLoginId || ""))); }
 // Records the grant (tagGrants/<receiver>/<tag> = who gave it and when), then puts the tag in the receiver's inventory. Works for offline people too. Firebase only.
@@ -9983,6 +9984,7 @@ const CRATE_ITEMS = [
   // Grant-only tags: never in a crate or the shop; only given with /give by the person allowed to grant them (see TAG_GRANTS).
   { id: "tag-jih", type: "tag", rar: "legendary", name: "JIH", fb: true },
   { id: "tag-div", type: "tag", rar: "legendary", name: "<div>", fb: true },
+  { id: "tag-owna", type: "tag", rar: "impossible", name: "owna approved", fb: true },   // grant-only: only #822414 can give it (/give tag_owna)
   // Shop-only (1000 coins in the Shop, never from a crate): a shiny gold tag
   { id: "tag-loaded",  type: "tag", rar: "legendary", name: "Loaded 💰", shop: true, price: 1000, legacy: true, blurb: "A shiny gold tag. Only sold here, never found in crates." },
   // ── Shop-only items (never in a crate). Ids start with "shp-". The price list lives in the database rules too (coins → sh), so a new
