@@ -13,7 +13,7 @@
        The rules look the game up (pg/<id> for Direct games, games/<id> for Secure ones) and check you were one of the two players.
      - login reward: claimed once per day, the amount depends on the weekday (see LOGIN below).
      - set bonus: 100 coins when every daily quest is claimed, 300 when every weekly quest is claimed.
-     - welcome bundle: a brand new account gets 50 coins + 5 crates once (see STARTER below).
+     - welcome bundle: a brand new account gets 50 coins once (crates are switched off for now, see STARTER below).
      - claiming: ONE write adds the reward to n (and crates to gc) and sets qp/<quest> = the period key. The rules only accept it when
        the progress is really there, the amounts are exactly the reward, and the quest was not claimed in this period yet.
    Resets: daily at 12:00 PM Eastern (17:00 UTC), weekly on Saturday at 12:00 PM Eastern (17:00 UTC). Same moment for everyone.
@@ -28,7 +28,7 @@ const LOGIN = [200, 100, 25, 25, 50, 100, 150];
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const SHOW_ORDER = [1, 2, 3, 4, 5, 6, 0];          // the strip in the window starts on Monday
 // Welcome bundle: only accounts created on or after this moment can get it (the database also only allows it once per account and once per browser).
-const STARTER_SINCE = Date.UTC(2026, 10, 21), STARTER_COINS = 50, STARTER_CRATES = 5;
+const STARTER_SINCE = Date.UTC(2026, 10, 21), STARTER_COINS = 50, STARTER_CRATES = 0;   // gift crates are OFF: the database rules have no gift-crate (gc) field yet. Add "gc" to vus-chat-rules.json before raising this or adding crates: to a quest.
 
 // kind: msg = messages sent, time = minutes in one session, crate = crates opened (selling a crate doesn't count), game = finished 1v1 games,
 //       login = the daily login reward, set = every quest of the period claimed
@@ -37,11 +37,11 @@ const QUESTS = [
   { id: "q-dmsg",   period: "d", kind: "msg",   icon: "💬", name: "Chatterbox",       desc: "Send 50 messages",                        goal: 50,         reward: 150 },
   { id: "q-dtime",  period: "d", kind: "time",  icon: "⏱️", name: "Stick Around",     desc: "Stay on VUS for 20 minutes in one session", goal: SESSION_MS, reward: 100 },
   { id: "q-dcrate", period: "d", kind: "crate", icon: "📦", name: "Crate Cracker",    desc: "Open 2 crates",                           goal: 2,          reward: 75 },
-  { id: "q-dgame",  period: "d", kind: "game",  icon: "🎮", name: "Friendly Duel",    desc: "Finish 2 games against other players",    goal: 2,          reward: 75, crates: 1 },
+  { id: "q-dgame",  period: "d", kind: "game",  icon: "🎮", name: "Friendly Duel",    desc: "Finish 2 games against other players",    goal: 2,          reward: 75 },
   { id: "q-dset",   period: "d", kind: "set",   icon: "✨", name: "Daily Sweep",      desc: "Claim every daily quest",                 members: ["q-dmsg", "q-dtime", "q-dcrate", "q-dgame"], reward: 100 },
   { id: "q-wcrate", period: "w", kind: "crate", icon: "🎁", name: "Crate Hoarder",    desc: "Open 10 crates",                          goal: 10,         reward: 250 },
   { id: "q-wmsg",   period: "w", kind: "msg",   icon: "🔥", name: "Marathon Chatter", desc: "Send 500 messages",                       goal: 500,        reward: 400 },
-  { id: "q-wgame",  period: "w", kind: "game",  icon: "🏆", name: "Arena Regular",    desc: "Finish 5 games against other players",    goal: 5,          reward: 200, crates: 3 },
+  { id: "q-wgame",  period: "w", kind: "game",  icon: "🏆", name: "Arena Regular",    desc: "Finish 5 games against other players",    goal: 5,          reward: 200 },
   { id: "q-wset",   period: "w", kind: "set",   icon: "👑", name: "Weekly Sweep",     desc: "Claim every weekly quest",                members: ["q-wcrate", "q-wmsg", "q-wgame"], reward: 300 }
 ];
 QUESTS.forEach(q => { if (q.kind === "set") q.goal = q.members.length; });
@@ -190,10 +190,11 @@ async function maybeStarter() {
     if (cur && String(cur) !== id) { starterSt.id = id; starterSt.busy = false; return; }   // this browser already took a welcome bundle for another account
     if (!cur) await dref.set(id);
     if (myId() !== id) { starterSt.busy = false; return; }
-    await db.ref("coins/" + id).set({ n: STARTER_COINS, gc: STARTER_CRATES, sb: 1, sbh: hash });
+    const bundle = { n: STARTER_COINS, sb: 1, sbh: hash }; if (STARTER_CRATES) bundle.gc = STARTER_CRATES;
+    await db.ref("coins/" + id).set(bundle);
     starterSt.id = id; welcome = true;
-    toast("🎁 Welcome to VUS! Here's " + STARTER_COINS + " coins and " + STARTER_CRATES + " crates to get you started.");
-    setMsg("🎁 Welcome bundle added: " + STARTER_COINS + " coins and " + STARTER_CRATES + " crates!", true);
+    toast("🎁 Welcome to VUS! Here's " + STARTER_COINS + " coins" + (STARTER_CRATES ? " and " + STARTER_CRATES + " crates" : "") + " to get you started.");
+    setMsg("🎁 Welcome bundle added: " + STARTER_COINS + " coins" + (STARTER_CRATES ? " and " + STARTER_CRATES + " crates" : "") + "!", true);
   } catch (e) {
     if (isDenied(e)) { starterSt.id = id; }                                      // the rules said no (already taken, or an older account): stop trying
     else { starterSt.fails++; starterSt.at = Date.now(); }

@@ -10173,7 +10173,7 @@ function crateCountMessage() {
   lastCrateMsgAt = now;
   progFor().msgs++; saveProg(); crateTick(true);
 }
-function crateStock() { return Math.max(0, crateEarned - crateOpened + crateGameNet); }   // + net crates from games (won minus staked)
+function crateStock() { return Math.max(0, crateEarned - crateOpened + crateGameNet + (Number(myCoinRec && myCoinRec.gc) || 0)); }   // + gift crates from quests and the welcome bundle (coins/<id>/gc)   // + net crates from games (won minus staked)
 function crateReady() { return !!myLoginId && crateClaimedW !== undefined && crateStock() > 0; }   // something to open
 function crateEarnable() {
   if (!myLoginId || crateClaimedW === undefined) return false;

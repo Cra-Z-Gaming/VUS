@@ -387,7 +387,7 @@
     if (mine && (mine.gid !== myGid || mine.mode !== myMode)) { myGid = mine.gid; myMode = mine.mode; startLoop(); }
     if (myGid && !viewOf(myGid, myMode)) { myGid = ""; stopLoop(); }
     if (spectate && (myGid || !viewOf(spectate.gid, spectate.mode))) spectate = null;   // started playing, or the watched game was removed
-    badge();
+    badge(); questScan();
     if (!open) return;
     // only redraw when something you can see changed (the players' heartbeats change the data every few seconds)
     var g = myGid ? viewOf(myGid, myMode) : null;
@@ -397,6 +397,16 @@
     var sig = JSON.stringify([me(), stock(), serverUp, modePref, myGid, spectate && spectate.gid, g ? [g.status, g.board, g.turn, g.score, g.round, g.rn, g.picked, g.draws, g.result, g.overtime, g.deadline, g.lastRound, g.winCells, g.p] : sg ? [sg.status, sg.board, sg.turn, sg.score, sg.round, sg.rn, sg.picked, sg.draws, sg.result, sg.overtime, sg.lastRound, sg.winCells] : [waiting, live]]);
     if (sig !== lastSig) { lastSig = sig; render(); }
   }
+  // Tells the quest tracker (quests.js) about every finished game I played in, with the freshest copy of the record, so it counts once the payout is final.
+  var qLast = {};
+  function questScan() {
+    var Q = window.VUS_QUESTS, id = me(); if (!Q || !Q.gameDone || !id) return;
+    var t = Date.now();
+    function send(key, gid, mode, raw) { if (t - (qLast[key] || 0) < 4000) return; qLast[key] = t; try { Q.gameDone({ gid: gid, mode: mode, raw: raw }); } catch (e) {} }
+    Object.keys(pgames).forEach(function (k) { var r = pgames[k]; if (!r || !r.a || !r.b || !sideIn(r)) return; if (derive(r).status === "done") send("d:" + k, k, "direct", r); });
+    Object.keys(games).forEach(function (k) { var g = games[k]; if (!g || !g.p || g.status !== "done") return; if ((g.p.a && g.p.a.id === id) || (g.p.b && g.p.b.id === id)) send("s:" + k, k, "secure", g); });
+  }
+  setInterval(function () { try { questScan(); } catch (e) {} }, 5000);
   function badge() { var g = myGid ? viewOf(myGid, myMode) : null; btn.style.color = g && g.status !== "done" ? "#4ade80" : ""; }
   function waitingList() {
     var out = [], t = now();
