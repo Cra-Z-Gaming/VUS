@@ -1,7 +1,7 @@
 // POST /api/game   Authorization: Bearer <login token>   { action, ... }
 // The server runs every game, so nobody can fake a win, a move, or a bet. Bets are held in escrow:
 // crates are taken from each player when they create/join, and paid out when the match ends.
-//   create { game:"ttt"|"rps"|"c4", bet }   join { gid }   move { gid, cell | col | pick }   ping { gid }   leave { gid }   sweep {}
+//   create { game:"ttt"|"rps"|"c4"|"ck", bet }   join { gid }   move { gid, cell | col | pick | from+to }   stop { gid }   ping { gid }   leave { gid }   sweep {}
 // Game state lives in games/<gid> (public read, only this server can write). Crates are crateClaims/<id>.n.
 // Rock-Paper-Scissors picks are kept secret in gamePicks/<gid> (nobody can read it) until both players have picked.
 const { admin, chatDb, fail, cors, readBody, accountById, verifyLogin } = require("./_lib");
@@ -9,7 +9,8 @@ const { admin, chatDb, fail, cors, readBody, accountById, verifyLogin } = requir
 const GAMES = {
   ttt: { name: "Tic-Tac-Toe", win: 2, ms: 5 * 60 * 1000, extra: 3 * 60 * 1000 },      // first to 2 rounds
   rps: { name: "Rock Paper Scissors", win: 2, ms: 3 * 60 * 1000, extra: 2 * 60 * 1000 },   // first to 2 rounds
-  c4:  { name: "Connect 4", win: 1, ms: 8 * 60 * 1000, extra: 3 * 60 * 1000 }          // one game
+  c4:  { name: "Connect 4", win: 1, ms: 8 * 60 * 1000, extra: 3 * 60 * 1000 },         // one game
+  ck:  { name: "Checkers", win: 1, ms: 10 * 60 * 1000, extra: 3 * 60 * 1000 }          // one game; when time is up the side with more pieces wins
 };
 const BETS = [1, 2, 3, 5, 10];
 const GRACE = 15000;                 // a player who is silent this long has disconnected
@@ -38,6 +39,62 @@ function c4Win(board, idx) {
   }
   return null;
 }
+  // ── Checkers (8x8) ──
+  // The board is 64 characters, index = row*8 + col, row 0 is the top. Only the dark squares ((row+col) odd) are used.
+  // "_" empty, "a"/"b" = a man of side a / b, "A"/"B" = a king. Side a (red) starts at the bottom and moves up, side b (black) starts at the top and moves down.
+  // Men step 1 square diagonally forward and may only go backward by JUMPING (capturing). Kings step or jump 1 square in any diagonal direction.
+  // Jumping is never forced, and after a jump the same piece may keep jumping or stop. Reaching the far row crowns a man and ends the turn.
+  var CK_DIRS = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+  var CK_START = (function () { var s = ""; for (var i = 0; i < 64; i++) { var r = i >> 3; s += ((r + (i & 7)) % 2 === 1 && r !== 3 && r !== 4) ? (r < 3 ? "b" : "a") : "_"; } return s; })();
+  function ckSide(ch) { return ch === "a" || ch === "A" ? "a" : ch === "b" || ch === "B" ? "b" : null; }
+  function ckJumpsFrom(board, i) {   // every capture the piece on square i could make (any direction, for men and kings)
+    var side = ckSide(board[i]), out = [], r = i >> 3, c = i & 7;
+    if (!side) return out;
+    CK_DIRS.forEach(function (d) {
+      var r2 = r + 2 * d[0], c2 = c + 2 * d[1];
+      if (r2 < 0 || r2 > 7 || c2 < 0 || c2 > 7) return;
+      var x = (r + d[0]) * 8 + c + d[1], t = r2 * 8 + c2, mid = board[x];
+      if (board[t] === "_" && mid !== "_" && ckSide(mid) !== side) out.push({ f: i, t: t, x: x });
+    });
+    return out;
+  }
+  function ckStepsFrom(board, i) {   // plain one-square moves (men: forward only)
+    var ch = board[i], side = ckSide(ch), out = [], r = i >> 3, c = i & 7;
+    if (!side) return out;
+    var king = ch !== ch.toLowerCase(), fwd = side === "a" ? -1 : 1;
+    CK_DIRS.forEach(function (d) {
+      if (!king && d[0] !== fwd) return;
+      var r1 = r + d[0], c1 = c + d[1];
+      if (r1 < 0 || r1 > 7 || c1 < 0 || c1 > 7 || board[r1 * 8 + c1] !== "_") return;
+      out.push({ f: i, t: r1 * 8 + c1, x: -1 });
+    });
+    return out;
+  }
+  function ckMoves(board, side, chain) {   // all legal moves for a side; while a jump chain is open (chain >= 0) only that piece's jumps
+    if (chain >= 0) return ckSide(board[chain]) === side ? ckJumpsFrom(board, chain) : [];
+    var out = [];
+    for (var i = 0; i < 64; i++) if (ckSide(board[i]) === side) out = out.concat(ckJumpsFrom(board, i), ckStepsFrom(board, i));
+    return out;
+  }
+  function ckFind(board, side, chain, f, t) { var m = ckMoves(board, side, chain); for (var i = 0; i < m.length; i++) if (m[i].f === f && m[i].t === t) return m[i]; return null; }
+  function ckApply(board, mv) {   // plays a move that is known to be legal -> { board, chain } (chain = square that may keep jumping, or -1)
+    var a = board.split(""), ch = a[mv.f], side = ckSide(ch), crowned = false;
+    a[mv.f] = "_"; if (mv.x >= 0) a[mv.x] = "_";
+    if (ch === ch.toLowerCase() && (side === "a" ? (mv.t >> 3) === 0 : (mv.t >> 3) === 7)) { ch = ch.toUpperCase(); crowned = true; }
+    a[mv.t] = ch;
+    var nb = a.join("");
+    return { board: nb, chain: mv.x >= 0 && !crowned && ckJumpsFrom(nb, mv.t).length ? mv.t : -1 };
+  }
+  function ckCount(board) { var n = { a: 0, b: 0 }; for (var i = 0; i < 64; i++) { var s = ckSide(board[i]); if (s) n[s]++; } return n; }
+
+// After a checkers move (or a "stop"): if no jump chain is open the turn passes, and the game ends when the other side has nothing left or can't move.
+function ckAfter(g, side, now) {
+  if (g.chain >= 0) return {};
+  const nx = other(side);
+  if (g.score[nx] === 0 || ckMoves(g.board, nx, -1).length === 0) settle(g, "score", side, now);
+  else g.turn = nx;
+  return {};
+}
 const rpsWinner = (pa, pb) => (pa === pb ? null : BEATS[pa] === pb ? "a" : "b");
 
 // Ends a game and records who gets what. winner = "a" | "b" | null (refund). leaver = the side that left, if any.
@@ -48,7 +105,7 @@ function settle(g, kind, winner, now, leaver) {
     forfeit: nameOf(g, leaver) + " left the game. " + who + " wins the bet.",
     disconnect: nameOf(g, leaver) + " was disconnected for 15 seconds. " + who + " wins the bet.",
     bothleft: "Both players disconnected at the same time. Everyone got their crates back.",
-    timeout: "Time ran out. " + who + " wins with the most games.",
+    timeout: "Time ran out. " + who + (g.type === "ck" ? " wins with the most pieces." : " wins with the most games."),
     "timeout-refund": "The timer ran out with no winner. Everyone got their crates back. Make or join a new game.",
     draw: "It's a draw. Everyone got their crates back.",
     cancel: "The game was cancelled. Your crates were returned."
@@ -64,6 +121,7 @@ function startGame(g, now) {
   Object.assign(g, { status: "playing", startedAt: now, deadline: now + cfg.ms, overtime: false, score: { a: 0, b: 0 }, round: 1, draws: 0, starter: "a", turn: "a" });
   if (g.type === "ttt") g.board = EMPTY9;
   else if (g.type === "c4") g.board = EMPTY42;
+  else if (g.type === "ck") { g.board = CK_START; g.chain = -1; g.score = { a: 12, b: 12 }; }
   else { g.rn = 1; g.picked = { a: false, b: false }; delete g.turn; }
 }
 
@@ -161,10 +219,28 @@ async function payout(db, gid) {
 const sideOf = (g, id) => (g.p.a && g.p.a.id === id ? "a" : g.p.b && g.p.b.id === id ? "b" : null);
 const err = (status, code, error, extra) => ({ error: { status, code, error, extra } });
 
-// One move in tic-tac-toe or Connect 4. Returns {} or an error.
+// Checkers: after a jump you may stop instead of jumping again.
+function applyStop(g, side, now) {
+  if (g.type !== "ck") return err(400, "NOT_CHECKERS", "Only checkers has a stop action.");
+  if (g.turn !== side) return err(409, "NOT_YOUR_TURN", "It's not your turn.");
+  if (!(g.chain >= 0)) return err(409, "NO_CHAIN", "You have no jump to stop.");
+  g.chain = -1;
+  return ckAfter(g, side, now);
+}
+
+// One move in tic-tac-toe, Connect 4 or Checkers. Returns {} or an error.
 function applyMove(g, side, b, now) {
   const cfg = GAMES[g.type];
   if (g.turn !== side) return err(409, "NOT_YOUR_TURN", "It's not your turn.");
+  if (g.type === "ck") {   // Checkers: move a piece from one square to another (0-63, row*8+col)
+    const f = Number(b.from), t = Number(b.to);
+    if (!Number.isInteger(f) || !Number.isInteger(t) || f < 0 || f > 63 || t < 0 || t > 63) return err(400, "BAD_SQUARE", "from and to must be whole numbers from 0 to 63.");
+    const mv = ckFind(g.board, side, g.chain, f, t);
+    if (!mv) return err(409, "BAD_MOVE", "That move isn't allowed.");
+    const ra = ckApply(g.board, mv);
+    g.board = ra.board; g.chain = ra.chain; g.lastMove = { f: mv.f, t: mv.t, x: mv.x }; g.score = ckCount(g.board);
+    return ckAfter(g, side, now);
+  }
   if (g.type === "ttt") {
     const cell = Number(b.cell);
     if (!Number.isInteger(cell) || cell < 0 || cell > 8) return err(400, "BAD_CELL", "cell must be a whole number from 0 to 8.");
@@ -335,7 +411,12 @@ module.exports = async (req, res) => {
         if (g.status !== "playing") return err(409, "NOT_STARTED", "The game hasn't started yet.");
         return applyMove(g, side, b, now);
       }
-      return err(400, "UNKNOWN_ACTION", "Unknown action.", { actions: ["create", "join", "move", "ping", "leave", "sweep"] });
+      if (action === "stop") {
+        g.seen[side] = now;
+        if (g.status !== "playing") return err(409, "NOT_STARTED", "The game hasn't started yet.");
+        return applyStop(g, side, now);
+      }
+      return err(400, "UNKNOWN_ACTION", "Unknown action.", { actions: ["create", "join", "move", "stop", "ping", "leave", "sweep"] });
     });
     if (!r.game) return fail(res, 404, "GAME_NOT_FOUND", "That game no longer exists.");
     if (r.verdict && r.verdict.error) { const e = r.verdict.error; return fail(res, e.status, e.code, e.error, e.extra); }
