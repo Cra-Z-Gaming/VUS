@@ -7822,6 +7822,9 @@ let mentionQuery = "";
 let mentionActiveIdx = 0;
 let mentionSearchToken = 0;
 let mentionSearchHits = [];
+// /give autofill state (see "/give autofill" below)
+let giveStage = 0, giveTagKey = "", giveQuery = "", giveActiveIdx = 0, giveNavUsed = false, giveSearchToken = 0, giveSearchTimer = 0, giveSearchHits = [];
+const giveIdCache = new Map();   // 6-digit ID -> { state: "checking" | "found" | "none", name }
 
 /* ══════════ Inline @mentions ══════════
    A mention is "@Name" anywhere in the message, several per message. When it goes out, each one carries an invisible
@@ -8130,10 +8133,184 @@ function openModerationTargetDropdown(tokenStart) {
   });
 }
 
+/* ══════════ /give autofill ══════════
+   Typing "/give " opens a list above the message box, in two steps:
+   1) the tags YOU are allowed to give (TAG_GRANTS). Picking one fills in "/give tag_name ".
+   2) the people: everyone online, then offline people this device has seen, then accounts found by the start of a username, and any
+      6-digit ID you type. Picking someone fills in their #ID, which works online or offline (no exact name needed).
+   Up/Down move, Tab picks, Enter picks too unless what you typed is already complete, Esc closes. */
+function giveParse(before) {
+  const mine = myGrantableTags();
+  if (!mine.length) return null;
+  let m = before.match(/^\/give[ \t]+([^\s]*)$/i);
+  if (m) return { stage: 1, query: m[1] };
+  m = before.match(/^\/give[ \t]+(\S+)[ \t]+([^\n]*)$/i);
+  const key = m ? String(m[1]).toLowerCase().replace(/_/g, "-") : "";
+  if (m && mine.includes(key)) return { stage: 2, tag: key, query: m[2] };
+  return null;
+}
+function giveCandidates(raw) {
+  const q = String(raw || "").trim().replace(/^[@#]/, "").toLowerCase();
+  const digits = /^[0-9]+$/.test(q), seen = new Set(), online = [], offline = [];
+  latestPresenceList.forEach(e => {
+    const id = String(e.loginId || "");
+    if (!/^[0-9]{6}$/.test(id) || seen.has(id)) return;
+    seen.add(id); online.push({ id, name: e.name || ("#" + id), online: true });
+  });
+  [...knownPeople].reverse().forEach(([pid, name]) => {   // newest first
+    const id = String(pid);
+    if (!/^[0-9]{6}$/.test(id) || seen.has(id) || !name) return;
+    seen.add(id); offline.push({ id, name, online: false });
+  });
+  giveSearchHits.forEach(h => {
+    const id = String(h.id || "");
+    if (!/^[0-9]{6}$/.test(id) || seen.has(id) || !h.name) return;
+    seen.add(id); offline.push({ id, name: h.name, online: false });
+  });
+  const rank = c => {
+    if (!q) return 0;
+    const s = digits ? c.id : String(c.name).toLowerCase();
+    return s.startsWith(q) ? 0 : s.includes(q) ? 1 : 2;
+  };
+  const keep = list => list.filter(c => rank(c) < 2)
+    .sort((a, b) => rank(a) - rank(b) || (a.online ? String(a.name).localeCompare(String(b.name)) : 0))
+    .slice(0, q ? 10 : 8);
+  return { q, online: keep(online), offline: keep(offline) };
+}
+function giveAcceptTag(id) {
+  $msgInput.value = "/give " + TAG_GRANTS[id].cmd + " ";
+  $msgInput.selectionStart = $msgInput.selectionEnd = $msgInput.value.length;
+  closeMentionDropdown();
+  $msgInput.focus();
+  autosizeInput(); updateCharCounter();
+  openGiveDropdown();   // straight on to picking the person
+}
+function giveAcceptPerson(c) {
+  const v = $msgInput.value, cur = $msgInput.selectionStart, cmd = TAG_GRANTS[giveTagKey].cmd;
+  const m = v.slice(0, cur).match(/^\/give[ \t]+\S+[ \t]+/i);
+  const head = m ? m[0] : "/give " + cmd + " ";
+  $msgInput.value = head + "#" + c.id + v.slice(cur);
+  $msgInput.selectionStart = $msgInput.selectionEnd = head.length + 1 + String(c.id).length;
+  closeMentionDropdown();
+  $msgInput.focus();
+  autosizeInput(); updateCharCounter();
+  showComposerNotice("Give " + cmd + " to " + (c.name || ("#" + c.id)) + " (#" + c.id + ")? Press Enter to send.");
+}
+function renderGiveDropdown() {
+  $mentionDropdown.innerHTML = "";
+  const picks = [];
+  const addPick = (btn, data) => {
+    btn.type = "button"; btn.classList.add("give-pick"); btn._give = data;
+    btn.addEventListener("mousedown", e => e.preventDefault());   // keep focus in the message box
+    $mentionDropdown.appendChild(btn); picks.push(btn);
+  };
+  if (giveStage === 1) {
+    addMentionCancelRow("Pick a tag to give");
+    const q = String(giveQuery || "").toLowerCase().replace(/-/g, "_");
+    myGrantableTags().filter(id => !q || TAG_GRANTS[id].cmd.toLowerCase().includes(q)).forEach(id => {
+      const btn = el("button", "mention-option");
+      btn.appendChild(el("span", "mo-name give-cmd", TAG_GRANTS[id].cmd));
+      const pv = tagEl(id); if (pv) btn.appendChild(pv);
+      btn.addEventListener("click", () => giveAcceptTag(id));
+      addPick(btn, { tag: id });
+    });
+    if (!picks.length) $mentionDropdown.appendChild(el("div", "mention-empty", "You can give: " + myGrantableTags().map(id => TAG_GRANTS[id].cmd).join(", ")));
+  } else {
+    addMentionCancelRow("Give " + TAG_GRANTS[giveTagKey].cmd + " to…");
+    const { q, online, offline } = giveCandidates(giveQuery);
+    const group = (label, list) => {
+      if (!list.length) return;
+      $mentionDropdown.appendChild(el("div", "mention-group", label + " — " + list.length));
+      list.forEach(c => {
+        const btn = el("button", "mention-option");
+        btn.appendChild(el("span", "mo-dot " + (c.online ? "on" : "off")));
+        btn.appendChild(el("span", "mo-name", c.name + (c.id === String(myLoginId) ? " (you)" : "")));
+        btn.appendChild(el("span", "mo-id", "#" + c.id));
+        btn.addEventListener("click", () => giveAcceptPerson(c));
+        addPick(btn, c);
+      });
+    };
+    group("Online", online);
+    group("Offline (you can still give it to them)", offline);
+    if (/^[0-9]{6}$/.test(q) && ![...online, ...offline].some(c => c.id === q)) {   // an ID that isn't in the lists: check it is a real account
+      let st = giveIdCache.get(q);
+      if (!st) {
+        st = { state: "checking", name: "" }; giveIdCache.set(q, st);
+        lookupAccountByLoginId(q).then(acc => { st.state = acc ? "found" : "none"; st.name = (acc && acc.username) || ""; })
+          .catch(() => { st.state = "none"; })
+          .then(() => { if (mentionDropdownOpen && mentionDropdownMode === "give") renderGiveDropdown(); });
+      }
+      if (st.state === "found") {
+        const btn = el("button", "mention-option");
+        btn.appendChild(el("span", "mo-dot off"));
+        btn.appendChild(el("span", "mo-name", st.name || ("Account #" + q)));
+        btn.appendChild(el("span", "mo-id", "#" + q));
+        btn.addEventListener("click", () => giveAcceptPerson({ id: q, name: st.name }));
+        addPick(btn, { id: q, name: st.name || "" });
+      } else {
+        $mentionDropdown.appendChild(el("div", "mention-empty", st.state === "checking" ? "Checking #" + q + "…" : "No account has the ID #" + q + "."));
+      }
+    }
+    if (!picks.length && !$mentionDropdown.querySelector(".mention-empty")) {
+      $mentionDropdown.appendChild(el("div", "mention-empty", q ? "No one found. Try the start of their username, or type their 6-digit ID." : "No one to suggest yet. Type a username or a 6-digit ID."));
+    }
+  }
+  giveActiveIdx = Math.min(giveActiveIdx, Math.max(0, picks.length - 1));
+  if (picks[giveActiveIdx]) picks[giveActiveIdx].classList.add("active");
+}
+// Opens (or refreshes) the list for what is in the box right now. Returns false when the box isn't a /give the person could still fill in.
+function openGiveDropdown() {
+  const p = giveParse($msgInput.value.slice(0, $msgInput.selectionStart));
+  if (!p) { if (mentionDropdownOpen && mentionDropdownMode === "give") closeMentionDropdown(); return false; }
+  const same = mentionDropdownOpen && mentionDropdownMode === "give" && giveStage === p.stage && giveQuery === p.query && giveTagKey === (p.tag || "");
+  if (!same) { giveActiveIdx = 0; giveNavUsed = false; }
+  if (giveStage !== p.stage) giveSearchHits = [];
+  giveStage = p.stage; giveTagKey = p.tag || ""; giveQuery = p.query;
+  mentionDropdownMode = "give"; mentionTriggerCharIndex = -1; mentionDropdownOpen = true;
+  $mentionDropdown.style.display = "block";
+  renderGiveDropdown();
+  // people who haven't chatted on this device: look them up by the start of their username (a short pause after typing)
+  clearTimeout(giveSearchTimer);
+  const sq = String(p.query || "").trim().replace(/^[@#]/, "");
+  if (p.stage === 2 && sq.length >= 2 && !/^[0-9]+$/.test(sq) && window.VUS_DM && window.VUS_DM.searchUsernames) {
+    const token = ++giveSearchToken;
+    giveSearchTimer = setTimeout(() => {
+      window.VUS_DM.searchUsernames(sq).then(list => {
+        if (token !== giveSearchToken || !mentionDropdownOpen || mentionDropdownMode !== "give" || giveStage !== 2) return;
+        giveSearchHits = list.map(x => ({ name: x.username, id: x.id }));
+        renderGiveDropdown();
+      }).catch(() => {});
+    }, 160);
+  }
+  return true;
+}
+// Up/Down move, Tab picks, Enter picks too unless what was typed is already complete (a full name or ID), then it sends as usual.
+$msgInput.addEventListener("keydown", e => {
+  if (!mentionDropdownOpen || mentionDropdownMode !== "give") return;
+  const rows = [...$mentionDropdown.querySelectorAll(".give-pick")];
+  if (!rows.length) return;
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault(); e.stopImmediatePropagation();
+    giveActiveIdx = (giveActiveIdx + (e.key === "ArrowDown" ? 1 : -1) + rows.length) % rows.length;
+    giveNavUsed = true;
+    rows.forEach((r, i) => r.classList.toggle("active", i === giveActiveIdx));
+    rows[giveActiveIdx].scrollIntoView({ block: "nearest" });
+    return;
+  }
+  let pick = e.key === "Tab";
+  if (e.key === "Enter" && !e.shiftKey) {
+    const q = String(giveQuery || "").trim().replace(/^[@#]/, "").toLowerCase();
+    pick = giveStage === 1 || !q || giveNavUsed || !rows.some(r => r._give && (String(r._give.name || "").toLowerCase() === q || String(r._give.id || "") === q));
+  }
+  if (pick) { e.preventDefault(); e.stopImmediatePropagation(); rows[Math.min(giveActiveIdx, rows.length - 1)].click(); }
+}, true);
+
 function refreshMentionDropdownIfOpen() {
   if (!mentionDropdownOpen) return;
   if (mentionDropdownMode === "moderation") {
     openModerationTargetDropdown(mentionTriggerCharIndex);
+  } else if (mentionDropdownMode === "give") {
+    renderGiveDropdown();
   } else {
     renderMentionDropdown();
   }
@@ -8305,6 +8482,7 @@ function handleMentionTrigger() {
     return;
   }
   if (commandListOpen) closeCommandList();
+  if (openGiveDropdown()) return;   // "/give " -> tag list, then people list
   const cursor = $msgInput.selectionStart;
   const before = $msgInput.value.slice(0, cursor);
   const moderationMatch = before.match(/(?:^|\s)\/(?:ban\s+|kick\s+|image\s+(?:on|off)\s+|(?:timeout|mute)\s+\S+\s+|tempban\s+\S+\s+|remove\s+\S+\s+|grant\s+(?:normie|mod|admin|coowner)\s+(?:(?:\S+\s+)?))([^\s]*)$/i);
