@@ -76,7 +76,11 @@ To do, in order:
 6. [ ] Optional: more ways for players to earn coins (the owner is open to ideas; example ideas so far: quests, login streak, 1v1 games).
 7. [ ] Check whether the Yin & Yang text-effect bug is fixed.
 
+## Checkers (added 2026-11-21, later session)
+New 1v1 game `ck` (8x8) in `games.js` (Direct mode + UI), `api/game.js` (Secure mode, actions `move {from,to}` and `stop`) and `vus-chat-rules.json` (`pg` type allows `ck`, log entries get field `f`, `c` up to 63). Rules: men step forward only and may go backward only by capturing; captures never forced; after a jump the piece may keep jumping or stop (`stop` / log kind `st`); reaching the far row crowns and ends the turn; win by capturing everything or leaving the opponent no legal move; 10 min, then more pieces wins, tie = 3 min overtime then refund. Checked with Node tests for the rules, server logic and a jsdom UI smoke test (not saved). NOT yet tested live: [ ] publish rules in Firebase, [ ] deploy `api/game.js` to Vercel, [ ] push `games.js` to GitHub (rules first, script last), [ ] play a Direct and a Secure checkers game with two accounts (capture, optional capture, chain + stop, crowning, win).
+
 ## Session log
+- 2026-11-21 (later still): added Checkers to the 1v1 games (see the Checkers section above).
 - 2026-11-21: quests audit (rules were out of date), rules + `quests.js` updated, gift crates left out on purpose, `games.txt` fixed.
 - 2026-11-21 (later): Firebase refused the rules with "Line 90: No such method/property 'numChildren'" (the old test simulator had accepted it); the rules file on disk is fixed. Added the Rainbow Pack bundle (see above). Also added the grant-only tag "owna approved" (`tag-owna`, only #822414 can give it) in `chat.js`, `style.css` and the rules.
 

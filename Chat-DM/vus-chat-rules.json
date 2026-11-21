@@ -24,7 +24,7 @@
       "$gid": {
         ".write": "!data.exists() || (!newData.exists() && (data.child('created').val() < now - 604800000 || (data.child('paid/a').exists() && data.child('paid/b').exists())))",
         ".validate": "newData.hasChildren(['type', 'bet', 'created', 'a'])",
-        "type": { ".validate": "newData.isString() && (newData.val() === 'ttt' || newData.val() === 'rps' || newData.val() === 'c4')" },
+        "type": { ".validate": "newData.isString() && (newData.val() === 'ttt' || newData.val() === 'rps' || newData.val() === 'c4' || newData.val() === 'ck')" },
         "bet": { ".validate": "newData.isNumber() && (newData.val() === 1 || newData.val() === 2 || newData.val() === 3 || newData.val() === 5 || newData.val() === 10)" },
         "created": { ".validate": "newData.val() === now" },
         "v": { ".validate": "newData.isNumber()" },
@@ -39,7 +39,8 @@
             "k": { ".validate": "newData.isString() && newData.val().length <= 8" },
             "t": { ".validate": "newData.isNumber()" },
             "s": { ".validate": "newData.val() === 'a' || newData.val() === 'b' || newData.val() === 'x'" },
-            "c": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 41" },
+            "c": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 63" },
+            "f": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 63" },
             "h": { ".validate": "newData.isString() && newData.val().length <= 64" },
             "p": { ".validate": "newData.val() === 'rock' || newData.val() === 'paper' || newData.val() === 'scissors'" },
             "z": { ".validate": "newData.isString() && newData.val().length <= 40" },
