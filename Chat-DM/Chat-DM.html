@@ -15,6 +15,7 @@
     <button class="rail-nav-btn" id="navAnnounce" title="Announcements" aria-label="Announcements"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h3l8 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M18.5 9a4 4 0 0 1 0 6"/></svg><span class="rail-dot" id="announceRailDot"></span></button>
     <button class="rail-nav-btn" id="navCrate" title="Crates" aria-label="Crates"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5"/><path d="M12 13v8"/></svg><span class="rail-dot" id="crateRailDot"></span></button>
     <button class="rail-nav-btn" id="navShop" title="Shop" aria-label="Shop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></button>
+    <button class="rail-nav-btn" id="navQuests" title="Quests" aria-label="Quests"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="m9 9 1.6 1.6L13.5 7.5"/><path d="M9 15h6"/></svg><span class="rail-dot" id="questRailDot"></span></button>
     <div id="railRooms"></div>
     <button class="rail-nav-btn rail-browse" id="navRooms" title="Browse rooms" aria-label="Browse rooms"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 21V4.5A1.5 1.5 0 0 1 7.5 3h9A1.5 1.5 0 0 1 18 4.5V21"/><path d="M3.5 21h17"/><circle cx="14.5" cy="12.5" r="0.9" fill="currentColor" stroke="none"/></svg><span class="rail-dot num" id="roomsRailCount"></span><span class="rail-dot" id="roomsRailDot"></span></button>
     <div class="rail-sep"></div>
@@ -714,7 +715,7 @@
 (function loadExternalAppFiles() {
   var BASE = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Chat-DM/";
   var CSS_URL = BASE + "style.css";
-  var JS_URLS = [BASE + "slm.js", BASE + "dm.js", BASE + "dev.js", BASE + "chat.js", BASE + "games.js"];
+  var JS_URLS = [BASE + "slm.js", BASE + "dm.js", BASE + "dev.js", BASE + "chat.js", BASE + "quests.js", BASE + "games.js"];
 
   function showLoadError(what, err) {
     document.body.innerHTML =
@@ -748,7 +749,7 @@
       document.body.appendChild(s);
     });
   }
-  function isOptional(u) { return /\/(slm|dev|games)\.js$/.test(u); }
+  function isOptional(u) { return /\/(slm|dev|games|quests)\.js$/.test(u); }
   /* LOADING ORDER
      Everything is downloaded AT THE SAME TIME (it used to be one file after another), and the files the chat needs run in order
      the moment each has arrived. games.js isn't needed to chat, so it runs a moment after the chat is up (straight away when

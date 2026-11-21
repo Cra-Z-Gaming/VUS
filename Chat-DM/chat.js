@@ -10751,15 +10751,16 @@ async function equipItemLegacyUnused(it, on) {
 })();
 
 /* ══════════ Coins and the Shop ══════════
-   1 message = 1 coin. NO SERVER IS NEEDED: everything is checked by the database rules (vus-chat-rules.json), so it works
+   1 message = 2 coins. NO SERVER IS NEEDED: everything is checked by the database rules (vus-chat-rules.json), so it works
    for everyone who can reach the chat. The rules only allow:
-     - coins/<id>: +1 at most every 5 s, and only for a REAL message from that same ID that is newer than the last coin
+     - coins/<id>: +2 at most every 2 s, and only for a REAL message from that same ID that is newer than the last coin
        (bot and system messages never count); or a purchase, which must take exactly 50 coins per crate (pc = crates paid for)
      - crateClaims/<id>: extra crates only up to the number paid for (pb can never go down, can never pass pc)
    Nobody can set a balance, skip the price, pay more or less than 50, or get paid twice. What the rules can't do is tell
    who is really behind an ID (the chat has no Firebase login), so see the notes about impersonation. */
 const SHOP_CRATE_PRICE = 50;
 const COIN_GAP_MS = 2000;
+const COIN_PER_MESSAGE = 2;   // the database rules have the same number (coins -> .write and bc)
 const COIN_WINDOW_MS = 60 * 60 * 1000, COIN_WINDOW_MAX = 500;   // at most 500 message coins per fixed 1-hour block (on the hour, UTC); the database rules enforce the same numbers
 let myCoins = null, myCoinRec = null, coinWatchId = "", coinWatchRef = null, coinBusy = false;
 function ensureCoinWatch() {
@@ -10798,7 +10799,15 @@ function coinClaim(room, mid, data) {
   const win = Math.floor(nowS / COIN_WINDOW_MS), used = Number(rec.bw) === win ? (Number(rec.bc) || 0) : 0;
   if (used >= COIN_WINDOW_MAX) return;   // this hour's coins are used up; the next hour starts on its own
   coinBusy = true;
-  ChatBackend._db.ref("coins/" + myLoginId).update({ n: (Number(rec.n) || 0) + 1, bw: win, bc: used + 1, last: firebase.database.ServerValue.TIMESTAMP, mid: String(mid), room: String(room) })
+  const upd = { n: (Number(rec.n) || 0) + COIN_PER_MESSAGE, bw: win, bc: used + 1, last: firebase.database.ServerValue.TIMESTAMP, mid: String(mid), room: String(room) };
+  // Quest counters (quests.js): messages today / this week. They ride along with the coin in the same write, and the rules only accept +1.
+  const qdk = Math.floor((nowS - 61200000) / 86400000), qwk = Math.floor((nowS - 234000000) / 604800000);
+  const withQuests = Object.assign({}, upd, {
+    qdk, qdm: (Number(rec.qdk) === qdk ? (Number(rec.qdm) || 0) : 0) + 1,
+    qwk, qwm: (Number(rec.qwk) === qwk ? (Number(rec.qwm) || 0) : 0) + 1
+  });
+  const cref = ChatBackend._db.ref("coins/" + myLoginId);
+  cref.update(withQuests).catch(() => cref.update(upd))   // if the counters are refused (for example right at a reset) the coin is still paid
     .catch(() => {}).then(() => { coinBusy = false; });
 }
 // Crates you have paid coins for but that haven't been handed over (for example the connection dropped between the two steps).
@@ -11282,7 +11291,7 @@ function paintShop() {
     });
     box.appendChild(row);
   }
-  box.appendChild(el("div", "cr-note", "Earn 1 coin for each message you send (at most one coin every 5 seconds). Bot messages don't earn coins."));
+  box.appendChild(el("div", "cr-note", "Earn 2 coins for each message you send (at most one message every 2 seconds counts, up to 500 an hour). Bot messages don't earn coins. Daily and weekly quests (the scroll button on the left) pay extra."));
   box.scrollTop = keepTop;
 }
 async function buyShop(item, qty) {
