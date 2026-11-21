@@ -3087,6 +3087,51 @@ body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-dragon::after, .cr-bubprev.bubfx
 .cr-av.rfx-shp-ring-dragon { margin: 14px; }
 @media (prefers-reduced-motion: reduce) { .rfx-shp-ring-dragon::after { animation: none !important; } }
 
+/* ═══════════ Rainbow Pack (2000 coins): Prism tag, Cloud bubble, Fading Rainbow text effect, plus the existing Rainbow Spin ring (no CSS needed for it) ═══════════ */
+
+/* Tag: soft rainbow colours that slowly fade into each other */
+.msg-tag.tg-shp-tag-prism {
+  background-image: linear-gradient(90deg, #fca5a5, #fdba74, #fde68a, #86efac, #7dd3fc, #c4b5fd, #f9a8d4, #fca5a5) !important; background-size: 300% 100% !important; background-color: #fde68a;
+  color: #1e1b4b !important; font-weight: 800; letter-spacing: .3px; border-color: rgba(255,255,255,.85); box-shadow: 0 0 6px rgba(196,181,253,.6);
+  animation: prismTagFade 7s linear infinite;
+}
+@keyframes prismTagFade { to { background-position: 150% 0; } }   /* size 300% -> one gradient tile is 150%, so the loop is seamless */
+@media (prefers-reduced-motion: reduce) { .msg-tag.tg-shp-tag-prism { animation: none !important; } }
+
+/* Text effect: the whole text fades slowly through the rainbow (a wide gradient, so only a soft blend of neighbouring colours shows at once).
+   A thin dark halo keeps it readable on the white cloud and on other bubbles. */
+.fxt-shp-fx-rainbow {
+  background-image: linear-gradient(90deg, #ef4444, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ec4899, #ef4444);
+  background-size: 500% 100%;
+  animation: fxRainbowFade 10s linear infinite;
+  font-weight: 700;
+  filter: drop-shadow(0 0 1px rgba(15,23,42,.75));
+}
+@keyframes fxRainbowFade { to { background-position: 125% 0; } }   /* size 500% -> one gradient tile is 125% */
+@media (prefers-reduced-motion: reduce) { .fxt-shp-fx-rainbow { animation: none !important; } }
+
+/* Bubble: a white cloud. Rows of round puffs stick out above and below the border (two pseudo-elements with a repeating inline SVG, scaled to a whole
+   number of puffs), so the text looks like it sits on a cloud. Like the Dragon bubble it makes room with margins. No text-shadow, so text effects stay clean. */
+body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-cloud, .cr-bubprev.bubfx.bub-cloud {
+  background-image: linear-gradient(180deg, #ffffff, #e3effc) !important; background-color: #ffffff;
+  position: relative; isolation: isolate; margin-top: 15px; margin-bottom: 14px; min-width: 72px; box-sizing: border-box;
+  border: 2px solid #bcd6f0 !important; border-radius: 18px;
+  color: #1e3a5f !important; text-shadow: none !important;
+}
+body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-cloud::before, .cr-bubprev.bubfx.bub-cloud::before,
+body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-cloud::after, .cr-bubprev.bubfx.bub-cloud::after {
+  content: ""; position: absolute; left: 12px; right: 12px; height: 16px; pointer-events: none; z-index: -1;
+  background-size: 40px 16px; background-repeat: round no-repeat; background-position: 0 0;
+}
+body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-cloud::before, .cr-bubprev.bubfx.bub-cloud::before {
+  top: -16px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 16%22 preserveAspectRatio=%22none%22%3E%3Cg fill=%22%23bcd6f0%22 stroke=%22%23bcd6f0%22 stroke-width=%224%22%3E%3Ccircle cx=%229%22 cy=%2216%22 r=%229%22/%3E%3Ccircle cx=%2226%22 cy=%2216%22 r=%2212%22/%3E%3C/g%3E%3Cg fill=%22%23ffffff%22%3E%3Ccircle cx=%229%22 cy=%2216%22 r=%229%22/%3E%3Ccircle cx=%2226%22 cy=%2216%22 r=%2212%22/%3E%3C/g%3E%3C/svg%3E");
+}
+body:not(.hide-bubcolors) .msg-bubble.bubfx.bub-cloud::after, .cr-bubprev.bubfx.bub-cloud::after {
+  bottom: -16px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 16%22 preserveAspectRatio=%22none%22%3E%3Cg fill=%22%23bcd6f0%22 stroke=%22%23bcd6f0%22 stroke-width=%224%22%3E%3Ccircle cx=%229%22 cy=%220%22 r=%229%22/%3E%3Ccircle cx=%2226%22 cy=%220%22 r=%2212%22/%3E%3C/g%3E%3Cg fill=%22%23e3effc%22%3E%3Ccircle cx=%229%22 cy=%220%22 r=%229%22/%3E%3Ccircle cx=%2226%22 cy=%220%22 r=%2212%22/%3E%3C/g%3E%3C/svg%3E");
+}
+
 /* ══════════ Quests ══════════ */
 .quest-modal { width: min(520px, 100%); }
 .quest-sec { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 16px 0 8px; font-size: 1rem; color: #e2e8f0; }

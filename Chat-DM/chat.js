@@ -10009,6 +10009,10 @@ const CRATE_ITEMS = [
   { id: "shp-bub-dragon",   type: "bub",  rar: "legendary", name: "Dragon Flames",      shop: true, bundle: "shp-bundle-dragon", anim: "dragon", txt: "#fff4d6", colors: ["#751410", "#d0371c", "#f4c942"] },
   { id: "shp-ring-dragon",  type: "ring", rar: "legendary", name: "Dragon Ring",        shop: true, bundle: "shp-bundle-dragon" },
   { id: "shp-fx-dragon",    type: "fx",   rar: "legendary", name: "Dragon Fire (animated)", shop: true, bundle: "shp-bundle-dragon" },
+  // ── Rainbow Pack pieces: only come with the Rainbow Pack (2000 coins). The ring is the existing Rainbow Spin (shp-ring-rainbow); it keeps its own 500-coin listing in the Rings tab too. ──
+  { id: "shp-tag-prism",    type: "tag",  rar: "legendary", name: "🌈Prism",           shop: true, bundle: "shp-bundle-rainbow" },
+  { id: "shp-bub-cloud",    type: "bub",  rar: "legendary", name: "Cloud",              shop: true, bundle: "shp-bundle-rainbow", anim: "cloud", txt: "#1e3a5f", colors: ["#ffffff", "#e3effc"] },
+  { id: "shp-fx-rainbow",   type: "fx",   rar: "legendary", name: "Fading Rainbow (animated)", shop: true, bundle: "shp-bundle-rainbow" },
   // text effects (CSS class fxt-<id>)
   { id: "fx-sunset", type: "fx", rar: "common", name: "Sunset Fade" },
   { id: "fx-ocean",  type: "fx", rar: "common", name: "Ocean Fade" },
@@ -11124,7 +11128,10 @@ const BUNDLES = [
     items: ["shp-tag-yin", "shp-tag-yang", "shp-tag-yinyang", "shp-bub-yinyang", "shp-fx-yinyang"] },
   { id: "shp-bundle-dragon", name: "Dragon Pack", price: 3000,
     blurb: "Fire and scales. A flaming bubble, a dragon that circles your picture, a fading red and orange tag and a dark fire text effect.",
-    items: ["shp-tag-dragonic", "shp-bub-dragon", "shp-ring-dragon", "shp-fx-dragon"] }
+    items: ["shp-tag-dragonic", "shp-bub-dragon", "shp-ring-dragon", "shp-fx-dragon"] },
+  { id: "shp-bundle-rainbow", name: "Rainbow Pack", price: 2000,
+    blurb: "Every colour at once. A white cloud bubble with puffs sticking out, a text effect that fades through the rainbow, the spinning Rainbow ring and a 🌈Prism tag.",
+    items: ["shp-tag-prism", "shp-bub-cloud", "shp-ring-rainbow", "shp-fx-rainbow"] }
 ];
 const BUNDLE_BY_ID = {}; BUNDLES.forEach(b => { BUNDLE_BY_ID[b.id] = b; });
 function bundleOwned(b) {
