@@ -179,8 +179,11 @@ function banLimitsForRank(rank) {
 }
 // What a rank may hand out / take away with /grant and /remove: Mods only Normie, Admins and up Mod and below.
 function canGrantRole(rank, roleId) {
-  // Only Normie can be given or taken away from chat, by Mod and above. Mod, Admin, Co-owner and Owner are set by hand in the Firebase console.
-  return roleId === "normie" && rank >= ROLES.mod.rank;
+  // Mod and above can give/take Normie. Co-owner and Owner can also give/take Mod, but that goes through the Owner's approval in the staff tool.
+  // Admin, Co-owner and Owner are set by hand in the Firebase console.
+  if (roleId === "normie") return rank >= ROLES.mod.rank;
+  if (roleId === "mod") return rank >= ROLES.coowner.rank;
+  return false;
 }
 // Returns "" when ms is fine, otherwise a message telling the person exactly why not.
 function checkDurationLimits(ms, limits) {
@@ -1407,8 +1410,9 @@ const ChatBackend = {
   },
 
   async grantRoleToId(roleId, loginId) {
-    if (roleId !== "normie") throw new Error("Only Normie can be changed from chat. Other ranks are set in the Firebase console.");
+    if (roleId !== "normie" && roleId !== "mod") throw new Error("Only Normie and Mod can be changed from chat. Other ranks are set in the Firebase console.");
     if (!ROLES[roleId] || ROLES[roleId].implicit || !loginId) throw new Error("Invalid role grant");
+    if (roleId === "mod") { this._needStaff(); await this.requestModApproval(loginId, 0); }
     if (roleId === "mod" || roleId === "normie") await this.issue("grants", { k: "role", t: loginId, v: roleId });
     await this._roleIdRefs[roleId].child(this._pid(loginId)).set(true);
     await this.dropLowerRoles(roleId, loginId);
@@ -1427,8 +1431,19 @@ const ChatBackend = {
     }
   },
 
+  // A Co-owner giving Mod leaves a note for the Owner (roleRequests/<login ID>). The staff tool shows it; Mod's ban/mute powers
+  // only start once the Owner approves it there (that is what creates their staff/<id> entry).
+  async requestModApproval(loginId, durationMs) {
+    await this._db.ref("roleRequests/" + this._pid(loginId)).set({
+      role: "mod", by: String(myLoginId || ""), byName: String(myName || "").slice(0, 40),
+      ...(durationMs ? { exp: (await this._serverNow()) + durationMs } : {}),
+      ts: firebase.database.ServerValue.TIMESTAMP
+    });
+  },
+
   async grantTemporaryRoleToId(roleId, loginId, durationMs, byLoginId) {
-    if (roleId !== "normie") throw new Error("Only Normie can be changed from chat. Other ranks are set in the Firebase console.");
+    if (roleId !== "normie" && roleId !== "mod") throw new Error("Only Normie and Mod can be changed from chat. Other ranks are set in the Firebase console.");
+    if (roleId === "mod") { this._needStaff(); await this.requestModApproval(loginId, durationMs); }
     if (!ROLES[roleId] || ROLES[roleId].implicit || roleId === "crown" || !loginId || durationMs <= 0) {
       throw new Error("Invalid temporary role grant");
     }
@@ -1444,11 +1459,13 @@ const ChatBackend = {
   },
 
   async removeRoleFromId(roleId, loginId) {
-    if (roleId !== "normie") throw new Error("Only Normie can be changed from chat. Other ranks are set in the Firebase console.");
+    if (roleId !== "normie" && roleId !== "mod") throw new Error("Only Normie and Mod can be changed from chat. Other ranks are set in the Firebase console.");
+    if (roleId === "mod") this._needStaff();
     if (!ROLES[roleId] || ROLES[roleId].implicit || !loginId) throw new Error("Invalid role removal");
     clearTimeout(this._temporaryRoleTimers[roleId + ":" + loginId]);
     if (roleId === "mod" || roleId === "normie") await this.issue("grants", { k: "unrole", t: loginId, v: roleId });
     await this._roleIdRefs[roleId].child(this._pid(loginId)).remove();
+    if (roleId === "mod") { try { await this._db.ref("roleRequests/" + this._pid(loginId)).remove(); } catch (e) {} }
   },
 
   async unbanUser(identifier) {
@@ -4400,14 +4417,14 @@ const SLASH_COMMANDS = [
     desc: rank => "Ban the account ID, so a new name won't get around it. " + (rank >= ROLES.crown.rank ? "Permanent." : "Lasts " + formatDurationShort(banLimitsForRank(rank).max) + " (the longest your rank can do).") + " A 6-digit ID works even if they're offline.", insert: "/ban " },
   { name: "/tempban", args: "time username or ID [reason]", minRank: ROLES.admin.rank,
     desc: () => "Ban the account ID for a while (" + limitsText(banLimitsForRank(myRank())) + ").", insert: "/tempban " },
-  { name: "/grant",   args: "normie perm|time username", minRank: ROLES.mod.rank,
-    desc: () => "Give Normie to someone. perm = permanent, or a time (" + limitsText(TIME_LIMITS.tempGrant) + "). Other ranks are set in the Firebase console.", insert: "/grant normie " },
-  { name: "/remove",  args: "normie username",        minRank: ROLES.mod.rank,
-    desc: () => "Take Normie away from someone.", insert: "/remove normie " },
+  { name: "/grant",   args: "normie|mod perm|time username", minRank: ROLES.mod.rank,
+    desc: () => "Give Normie to someone (Co-owner and Owner can also give Mod; the Owner approves Mod in the staff tool before it gets ban/mute). perm = permanent, or a time (" + limitsText(TIME_LIMITS.tempGrant) + ").", insert: "/grant normie " },
+  { name: "/remove",  args: "normie|mod username",        minRank: ROLES.mod.rank,
+    desc: () => "Take Normie away from someone (Co-owner and Owner can also take Mod).", insert: "/remove normie " },
   { name: "/staff",   args: "", minRank: ROLES.mod.rank,
     desc: "Sign in as staff with your MZK email and password. Needed for bans and mutes once the Owner turns on staff-only moderation.", insert: "/staff" },
-  { name: "/image",   args: "on|off username",        minRank: ROLES.admin.rank,
-    desc: "Give or take away image access for someone below your rank.", insert: "/image " },
+  { name: "/media",   args: "on|off username",        minRank: ROLES.admin.rank,
+    desc: "Give or take away media access (pictures, GIFs, video, audio and voice messages) for someone below your rank.", insert: "/media " },
   { name: "/afk", args: "", minRank: 0,
     desc: "Mark yourself AFK (yellow dot). Takes effect after 1 second; any click or key press brings you back.", insert: "/afk" },
   { name: "/give", args: "tag_name username or #ID", minRank: 0, only: () => myGrantableTags().length > 0,
@@ -4677,6 +4694,7 @@ function isPermissionDenied(e) {
 // Owner and Co-owner can only be added by hand in the Firebase console, so the
 // rules refuse them from the browser. Say so plainly instead of a raw error.
 function rankByHandNotice(role) {
+  if (role.id === "mod") return "Giving or removing Mod needs a Co-owner or Owner who is approved staff. Type /staff to sign in, or ask the Owner to approve you in the staff tool.";
   return role.label + " can only be added by hand in the Firebase console: roleIds/" + role.id + "/<6-digit ID> = true.";
 }
 
@@ -4686,6 +4704,7 @@ async function handleModerationCommand(text) {
   let command = parts[0].toLowerCase();
   if (command === "/staff") { VUS_STAFF.open(); return true; }
   if (command === "/timeout") command = "/mute";   // old name still works
+  if (command === "/image") command = "/media";    // old name still works
   const rank = myRank();
 
   const def = SLASH_COMMANDS.find(c => c.name === command);
@@ -4758,20 +4777,20 @@ async function handleModerationCommand(text) {
     return true;
   }
 
-  // ── /image ──
-  if (command === "/image") {
+  // ── /media (was /image) ──
+  if (command === "/media") {
     const mode = (parts[1] || "").toLowerCase();
     if (parts.length < 3 || !["on", "off"].includes(mode)) {
-      showComposerNotice("Use /image on username or /image off username");
+      showComposerNotice("Use /media on username or /media off username");
       return true;
     }
     const target = await resolveModerationTarget(parts.slice(2).join(" "));
-    if (!guardModerationTarget(target, "change image access for")) return true;
+    if (!guardModerationTarget(target, "change media access for")) return true;
     try {
       await ChatBackend.setImageAccess(target.loginId, mode === "on");
-      showComposerNotice((mode === "on" ? "Gave image access to " : "Removed image access from ") + target.name + ".");
+      showComposerNotice((mode === "on" ? "Gave media access (pictures, video, audio, voice messages) to " : "Removed media access from ") + target.name + ".");
     } catch (e) {
-      showComposerNotice("Couldn't update image access: " + (e && e.message ? e.message : "check your connection") + ".");
+      showComposerNotice("Couldn't update media access: " + (e && e.message ? e.message : "check your connection") + ".");
     }
     return true;
   }
@@ -4870,11 +4889,11 @@ async function handleModerationCommand(text) {
     if (parts.length < 3) { showComposerNotice("Use /remove rank username, such as /remove mod alex"); return true; }
     const roleToRemove = ROLES[parts[1].toLowerCase()];
     if (!roleToRemove || roleToRemove.implicit || roleToRemove.id === "crown") {
-      showComposerNotice("Only Normie can be removed from chat: /remove normie username");
+      showComposerNotice("Only Normie (and Mod, for Co-owners) can be removed from chat: /remove normie username");
       return true;
     }
     if (!canGrantRole(rank, roleToRemove.id)) {
-      showComposerNotice("Only Normie can be removed from chat. Other ranks are changed in the Firebase console.");
+      showComposerNotice("You can't remove that rank from chat. Normie: Mod and up. Mod: Co-owner and Owner. Other ranks are changed in the Firebase console.");
       return true;
     }
     const target = await resolveModerationTarget(parts.slice(2).join(" "), { allowOfflineId: true });
@@ -4898,11 +4917,11 @@ async function handleModerationCommand(text) {
     }
     const roleToGrant = ROLES[parts[1].toLowerCase()];
     if (!roleToGrant || roleToGrant.implicit || roleToGrant.id === "crown") {
-      showComposerNotice("Only Normie can be given from chat: /grant normie perm username");
+      showComposerNotice("Only Normie (and Mod, for Co-owners) can be given from chat: /grant normie perm username");
       return true;
     }
     if (!canGrantRole(rank, roleToGrant.id)) {
-      showComposerNotice("Only Normie can be given from chat. Other ranks are changed in the Firebase console.");
+      showComposerNotice("You can't give that rank from chat. Normie: Mod and up. Mod: Co-owner and Owner. Other ranks are changed in the Firebase console.");
       return true;
     }
     // Third word is "perm" or a time only when a name follows it, so someone
@@ -4970,6 +4989,7 @@ async function sendMessage() {
   // Chatting but missing from the online list? Put them back.
   if (myLoginId && !latestPresenceList.some(e => String(e.loginId || "") === String(myLoginId))) ChatBackend.ensurePresence();
   if (!channelAllowedFor(activeChannel(), myLoginId)) { showComposerNotice("You can't post in this channel."); return; }
+  if (text.length > MAX_CHARS && activeChannelId !== "ai" && myRank() < ROLES.normie.rank) { showComposerNotice("Over the " + MAX_CHARS + "-character limit. Large messages (SLM) need the Normie rank or higher."); return; }   // unranked can't use SLM (storage)
   if (text.length > MAX_CHARS && activeChannelId !== "ai" && (activeChannelId === "announce" || editingMsgId || pendingImageDataUrl || pendingVideo || !window.VUS_SLM)) { showComposerNotice("Over the " + MAX_CHARS + "-character limit. Long text can't be used for announcements, edits or captions."); return; }
   if (myTimeoutRemainingMs > 0) {
     showComposerNotice(mutedNotice());
@@ -5228,6 +5248,7 @@ async function stageVideoFile(file0) {
 
 // A picked or dropped file that isn't a picture/video/audio: offer it as a shared file (SLM).
 async function sendFileAsSlm(file) {
+  if (myRank() < ROLES.normie.rank) { showComposerNotice("Sending files as SLM needs the Normie rank or higher."); return; }   // unranked can't use SLM (storage)
   if (activeChannelId === "announce" || activeChannelId === "ai") { showComposerNotice("Files can't be sent in this channel."); return; }
   if (myTimeoutRemainingMs > 0) { showComposerNotice(mutedNotice()); return; }
   const wait = currentImageCooldownMs() - (Date.now() - lastImageSentAt);
@@ -5364,7 +5385,7 @@ async function sendGifFromPicker(url) {
   const hasFiles = e => e.dataTransfer && [...(e.dataTransfer.types || [])].includes("Files");
   const chatVisible = () => $chatScreen && $chatScreen.style.display !== "none" && !!myLoginId;
   const showHint = on => {
-    if (on && !hint) { hint = document.createElement("div"); hint.className = "drop-hint"; hint.textContent = "Drop a file to attach it (pictures, GIFs, video, audio, or any file up to 1.5 MB)"; document.body.appendChild(hint); }
+    if (on && !hint) { hint = document.createElement("div"); hint.className = "drop-hint"; hint.textContent = "Drop a file to attach it (pictures, GIFs, video, audio, or any file up to 5 MB)"; document.body.appendChild(hint); }
     if (!on && hint) { hint.remove(); hint = null; }
   };
   window.addEventListener("dragenter", e => { if (!hasFiles(e) || !chatVisible()) return; e.preventDefault(); depth++; showHint(true); });
@@ -5441,13 +5462,96 @@ function updateUploadButtonVisibility() {
   const may = canPostImages() && activeChannelId !== "announce";
   $uploadImageBtn.style.display = may ? "inline-block" : "none";
   const gb = document.getElementById("chatGifBtn"); if (gb) gb.style.display = may ? "inline-block" : "none";
+  const vb = ensureVoiceBtn(); if (vb) vb.style.display = (may && activeChannelId !== "ai" && voiceMime()) ? "inline-block" : "none";
+  if (!may && voiceRec) cancelVoiceRecording();
   if (!may) clearPendingImage();
+}
+
+/* ══════════ Voice messages ══════════
+   Part of Media: anyone who can post pictures/video ("/media on", or Mod and up) gets the Voice button.
+   Click to record (button turns red), click again to stop. It stops by itself at the size or length limit.
+   The recording is staged like an audio file, so you can add text, send, or cancel. It goes out as a clip (disappears after a few minutes). */
+const VOICE_MAX_BYTES = 5 * 1024 * 1024;       // same cap as shared files
+const VOICE_MAX_SECONDS = VIDEO_MAX_SECONDS;   // same length cap as clips
+let voiceRec = null;                           // { rec, stream, chunks, bytes, t0, timer, mime, cancelled }
+function voiceMime() {
+  if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return "";
+  return ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"].find(t => { try { return MediaRecorder.isTypeSupported(t); } catch (e) { return false; } }) || "";
+}
+function ensureVoiceBtn() {
+  let b = document.getElementById("chatVoiceBtn");
+  if (b) return b;
+  const gb = document.getElementById("chatGifBtn"); if (!gb) return null;
+  if (!document.getElementById("voiceBtnCss")) {
+    const s = document.createElement("style"); s.id = "voiceBtnCss";
+    s.textContent = "@keyframes voicePulse{0%,100%{opacity:1}50%{opacity:.55}}#chatVoiceBtn.rec{background:#dc2626;border-color:#ef4444;color:#fff;animation:voicePulse 1s infinite}";
+    document.head.appendChild(s);
+  }
+  b = document.createElement("button"); b.id = "chatVoiceBtn"; b.type = "button"; b.className = "toolbar-btn";
+  b.style.display = "none"; b.textContent = "\uD83C\uDF99 Voice"; b.title = "Record a voice message";
+  b.addEventListener("click", toggleVoiceRecording);
+  gb.insertAdjacentElement("afterend", b);
+  return b;
+}
+function paintVoiceBtn() {
+  const b = document.getElementById("chatVoiceBtn"); if (!b) return;
+  if (voiceRec) {
+    const s = Math.floor((Date.now() - voiceRec.t0) / 1000);
+    b.classList.add("rec"); b.textContent = "\u23F9 Stop " + Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); b.title = "Click to stop recording";
+  } else { b.classList.remove("rec"); b.textContent = "\uD83C\uDF99 Voice"; b.title = "Record a voice message"; }
+}
+async function toggleVoiceRecording() {
+  if (voiceRec) { stopVoiceRecording(); return; }
+  if (!canPostImages()) { showComposerNotice("Voice messages need media access. Ask an Admin or higher."); return; }
+  if (activeChannelId === "announce" || activeChannelId === "ai") { showComposerNotice("Voice messages can't be sent in this channel."); return; }
+  if (myTimeoutRemainingMs > 0) { showComposerNotice(mutedNotice()); return; }
+  const mime = voiceMime();
+  if (!mime) { showComposerNotice("This browser can't record audio."); return; }
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (e) { showComposerNotice("Couldn't use the microphone. Allow mic access for this site, then try again."); return; }
+  if (voiceRec) { stream.getTracks().forEach(t => t.stop()); return; }   // double click while the permission box was open
+  clearPendingImage();
+  let rec;
+  try { rec = new MediaRecorder(stream, { mimeType: mime, audioBitsPerSecond: 32000 }); }
+  catch (e) { stream.getTracks().forEach(t => t.stop()); showComposerNotice("This browser can't record audio."); return; }
+  const st = { rec, stream, chunks: [], bytes: 0, t0: Date.now(), timer: null, mime, cancelled: false };
+  voiceRec = st;
+  rec.ondataavailable = e => {
+    if (!e.data || !e.data.size) return;
+    st.chunks.push(e.data); st.bytes += e.data.size;
+    if (st.bytes >= VOICE_MAX_BYTES - 65536) stopVoiceRecording();   // stop at the file limit
+  };
+  rec.onstop = () => finishVoiceRecording(st);
+  rec.start(1000);
+  paintVoiceBtn();
+  st.timer = setInterval(() => { paintVoiceBtn(); if ((Date.now() - st.t0) / 1000 >= VOICE_MAX_SECONDS) stopVoiceRecording(); }, 250);
+}
+function stopVoiceRecording() { if (voiceRec && voiceRec.rec.state !== "inactive") { try { voiceRec.rec.stop(); } catch (e) {} } }
+function cancelVoiceRecording() { if (!voiceRec) return; voiceRec.cancelled = true; stopVoiceRecording(); }
+function finishVoiceRecording(st) {
+  clearInterval(st.timer);
+  st.stream.getTracks().forEach(t => t.stop());
+  if (voiceRec === st) voiceRec = null;
+  paintVoiceBtn();
+  if (st.cancelled) return;
+  const dur = (Date.now() - st.t0) / 1000;
+  if (!st.chunks.length || dur < 0.5) { showComposerNotice("That recording was too short."); return; }
+  const type = st.mime.split(";")[0];   // the database only accepts a plain type like audio/webm, no codec part
+  const file = new File(st.chunks, "voice-message." + (type === "audio/mp4" ? "m4a" : type === "audio/ogg" ? "ogg" : "webm"), { type });
+  if (file.size > VOICE_MAX_BYTES) { showComposerNotice("That recording is over " + fmtBytes(VOICE_MAX_BYTES) + "."); return; }
+  pendingImageDataUrl = null;
+  pendingVideo = { file, dur: Math.min(dur, VOICE_MAX_SECONDS) };   // length comes from our timer: recorded files often report an unknown length
+  $pendingImagePreview.src = AUDIO_ICON;
+  document.getElementById("chatPendingLabel").textContent = "Voice message ready (" + Math.round(pendingVideo.dur) + "s, " + fmtBytes(file.size) + ") \u2014 add text if you like, then click Send (or Cancel). It disappears 4 minutes after posting.";
+  $pendingImageBar.style.display = "flex";
 }
 
 function leaveSilently() {
   const dmSession = loadDmSession();
   ChatBackend.releasePresenceSilently();
   stopTyping();
+  cancelVoiceRecording();
   clearPendingImage();
   myName = "";
   myLoginId = "";
@@ -6657,7 +6761,7 @@ window.__logs={add(batch){for(const r of batch)rows.push(r);rows.sort((a,b)=>(b.
 }
 
 // Every logged command in a new about:blank tab: who ran it (name first, ID beside it) and who it was aimed at.
-const CMD_SKIP = { "/mute": 1, "/timeout": 1, "/tempban": 1, "/image": 1, "/remove": 1, "/ban": 0, "/kick": 0, "/unban": 0, "/unmute": 0 };
+const CMD_SKIP = { "/mute": 1, "/timeout": 1, "/tempban": 1, "/media": 1, "/image": 1, "/remove": 1, "/ban": 0, "/kick": 0, "/unban": 0, "/unmute": 0 };
 function commandTargetText(cmd) {
   const parts = String(cmd || "").trim().split(/\s+/);
   const name = (parts[0] || "").toLowerCase();

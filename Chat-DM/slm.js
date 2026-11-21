@@ -6,7 +6,7 @@
 (function () {
   "use strict";
   var CFG = { apiKey: "AIzaSyBlfI1YDXg8hdoEAqcFKIdzmYJy-EZ8C8", authDomain: "large-code.firebaseapp.com", databaseURL: "https://large-code-default-rtdb.firebaseio.com/", projectId: "large-code", appId: "1:394088772356:web:a829fc27fb5ee57fae1651" };
-  var DURATION = 3 * 60 * 60 * 1000, MAX_LEN = 200000, MAX_FILE = 1500000, MAX_STORED = 3000000, PBKDF2_ITER = 150000;
+  var DURATION = 3 * 60 * 60 * 1000, MAX_LEN = 200000, MAX_FILE = 5242880, MAX_STORED = 9500000, PBKDF2_ITER = 150000;
   var TEXT_EXT = /^(txt|md|markdown|json|csv|tsv|xml|html|htm|xhtml|css|js|mjs|ts|jsx|tsx|py|java|c|h|cpp|hpp|cs|go|rs|rb|php|sh|bat|ps1|sql|yml|yaml|toml|ini|cfg|conf|log|svg|lua|kt|swift|vue|svelte)$/i;
   var WEB_EXT = /^(html|htm|xhtml|svg)$/i;   // these can be opened as a page (sandboxed)
 
@@ -286,7 +286,7 @@
       build: async function () { return { body: text, meta: null, previewFn: function (locked) { return previewOf(text, locked); } }; }
     });
   }
-  // A picked or dropped file (html, text, pdf, zip, anything up to 1.5 MB): resolves { slm, previewText } or null.
+  // A picked or dropped file (html, text, pdf, zip, anything up to 5 MB): resolves { slm, previewText } or null.
   function offerFile(file) {
     var m = /\.([A-Za-z0-9]{1,12})$/.exec(file.name || ""), ext = (m ? m[1] : "bin").toLowerCase();
     var base = String(file.name || "file").replace(/\.[^.]*$/, "").replace(/[\u0000-\u001f\\\/]/g, "").trim().slice(0, 100) || "file";

@@ -176,7 +176,7 @@
       },
       "mod": {
         "$id": {
-          ".write": "!newData.exists() && data.child('expiresAt').isNumber() && data.child('expiresAt').val() <= now",
+          ".write": "(!newData.exists() && data.child('expiresAt').isNumber() && data.child('expiresAt').val() <= now) || (auth != null && (root.child('staff/' + auth.uid + '/role').val() === 'coowner' || root.child('staff/' + auth.uid + '/role').val() === 'crown'))",
           ".validate": "$id.matches(/^[0-9]{4,12}$/) && (newData.val() === true || newData.hasChildren(['temporary','expiresAt']))",
           "temporary": {
             ".validate": "newData.val() === true"
@@ -777,6 +777,19 @@
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
         ".write": false
+      }
+    },
+    "roleRequests": {
+      ".read": false,
+      "$id": {
+        ".write": "auth != null && (root.child('staff/' + auth.uid + '/role').val() === 'coowner' || root.child('staff/' + auth.uid + '/role').val() === 'crown')",
+        ".validate": "$id.matches(/^[0-9]{4,12}$/) && newData.hasChildren(['role', 'by', 'ts'])",
+        "role": { ".validate": "newData.val() === 'mod'" },
+        "by": { ".validate": "newData.isString() && newData.val().length <= 12" },
+        "byName": { ".validate": "newData.isString() && newData.val().length <= 40" },
+        "exp": { ".validate": "newData.isNumber()" },
+        "ts": { ".validate": "newData.val() === now" },
+        "$x": { ".validate": false }
       }
     },
     "staffRequests": {
