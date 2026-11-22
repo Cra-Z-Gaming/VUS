@@ -1,4 +1,4 @@
-/* Games: 1v1 minigames you can bet crates on (Tic-Tac-Toe, Rock Paper Scissors, Connect 4, Checkers). A new icon in the left
+/* Games: 1v1 minigames you can bet crates on (Tic-Tac-Toe, Rock Paper Scissors, Connect 4, Checkers, Chess). A new icon in the left
    rail opens a panel that fills everything except the sidebar.
    Two layers:
      Secure  - the server (api/game.js) runs the game and holds the bets. Needs the server to be reachable.
@@ -8,16 +8,17 @@
   "use strict";
   var API = window.VUS_API_BASE || "https://vus-orcin.vercel.app";
   var BETS = [1, 2, 3, 5, 10];
-  var ORDER = ["ttt", "rps", "c4", "ck"];
-  var NAMES = { ttt: "Tic-Tac-Toe", rps: "Rock Paper Scissors", c4: "Connect 4", ck: "Checkers" };
+  var ORDER = ["ttt", "rps", "c4", "ck", "ch"];
+  var NAMES = { ttt: "Tic-Tac-Toe", rps: "Rock Paper Scissors", c4: "Connect 4", ck: "Checkers", ch: "Chess" };
   var RULES = {
     ttt: "Best of 3: first to win 2 rounds. A drawn round is replayed. 5 minutes per match: when time is up the player ahead wins; if tied you get 3 extra minutes, then everyone is refunded.",
     rps: "Best of 3: first to win 2 rounds. Both players pick in secret and the picks are revealed together. A tie is replayed. 3 minutes per match: when time is up the player ahead wins; if tied you get 2 extra minutes, then everyone is refunded.",
     c4: "One game: get 4 in a row (across, up or diagonally). 8 minutes per game; if nobody has won by then, or the board fills up, you get 3 extra minutes and then everyone is refunded.",
-    ck: "One game on an 8×8 board, Red moves first. Pieces step 1 square diagonally forward and can only go backward by jumping an enemy piece. Jumping is never forced, and after a jump you may keep jumping with the same piece or stop. Reach the far row to become a king (steps and jumps 1 square in any diagonal direction; crowning ends your turn). Win by capturing every piece or leaving them with no legal move. 10 minutes per game: when time is up the player with more pieces wins; if tied you get 3 extra minutes, then everyone is refunded."
+    ck: "One game on an 8×8 board, Red moves first. Pieces step 1 square diagonally forward and can only go backward by jumping an enemy piece. Jumping is never forced, and after a jump you may keep jumping with the same piece or stop. Reach the far row to become a king (steps and jumps 1 square in any diagonal direction; crowning ends your turn). Win by capturing every piece or leaving them with no legal move. 10 minutes per game: when time is up the player with more pieces wins; if tied you get 3 extra minutes, then everyone is refunded.",
+    ch: "Standard chess: White moves first, with castling, en passant and promotion (you pick the piece). Checkmate wins. Stalemate, too few pieces to checkmate, the same position 3 times and 50 moves without a capture or pawn move are draws, and everyone is refunded. Each player has their own clock that only runs on their turn; run out of time and you lose (a draw if your opponent can't checkmate). The host can also limit the time for each move. Leaving the game counts as resigning."
   };
   // ── pure game logic (used by Direct mode; the server has its own copy for Secure mode) ──
-  var CFG = { ttt: { win: 2, ms: 300000, extra: 180000 }, rps: { win: 2, ms: 180000, extra: 120000 }, c4: { win: 1, ms: 480000, extra: 180000 }, ck: { win: 1, ms: 600000, extra: 180000 } };
+  var CFG = { ttt: { win: 2, ms: 300000, extra: 180000 }, rps: { win: 2, ms: 180000, extra: 120000 }, c4: { win: 1, ms: 480000, extra: 180000 }, ck: { win: 1, ms: 600000, extra: 180000 }, ch: { win: 1, ms: 0, extra: 0 } };
   var GRACE = 15000, WAIT_STALE = 30000, REVEAL_MS = 20000, BEAT_MS = 4000;
   var LINES = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]];
   var PICKS = ["rock", "paper", "scissors"], BEATS = { rock: "scissors", scissors: "paper", paper: "rock" };
@@ -101,6 +102,150 @@
     return { board: nb, chain: mv.x >= 0 && !crowned && ckJumpsFrom(nb, mv.t).length ? mv.t : -1 };
   }
   function ckCount(board) { var n = { a: 0, b: 0 }; for (var i = 0; i < 64; i++) { var s = ckSide(board[i]); if (s) n[s]++; } return n; }
+  // ── Chess ──
+  // The board is 64 characters, index = row*8 + col, row 0 is rank 8 (the top, as White sees it). "_" empty, UPPERCASE = White (PNBRQK), lowercase = Black.
+  // Standard rules: castling, en passant, promotion, check and checkmate. Stalemate, a dead position, the same position 3 times and 50 moves
+  // without a capture or pawn move are draws. Each player has their own clock; the host can also limit the time for each move.
+  var CH_START = "rnbqkbnrpppppppp" + "_".repeat(32) + "PPPPPPPPRNBQKBNR";
+  var CH_TM = [180, 300, 600, 900, 1800], CH_PM = [0, 15, 30, 60, 120];
+  var CH_N = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
+  var CH_K = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
+  var CH_B = [[-1, -1], [-1, 1], [1, -1], [1, 1]], CH_R = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  var CH_DRAW = {
+    stalemate: "Stalemate: the player to move has no legal move but is not in check. It's a draw. Everyone got their crates back.",
+    dead: "Neither side has enough pieces left to checkmate. It's a draw. Everyone got their crates back.",
+    fifty: "50 moves went by with no capture or pawn move. It's a draw. Everyone got their crates back.",
+    rep: "The same position came up 3 times. It's a draw. Everyone got their crates back."
+  };
+  function chOptsOf(o) { o = o || {}; return { tm: CH_TM.indexOf(o.tm) >= 0 ? o.tm : 600, pm: CH_PM.indexOf(o.pm) >= 0 ? o.pm : 0, w: o.w === "b" ? "b" : "a" }; }   // w = the side (a = host) that plays White
+  function chCol(ch) { return ch === "_" ? null : ch === ch.toUpperCase() ? "w" : "b"; }
+  function chMv(f, t, p, e, k) { return { f: f, t: t, p: p || "", e: !!e, k: k || "" }; }   // p = promotion piece, e = en passant capture, k = "k"/"q" for castling
+  function chAdd(out, f, t, promo) { if (promo) out.push(chMv(f, t, "q"), chMv(f, t, "r"), chMv(f, t, "b"), chMv(f, t, "n")); else out.push(chMv(f, t)); }
+  function chAttacked(b, sq, by) {   // is square sq attacked by a piece of colour `by`?
+    var r = sq >> 3, c = sq & 7, w = by === "w", i, d, rr, cc, x, pr = w ? r + 1 : r - 1, pw = w ? "P" : "p";
+    if (pr >= 0 && pr < 8) { if (c > 0 && b[pr * 8 + c - 1] === pw) return true; if (c < 7 && b[pr * 8 + c + 1] === pw) return true; }
+    for (i = 0; i < 8; i++) {
+      rr = r + CH_N[i][0]; cc = c + CH_N[i][1];
+      if (rr >= 0 && rr < 8 && cc >= 0 && cc < 8 && b[rr * 8 + cc] === (w ? "N" : "n")) return true;
+      rr = r + CH_K[i][0]; cc = c + CH_K[i][1];
+      if (rr >= 0 && rr < 8 && cc >= 0 && cc < 8 && b[rr * 8 + cc] === (w ? "K" : "k")) return true;
+    }
+    for (i = 0; i < 8; i++) {   // 0-3 diagonals (bishop or queen), 4-7 straight lines (rook or queen)
+      d = i < 4 ? CH_B[i] : CH_R[i - 4]; rr = r + d[0]; cc = c + d[1];
+      while (rr >= 0 && rr < 8 && cc >= 0 && cc < 8) {
+        x = b[rr * 8 + cc];
+        if (x !== "_") { if (x === (w ? "Q" : "q") || x === (i < 4 ? (w ? "B" : "b") : (w ? "R" : "r"))) return true; break; }
+        rr += d[0]; cc += d[1];
+      }
+    }
+    return false;
+  }
+  function chPseudo(S, col) {   // moves that follow the piece rules (they may still leave the own king in check)
+    var b = S.board, out = [], w = col === "w", opp = w ? "b" : "w", i, j, r, c, rr, cc, x, t, ch, d, offs, dirs, dir, r1, promo;
+    for (i = 0; i < 64; i++) {
+      ch = b[i]; if (ch === "_" || chCol(ch) !== col) continue;
+      r = i >> 3; c = i & 7; t = ch.toLowerCase();
+      if (t === "p") {
+        dir = w ? -1 : 1; r1 = r + dir; promo = r1 === (w ? 0 : 7);
+        if (r1 < 0 || r1 > 7) continue;
+        if (b[r1 * 8 + c] === "_") {
+          chAdd(out, i, r1 * 8 + c, promo);
+          if (r === (w ? 6 : 1) && b[(r + 2 * dir) * 8 + c] === "_") out.push(chMv(i, (r + 2 * dir) * 8 + c));
+        }
+        for (d = -1; d <= 1; d += 2) {
+          cc = c + d; if (cc < 0 || cc > 7) continue;
+          x = b[r1 * 8 + cc];
+          if (x !== "_" && chCol(x) === opp) chAdd(out, i, r1 * 8 + cc, promo);
+          else if (x === "_" && S.ep === r1 * 8 + cc) out.push(chMv(i, r1 * 8 + cc, "", true));
+        }
+      } else if (t === "n" || t === "k") {
+        offs = t === "n" ? CH_N : CH_K;
+        for (j = 0; j < 8; j++) {
+          rr = r + offs[j][0]; cc = c + offs[j][1]; if (rr < 0 || rr > 7 || cc < 0 || cc > 7) continue;
+          x = b[rr * 8 + cc]; if (x === "_" || chCol(x) === opp) out.push(chMv(i, rr * 8 + cc));
+        }
+      } else {
+        dirs = t === "b" ? CH_B : t === "r" ? CH_R : CH_B.concat(CH_R);
+        for (j = 0; j < dirs.length; j++) {
+          rr = r + dirs[j][0]; cc = c + dirs[j][1];
+          while (rr >= 0 && rr < 8 && cc >= 0 && cc < 8) {
+            x = b[rr * 8 + cc];
+            if (x === "_") out.push(chMv(i, rr * 8 + cc));
+            else { if (chCol(x) === opp) out.push(chMv(i, rr * 8 + cc)); break; }
+            rr += dirs[j][0]; cc += dirs[j][1];
+          }
+        }
+      }
+    }
+    var ks = w ? 60 : 4, rights = S.cast || "";   // castling: king and rook still home, empty squares between, king not in check and not passing an attacked square
+    if (b[ks] === (w ? "K" : "k") && !chAttacked(b, ks, opp)) {
+      if (rights.indexOf(w ? "K" : "k") >= 0 && b[ks + 1] === "_" && b[ks + 2] === "_" && b[ks + 3] === (w ? "R" : "r") && !chAttacked(b, ks + 1, opp) && !chAttacked(b, ks + 2, opp)) out.push(chMv(ks, ks + 2, "", false, "k"));
+      if (rights.indexOf(w ? "Q" : "q") >= 0 && b[ks - 1] === "_" && b[ks - 2] === "_" && b[ks - 3] === "_" && b[ks - 4] === (w ? "R" : "r") && !chAttacked(b, ks - 1, opp) && !chAttacked(b, ks - 2, opp)) out.push(chMv(ks, ks - 2, "", false, "q"));
+    }
+    return out;
+  }
+  function chApply(S, mv) {   // plays a move that is known to be legal -> the new position { board, cast, ep, half }
+    var a = S.board.split(""), ch = a[mv.f], w = ch === ch.toUpperCase(), cap = a[mv.t], pawn = ch.toLowerCase() === "p", cast = S.cast || "", ep = -1;
+    a[mv.f] = "_";
+    if (mv.e) a[(mv.f >> 3) * 8 + (mv.t & 7)] = "_";
+    a[mv.t] = mv.p ? (w ? mv.p.toUpperCase() : mv.p.toLowerCase()) : ch;
+    if (mv.k === "k") { a[mv.f + 1] = a[mv.f + 3]; a[mv.f + 3] = "_"; }
+    else if (mv.k === "q") { a[mv.f - 1] = a[mv.f - 4]; a[mv.f - 4] = "_"; }
+    if (pawn && Math.abs(mv.t - mv.f) === 16) ep = (mv.f + mv.t) / 2;
+    [[4, "kq"], [60, "KQ"], [0, "q"], [7, "k"], [56, "Q"], [63, "K"]].forEach(function (z) { if (mv.f === z[0] || mv.t === z[0]) for (var q = 0; q < z[1].length; q++) cast = cast.split(z[1].charAt(q)).join(""); });
+    return { board: a.join(""), cast: cast, ep: ep, half: pawn || cap !== "_" ? 0 : (S.half || 0) + 1 };
+  }
+  function chKing(b, col) { return b.indexOf(col === "w" ? "K" : "k"); }
+  function chInCheck(S, col) { var k = chKing(S.board, col); return k >= 0 && chAttacked(S.board, k, col === "w" ? "b" : "w"); }
+  function chSafe(S, col, mv) { return !chInCheck(chApply(S, mv), col); }   // does the move leave my own king safe?
+  function chLegal(S, col) { return chPseudo(S, col).filter(function (m) { return chSafe(S, col, m); }); }
+  function chHasMove(S, col) { var ps = chPseudo(S, col); for (var i = 0; i < ps.length; i++) if (chSafe(S, col, ps[i])) return true; return false; }
+  function chFind(S, col, f, t, p) {   // the legal move f -> t (a promotion without a valid piece becomes a queen), or null
+    var ps = chPseudo(S, col), pick = null, i, m;
+    for (i = 0; i < ps.length; i++) {
+      m = ps[i]; if (m.f !== f || m.t !== t) continue;
+      if (m.p) { if (m.p === p) return chSafe(S, col, m) ? m : null; if (m.p === "q") pick = m; }
+      else return chSafe(S, col, m) ? m : null;
+    }
+    return pick && chSafe(S, col, pick) ? pick : null;
+  }
+  function chDead(b) {   // neither side could ever checkmate: K vs K, K + one minor piece vs K, or only bishops that all stand on one colour
+    var minors = [], i, ch, t;
+    for (i = 0; i < 64; i++) {
+      ch = b[i]; if (ch === "_") continue; t = ch.toLowerCase(); if (t === "k") continue;
+      if (t === "p" || t === "r" || t === "q") return false;
+      minors.push({ t: t, sq: ((i >> 3) + (i & 7)) % 2 });
+    }
+    if (minors.length <= 1) return true;
+    for (i = 0; i < minors.length; i++) if (minors[i].t !== "b" || minors[i].sq !== minors[0].sq) return false;
+    return true;
+  }
+  function chCanMate(b, col) {   // could this colour ever checkmate? (used when the other side runs out of time)
+    var n = 0, i, ch, t;
+    for (i = 0; i < 64; i++) {
+      ch = b[i]; if (ch === "_" || chCol(ch) !== col) continue; t = ch.toLowerCase(); if (t === "k") continue;
+      if (t === "p" || t === "r" || t === "q") return true;
+      n++;
+    }
+    return n >= 2;
+  }
+  function chKey(S, col) {   // identifies a position for the repetition rule (col = side to move; en passant only counts when it is really possible)
+    var ep = -1;
+    if (S.ep >= 0) {
+      var r = S.ep >> 3, c = S.ep & 7, pw = col === "w" ? "P" : "p", rr = col === "w" ? r + 1 : r - 1;
+      if (rr >= 0 && rr < 8 && ((c > 0 && S.board[rr * 8 + c - 1] === pw) || (c < 7 && S.board[rr * 8 + c + 1] === pw))) ep = S.ep;
+    }
+    return S.board + col + (S.cast || "-") + ep;
+  }
+  function chAfter(S, mover, hist) {   // S = the position after `mover` moved. hist counts the positions seen so far (updated here). -> { check, over }
+    var opp = mover === "w" ? "b" : "w", check = chInCheck(S, opp), k;
+    if (!chHasMove(S, opp)) return { check: check, over: check ? "mate" : "stalemate" };
+    if (chDead(S.board)) return { check: check, over: "dead" };
+    if (S.half >= 100) return { check: check, over: "fifty" };
+    k = chKey(S, opp); hist[k] = (hist[k] || 0) + 1;
+    return { check: check, over: hist[k] >= 3 ? "rep" : null };
+  }
+  function chDeadline(x) { return x.turnT + Math.min(x.clock[x.turn], x.pm ? x.pm * 1000 : 1e15); }   // when the side to move runs out of time (total clock or per-move limit)
   function rpsWin(pa, pb) { return pa === pb ? null : BEATS[pa] === pb ? "a" : "b"; }
 
   // Turns a Direct game record (players + move log) into the same shape the server sends for Secure games.
@@ -108,9 +253,13 @@
   function derive(g) {
     var type = g.type, cfg = CFG[type] || CFG.ttt, bet = g.bet;
     var st = { mode: "direct", type: type, bet: bet, created: g.created, p: { a: g.a, b: g.b || null }, seen: g.seen || {}, paid: g.paid || {}, status: "waiting", score: { a: 0, b: 0 }, round: 1, draws: 0, starter: "a", turn: "a", overtime: false, deadline: 0, startT: 0, result: null, pay: null, winCells: null, lastRound: null, tBoth: 0, rv: { a: false, b: false } };
-    if (type === "ttt") st.board = "_________"; else if (type === "c4") st.board = "_".repeat(42); else if (type === "ck") { st.board = CK_START; st.chain = -1; st.score = { a: 12, b: 12 }; } else { st.rn = 1; st.picked = { a: false, b: false }; delete st.turn; }
+    if (type === "ttt") st.board = "_________"; else if (type === "c4") st.board = "_".repeat(42); else if (type === "ck") { st.board = CK_START; st.chain = -1; st.score = { a: 12, b: 12 }; } else if (type === "ch") {
+      var cho = chOptsOf(g.opt);
+      st.board = CH_START; st.cast = "KQkq"; st.ep = -1; st.half = 0; st.white = cho.w; st.starter = cho.w; st.turn = cho.w; st.tm = cho.tm; st.pm = cho.pm;
+      st.clock = { a: cho.tm * 1000, b: cho.tm * 1000 }; st.turnT = 0; st.inCheck = false; st.lastMove = null;
+    } else { st.rn = 1; st.picked = { a: false, b: false }; delete st.turn; }
     function nm(s) { return (st.p[s] && st.p[s].name) || "Player"; }
-    function finish(kind, w, t, leaver) {
+    function finish(kind, w, t, leaver, msgOver) {
       var who = w ? nm(w) : "", msgs = {
         score: who + " won" + (cfg.win > 1 ? " the match " + Math.max(st.score.a, st.score.b) + "-" + Math.min(st.score.a, st.score.b) : "") + ".",
         forfeit: nm(leaver || other(w || "a")) + " left the game. " + who + " wins the bet.",
@@ -122,8 +271,14 @@
         cancel: "The game was cancelled. Your crates were returned."
       };
       st.status = "done";
-      st.result = { kind: kind, winner: w || null, msg: msgs[kind] || "The game ended.", at: t };
+      st.result = { kind: kind, winner: w || null, msg: msgOver || msgs[kind] || "The game ended.", at: t };
       st.pay = w ? (function () { var o = {}; o[w] = bet * 2; o[other(w)] = 0; return o; })() : st.p.b ? { a: bet, b: bet } : { a: bet, b: 0 };
+    }
+    var hist = {}; if (type === "ch") hist[chKey({ board: CH_START, cast: "KQkq", ep: -1 }, "w")] = 1;
+    function chFlag(w, t) {   // the side to move ran out of time, so w (the other side) wins, unless w could never checkmate
+      var l = other(w), perMove = st.pm && st.pm * 1000 < st.clock[l];
+      if (!chCanMate(st.board, w === st.white ? "w" : "b")) finish("draw", null, t, null, nm(l) + " ran out of time, but " + nm(w) + " can't checkmate with the pieces left. It's a draw. Everyone got their crates back.");
+      else finish("timeout", w, t, null, perMove ? nm(l) + " took too long to move (" + st.pm + " second limit). " + nm(w) + " wins the bet." : nm(l) + " ran out of time. " + nm(w) + " wins the bet.");
     }
     var C = {}, R = {};   // Rock Paper Scissors commitments / reveals per round
     function rpsRound(winner, pa, pb, t) {
@@ -134,16 +289,19 @@
     var keys = Object.keys(g.log || {}).sort();
     for (var i = 0; i < keys.length && st.status !== "done"; i++) {
       var e = g.log[keys[i]]; if (!e || typeof e !== "object") continue;
-      if (e.k === "start") { if (!st.startT && g.b) { st.status = "playing"; st.startT = e.t; st.deadline = e.t + cfg.ms; } continue; }
+      if (e.k === "start") { if (!st.startT && g.b) { st.status = "playing"; st.startT = e.t; st.deadline = e.t + cfg.ms; if (type === "ch") { st.turnT = e.t; st.deadline = chDeadline(st); } } continue; }
       if (e.k === "end") {
         if (st.status === "waiting") { if (e.kind === "cancel") finish("cancel", null, e.t); continue; }
         if (e.kind === "forfeit" || e.kind === "disconnect") { if (e.w === "a" || e.w === "b") finish(e.kind, e.w, e.t); }
-        else if (e.kind === "timeout") { if ((e.w === "a" || e.w === "b") && e.t >= st.deadline) finish("timeout", e.w, e.t); }
+        else if (e.kind === "timeout") {
+          if (type === "ch") { if (e.w === other(st.turn) && e.t >= st.deadline) chFlag(e.w, e.t); }
+          else if ((e.w === "a" || e.w === "b") && e.t >= st.deadline) finish("timeout", e.w, e.t);
+        }
         else if (e.kind === "bothleft" || e.kind === "timeout-refund") finish(e.kind, null, e.t);
         continue;
       }
       if (st.status !== "playing") continue;
-      if (e.k === "ot") { if (!st.overtime && st.score.a === st.score.b && e.t >= st.deadline) { st.overtime = true; st.deadline = st.startT + cfg.ms + cfg.extra; } continue; }
+      if (e.k === "ot") { if (type !== "ch" && !st.overtime && st.score.a === st.score.b && e.t >= st.deadline) { st.overtime = true; st.deadline = st.startT + cfg.ms + cfg.extra; } continue; }
       if (e.s !== "a" && e.s !== "b" && e.k !== "rl") continue;
       if (type === "rps") {
         var cr = C[st.rn] = C[st.rn] || {}, rr = R[st.rn] = R[st.rn] || {};
@@ -171,6 +329,19 @@
           if (st.score[ckn] === 0 || ckMoves(st.board, ckn, -1).length === 0) finish("score", e.s, e.t);   // captured everything, or the other side can't move
           else st.turn = ckn;
         }
+        continue;
+      }
+      if (type === "ch") {   // Chess: k "m" = a move (f = from square, c = to square, p = promotion piece q/r/b/n)
+        if (e.k !== "m" || st.turn !== e.s || !Number.isInteger(e.f) || !Number.isInteger(e.c)) continue;
+        if (e.t > st.deadline) { chFlag(other(e.s), e.t); continue; }   // the move came after the clock ran out
+        var chc = e.s === st.white ? "w" : "b", chS = { board: st.board, cast: st.cast, ep: st.ep, half: st.half }, chm = chFind(chS, chc, e.f, e.c, e.p);
+        if (!chm) continue;
+        st.clock[e.s] = Math.max(0, st.clock[e.s] - (e.t - st.turnT));
+        var chn = chApply(chS, chm), cha = chAfter(chn, chc, hist);
+        st.board = chn.board; st.cast = chn.cast; st.ep = chn.ep; st.half = chn.half; st.lastMove = { f: chm.f, t: chm.t }; st.inCheck = cha.check;
+        if (cha.over === "mate") finish("score", e.s, e.t, null, "Checkmate! " + nm(e.s) + " wins.");
+        else if (cha.over) finish("draw", null, e.t, null, CH_DRAW[cha.over]);
+        else { st.turn = other(e.s); st.turnT = e.t; st.deadline = chDeadline(st); }
         continue;
       }
       if (e.k !== "m" || st.turn !== e.s || !Number.isInteger(e.c)) continue;
@@ -248,6 +419,7 @@
     ".gm-rps{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:14px 0}.gm-rpsb{width:min(30vw,130px);padding:14px 6px;border-radius:14px;border:2px solid #334155;background:#0f172a;color:#e2e8f0;cursor:pointer;font-size:14px;font-weight:700}.gm-rpsb span{display:block;font-size:44px;line-height:1.1;margin-bottom:4px}.gm-rpsb.can:hover{background:#334155}.gm-rpsb.mine{border-color:#4ade80}.gm-rpsb:disabled{cursor:default;opacity:.7}" +
     ".gm-status{text-align:center;font-size:17px;font-weight:700;min-height:26px;margin:6px 0}.gm-banner{text-align:center;font-size:15px;color:#fbbf24;min-height:20px}.gm-done{text-align:center}.gm-done h3{font-size:22px;margin:0 0 8px}.gm-center{text-align:center}.gm-sel{padding:8px;border-radius:8px;background:#0f172a;color:#e2e8f0;border:1.5px solid #334155;font-size:15px}";
   css.textContent += ".gm-ck{display:grid;grid-template-columns:repeat(8,1fr);width:min(480px,94vw);margin:14px auto;border:4px solid #3b2a1a;border-radius:8px;overflow:hidden}.gm-sq{aspect-ratio:1;padding:0;border:0;display:flex;align-items:center;justify-content:center;position:relative;cursor:default}.gm-sq.lt{background:#f0d9b5}.gm-sq.dk{background:#b58863}.gm-sq.dk.last{background:#c9a94a}.gm-sq.mv,.gm-sq.tg,.gm-sq.tgx{cursor:pointer}.gm-sq.tg::after{content:'';width:28%;height:28%;border-radius:50%;background:rgba(22,163,74,.9);position:absolute}.gm-sq.tgx::after{content:'';width:72%;height:72%;border-radius:50%;border:4px solid #ef4444;box-sizing:border-box;position:absolute}.gm-sq.sel{box-shadow:inset 0 0 0 4px #22c55e}.gm-pc{width:78%;height:78%;border-radius:50%;box-shadow:0 3px 0 rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;font-size:min(5.6vw,27px);line-height:1;color:#fde68a;box-sizing:border-box}.gm-pc.a{background:#ef4444;border:3px solid #b91c1c}.gm-pc.b{background:#1f2937;border:3px solid #6b7280}.gm-sq.mv .gm-pc{box-shadow:0 3px 0 rgba(0,0,0,.45),0 0 0 3px rgba(34,197,94,.6)}";
+  css.textContent += ".gm-cp{font-size:min(9.4vw,46px);line-height:1;display:block;pointer-events:none}.gm-cp.w{color:#fff;text-shadow:0 0 2px #000,0 0 2px #000,1px 1px 1px #000,-1px -1px 1px #000}.gm-cp.b{color:#111;text-shadow:0 0 1px rgba(255,255,255,.5)}.gm-sq.lt.last{background:#e8d56b}.gm-sq.chk{background:#ef4444 !important}.gm-co{position:absolute;font-size:10px;font-weight:700;color:rgba(0,0,0,.55);pointer-events:none;line-height:1}.gm-co.l{top:3px;left:3px}.gm-co.f{bottom:2px;right:3px}.gm-ch-row{display:flex;justify-content:space-between;align-items:center;gap:10px;width:min(480px,94vw);margin:8px auto;font-weight:700}";
   document.head.appendChild(css);
 
   // ── rail button + panel ──
@@ -332,12 +504,14 @@
     }
     return false;
   }
-  async function dCreate(type, bet) {
+  async function dCreate(type, bet, opts) {
     if (stock() < bet) throw new Error("You don't have " + crates(bet) + " to bet.");
     await adjustG(me(), -bet);
     try {
       var ref = db().ref("pg").push();
-      await ref.set({ type: type, bet: bet, created: TS(), a: { id: me(), name: myName() }, seen: { a: TS() }, v: 1 });
+      var rec = { type: type, bet: bet, created: TS(), a: { id: me(), name: myName() }, seen: { a: TS() }, v: 1 };
+      if (type === "ch") { var o = opts || {}; rec.opt = { tm: CH_TM.indexOf(o.tm) >= 0 ? o.tm : 600, pm: CH_PM.indexOf(o.pm) >= 0 ? o.pm : 0, w: o.c === "white" ? "a" : o.c === "black" ? "b" : (Math.random() < 0.5 ? "a" : "b") }; }   // w = which side plays White (the host is side a)
+      await ref.set(rec);
       return { gid: ref.key, mode: "direct" };
     } catch (e) { await adjustG(me(), bet); throw new Error(friendly(e, "Creating the game")); }
   }
@@ -363,9 +537,9 @@
     var side = sideIn(pgames[gid]);
     return append(gid, { k: "m", s: side, c: c }, function (x) { return x.status === "playing" && x.turn === side; });
   }
-  function dMoveCk(gid, f, t) {
+  function dMoveCk(gid, f, t, p) {
     var side = sideIn(pgames[gid]);
-    return append(gid, { k: "m", s: side, f: f, c: t }, function (x) { return x.status === "playing" && x.turn === side; });
+    return append(gid, p ? { k: "m", s: side, f: f, c: t, p: p } : { k: "m", s: side, f: f, c: t }, function (x) { return x.status === "playing" && x.turn === side; });
   }
   function dStop(gid) {   // end my turn after a jump instead of jumping again
     var side = sideIn(pgames[gid]);
@@ -404,7 +578,8 @@
           return void append(gid, { k: "end", s: "x", kind: "disconnect", w: side }, function (x) { return x.status === "playing"; });
         }
         if (t >= st.deadline) {
-          if (st.score.a !== st.score.b) append(gid, { k: "end", s: "x", kind: "timeout", w: st.score.a > st.score.b ? "a" : "b" }, function (x) { return x.status === "playing" && x.score.a !== x.score.b; });
+          if (st.type === "ch") append(gid, { k: "end", s: "x", kind: "timeout", w: other(st.turn) }, function (x) { return x.status === "playing" && x.turn === st.turn && x.turnT === st.turnT; });
+          else if (st.score.a !== st.score.b) append(gid, { k: "end", s: "x", kind: "timeout", w: st.score.a > st.score.b ? "a" : "b" }, function (x) { return x.status === "playing" && x.score.a !== x.score.b; });
           else if (!st.overtime) append(gid, { k: "ot", s: "x" }, function (x) { return x.status === "playing" && !x.overtime; });
           else append(gid, { k: "end", s: "x", kind: "timeout-refund" }, function (x) { return x.status === "playing" && x.overtime; });
         }
@@ -482,11 +657,11 @@
   function badge() { var g = myGid ? viewOf(myGid, myMode) : null; btn.style.color = g && g.status !== "done" ? "#4ade80" : ""; }
   function waitingList() {
     var out = [], t = now();
-    Object.keys(games).forEach(function (k) { var g = games[k]; if (g && g.status === "waiting" && g.p && g.p.a) out.push({ gid: k, mode: "secure", type: g.type || "ttt", bet: g.bet, host: g.p.a.name, created: g.created || 0 }); });
+    Object.keys(games).forEach(function (k) { var g = games[k]; if (g && g.status === "waiting" && g.p && g.p.a) out.push({ gid: k, mode: "secure", type: g.type || "ttt", bet: g.bet, host: g.p.a.name, created: g.created || 0, opt: g.opt }); });
     Object.keys(pgames).forEach(function (k) {
       var r = pgames[k]; if (!r || !r.a) return;
       var st = derive(r); if (st.status !== "waiting" || t - ((r.seen && r.seen.a) || r.created || 0) > WAIT_STALE) return;
-      out.push({ gid: k, mode: "direct", type: r.type, bet: r.bet, host: r.a.name, created: r.created || 0 });
+      out.push({ gid: k, mode: "direct", type: r.type, bet: r.bet, host: r.a.name, created: r.created || 0, opt: r.opt });
     });
     return out.sort(function (a, b) { return b.created - a.created; });
   }
@@ -531,6 +706,7 @@
     ORDER.forEach(function (k) { var o = document.createElement("option"); o.value = k; o.textContent = NAMES[k]; sel.appendChild(o); });
     sel.value = selGame; sel.onchange = function () { selGame = sel.value; render(); }; c.appendChild(sel);
     c.appendChild(el("div", "gm-note", RULES[selGame]));
+    if (selGame === "ch") c.appendChild(chOptions());
     // which layer
     var ms = document.createElement("select"); ms.className = "gm-sel"; ms.style.marginLeft = "8px";
     [["auto", "Mode: automatic"], ["secure", "Mode: Secure (server)"], ["direct", "Mode: Direct (no server)"]].forEach(function (m) { var o = document.createElement("option"); o.value = m[0]; o.textContent = m[1]; ms.appendChild(o); });
@@ -547,7 +723,7 @@
       opts.forEach(function (n) { var b = el("button", "gm-bet" + (n === picked ? " on" : ""), n + "x"); b.type = "button"; b.onclick = function () { picked = n; render(); }; bets.appendChild(b); });
       c.appendChild(bets);
       var go = el("button", "gm-btn p", "Create game (" + crates(picked) + ")"); go.type = "button"; go.disabled = busy || (cm === "secure" && serverUp === false);
-      go.onclick = function () { act(function () { return cm === "direct" ? dCreate(selGame, picked) : call("create", { game: selGame, bet: picked }).then(function (r) { return { gid: r.gid, mode: "secure" }; }); }); };
+      go.onclick = function () { act(function () { return cm === "direct" ? dCreate(selGame, picked, chCreateOpts()) : call("create", { game: selGame, bet: picked, opt: chCreateOpts() }).then(function (r) { return { gid: r.gid, mode: "secure" }; }); }); };
       c.appendChild(go);
     }
     wrap.appendChild(c);
@@ -558,7 +734,7 @@
     list.forEach(function (w) {
       var row = el("div", "gm-row"), info = el("div", "grow"), b = el("b", "", w.host);
       b.appendChild(el("span", "gm-tag " + (w.mode === "secure" ? "s" : "d"), w.mode === "secure" ? "Secure" : "Direct"));
-      info.appendChild(b); info.appendChild(el("span", "", (NAMES[w.type] || "Game") + " \u00B7 bet " + w.bet + "x (" + crates(w.bet) + ")"));
+      info.appendChild(b); info.appendChild(el("span", "", (NAMES[w.type] || "Game") + chLobbyInfo(w) + " \u00B7 bet " + w.bet + "x (" + crates(w.bet) + ")"));
       var needServer = w.mode === "secure" && serverUp === false;
       var j = el("button", "gm-btn p", needServer ? "Server needed" : have >= w.bet ? "Join" : "Need " + w.bet); j.type = "button"; j.disabled = busy || needServer || have < w.bet;
       j.onclick = function () { act(function () { return w.mode === "direct" ? dJoin(w.gid) : call("join", { gid: w.gid }).then(function (r) { return { gid: r.gid, mode: "secure" }; }); }); };
@@ -590,7 +766,7 @@
       var row = el("div", "gm-row"), info = el("div", "grow"), b = el("b", "", w.a + " vs " + w.b);
       b.appendChild(el("span", "gm-tag " + (w.mode === "secure" ? "s" : "d"), w.mode === "secure" ? "Secure" : "Direct"));
       info.appendChild(b);
-      info.appendChild(el("span", "", (NAMES[w.type] || "Game") + " \u00B7 bet " + w.bet + "x" + (w.type === "c4" ? "" : " \u00B7 " + (w.type === "ck" ? "pieces " : "score ") + w.score.a + "\u2013" + w.score.b)));
+      info.appendChild(el("span", "", (NAMES[w.type] || "Game") + " \u00B7 bet " + w.bet + "x" + (w.type === "c4" || w.type === "ch" ? "" : " \u00B7 " + (w.type === "ck" ? "pieces " : "score ") + w.score.a + "\u2013" + w.score.b)));
       var v = el("button", "gm-btn p", "Watch"); v.type = "button";
       v.onclick = function () { spectate = { gid: w.gid, mode: w.mode }; lastSig = ""; showErr(""); render(); };
       row.append(info, v); c.appendChild(row);
@@ -601,7 +777,7 @@
     var type = g.type || "ttt", sc = g.score || { a: 0, b: 0 }, A = g.p.a.name, B = g.p.b ? g.p.b.name : "";
     var top = el("div", "gm-top");
     var left = el("div"); left.appendChild(el("div", "gm-pl", A));
-    var mid = el("div", "gm-center"); mid.appendChild(el("div", "gm-score", type === "c4" ? "vs" : sc.a + " \u2013 " + sc.b));
+    var mid = el("div", "gm-center"); mid.appendChild(el("div", "gm-score", type === "c4" || type === "ch" ? "vs" : sc.a + " \u2013 " + sc.b));
     var sub = el("div", "gm-note", "\uD83D\uDC41 Watching \u00B7 " + (NAMES[type] || "Game") + " \u00B7 pot " + crates(g.bet * 2));
     sub.appendChild(el("span", "gm-tag " + (g.mode === "direct" ? "d" : "s"), g.mode === "direct" ? "Direct" : "Secure")); mid.appendChild(sub);
     var right = el("div"); right.style.textAlign = "right"; right.appendChild(el("div", "gm-pl", B));
@@ -615,9 +791,9 @@
         var lr = g.lastRound;
         if (lr && lr.a) card.appendChild(el("div", "gm-banner", "Last round: " + A + " " + ICON[lr.a] + " vs " + B + " " + ICON[lr.b] + " \u2014 " + (lr.winner ? (lr.winner === "a" ? A : B) + " won it." : "a tie.")));
       } else {
-        var first = type === "c4" ? ["Red", "Yellow"] : type === "ck" ? ["Red", "Black"] : ["X", "O"], starter = g.starter || "a";
+        var first = type === "c4" ? ["Red", "Yellow"] : type === "ck" ? ["Red", "Black"] : type === "ch" ? ["White", "Black"] : ["X", "O"], starter = g.starter || "a";
         card.appendChild(el("div", "gm-status", (g.turn === "a" ? A : B) + "'s turn"));
-        card.appendChild(type === "c4" ? c4Board(g, false, false) : type === "ck" ? ckBoard(g, false, false, "a") : tttBoard(g, false, false));
+        card.appendChild(type === "ch" ? chSpectate(g) : type === "c4" ? c4Board(g, false, false) : type === "ck" ? ckBoard(g, false, false, "a") : tttBoard(g, false, false));
         card.appendChild(el("div", "gm-note gm-center", first[0] + ": " + (starter === "a" ? A : B) + " \u00B7 " + first[1] + ": " + (starter === "a" ? B : A)));
       }
     } else {
@@ -628,6 +804,7 @@
       if (type === "c4" && g.board) d.appendChild(c4Board(g, false, false));
       if (type === "ttt" && g.board) d.appendChild(tttBoard(g, false, false));
       if (type === "ck" && g.board) d.appendChild(ckBoard(g, false, false, "a"));
+      if (type === "ch" && g.board) d.appendChild(chBoard(g, false, false, "w"));
       card.appendChild(d);
     }
     var stop = el("button", "gm-btn", "Stop watching"); stop.type = "button"; var sw = el("div", "gm-center"); sw.appendChild(stop); card.appendChild(sw);
@@ -646,7 +823,7 @@
   var timerEl = null;
   var ICON = { rock: "\u270A", paper: "\u270B", scissors: "\u270C\uFE0F", "?": "\u2753" }, LABEL = { rock: "Rock", paper: "Paper", scissors: "Scissors" };
   function doStop(g) { return g.mode === "direct" ? dStop(myGid) : call("stop", { gid: myGid }); }
-  function doMove(g, payload) { if (payload.from !== undefined) return g.mode === "direct" ? dMoveCk(myGid, payload.from, payload.to) : call("move", { gid: myGid, from: payload.from, to: payload.to }); return g.mode === "direct" ? dMove(myGid, payload.cell !== undefined ? payload.cell : payload.col) : call("move", Object.assign({ gid: myGid }, payload)); }
+  function doMove(g, payload) { if (payload.from !== undefined) return g.mode === "direct" ? dMoveCk(myGid, payload.from, payload.to, payload.promo) : call("move", { gid: myGid, from: payload.from, to: payload.to, promo: payload.promo }); return g.mode === "direct" ? dMove(myGid, payload.cell !== undefined ? payload.cell : payload.col) : call("move", Object.assign({ gid: myGid }, payload)); }
 
   function tttBoard(g, mineTurn, live) {
     var board = el("div", "gm-board");
@@ -698,13 +875,103 @@
     return board;
   }
 
+  // ── Chess screen ──
+  // Host options live in chOpt while creating a game. On the board: click one of your pieces, then a highlighted square (a pawn reaching the last row asks which piece to promote to).
+  var chOpt = { tm: 600, pm: 0, c: "random" }, chClk = null, chSel = -1, chSelFor = "", chPend = null;
+  var CH_GLYPH = { k: "\u265A", q: "\u265B", r: "\u265C", b: "\u265D", n: "\u265E", p: "\u265F" };
+  function chCreateOpts() { return selGame === "ch" ? { tm: chOpt.tm, pm: chOpt.pm, c: chOpt.c } : null; }
+  function chDesc(o) { var s = (o.tm ? o.tm / 60 : 10) + " min each"; if (o.pm) s += ", " + (o.pm >= 60 ? o.pm / 60 + " min" : o.pm + " sec") + " per move"; return s; }
+  function chInfo(type, g) { return type === "ch" ? " \u00B7 " + chDesc(g) : ""; }
+  function chLobbyInfo(w) { return w.type === "ch" && w.opt ? " \u00B7 " + chDesc(w.opt) + " \u00B7 you play " + (w.opt.w === "a" ? "Black" : "White") : ""; }
+  function chOptions() {
+    var box = el("div"); box.style.cssText = "display:flex;gap:12px;flex-wrap:wrap;margin:10px 0";
+    function pick(label, vals, cur, onSet) {
+      var lb = el("label", "gm-note", label + " "); lb.style.cssText = "margin:0;display:flex;align-items:center;gap:6px";
+      var s = document.createElement("select"); s.className = "gm-sel";
+      vals.forEach(function (v) { var o = document.createElement("option"); o.value = v[0]; o.textContent = v[1]; s.appendChild(o); });
+      s.value = String(cur); s.onchange = function () { onSet(s.value); };
+      lb.appendChild(s); box.appendChild(lb);
+    }
+    pick("Time each:", [[180, "3 min"], [300, "5 min"], [600, "10 min"], [900, "15 min"], [1800, "30 min"]], chOpt.tm, function (v) { chOpt.tm = Number(v); });
+    pick("Time per move:", [[0, "No limit"], [15, "15 sec"], [30, "30 sec"], [60, "1 min"], [120, "2 min"]], chOpt.pm, function (v) { chOpt.pm = Number(v); });
+    pick("You play:", [["random", "Random"], ["white", "White"], ["black", "Black"]], chOpt.c, function (v) { chOpt.c = v; });
+    return box;
+  }
+  function chRow(name, white, you) {   // a player's name tag and clock
+    var row = el("div", "gm-ch-row"), n = el("span", "", name + (you ? " (you)" : "") + " \u00B7 " + (white ? "White" : "Black")), t = el("div", "gm-timer", "--:--");
+    row.appendChild(n); row.appendChild(t);
+    return { row: row, timer: t };
+  }
+  function paintChess(g) {
+    var t = now(), used = g.status === "playing" && g.turnT ? Math.max(0, t - g.turnT) : 0, clk = g.clock || {};
+    if (chClk) ["a", "b"].forEach(function (s) {
+      var e = chClk[s]; if (!e) return;
+      var run = g.status === "playing" && g.turn === s;
+      e.textContent = fmt((clk[s] || 0) - (run ? used : 0)); e.classList.toggle("ot", run);
+    });
+    if (timerEl) { timerEl.classList.remove("ot"); timerEl.style.display = g.pm && g.status === "playing" ? "" : "none"; if (g.pm) timerEl.textContent = "Move limit " + fmt(g.pm * 1000 - used); }
+  }
+  function chBoard(g, mineTurn, live, view) {   // view = the colour shown at the bottom ("w" or "b")
+    var board = el("div", "gm-ck"), key = g.board + ":" + g.turn + ":" + g.status;
+    if (chSelFor !== key) { chSel = -1; chPend = null; chSelFor = key; }
+    var play = live && mineTurn && !busy, S = { board: g.board, cast: g.cast || "", ep: g.ep == null ? -1 : g.ep, half: g.half || 0 };
+    var moves = play ? chLegal(S, view) : [], movable = {}, targets = {};
+    moves.forEach(function (m) { movable[m.f] = true; });
+    if (chSel >= 0 && !movable[chSel]) chSel = -1;
+    moves.forEach(function (m) { if (m.f === chSel && !targets[m.t]) targets[m.t] = m; });
+    var lm = g.lastMove || null, ksq = g.inCheck && g.status === "playing" ? chKing(g.board, g.turn === g.white ? "w" : "b") : -1;
+    for (var k = 0; k < 64; k++) (function (i) {
+      var r = i >> 3, c = i & 7, v = g.board[i];
+      var cls = "gm-sq " + ((r + c) % 2 === 0 ? "lt" : "dk") + (i === chSel ? " sel" : "") + (targets[i] ? (v !== "_" || targets[i].e ? " tgx" : " tg") : "") + (lm && (i === lm.f || i === lm.t) ? " last" : "") + (i === ksq ? " chk" : "") + (movable[i] ? " mv" : "");
+      var sq = el("button", cls); sq.type = "button"; sq.disabled = !play;
+      if (v !== "_") sq.appendChild(el("span", "gm-cp " + chCol(v), CH_GLYPH[v.toLowerCase()] + "\uFE0E"));
+      if (view === "w" ? c === 0 : c === 7) sq.appendChild(el("span", "gm-co l", String(8 - r)));
+      if (view === "w" ? r === 7 : r === 0) sq.appendChild(el("span", "gm-co f", "abcdefgh".charAt(c)));
+      sq.onclick = function () {
+        if (targets[i]) {
+          if (targets[i].p) { chPend = { f: chSel, t: i }; render(); return; }
+          var from = chSel, to = i; chSel = -1; chPend = null;
+          act(function () { return doMove(g, { from: from, to: to }); });
+        } else if (movable[i]) { chSel = i === chSel ? -1 : i; chPend = null; render(); }
+        else if (chSel >= 0) { chSel = -1; chPend = null; render(); }
+      };
+      board.appendChild(sq);
+    })(view === "b" ? 63 - k : k);
+    return board;
+  }
+  function chPlay(g, mineTurn, side, oppName) {   // clocks + board (+ the promotion choice) for a player
+    var opp = other(side), w = el("div"), top = chRow(oppName, g.white === opp, false), bot = chRow(g.p[side].name, g.white === side, true);
+    chClk = {}; chClk[opp] = top.timer; chClk[side] = bot.timer;
+    w.appendChild(top.row);
+    w.appendChild(chBoard(g, mineTurn, true, g.white === side ? "w" : "b"));
+    if (chPend && mineTurn) {
+      var pr = el("div", "gm-center"); pr.appendChild(el("div", "gm-note gm-center", "Promote to:"));
+      [["q", "Queen"], ["r", "Rook"], ["b", "Bishop"], ["n", "Knight"]].forEach(function (p) {
+        var b = el("button", "gm-btn", CH_GLYPH[p[0]] + "\uFE0E " + p[1]); b.type = "button"; b.disabled = busy; b.style.margin = "0 4px 6px";
+        b.onclick = function () { var pp = chPend; chPend = null; chSel = -1; act(function () { return doMove(g, { from: pp.f, to: pp.t, promo: p[0] }); }); };
+        pr.appendChild(b);
+      });
+      w.appendChild(pr);
+    }
+    w.appendChild(bot.row);
+    paintChess(g);
+    return w;
+  }
+  function chSpectate(g) {   // read-only board with White at the bottom
+    var w = el("div"), ws = g.white || "a", bs = other(ws), top = chRow(g.p[bs].name, false, false), bot = chRow(g.p[ws].name, true, false);
+    chClk = {}; chClk[bs] = top.timer; chClk[ws] = bot.timer;
+    w.appendChild(top.row); w.appendChild(chBoard(g, false, false, "w")); w.appendChild(bot.row);
+    paintChess(g);
+    return w;
+  }
+
   function renderGame(wrap, g) {
     var id = me(), side = g.p.a && g.p.a.id === id ? "a" : "b", opp = side === "a" ? "b" : "a", type = g.type || "ttt";
     var top = el("div", "gm-top");
     var left = el("div"); left.appendChild(el("div", "gm-pl me", g.p[side].name + " (you)"));
     var mid = el("div", "gm-center"), sc = g.score || { a: 0, b: 0 };
-    mid.appendChild(el("div", "gm-score", type === "c4" ? "vs" : sc[side] + " \u2013 " + sc[opp]));
-    var sub = el("div", "gm-note", (NAMES[type] || "Game") + " \u00B7 bet " + g.bet + "x each \u00B7 pot " + crates(g.bet * 2));
+    mid.appendChild(el("div", "gm-score", type === "c4" || type === "ch" ? "vs" : sc[side] + " \u2013 " + sc[opp]));
+    var sub = el("div", "gm-note", (NAMES[type] || "Game") + chInfo(type, g) + " \u00B7 bet " + g.bet + "x each \u00B7 pot " + crates(g.bet * 2));
     sub.appendChild(el("span", "gm-tag " + (g.mode === "direct" ? "d" : "s"), g.mode === "direct" ? "Direct" : "Secure")); mid.appendChild(sub);
     var right = el("div"); right.style.textAlign = "right"; right.appendChild(el("div", "gm-pl", g.p[opp] ? g.p[opp].name : "Waiting\u2026"));
     top.append(left, mid, right); wrap.appendChild(top);
@@ -731,11 +998,12 @@
         card.appendChild(row);
         if (lr) banner = "Last round: you " + ICON[lr[side]] + " vs " + oppName + " " + ICON[lr[opp]] + " \u2014 " + (lr.winner ? (lr.winner === side ? "you won it!" : oppName + " won it.") : "a tie, replaying.");
       } else {
-        var mineTurn = g.turn === side, markName = type === "c4" ? (side === g.starter ? "Red" : "Yellow") : type === "ck" ? (side === "a" ? "Red" : "Black") : (side === g.starter ? "X" : "O");
+        var mineTurn = g.turn === side, markName = type === "c4" ? (side === g.starter ? "Red" : "Yellow") : type === "ck" ? (side === "a" ? "Red" : "Black") : type === "ch" ? (side === g.white ? "White" : "Black") : (side === g.starter ? "X" : "O");
         var stTxt = mineTurn ? "Your turn (" + markName + ")" : oppName + "'s turn";
+        if (type === "ch" && g.inCheck) stTxt += " - check!";
         if (type === "ck" && mineTurn) stTxt = g.chain >= 0 ? "Keep jumping with the highlighted piece, or stop here" : stTxt + (ckMoves(g.board, side, -1).some(function (m) { return m.x >= 0; }) ? " · you can capture (optional)" : "");
         card.appendChild(el("div", "gm-status", stTxt));
-        card.appendChild(type === "c4" ? c4Board(g, mineTurn, true) : type === "ck" ? ckBoard(g, mineTurn, true, side) : tttBoard(g, mineTurn, true));
+        card.appendChild(type === "ch" ? chPlay(g, mineTurn, side, oppName) : type === "c4" ? c4Board(g, mineTurn, true) : type === "ck" ? ckBoard(g, mineTurn, true, side) : tttBoard(g, mineTurn, true));
         if (type === "ck") {
           card.appendChild(el("div", "gm-note gm-center", "You are " + markName + (side === "a" ? " (moving up)" : " (moving down)") + ". The numbers at the top are pieces left."));
           if (mineTurn && g.chain >= 0) { var stp = el("button", "gm-btn", "Stop here (end my turn)"); stp.type = "button"; stp.disabled = busy; stp.onclick = function () { act(function () { return doStop(g); }); }; var stw = el("div", "gm-center"); stw.appendChild(stp); card.appendChild(stw); }
@@ -743,7 +1011,7 @@
         if (type === "ttt" && lr && now() - lr.at < 4000) banner = lr.winner ? g.p[lr.winner].name + " won round " + lr.round + "!" : "Round " + lr.round + " was a draw. Replaying.";
       }
       card.appendChild(el("div", "gm-banner", banner));
-      card.appendChild(el("div", "gm-note gm-center", (type === "c4" || type === "ck" ? "One game" : "Round " + g.round) + (g.draws ? " \u00B7 " + g.draws + (g.draws === 1 ? " tie" : " ties") : "") + ". Keep this tab open: if you are disconnected for 15 seconds your bet goes to " + oppName + "."));
+      card.appendChild(el("div", "gm-note gm-center", (type === "c4" || type === "ck" || type === "ch" ? "One game" : "Round " + g.round) + (g.draws ? " \u00B7 " + g.draws + (g.draws === 1 ? " tie" : " ties") : "") + ". Keep this tab open: if you are disconnected for 15 seconds your bet goes to " + oppName + "."));
       var lv = el("button", "gm-btn d", "Leave game"); lv.type = "button"; var lw = el("div", "gm-center"); lw.appendChild(lv); card.appendChild(lw);
       lv.onclick = function () { gmConfirm("Leave this game?", "Your bet of " + crates(g.bet) + " goes to " + oppName + ".", "Leave game", function () { act(function () { return g.mode === "direct" ? dLeave(myGid) : call("leave", { gid: myGid }); }); }); };
       paintTimer(g);
@@ -756,12 +1024,14 @@
       if (type === "c4" && g.board) d.appendChild(c4Board(g, false, false));
       if (type === "ttt" && g.board) d.appendChild(tttBoard(g, false, false));
       if (type === "ck" && g.board) d.appendChild(ckBoard(g, false, false, side));
+      if (type === "ch" && g.board) d.appendChild(chBoard(g, false, false, g.white === side ? "w" : "b"));
       var back = el("button", "gm-btn p", "Back to games"); back.type = "button"; back.onclick = function () { myGid = ""; myMode = ""; stopLoop(); showErr(""); lastSig = ""; render(); };
       d.appendChild(back); card.appendChild(d);
     }
     wrap.appendChild(card);
   }
   function paintTimer(g) {
+    if (g.type === "ch") { paintChess(g); return; }
     if (!timerEl) return;
     var left = (g.deadline || 0) - now();
     timerEl.textContent = (g.overtime ? "Overtime " : "Time left ") + fmt(left);

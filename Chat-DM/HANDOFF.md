@@ -17,7 +17,7 @@ VUS D.C is a browser chat + DM web app (main chat, channels, DMs, shop, crates, 
 | `chat.js` (~650 KB) | chat, coins, shop, crates, cosmetics, /commands, moderation. Too big to read whole: copy it to Claude's computer and grep |
 | `dm.js` | DMs, accounts (`VUS_DM.getAccountCreatedAt`) |
 | `quests.js` | daily/weekly quests, login reward, welcome bundle, game counting |
-| `games.js` | 1v1 crate-betting games (tic-tac-toe, rock-paper-scissors, connect 4), reports finished games to `quests.js` |
+| `games.js` | 1v1 crate-betting games (tic-tac-toe, rock-paper-scissors, connect 4, checkers, chess), reports finished games to `quests.js` |
 | `slm.js`, `SLM.html`, `vus-SLM-rules.json` | ShareLargeMessages extension |
 | `dev.js`, `staff-tool/`, `staff-accounts.json` | staff/dev tools (do not copy secrets into notes or chats) |
 | `style.css` | all styling (`.quest-*` classes at the end) |
@@ -79,7 +79,11 @@ To do, in order:
 ## Checkers (added 2026-11-21, later session)
 New 1v1 game `ck` (8x8) in `games.js` (Direct mode + UI), `api/game.js` (Secure mode, actions `move {from,to}` and `stop`) and `vus-chat-rules.json` (`pg` type allows `ck`, log entries get field `f`, `c` up to 63). Rules: men step forward only and may go backward only by capturing; captures never forced; after a jump the piece may keep jumping or stop (`stop` / log kind `st`); reaching the far row crowns and ends the turn; win by capturing everything or leaving the opponent no legal move; 10 min, then more pieces wins, tie = 3 min overtime then refund. Checked with Node tests for the rules, server logic and a jsdom UI smoke test (not saved). NOT yet tested live: [ ] publish rules in Firebase, [ ] deploy `api/game.js` to Vercel, [ ] push `games.js` to GitHub (rules first, script last), [ ] play a Direct and a Secure checkers game with two accounts (capture, optional capture, chain + stop, crowning, win).
 
+## Chess (added 2026-11-21, latest session)
+New 1v1 game `ch` in `games.js` (Direct mode + UI), `api/game.js` (Secure mode, same `move {from,to,promo}` action) and `vus-chat-rules.json` (`pg` now allows type `ch`, an `opt` object `{tm, pm, w}` and promotion letters q/r/b/n in log field `p`). Board = 64-char string, uppercase White, lowercase Black. Full rules: castling, en passant, promotion (player picks), check/checkmate, stalemate, dead position, threefold repetition, 50-move rule. Each player has their own clock (3/5/10/15/30 min chosen by the host) and the host may add a per-move limit (none/15 s/30 s/1 min/2 min) and pick White/Black/random. Timeout = loss, except a draw if the other side could never checkmate. Leaving = resign. The engine exists twice (`games.js` and `api/game.js`): keep them identical. Tested in Claude's temporary workspace: move-count (perft) tests on 6 standard positions for the client engine and 4 for the server copy all match; 32 game-log tests (mate, illegal moves, clocks, flag, per-move limit, repetition, promotion, stalemate, castling, en passant) pass. NOT yet tested live: [ ] publish rules in Firebase FIRST (without them Direct-mode chess is refused), [ ] deploy `api/game.js` to Vercel, [ ] push `games.js` to GitHub (last), [ ] play a Direct and a Secure chess game with two accounts (both colours, promotion picker, clocks, move limit, resign).
+
 ## Session log
+- 2026-11-21 (latest): added Chess to the 1v1 games (see the Chess section above); fixed a garbled comment in `api/game.js`; the rules needed the `ch` type, `opt` and promotion letters.
 - 2026-11-21 (later still): added Checkers to the 1v1 games (see the Checkers section above).
 - 2026-11-21: quests audit (rules were out of date), rules + `quests.js` updated, gift crates left out on purpose, `games.txt` fixed.
 - 2026-11-21 (later): Firebase refused the rules with "Line 90: No such method/property 'numChildren'" (the old test simulator had accepted it); the rules file on disk is fixed. Added the Rainbow Pack bundle (see above). Also added the grant-only tag "owna approved" (`tag-owna`, only #822414 can give it) in `chat.js`, `style.css` and the rules.

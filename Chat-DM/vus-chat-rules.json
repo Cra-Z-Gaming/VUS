@@ -24,7 +24,8 @@
       "$gid": {
         ".write": "!data.exists() || (!newData.exists() && (data.child('created').val() < now - 604800000 || (data.child('paid/a').exists() && data.child('paid/b').exists())))",
         ".validate": "newData.hasChildren(['type', 'bet', 'created', 'a'])",
-        "type": { ".validate": "newData.isString() && (newData.val() === 'ttt' || newData.val() === 'rps' || newData.val() === 'c4' || newData.val() === 'ck')" },
+        "type": { ".validate": "newData.isString() && (newData.val() === 'ttt' || newData.val() === 'rps' || newData.val() === 'c4' || newData.val() === 'ck' || newData.val() === 'ch')" },
+        "opt": { ".validate": "newData.hasChildren(['tm', 'pm', 'w']) && (newData.child('tm').val() === 180 || newData.child('tm').val() === 300 || newData.child('tm').val() === 600 || newData.child('tm').val() === 900 || newData.child('tm').val() === 1800) && (newData.child('pm').val() === 0 || newData.child('pm').val() === 15 || newData.child('pm').val() === 30 || newData.child('pm').val() === 60 || newData.child('pm').val() === 120) && (newData.child('w').val() === 'a' || newData.child('w').val() === 'b')", "tm": { ".validate": "newData.isNumber()" }, "pm": { ".validate": "newData.isNumber()" }, "w": { ".validate": "newData.isString()" }, "$x": { ".validate": false } },
         "bet": { ".validate": "newData.isNumber() && (newData.val() === 1 || newData.val() === 2 || newData.val() === 3 || newData.val() === 5 || newData.val() === 10)" },
         "created": { ".validate": "newData.val() === now" },
         "v": { ".validate": "newData.isNumber()" },
@@ -42,7 +43,7 @@
             "c": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 63" },
             "f": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 63" },
             "h": { ".validate": "newData.isString() && newData.val().length <= 64" },
-            "p": { ".validate": "newData.val() === 'rock' || newData.val() === 'paper' || newData.val() === 'scissors'" },
+            "p": { ".validate": "newData.val() === 'rock' || newData.val() === 'paper' || newData.val() === 'scissors' || newData.val() === 'q' || newData.val() === 'r' || newData.val() === 'b' || newData.val() === 'n'" },
             "z": { ".validate": "newData.isString() && newData.val().length <= 40" },
             "w": { ".validate": "newData.val() === 'a' || newData.val() === 'b'" },
             "kind": { ".validate": "newData.isString() && newData.val().length <= 16" },
