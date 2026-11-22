@@ -1,7 +1,7 @@
 // POST /api/game   Authorization: Bearer <login token>   { action, ... }
 // The server runs every game, so nobody can fake a win, a move, or a bet. Bets are held in escrow:
 // crates are taken from each player when they create/join, and paid out when the match ends.
-//   create { game:"ttt"|"rps"|"c4"|"ck", bet }   join { gid }   move { gid, cell | col | pick | from+to }   stop { gid }   ping { gid }   leave { gid }   sweep {}
+//   create { game:"ttt"|"rps"|"c4"|"ck"|"ch", bet, opt }   (opt is only for chess: { tm: seconds each, pm: seconds per move or 0, c: "white"|"black"|"random" })   join { gid }   move { gid, cell | col | pick | from+to }   stop { gid }   ping { gid }   leave { gid }   sweep {}
 // Game state lives in games/<gid> (public read, only this server can write). Crates are crateClaims/<id>.n.
 // Rock-Paper-Scissors picks are kept secret in gamePicks/<gid> (nobody can read it) until both players have picked.
 const { admin, chatDb, fail, cors, readBody, accountById, verifyLogin } = require("./_lib");
@@ -10,7 +10,8 @@ const GAMES = {
   ttt: { name: "Tic-Tac-Toe", win: 2, ms: 5 * 60 * 1000, extra: 3 * 60 * 1000 },      // first to 2 rounds
   rps: { name: "Rock Paper Scissors", win: 2, ms: 3 * 60 * 1000, extra: 2 * 60 * 1000 },   // first to 2 rounds
   c4:  { name: "Connect 4", win: 1, ms: 8 * 60 * 1000, extra: 3 * 60 * 1000 },         // one game
-  ck:  { name: "Checkers", win: 1, ms: 10 * 60 * 1000, extra: 3 * 60 * 1000 }          // one game; when time is up the side with more pieces wins
+  ck:  { name: "Checkers", win: 1, ms: 10 * 60 * 1000, extra: 3 * 60 * 1000 },   // one game; when time is up the side with more pieces wins
+  ch:  { name: "Chess", win: 1, ms: 0, extra: 0 }   // one game; no overall timer: each player has a clock (g.clock) and the host may set a per-move limit (g.pm)
 };
 const BETS = [1, 2, 3, 5, 10];
 const GRACE = 15000;                 // a player who is silent this long has disconnected
@@ -87,6 +88,161 @@ function c4Win(board, idx) {
   }
   function ckCount(board) { var n = { a: 0, b: 0 }; for (var i = 0; i < 64; i++) { var s = ckSide(board[i]); if (s) n[s]++; } return n; }
 
+  // ── Chess ──
+  // The board is 64 characters, index = row*8 + col, row 0 is rank 8 (the top, as White sees it). "_" empty, UPPERCASE = White (PNBRQK), lowercase = Black.
+  // Standard rules: castling, en passant, promotion, check and checkmate. Stalemate, a dead position, the same position 3 times and 50 moves
+  // without a capture or pawn move are draws. Each player has their own clock; the host can also limit the time for each move.
+  // g.white = the side (a = host) that plays White. g.clock = ms left per side as of g.turnT; g.deadline = when the side to move runs out (clock or per-move limit).
+  // This logic is a copy of the one in games.js (Direct mode): keep them identical.
+  var CH_START = "rnbqkbnrpppppppp" + "_".repeat(32) + "PPPPPPPPRNBQKBNR";
+  var CH_TM = [180, 300, 600, 900, 1800], CH_PM = [0, 15, 30, 60, 120];
+  var CH_N = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
+  var CH_K = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
+  var CH_B = [[-1, -1], [-1, 1], [1, -1], [1, 1]], CH_R = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  var CH_DRAW = {
+    stalemate: "Stalemate: the player to move has no legal move but is not in check. It's a draw. Everyone got their crates back.",
+    dead: "Neither side has enough pieces left to checkmate. It's a draw. Everyone got their crates back.",
+    fifty: "50 moves went by with no capture or pawn move. It's a draw. Everyone got their crates back.",
+    rep: "The same position came up 3 times. It's a draw. Everyone got their crates back."
+  };
+  function chMakeOpt(o) {   // the host's choices (validated) -> { tm, pm, w } where w = the side that plays White
+    o = o || {};
+    var tm = CH_TM.indexOf(Number(o.tm)) >= 0 ? Number(o.tm) : 600, pm = CH_PM.indexOf(Number(o.pm)) >= 0 ? Number(o.pm) : 0;
+    return { tm: tm, pm: pm, w: o.c === "white" ? "a" : o.c === "black" ? "b" : (Math.random() < 0.5 ? "a" : "b") };
+  }
+  function chCol(ch) { return ch === "_" ? null : ch === ch.toUpperCase() ? "w" : "b"; }
+  function chMv(f, t, p, e, k) { return { f: f, t: t, p: p || "", e: !!e, k: k || "" }; }   // p = promotion piece, e = en passant capture, k = "k"/"q" for castling
+  function chAdd(out, f, t, promo) { if (promo) out.push(chMv(f, t, "q"), chMv(f, t, "r"), chMv(f, t, "b"), chMv(f, t, "n")); else out.push(chMv(f, t)); }
+  function chAttacked(b, sq, by) {   // is square sq attacked by a piece of colour `by`?
+    var r = sq >> 3, c = sq & 7, w = by === "w", i, d, rr, cc, x, pr = w ? r + 1 : r - 1, pw = w ? "P" : "p";
+    if (pr >= 0 && pr < 8) { if (c > 0 && b[pr * 8 + c - 1] === pw) return true; if (c < 7 && b[pr * 8 + c + 1] === pw) return true; }
+    for (i = 0; i < 8; i++) {
+      rr = r + CH_N[i][0]; cc = c + CH_N[i][1];
+      if (rr >= 0 && rr < 8 && cc >= 0 && cc < 8 && b[rr * 8 + cc] === (w ? "N" : "n")) return true;
+      rr = r + CH_K[i][0]; cc = c + CH_K[i][1];
+      if (rr >= 0 && rr < 8 && cc >= 0 && cc < 8 && b[rr * 8 + cc] === (w ? "K" : "k")) return true;
+    }
+    for (i = 0; i < 8; i++) {   // 0-3 diagonals (bishop or queen), 4-7 straight lines (rook or queen)
+      d = i < 4 ? CH_B[i] : CH_R[i - 4]; rr = r + d[0]; cc = c + d[1];
+      while (rr >= 0 && rr < 8 && cc >= 0 && cc < 8) {
+        x = b[rr * 8 + cc];
+        if (x !== "_") { if (x === (w ? "Q" : "q") || x === (i < 4 ? (w ? "B" : "b") : (w ? "R" : "r"))) return true; break; }
+        rr += d[0]; cc += d[1];
+      }
+    }
+    return false;
+  }
+  function chPseudo(S, col) {   // moves that follow the piece rules (they may still leave the own king in check)
+    var b = S.board, out = [], w = col === "w", opp = w ? "b" : "w", i, j, r, c, rr, cc, x, t, ch, d, offs, dirs, dir, r1, promo;
+    for (i = 0; i < 64; i++) {
+      ch = b[i]; if (ch === "_" || chCol(ch) !== col) continue;
+      r = i >> 3; c = i & 7; t = ch.toLowerCase();
+      if (t === "p") {
+        dir = w ? -1 : 1; r1 = r + dir; promo = r1 === (w ? 0 : 7);
+        if (r1 < 0 || r1 > 7) continue;
+        if (b[r1 * 8 + c] === "_") {
+          chAdd(out, i, r1 * 8 + c, promo);
+          if (r === (w ? 6 : 1) && b[(r + 2 * dir) * 8 + c] === "_") out.push(chMv(i, (r + 2 * dir) * 8 + c));
+        }
+        for (d = -1; d <= 1; d += 2) {
+          cc = c + d; if (cc < 0 || cc > 7) continue;
+          x = b[r1 * 8 + cc];
+          if (x !== "_" && chCol(x) === opp) chAdd(out, i, r1 * 8 + cc, promo);
+          else if (x === "_" && S.ep === r1 * 8 + cc) out.push(chMv(i, r1 * 8 + cc, "", true));
+        }
+      } else if (t === "n" || t === "k") {
+        offs = t === "n" ? CH_N : CH_K;
+        for (j = 0; j < 8; j++) {
+          rr = r + offs[j][0]; cc = c + offs[j][1]; if (rr < 0 || rr > 7 || cc < 0 || cc > 7) continue;
+          x = b[rr * 8 + cc]; if (x === "_" || chCol(x) === opp) out.push(chMv(i, rr * 8 + cc));
+        }
+      } else {
+        dirs = t === "b" ? CH_B : t === "r" ? CH_R : CH_B.concat(CH_R);
+        for (j = 0; j < dirs.length; j++) {
+          rr = r + dirs[j][0]; cc = c + dirs[j][1];
+          while (rr >= 0 && rr < 8 && cc >= 0 && cc < 8) {
+            x = b[rr * 8 + cc];
+            if (x === "_") out.push(chMv(i, rr * 8 + cc));
+            else { if (chCol(x) === opp) out.push(chMv(i, rr * 8 + cc)); break; }
+            rr += dirs[j][0]; cc += dirs[j][1];
+          }
+        }
+      }
+    }
+    var ks = w ? 60 : 4, rights = S.cast || "";   // castling: king and rook still home, empty squares between, king not in check and not passing an attacked square
+    if (b[ks] === (w ? "K" : "k") && !chAttacked(b, ks, opp)) {
+      if (rights.indexOf(w ? "K" : "k") >= 0 && b[ks + 1] === "_" && b[ks + 2] === "_" && b[ks + 3] === (w ? "R" : "r") && !chAttacked(b, ks + 1, opp) && !chAttacked(b, ks + 2, opp)) out.push(chMv(ks, ks + 2, "", false, "k"));
+      if (rights.indexOf(w ? "Q" : "q") >= 0 && b[ks - 1] === "_" && b[ks - 2] === "_" && b[ks - 3] === "_" && b[ks - 4] === (w ? "R" : "r") && !chAttacked(b, ks - 1, opp) && !chAttacked(b, ks - 2, opp)) out.push(chMv(ks, ks - 2, "", false, "q"));
+    }
+    return out;
+  }
+  function chApply(S, mv) {   // plays a move that is known to be legal -> the new position { board, cast, ep, half }
+    var a = S.board.split(""), ch = a[mv.f], w = ch === ch.toUpperCase(), cap = a[mv.t], pawn = ch.toLowerCase() === "p", cast = S.cast || "", ep = -1;
+    a[mv.f] = "_";
+    if (mv.e) a[(mv.f >> 3) * 8 + (mv.t & 7)] = "_";
+    a[mv.t] = mv.p ? (w ? mv.p.toUpperCase() : mv.p.toLowerCase()) : ch;
+    if (mv.k === "k") { a[mv.f + 1] = a[mv.f + 3]; a[mv.f + 3] = "_"; }
+    else if (mv.k === "q") { a[mv.f - 1] = a[mv.f - 4]; a[mv.f - 4] = "_"; }
+    if (pawn && Math.abs(mv.t - mv.f) === 16) ep = (mv.f + mv.t) / 2;
+    [[4, "kq"], [60, "KQ"], [0, "q"], [7, "k"], [56, "Q"], [63, "K"]].forEach(function (z) { if (mv.f === z[0] || mv.t === z[0]) for (var q = 0; q < z[1].length; q++) cast = cast.split(z[1].charAt(q)).join(""); });
+    return { board: a.join(""), cast: cast, ep: ep, half: pawn || cap !== "_" ? 0 : (S.half || 0) + 1 };
+  }
+  function chKing(b, col) { return b.indexOf(col === "w" ? "K" : "k"); }
+  function chInCheck(S, col) { var k = chKing(S.board, col); return k >= 0 && chAttacked(S.board, k, col === "w" ? "b" : "w"); }
+  function chSafe(S, col, mv) { return !chInCheck(chApply(S, mv), col); }   // does the move leave my own king safe?
+  function chHasMove(S, col) { var ps = chPseudo(S, col); for (var i = 0; i < ps.length; i++) if (chSafe(S, col, ps[i])) return true; return false; }
+  function chFind(S, col, f, t, p) {   // the legal move f -> t (a promotion without a valid piece becomes a queen), or null
+    var ps = chPseudo(S, col), pick = null, i, m;
+    for (i = 0; i < ps.length; i++) {
+      m = ps[i]; if (m.f !== f || m.t !== t) continue;
+      if (m.p) { if (m.p === p) return chSafe(S, col, m) ? m : null; if (m.p === "q") pick = m; }
+      else return chSafe(S, col, m) ? m : null;
+    }
+    return pick && chSafe(S, col, pick) ? pick : null;
+  }
+  function chDead(b) {   // neither side could ever checkmate: K vs K, K + one minor piece vs K, or only bishops that all stand on one colour
+    var minors = [], i, ch, t;
+    for (i = 0; i < 64; i++) {
+      ch = b[i]; if (ch === "_") continue; t = ch.toLowerCase(); if (t === "k") continue;
+      if (t === "p" || t === "r" || t === "q") return false;
+      minors.push({ t: t, sq: ((i >> 3) + (i & 7)) % 2 });
+    }
+    if (minors.length <= 1) return true;
+    for (i = 0; i < minors.length; i++) if (minors[i].t !== "b" || minors[i].sq !== minors[0].sq) return false;
+    return true;
+  }
+  function chCanMate(b, col) {   // could this colour ever checkmate? (used when the other side runs out of time)
+    var n = 0, i, ch, t;
+    for (i = 0; i < 64; i++) {
+      ch = b[i]; if (ch === "_" || chCol(ch) !== col) continue; t = ch.toLowerCase(); if (t === "k") continue;
+      if (t === "p" || t === "r" || t === "q") return true;
+      n++;
+    }
+    return n >= 2;
+  }
+  function chKey(S, col) {   // identifies a position for the repetition rule (col = side to move; en passant only counts when it is really possible)
+    var ep = -1;
+    if (S.ep >= 0) {
+      var r = S.ep >> 3, c = S.ep & 7, pw = col === "w" ? "P" : "p", rr = col === "w" ? r + 1 : r - 1;
+      if (rr >= 0 && rr < 8 && ((c > 0 && S.board[rr * 8 + c - 1] === pw) || (c < 7 && S.board[rr * 8 + c + 1] === pw))) ep = S.ep;
+    }
+    return S.board + col + (S.cast || "-") + ep;
+  }
+  function chAfter(S, mover, hist) {   // S = the position after `mover` moved. hist counts the positions seen so far (updated here). -> { check, over }
+    var opp = mover === "w" ? "b" : "w", check = chInCheck(S, opp), k;
+    if (!chHasMove(S, opp)) return { check: check, over: check ? "mate" : "stalemate" };
+    if (chDead(S.board)) return { check: check, over: "dead" };
+    if (S.half >= 100) return { check: check, over: "fifty" };
+    k = chKey(S, opp); hist[k] = (hist[k] || 0) + 1;
+    return { check: check, over: hist[k] >= 3 ? "rep" : null };
+  }
+  function chDeadline(x) { return x.turnT + Math.min(x.clock[x.turn], x.pm ? x.pm * 1000 : 1e15); }   // when the side to move runs out of time (total clock or per-move limit)
+  function chTimeout(g, now) {   // the side to move ran out of time: the other side wins, unless it could never checkmate
+    var l = g.turn, w = other(l), perMove = g.pm && g.pm * 1000 < g.clock[l];
+    if (!chCanMate(g.board, w === g.white ? "w" : "b")) settle(g, "draw", null, now, null, nameOf(g, l) + " ran out of time, but " + nameOf(g, w) + " can't checkmate with the pieces left. It's a draw. Everyone got their crates back.");
+    else settle(g, "timeout", w, now, null, perMove ? nameOf(g, l) + " took too long to move (" + g.pm + " second limit). " + nameOf(g, w) + " wins the bet." : nameOf(g, l) + " ran out of time. " + nameOf(g, w) + " wins the bet.");
+  }
+
 // After a checkers move (or a "stop"): if no jump chain is open the turn passes, and the game ends when the other side has nothing left or can't move.
 function ckAfter(g, side, now) {
   if (g.chain >= 0) return {};
@@ -98,7 +254,7 @@ function ckAfter(g, side, now) {
 const rpsWinner = (pa, pb) => (pa === pb ? null : BEATS[pa] === pb ? "a" : "b");
 
 // Ends a game and records who gets what. winner = "a" | "b" | null (refund). leaver = the side that left, if any.
-function settle(g, kind, winner, now, leaver) {
+function settle(g, kind, winner, now, leaver, msg) {
   const bet = g.bet, who = winner ? nameOf(g, winner) : "";
   const msgs = {
     score: who + " won" + (GAMES[g.type].win > 1 && g.score ? " the match " + Math.max(g.score.a, g.score.b) + "-" + Math.min(g.score.a, g.score.b) : "") + ".",
@@ -111,7 +267,7 @@ function settle(g, kind, winner, now, leaver) {
     cancel: "The game was cancelled. Your crates were returned."
   };
   g.status = "done";
-  g.result = { kind, winner: winner || null, msg: msgs[kind] || "The game ended.", at: now };
+  g.result = { kind, winner: winner || null, msg: msg || msgs[kind] || "The game ended.", at: now };
   g.pay = winner ? { [winner]: bet * 2, [other(winner)]: 0 } : g.p.b ? { a: bet, b: bet } : { a: bet, b: 0 };
   g.paid = false;
 }
@@ -122,6 +278,11 @@ function startGame(g, now) {
   if (g.type === "ttt") g.board = EMPTY9;
   else if (g.type === "c4") g.board = EMPTY42;
   else if (g.type === "ck") { g.board = CK_START; g.chain = -1; g.score = { a: 12, b: 12 }; }
+  else if (g.type === "ch") {
+    const o = g.opt || {};
+    Object.assign(g, { board: CH_START, cast: "KQkq", ep: -1, half: 0, white: o.w, starter: o.w, turn: o.w, tm: o.tm, pm: o.pm, clock: { a: o.tm * 1000, b: o.tm * 1000 }, turnT: now, inCheck: false, hist: { [chKey({ board: CH_START, cast: "KQkq", ep: -1 }, "w")]: 1 } });
+    g.deadline = chDeadline(g);
+  }
   else { g.rn = 1; g.picked = { a: false, b: false }; delete g.turn; }
 }
 
@@ -142,6 +303,7 @@ function evaluate(g, now) {
   }
   if (sa) return settle(g, "disconnect", "b", now, "a");
   if (sb) return settle(g, "disconnect", "a", now, "b");
+  if (g.type === "ch") { if (now >= g.deadline) chTimeout(g, now); return; }   // chess: per-player clocks instead of one game timer
   if (now >= g.deadline) {
     if (g.score.a !== g.score.b) settle(g, "timeout", g.score.a > g.score.b ? "a" : "b", now);
     else if (!g.overtime) { g.overtime = true; g.deadline = Math.max(now, g.deadline) + GAMES[g.type].extra; }
@@ -241,6 +403,23 @@ function applyMove(g, side, b, now) {
     g.board = ra.board; g.chain = ra.chain; g.lastMove = { f: mv.f, t: mv.t, x: mv.x }; g.score = ckCount(g.board);
     return ckAfter(g, side, now);
   }
+  if (g.type === "ch") {   // Chess: move a piece from one square to another (0-63, row*8+col); promo = q, r, b or n (default q)
+    const f = Number(b.from), t = Number(b.to);
+    if (!Number.isInteger(f) || !Number.isInteger(t) || f < 0 || f > 63 || t < 0 || t > 63) return err(400, "BAD_SQUARE", "from and to must be whole numbers from 0 to 63.");
+    const col = side === g.white ? "w" : "b", S = { board: g.board, cast: g.cast || "", ep: g.ep == null ? -1 : g.ep, half: g.half || 0 };
+    const mv = chFind(S, col, f, t, String(b.promo || ""));
+    if (!mv) return err(409, "BAD_MOVE", "That move isn't allowed.");
+    g.clock[side] = Math.max(0, g.clock[side] - (now - g.turnT));
+    const nx = chApply(S, mv);
+    g.board = nx.board; g.cast = nx.cast; g.ep = nx.ep; g.half = nx.half; g.lastMove = { f: mv.f, t: mv.t };
+    if (!g.hist) g.hist = {};
+    const after = chAfter(nx, col, g.hist);
+    g.inCheck = after.check;
+    if (after.over === "mate") settle(g, "score", side, now, null, "Checkmate! " + nameOf(g, side) + " wins.");
+    else if (after.over) settle(g, "draw", null, now, null, CH_DRAW[after.over]);
+    else { g.turn = other(side); g.turnT = now; g.deadline = chDeadline(g); }
+    return {};
+  }
   if (g.type === "ttt") {
     const cell = Number(b.cell);
     if (!Number.isInteger(cell) || cell < 0 || cell > 8) return err(400, "BAD_CELL", "cell must be a whole number from 0 to 8.");
@@ -314,7 +493,7 @@ module.exports = async (req, res) => {
         return fail(res, 402, "NOT_ENOUGH_CRATES", "You don't have " + bet + " crate" + (bet === 1 ? "" : "s") + " to bet.", { have: await stockOf(db, id), bet });
       }
       const ref = db.ref("games").push();
-      await ref.set({ type: b.game, status: "waiting", bet, created: now, p: { a: { id, name: acct.account.username } }, seen: { a: now }, v: 2 });
+      await ref.set(Object.assign({ type: b.game, status: "waiting", bet, created: now, p: { a: { id, name: acct.account.username } }, seen: { a: now }, v: 2 }, b.game === "ch" ? { opt: chMakeOpt(b.opt) } : {}));
       await setActive(db, id, ref.key, now);
       return res.json({ ok: true, gid: ref.key });
     }
