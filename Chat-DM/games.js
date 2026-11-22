@@ -376,10 +376,10 @@
   // Custom confirm popup (replaces the browser's confirm()). Enter confirms, Escape cancels.
   function gmConfirm(title, msg, okLabel, onOk) {
     var ov = el("div"); ov.style.cssText = "position:fixed;inset:0;background:rgba(2,6,23,.7);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px";
-    var box = el("div"); box.style.cssText = "background:#1e293b;border:1.5px solid #334155;border-radius:14px;padding:20px;max-width:360px;width:100%;color:#e2e8f0;text-align:center";
+    var box = el("div"); box.style.cssText = "background:#1e293b;border:1.5px solid #334155;border-radius:14px;padding:20px;max-width:360px;width:100%;box-sizing:border-box;color:#e2e8f0;text-align:center";
     var ttl = el("h3", "", title); ttl.style.margin = "0 0 8px";
     var p = el("p", "", msg); p.style.cssText = "margin:0 0 16px;color:#94a3b8;font-size:15px";
-    var row = el("div"); row.style.cssText = "display:flex;gap:10px;justify-content:center";
+    var row = el("div"); row.style.cssText = "display:flex;gap:10px;justify-content:center;flex-wrap:wrap";
     var no = el("button", "gm-btn", "Stay"); no.type = "button";
     var yes = el("button", "gm-btn d", okLabel); yes.type = "button";
     function close() { document.removeEventListener("keydown", onKey, true); if (ov.parentNode) ov.parentNode.removeChild(ov); }
@@ -420,6 +420,26 @@
     ".gm-status{text-align:center;font-size:17px;font-weight:700;min-height:26px;margin:6px 0}.gm-banner{text-align:center;font-size:15px;color:#fbbf24;min-height:20px}.gm-done{text-align:center}.gm-done h3{font-size:22px;margin:0 0 8px}.gm-center{text-align:center}.gm-sel{padding:8px;border-radius:8px;background:#0f172a;color:#e2e8f0;border:1.5px solid #334155;font-size:15px}";
   css.textContent += ".gm-ck{display:grid;grid-template-columns:repeat(8,1fr);width:min(480px,94vw);margin:14px auto;border:4px solid #3b2a1a;border-radius:8px;overflow:hidden}.gm-sq{aspect-ratio:1;padding:0;border:0;display:flex;align-items:center;justify-content:center;position:relative;cursor:default}.gm-sq.lt{background:#f0d9b5}.gm-sq.dk{background:#b58863}.gm-sq.dk.last{background:#c9a94a}.gm-sq.mv,.gm-sq.tg,.gm-sq.tgx{cursor:pointer}.gm-sq.tg::after{content:'';width:28%;height:28%;border-radius:50%;background:rgba(22,163,74,.9);position:absolute}.gm-sq.tgx::after{content:'';width:72%;height:72%;border-radius:50%;border:4px solid #ef4444;box-sizing:border-box;position:absolute}.gm-sq.sel{box-shadow:inset 0 0 0 4px #22c55e}.gm-pc{width:78%;height:78%;border-radius:50%;box-shadow:0 3px 0 rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;font-size:min(5.6vw,27px);line-height:1;color:#fde68a;box-sizing:border-box}.gm-pc.a{background:#ef4444;border:3px solid #b91c1c}.gm-pc.b{background:#1f2937;border:3px solid #6b7280}.gm-sq.mv .gm-pc{box-shadow:0 3px 0 rgba(0,0,0,.45),0 0 0 3px rgba(34,197,94,.6)}";
   css.textContent += ".gm-cp{font-size:min(9.4vw,46px);line-height:1;display:block;pointer-events:none}.gm-cp.w{color:#fff;text-shadow:0 0 2px #000,0 0 2px #000,1px 1px 1px #000,-1px -1px 1px #000}.gm-cp.b{color:#111;text-shadow:0 0 1px rgba(255,255,255,.5)}.gm-sq.lt.last{background:#e8d56b}.gm-sq.chk{background:#ef4444 !important}.gm-co{position:absolute;font-size:10px;font-weight:700;color:rgba(0,0,0,.55);pointer-events:none;line-height:1}.gm-co.l{top:3px;left:3px}.gm-co.f{bottom:2px;right:3px}.gm-ch-row{display:flex;justify-content:space-between;align-items:center;gap:10px;width:min(480px,94vw);margin:8px auto;font-weight:700}";
+  // Phones and small windows: nothing may scroll sideways, boards shrink to fit the width AND the height, and the menu button lets you leave the games panel.
+  css.textContent += "#gamesPane{overflow-x:hidden;overflow-y:auto;min-height:0;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}" +
+    "#gamesPane button,#gamesPane select{touch-action:manipulation;-webkit-tap-highlight-color:transparent}" +
+    ".gm-wrap,.gm-h,.gm-top>div{min-width:0}.gm-card,.gm-c4,.gm-ck,.gm-board,.gm-ch-row{box-sizing:border-box}.gm-card{overflow:hidden}" +
+    ".gm-h h2{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gm-stock{white-space:nowrap}" +
+    ".gm-pl,.gm-note,.gm-row b,.gm-row span{overflow-wrap:anywhere}.gm-sel{max-width:100%;font-size:16px}" +
+    ".gm-board{width:min(340px,100%)}.gm-c4{width:min(440px,100%)}.gm-ck,.gm-ch-row{width:min(480px,100%)}" +
+    ".gm-board{grid-template-columns:repeat(3,minmax(0,1fr))}.gm-c4{grid-template-columns:repeat(7,minmax(0,1fr))}.gm-ck{grid-template-columns:repeat(8,minmax(0,1fr))}" +
+    ".gm-ch-row>span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
+    ".gm-rps{flex-wrap:nowrap}.gm-rpsb{flex:1 1 0;width:auto;max-width:130px;min-width:0}" +
+    "#gamesPane .mobile-menu-btn{display:none;flex:none;width:44px;height:44px;margin:0 2px 0 -4px;padding:0;border-radius:12px;background:#1e293b;border:1.5px solid #334155;color:#e2e8f0;font-size:22px;line-height:1;align-items:center;justify-content:center;cursor:pointer}" +
+    "@supports (width:100dvh){.gm-board{width:min(340px,100%,max(200px,calc(100dvh - 230px)))}.gm-ck,.gm-ch-row{width:min(480px,100%,max(260px,calc(100dvh - 230px)))}}" +
+    "@supports (width:1cqw){.gm-ck,.gm-board{container-type:inline-size}.gm-cp{font-size:9.6cqw}.gm-pc{font-size:5.6cqw}.gm-cell{font-size:min(19cqw,58px)}}" +
+    "@media (pointer:coarse){.gm-bet,.gm-btn{min-height:44px}.gm-bet{min-width:52px}.gm-sel{min-height:44px}}" +
+    "@media (max-width:720px){#gamesPane{padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(20px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}" +
+    "#gamesPane .mobile-menu-btn{display:inline-flex}.gm-h h2{font-size:19px}.gm-card{padding:12px;border-radius:12px}" +
+    ".gm-top{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;align-items:start}.gm-top>div{text-align:center !important}.gm-top>.gm-center{grid-column:1/-1;order:3}" +
+    ".gm-pl{font-size:16px}.gm-score{font-size:26px}.gm-rpsb span{font-size:36px}.gm-status{font-size:16px}" +
+    ".gm-card>.gm-sel{display:block;width:100%;margin:0 0 8px !important}.gm-card label.gm-note{flex:1 1 100%;justify-content:space-between}.gm-card label .gm-sel{flex:1;max-width:60%}}" +
+    "@media (max-height:520px) and (min-width:721px){#gamesPane{padding:12px 18px}.gm-card{padding:12px}.gm-top{display:grid;grid-template-columns:1fr auto 1fr;gap:8px 12px;align-items:center;margin:0 0 6px}.gm-top>.gm-center{max-width:380px}.gm-score{font-size:24px}.gm-h{margin:0 0 8px}}";
   document.head.appendChild(css);
 
   // ── rail button + panel ──
@@ -435,6 +455,7 @@
     prevActive = Array.prototype.slice.call(rail.querySelectorAll(".rail-nav-btn.active, .rail-room.active"));
     prevActive.forEach(function (b) { b.classList.remove("active"); });
     shell.classList.add("mode-games"); btn.classList.add("active");
+    shell.classList.remove("nav-open");   // on phones: close the sidebar drawer so the games panel is visible
     btn.style.color = ""; btn.title = "Games";
     probe(false).then(function () { if (open) { lastSig = ""; onGames(); } });
     sweep(); startListening(); render();
@@ -444,7 +465,11 @@
     shell.classList.remove("mode-games"); btn.classList.remove("active");
     prevActive.forEach(function (b) { b.classList.add("active"); }); prevActive = [];
   }
-  btn.addEventListener("click", function () { if (open) closePane(); else openPane(); });
+  btn.addEventListener("click", function () {
+    if (!open) openPane();
+    else if (shell.classList.contains("nav-open")) shell.classList.remove("nav-open");   // phone drawer is open: just close the drawer and stay in Games
+    else closePane();
+  });
   // Clicking anything else in the sidebar returns to normal (capture phase: runs before their own handlers).
   if (navCol) navCol.addEventListener("click", function (e) { if (open && !btn.contains(e.target)) closePane(); }, true);
 
@@ -685,12 +710,16 @@
   }, 2000);
 
   // ── drawing ──
-  var picked = 0, selGame = "ttt", busy = false;
+  var picked = 0, selGame = "ttt", busy = false, lastViewKey = "";
   function render() {
     if (!open) return;
-    pane.textContent = "";
+    var viewKey = myGid ? "g" + myGid : spectate ? "s" + spectate.gid : "l", keepY = viewKey === lastViewKey ? pane.scrollTop : 0;   // keep your scroll position while the same screen redraws
+    lastViewKey = viewKey; pane.textContent = "";
+    requestAnimationFrame(function () { pane.scrollTop = keepY; });
     var wrap = el("div", "gm-wrap"); pane.appendChild(wrap);
-    var h = el("div", "gm-h"); h.appendChild(el("h2", "", "\uD83C\uDFAE Games"));
+    var h = el("div", "gm-h");
+    var mb = el("button", "mobile-menu-btn", "\u2630"); mb.type = "button"; mb.setAttribute("aria-label", "Open menu"); h.appendChild(mb);   // phones only: opens the sidebar drawer (the app's own handler does the toggling)
+    h.appendChild(el("h2", "", "\uD83C\uDFAE Games"));
     h.appendChild(el("div", "gm-stock", me() ? "\uD83D\uDCE6 " + crates(stock()) : "Not logged in")); wrap.appendChild(h);
     errBox = el("div", "gm-err"); wrap.appendChild(errBox);
     if (!me()) { wrap.appendChild(el("div", "gm-note", "Log in to play games.")); return; }
