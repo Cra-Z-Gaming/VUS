@@ -367,7 +367,7 @@
     }
     return st;
   }
-  window.VUS_GAMES = { derive: derive, sha256hex: sha256hex };
+  window.VUS_GAMES = { derive: derive, sha256hex: sha256hex, E: { lineWinner: lineWinner, ckMoves: ckMoves, ckFind: ckFind, ckApply: ckApply, ckCount: ckCount, CK_START: CK_START, chPseudo: chPseudo, chApply: chApply, chInCheck: chInCheck, chLegal: chLegal, chFind: chFind, chAfter: chAfter, chKey: chKey, chDead: chDead, CH_START: CH_START } };   // E = the rule engines, used by the practice bots (bots.js)
 
   var shell = document.getElementById("appShell"), rail = document.getElementById("rail"), navCol = document.getElementById("navCol");
   if (!shell || !rail) return;

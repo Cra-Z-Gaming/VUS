@@ -3,6 +3,8 @@
 Read this first when starting a new chat about this project, then continue from "Current status".
 Last updated: 2026-11-21 (end of the quests session).
 
+**OPEN WORK (2026-11-22): bot / practice mode for the 1v1 games. Read `BOT-MODE-NOTES.md` in this folder first.** Earlier sessions wrote the bot code but never saved it, so it is lost; `games.js` on disk also changed unexpectedly (88,490 bytes, modified 2026-11-22 01:52) and has not been inspected yet. Save every finished piece to disk immediately (see that file's "Working method").
+
 ## What this project is
 VUS D.C is a browser chat + DM web app (main chat, channels, DMs, shop, crates, coins, tags/bubbles, 1v1 crate games, quests).
 - Front end: plain HTML/JS/CSS. `Chat-DM.html` loads its scripts from GitHub raw (`Cra-Z-Gaming/VUS`, folder `Chat-DM/`): `slm.js`, `dm.js`, `dev.js`, `chat.js`, `quests.js`, `games.js`. **Local edits do nothing until they are pushed to GitHub.**
