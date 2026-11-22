@@ -148,6 +148,230 @@
   }
   BOTS.c4 = c4;
 
+  // ── Checkers ── board = 64 chars (same layout as games.js); side = the bot's side ("a" or "b"); chain = the square of a jump the bot may keep going with, or -1.
+  // Returns the move to play (an object from E.ckMoves: use .f and .t), or null = "stop jumping and end the turn" (also null when there is no move at all).
+  function ckEval(board, side) {   // how good the position is for `side`: pieces count most, men gain value as they advance, kings like the middle
+    var s = 0, i, ch, sd, r, c, v, adv;
+    for (i = 0; i < 64; i++) {
+      ch = board[i]; if (ch === "_") continue;
+      sd = ch === "a" || ch === "A" ? "a" : "b"; r = i >> 3; c = i & 7;
+      if (ch !== ch.toLowerCase()) v = 170 - 2 * (Math.abs(r - 3.5) + Math.abs(c - 3.5));
+      else { adv = sd === "a" ? 7 - r : r; v = 100 + 5 * adv + (adv === 0 ? 10 : 0) + (c === 0 || c === 7 ? 3 : 0); }
+      s += sd === side ? v : -v;
+    }
+    return s;
+  }
+  function ck(board, side, chain, lvl) {
+    var foe = side === "a" ? "b" : "a", nodes = 0, stop = false, deadline = INF, t0 = clock();
+    function search(bd, sd, ch, depth, alpha, beta, ply) {   // value for the side to move (sd); ch >= 0 means sd is in the middle of a jump chain
+      if ((++nodes & 255) === 0 && clock() > deadline) stop = true;
+      if (stop) return 0;
+      var fo = sd === "a" ? "b" : "a", moves = E.ckMoves(bd, sd, ch), best = -INF, i, m, r, v;
+      if (ch < 0 && !moves.length) return -(MATE - ply);   // nothing left to move: the other side has won
+      if (ply > 50) return ckEval(bd, sd);
+      if (ch < 0 && depth <= 0) {   // out of depth: keep looking only while captures are possible (taking is optional, so standing still is allowed)
+        best = ckEval(bd, sd);
+        moves = moves.filter(function (x) { return x.x >= 0; });
+        if (!moves.length || best >= beta) return best;
+        if (best > alpha) alpha = best;
+      } else if (moves.length > 1) {   // look at captures first
+        moves = moves.filter(function (x) { return x.x >= 0; }).concat(moves.filter(function (x) { return x.x < 0; }));
+      }
+      for (i = 0; i < moves.length; i++) {
+        m = moves[i]; r = E.ckApply(bd, m);
+        v = r.chain >= 0 ? search(r.board, sd, r.chain, depth, alpha, beta, ply + 1) : -search(r.board, fo, -1, depth - 1, -beta, -alpha, ply + 1);
+        if (stop) return 0;
+        if (v > best) best = v;
+        if (v > alpha) alpha = v;
+        if (alpha >= beta) return best;
+      }
+      if (ch >= 0) {   // after a jump you may also stop
+        v = -search(bd, fo, -1, depth - 1, -beta, -alpha, ply + 1);
+        if (stop) return 0;
+        if (v > best) best = v;
+      }
+      return best;
+    }
+    function rootVal(m, dd) {
+      var r;
+      if (m === null) return -search(board, foe, -1, dd - 1, -INF, INF, 1);
+      r = E.ckApply(board, m);
+      return r.chain >= 0 ? search(r.board, side, r.chain, dd, -INF, INF, 1) : -search(r.board, foe, -1, dd - 1, -INF, INF, 1);
+    }
+    var cand = E.ckMoves(board, side, chain), scores = null, maxD = [2, 6, 16][lvl], ms = [40, 250, 900][lvl], margin = [60, 15, 0][lvl], d, k, v, cur, pairs, opts, top, i;
+    if (chain >= 0) cand.push(null);
+    if (!cand.length) return null;
+    if (cand.length === 1) return cand[0];
+    for (d = 1; d <= maxD; d++) {   // look 1 move ahead, then 2, 3 ... until the time budget runs out; keep the last complete answer
+      deadline = d === 1 ? INF : t0 + ms; cur = [];
+      for (k = 0; k < cand.length; k++) { v = rootVal(cand[k], d); if (stop) break; cur.push(v); }
+      if (stop) break;
+      pairs = cand.map(function (m, j) { return { m: m, v: cur[j] }; }).sort(function (x, y) { return y.v - x.v; });   // best first, so the next round starts with the likely best move
+      cand = pairs.map(function (p) { return p.m; }); scores = pairs.map(function (p) { return p.v; });
+      if (Math.abs(scores[0]) >= MATE - 100) break;   // a forced win or a forced loss: looking deeper changes nothing
+    }
+    top = scores[0]; opts = [];
+    for (i = 0; i < cand.length; i++) if (scores[i] >= top - margin) opts.push(cand[i]);
+    if (lvl === 0 && Math.random() < 0.25) return pickOne(cand);   // Easy: now and then just plays something
+    return pickOne(opts);
+  }
+  BOTS.ck = ck;
+
+  // ── Chess ── S = a position { board, cast, ep, half } exactly as games.js uses it; col = the bot's colour ("w" or "b");
+  // hist = how often each position has already come up in the game ({ chKey: count }, {} is fine); lvl 0/1/2.
+  // Returns the move to play (an object from E.chLegal: use .f .t .p), or null when there is no legal move.
+  var CH_VAL = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 0 };
+  var CH_PST = {   // piece-square tables from White's point of view (row 0 = rank 8); Black reads them mirrored top-to-bottom. e = king in the endgame
+    p: [0, 0, 0, 0, 0, 0, 0, 0, 50, 50, 50, 50, 50, 50, 50, 50, 10, 10, 20, 30, 30, 20, 10, 10, 5, 5, 10, 25, 25, 10, 5, 5, 0, 0, 0, 20, 20, 0, 0, 0, 5, -5, -10, 0, 0, -10, -5, 5, 5, 10, 10, -20, -20, 10, 10, 5, 0, 0, 0, 0, 0, 0, 0, 0],
+    n: [-50, -40, -30, -30, -30, -30, -40, -50, -40, -20, 0, 0, 0, 0, -20, -40, -30, 0, 10, 15, 15, 10, 0, -30, -30, 5, 15, 20, 20, 15, 5, -30, -30, 0, 15, 20, 20, 15, 0, -30, -30, 5, 10, 15, 15, 10, 5, -30, -40, -20, 0, 5, 5, 0, -20, -40, -50, -40, -30, -30, -30, -30, -40, -50],
+    b: [-20, -10, -10, -10, -10, -10, -10, -20, -10, 0, 0, 0, 0, 0, 0, -10, -10, 0, 5, 10, 10, 5, 0, -10, -10, 5, 5, 10, 10, 5, 5, -10, -10, 0, 10, 10, 10, 10, 0, -10, -10, 10, 10, 10, 10, 10, 10, -10, -10, 5, 0, 0, 0, 0, 5, -10, -20, -10, -10, -10, -10, -10, -10, -20],
+    r: [0, 0, 0, 0, 0, 0, 0, 0, 5, 10, 10, 10, 10, 10, 10, 5, -5, 0, 0, 0, 0, 0, 0, -5, -5, 0, 0, 0, 0, 0, 0, -5, -5, 0, 0, 0, 0, 0, 0, -5, -5, 0, 0, 0, 0, 0, 0, -5, -5, 0, 0, 0, 0, 0, 0, -5, 0, 0, 0, 5, 5, 0, 0, 0],
+    q: [-20, -10, -10, -5, -5, -10, -10, -20, -10, 0, 0, 0, 0, 0, 0, -10, -10, 0, 5, 5, 5, 5, 0, -10, -5, 0, 5, 5, 5, 5, 0, -5, 0, 0, 5, 5, 5, 5, 0, -5, -10, 5, 5, 5, 5, 5, 0, -10, -10, 0, 5, 0, 0, 0, 0, -10, -20, -10, -10, -5, -5, -10, -10, -20],
+    k: [-30, -40, -40, -50, -50, -40, -40, -30, -30, -40, -40, -50, -50, -40, -40, -30, -30, -40, -40, -50, -50, -40, -40, -30, -30, -40, -40, -50, -50, -40, -40, -30, -20, -30, -30, -40, -40, -30, -30, -20, -10, -20, -20, -20, -20, -20, -20, -10, 20, 20, 0, 0, 0, 0, 20, 20, 20, 30, 10, 0, 0, 10, 30, 20],
+    e: [-50, -40, -30, -20, -20, -30, -40, -50, -30, -20, -10, 0, 0, -10, -20, -30, -30, -10, 20, 30, 30, 20, -10, -30, -30, -10, 30, 40, 40, 30, -10, -30, -30, -10, 30, 40, 40, 30, -10, -30, -30, -10, 20, 30, 30, 20, -10, -30, -30, -30, 0, 0, 0, 0, -30, -30, -50, -30, -30, -30, -30, -30, -30, -50]
+  };
+  var CH_LINES = ["e2e4 e7e5 g1f3 b8c6 f1b5 a7a6", "e2e4 e7e5 g1f3 b8c6 f1c4 g8f6", "e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6", "e2e4 e7e6 d2d4 d7d5 b1c3 g8f6", "e2e4 c7c6 d2d4 d7d5 b1c3 d5e4 c3e4 c8f5",
+    "d2d4 d7d5 c2c4 e7e6 b1c3 g8f6", "d2d4 g8f6 c2c4 e7e6 g1f3 d7d5", "d2d4 d7d5 g1f3 g8f6 c1f4 e7e6", "g1f3 d7d5 d2d4 g8f6 c2c4 e7e6", "c2c4 e7e5 b1c3 g8f6 g2g3 d7d5"];
+  var CH_BOOK = null;
+  function chBook(S, col) {   // a few well-known opening lines, so the bot does not open the same way every time; null once the game leaves them
+    var list;
+    if (!CH_BOOK) {
+      CH_BOOK = {};
+      CH_LINES.forEach(function (line) {
+        var P = { board: E.CH_START, cast: "KQkq", ep: -1, half: 0 }, c = "w", ok = true;
+        line.split(" ").forEach(function (s) {
+          if (!ok) return;
+          var f = (8 - +s[1]) * 8 + s.charCodeAt(0) - 97, t = (8 - +s[3]) * 8 + s.charCodeAt(2) - 97, m = E.chFind(P, c, f, t, ""), key = E.chKey(P, c), pair = f + "," + t;
+          if (!m) { ok = false; return; }
+          if (!CH_BOOK[key]) CH_BOOK[key] = [];
+          if (CH_BOOK[key].indexOf(pair) < 0) CH_BOOK[key].push(pair);
+          P = E.chApply(P, m); c = c === "w" ? "b" : "w";
+        });
+      });
+    }
+    list = CH_BOOK[E.chKey(S, col)];
+    if (!list) return null;
+    list = pickOne(list).split(",");
+    return E.chFind(S, col, +list[0], +list[1], "");
+  }
+  function chEval(b, col) {   // how good the board is for `col`, in centipawns (100 = one pawn)
+    var s = 0, i, ch, t, w, r, c, ix, np = 0, pawns = 0, rq = 0, minors = 0, wk = 0, bk = 0, wm = 0, bm = 0, endg, strongW, sk, lk, bonus;
+    for (i = 0; i < 64; i++) {
+      ch = b[i]; if (ch === "_") continue;
+      t = ch.toLowerCase(); w = ch !== t; r = i >> 3; c = i & 7;
+      if (t === "k") { if (w) wk = i; else bk = i; continue; }
+      ix = w ? i : (7 - r) * 8 + c;
+      if (w) { s += CH_VAL[t] + CH_PST[t][ix]; wm += CH_VAL[t]; } else { s -= CH_VAL[t] + CH_PST[t][ix]; bm += CH_VAL[t]; }
+      if (t === "p") pawns++; else { np += CH_VAL[t]; if (t === "n" || t === "b") minors++; else rq++; }
+    }
+    if (!pawns && !rq && minors <= 1) return 0;   // too little left to ever checkmate
+    endg = np <= 2600;
+    s += (endg ? CH_PST.e : CH_PST.k)[wk] - (endg ? CH_PST.e : CH_PST.k)[(7 - (bk >> 3)) * 8 + (bk & 7)];
+    if (endg && Math.abs(wm - bm) >= 300) {   // far ahead in the endgame: drive the lone king to the edge and bring the own king close, so the bot can really finish the game
+      strongW = wm > bm; sk = strongW ? wk : bk; lk = strongW ? bk : wk;
+      bonus = 10 * (Math.abs((lk >> 3) - 3.5) + Math.abs((lk & 7) - 3.5)) + 4 * (14 - Math.abs((sk >> 3) - (lk >> 3)) - Math.abs((sk & 7) - (lk & 7)));
+      s += strongW ? bonus : -bonus;
+    }
+    return col === "w" ? s : -s;
+  }
+  function ch(S, col, hist, lvl) {
+    var other = col === "w" ? "b" : "w", nodes = 0, stop = false, deadline = INF, t0 = clock(), path = [], killers = [], hh = [], i;
+    hist = hist || {};
+    for (i = 0; i < 4096; i++) hh[i] = 0;
+    function order(P, ps, kl) {   // sort score for every move: captures (big victim, small attacker) first, then promotions, killer moves, then moves that worked before
+      var j, m, cap, idx;
+      for (j = 0; j < ps.length; j++) {
+        m = ps[j]; cap = P.board[m.t]; idx = m.f * 64 + m.t;
+        if (cap !== "_" || m.e) m.sc = 100000 + (cap === "_" ? 100 : CH_VAL[cap.toLowerCase()]) * 16 - CH_VAL[P.board[m.f].toLowerCase()];
+        else if (m.p) m.sc = 90000 + (m.p === "q" ? 800 : 0);
+        else if (kl && idx === kl[0]) m.sc = 80000;
+        else if (kl && idx === kl[1]) m.sc = 79000;
+        else m.sc = hh[idx];
+      }
+      ps.sort(function (x, y) { return y.sc - x.sc; });
+    }
+    function qs(P, c, alpha, beta, ply) {   // quiet search: after the set depth, keep looking only at captures so the bot does not stop in the middle of a trade
+      if ((++nodes & 255) === 0 && clock() > deadline) stop = true;
+      if (stop) return 0;
+      var o = c === "w" ? "b" : "w", stand = chEval(P.board, c), best = stand, ps, j, m, nb, v, vic;
+      if (stand >= beta || ply > 40) return stand;
+      if (stand > alpha) alpha = stand;
+      ps = E.chPseudo(P, c); order(P, ps, null);
+      for (j = 0; j < ps.length; j++) {
+        m = ps[j]; if (m.sc < 90000) break;
+        if (m.p && m.p !== "q") continue;
+        vic = P.board[m.t] === "_" ? 100 : CH_VAL[P.board[m.t].toLowerCase()];
+        if (!m.p && stand + vic + 200 < alpha) continue;   // cannot catch up even after winning this piece
+        nb = E.chApply(P, m); if (E.chInCheck(nb, c)) continue;
+        v = -qs(nb, o, -beta, -alpha, ply + 1);
+        if (stop) return 0;
+        if (v > best) best = v;
+        if (v > alpha) alpha = v;
+        if (alpha >= beta) break;
+      }
+      return best;
+    }
+    function search(P, c, depth, alpha, beta, ply) {   // value for the side to move (c)
+      if ((++nodes & 255) === 0 && clock() > deadline) stop = true;
+      if (stop) return 0;
+      var o = c === "w" ? "b" : "w", inChk = E.chInCheck(P, c), ps, j, m, nb, v, best = -INF, legal = 0, key, kl, idx, quiet, pushed = false;
+      if (P.half >= 100) return 0;   // 50-move rule
+      if (P.half >= 4) {   // a position that already came up twice in the game, or earlier on this line, counts as a draw
+        key = E.chKey(P, c);
+        if ((hist[key] || 0) >= 2 || path.indexOf(key) >= 0) return 0;
+        path.push(key); pushed = true;
+      }
+      if (inChk && ply < 40) depth++;   // when in check look one move deeper
+      if (depth <= 0) { v = qs(P, c, alpha, beta, ply); if (pushed) path.pop(); return v; }
+      kl = killers[ply] || (killers[ply] = [-1, -1]);
+      ps = E.chPseudo(P, c); order(P, ps, kl);
+      for (j = 0; j < ps.length; j++) {
+        m = ps[j]; nb = E.chApply(P, m);
+        if (E.chInCheck(nb, c)) continue;
+        legal++;
+        quiet = P.board[m.t] === "_" && !m.e && !m.p;
+        if (legal > 4 && depth >= 3 && quiet && !inChk && m.sc < 70000) {   // late quiet moves are first looked at a bit less deeply
+          v = -search(nb, o, depth - 2, -alpha - 1, -alpha, ply + 1);
+          if (v > alpha && !stop) v = -search(nb, o, depth - 1, -beta, -alpha, ply + 1);
+        } else v = -search(nb, o, depth - 1, -beta, -alpha, ply + 1);
+        if (stop) return 0;
+        if (v > best) best = v;
+        if (v > alpha) alpha = v;
+        if (alpha >= beta) {
+          if (quiet) { idx = m.f * 64 + m.t; if (kl[0] !== idx) { kl[1] = kl[0]; kl[0] = idx; } hh[idx] = Math.min(50000, hh[idx] + depth * depth); }
+          break;
+        }
+      }
+      if (!legal) best = inChk ? -(MATE - ply) : 0;   // checkmate, or stalemate
+      if (pushed) path.pop();
+      return best;
+    }
+    var cands = E.chLegal(S, col), scores = null, maxD = [2, 4, 9][lvl], ms = [120, 600, 1500][lvl], margin = [150, 25, 0][lvl], d, k, v, top, lo, cur, pairs, opts, pick;
+    if (!cands.length) return null;
+    if (cands.length === 1) return cands[0];
+    pick = chBook(S, col); if (pick) return pick;
+    if (lvl === 0 && Math.random() < 0.2) return pickOne(cands);   // Easy: now and then just plays something
+    order(S, cands, null); path.push(E.chKey(S, col));
+    for (d = 1; d <= maxD; d++) {   // look 1 move ahead, then 2, 3 ... until the time budget runs out; the last complete round decides
+      deadline = d <= 2 ? INF : t0 + ms; cur = []; top = -INF;
+      for (k = 0; k < cands.length; k++) {
+        lo = k === 0 ? -INF : top - margin - 1;   // only moves that could land within `margin` of the best need an exact value
+        v = -search(E.chApply(S, cands[k]), other, d - 1, -INF, -lo, 1);
+        if (stop) break;
+        cur.push(v); if (v > top) top = v;
+      }
+      if (stop) break;
+      pairs = cands.map(function (m, j) { return { m: m, v: cur[j] }; }).sort(function (x, y) { return y.v - x.v; });   // best first, so the next round starts with the likely best move
+      cands = pairs.map(function (p) { return p.m; }); scores = pairs.map(function (p) { return p.v; });
+      if (Math.abs(scores[0]) >= MATE - 100) break;   // a forced mate (for or against): looking deeper changes nothing
+    }
+    top = scores[0]; opts = [];
+    for (k = 0; k < cands.length; k++) if (scores[k] >= top - margin) opts.push(cands[k]);
+    pick = pickOne(opts);
+    return E.chFind(S, col, pick.f, pick.t, pick.p || "q") || pick;
+  }
+  BOTS.ch = ch;
+
   /*@@NEXT@@*/
   window.VUS_BOTS = BOTS;
 })();

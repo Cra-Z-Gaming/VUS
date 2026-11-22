@@ -554,19 +554,23 @@
     }
   }
   function dLeave(gid) {
+    if (lgames[gid]) { lLeave(); return true; }   // a practice game: just walk away
     var raw = pgames[gid], side = sideIn(raw), st = raw && derive(raw); if (!side || !st) return;
     if (st.status === "waiting") return append(gid, { k: "end", s: "x", kind: "cancel" }, function (x) { return x.status === "waiting"; });
     return append(gid, { k: "end", s: side, kind: "forfeit", w: other(side) }, function (x) { return x.status === "playing"; });
   }
   function dMove(gid, c) {
+    if (lgames[gid]) return lAct(gid, { k: "m", s: "a", c: c });
     var side = sideIn(pgames[gid]);
     return append(gid, { k: "m", s: side, c: c }, function (x) { return x.status === "playing" && x.turn === side; });
   }
   function dMoveCk(gid, f, t, p) {
+    if (lgames[gid]) return lAct(gid, p ? { k: "m", s: "a", f: f, c: t, p: p } : { k: "m", s: "a", f: f, c: t });
     var side = sideIn(pgames[gid]);
     return append(gid, p ? { k: "m", s: side, f: f, c: t, p: p } : { k: "m", s: side, f: f, c: t }, function (x) { return x.status === "playing" && x.turn === side; });
   }
   function dStop(gid) {   // end my turn after a jump instead of jumping again
+    if (lgames[gid]) return lAct(gid, { k: "st", s: "a" });
     var side = sideIn(pgames[gid]);
     return append(gid, { k: "st", s: side }, function (x) { return x.status === "playing" && x.turn === side && x.chain >= 0; });
   }
@@ -574,6 +578,7 @@
   try { commits = JSON.parse(localStorage.getItem("vus_games_commits") || "{}") || {}; } catch (e) { commits = {}; }
   function saveCommits() { try { localStorage.setItem("vus_games_commits", JSON.stringify(commits)); } catch (e) {} }
   function dPick(gid, p) {   // commit to a pick without showing it; the reveal is sent automatically once both have committed
+    if (lgames[gid]) return lPick(gid, p);
     var raw = pgames[gid], side = sideIn(raw), st = raw && derive(raw);
     if (!st || st.status !== "playing" || st.picked[side]) return;
     var z = Array.prototype.map.call(crypto.getRandomValues(new Uint8Array(8)), function (x) { return ("0" + x.toString(16)).slice(-2); }).join("");
@@ -588,6 +593,7 @@
   }
   var lastBeat = 0, ticking = false;
   async function directTick(gid) {   // runs every second while I'm in a Direct game
+    if (lgames[gid]) return localTick(gid);
     if (ticking) return; ticking = true;
     try {
       var raw = pgames[gid], side = sideIn(raw); if (!raw || !side) return;
@@ -636,12 +642,194 @@
 
   // ── game state (live from the database) ──
   var games = {}, pgames = {}, listenRef = null, pgRef = null, myGid = "", myMode = "", loop = null, lastId = "", lastSig = "", myPicks = {}, lastPing = 0, spectate = null;
+  // ── Practice games against a bot ──
+  // A practice game lives only in this browser tab: nothing goes to Firebase or the server, no crates are bet and quests never see it.
+  // Its record has the same shape as a Direct game, so derive() and the normal game screens work unchanged. The bot (bots.js, loaded on first use) is always side "b".
+  var BOTS_URL = "https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Chat-DM/bots.js", botsP = null;
+  var lgames = {}, lviews = {}, lcommits = {}, lTimers = {}, lseq = 0, LVN = ["Easy", "Normal", "Hard"], prOpt = { game: "ttt", lvl: 1, tm: 600, pm: 0, c: "random" };
+  function loadBots() {   // bots.js is fetched like the other scripts (raw.githubusercontent.com cannot be used as a plain <script src>)
+    if (window.VUS_BOTS) return Promise.resolve();
+    if (!botsP) botsP = fetch(BOTS_URL, { cache: "no-cache" }).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    }).then(function (t) {
+      return new Promise(function (res, rej) {
+        var s = document.createElement("script");
+        s.src = URL.createObjectURL(new Blob([t], { type: "application/javascript" }));
+        s.onload = res; s.onerror = function () { rej(new Error("bots.js did not run")); };
+        document.body.appendChild(s);
+      });
+    }).then(function () { if (!window.VUS_BOTS) throw new Error("bots.js did not start"); }).catch(function (e) {
+      botsP = null; throw new Error("The practice bots couldn't be loaded (" + (e && e.message || e) + "). Check your connection and try again.");
+    });
+    return botsP;
+  }
+  function pracMsg(s) {   // the normal result texts talk about bets and crates: say the same thing without them
+    return String(s || "").replace(" Everyone got their crates back. Make or join a new game.", "").replace(" Everyone got their crates back.", "").replace(" wins the bet.", " wins.");
+  }
+  function lview(gid) {   // the view derive() gives for a Direct game, remembered until the log grows
+    var raw = lgames[gid], n, c, st;
+    if (!raw) return null;
+    n = Object.keys(raw.log).length; c = lviews[gid];
+    if (!c || c.n !== n) {
+      st = derive(raw); st.practice = true; st.prac = raw.prac; st.lvl = raw.lvl;
+      if (st.result) st.result.msg = raw.stuck ? "The bot ran into a problem, so this practice game was stopped. Leave and start a new one." : pracMsg(st.result.msg);
+      c = lviews[gid] = { n: n, st: st };
+    }
+    return c.st;
+  }
+  function lAppend(gid, entry, ok) {   // add one entry to a practice game's log (the same entries a Direct game uses)
+    var raw = lgames[gid];
+    if (!raw || (ok && !ok(lview(gid)))) return false;
+    raw.log[("000" + Object.keys(raw.log).length).slice(-4)] = Object.assign({}, entry, { t: now() });
+    return true;
+  }
+  function lAfter(gid) { onGames(); lPlan(gid); }
+  function lAct(gid, entry) {   // a move by me (side a)
+    var done = lAppend(gid, entry, function (x) { return x.status === "playing" && x.turn === "a" && (entry.k !== "st" || x.chain >= 0); });
+    if (done) lAfter(gid);
+    return done;
+  }
+  function lz() { return Array.prototype.map.call(crypto.getRandomValues(new Uint8Array(8)), function (x) { return ("0" + x.toString(16)).slice(-2); }).join(""); }
+  function lPick(gid, p) {   // Rock Paper Scissors: lock in my pick (the reveal follows in localTick)
+    var st = lview(gid), z, done;
+    if (!st || st.status !== "playing" || st.picked.a || PICKS.indexOf(p) < 0) return false;
+    z = lz(); lcommits[gid + ":" + st.rn + ":a"] = { p: p, z: z };
+    done = lAppend(gid, { k: "c", s: "a", h: sha256hex(p + ":" + z) }, function (x) { return x.status === "playing" && !x.picked.a; });
+    if (done) lAfter(gid);
+    return done;
+  }
+  function lDrop(gid) {   // forget a practice game (does nothing for a real game)
+    if (!lgames[gid]) return;
+    clearTimeout(lTimers[gid]); delete lTimers[gid]; delete lgames[gid]; delete lviews[gid];
+    Object.keys(lcommits).forEach(function (k) { if (k.indexOf(gid + ":") === 0) delete lcommits[k]; });
+  }
+  function lLeave() { lDrop(myGid); myGid = ""; myMode = ""; stopLoop(); showErr(""); lastSig = ""; render(); }
+  function lRpsHist(raw) {   // finished Rock Paper Scissors rounds from the bot's point of view: { me: bot's pick, foe: my pick }
+    var A = [], Bp = [], keys = Object.keys(raw.log).sort(), out = [], i, e;
+    for (i = 0; i < keys.length; i++) { e = raw.log[keys[i]]; if (e && e.k === "r" && PICKS.indexOf(e.p) >= 0) (e.s === "a" ? A : Bp).push(e.p); }
+    for (i = 0; i < Math.min(A.length, Bp.length); i++) out.push({ me: Bp[i], foe: A[i] });
+    return out;
+  }
+  function lChessHist(raw) {   // how often each position has come up so far (for the repetition rule), by replaying the moves
+    var S = { board: CH_START, cast: "KQkq", ep: -1, half: 0 }, hist = {}, w = chOptsOf(raw.opt).w, keys = Object.keys(raw.log).sort(), i, e, c, m;
+    hist[chKey(S, "w")] = 1;
+    for (i = 0; i < keys.length; i++) {
+      e = raw.log[keys[i]]; if (!e || e.k !== "m" || !Number.isInteger(e.f)) continue;
+      c = e.s === w ? "w" : "b"; m = chFind(S, c, e.f, e.c, e.p); if (!m) continue;
+      S = chApply(S, m); chAfter(S, c, hist);
+    }
+    return hist;
+  }
+  function lSig(st) { return JSON.stringify([st.board, st.turn, st.chain, st.picked, st.rv, st.rn, st.score]); }
+  function lCommitB(raw, st, p) {   // the bot locks in a Rock Paper Scissors pick (hidden until both have picked)
+    var z = lz();
+    if (PICKS.indexOf(p) < 0) p = PICKS[Math.floor(Math.random() * 3)];
+    lcommits[raw.gid + ":" + st.rn + ":b"] = { p: p, z: z };
+    return { k: "c", s: "b", h: sha256hex(p + ":" + z) };
+  }
+  function lChoose(raw, st) {   // asks bots.js for the bot's next log entry, or null when it has no valid answer
+    var B = window.VUS_BOTS, lvl = raw.lvl, type = st.type, v, m;
+    if (!B || !B[type]) return null;
+    if (type === "ttt") { v = B.ttt(st.board, st.starter === "b" ? "X" : "O", lvl); return v >= 0 && st.board[v] === "_" ? { k: "m", s: "b", c: v } : null; }
+    if (type === "c4") { v = B.c4(st.board, st.starter === "b" ? "R" : "Y", lvl); return v >= 0 && v <= 6 && st.board[v] === "_" ? { k: "m", s: "b", c: v } : null; }
+    if (type === "rps") return st.picked.b ? null : lCommitB(raw, st, B.rps(lRpsHist(raw), lvl));
+    if (type === "ck") {
+      m = B.ck(st.board, "b", st.chain, lvl);
+      if (m) return ckFind(st.board, "b", st.chain, m.f, m.t) ? { k: "m", s: "b", f: m.f, c: m.t } : null;
+      return st.chain >= 0 ? { k: "st", s: "b" } : null;
+    }
+    m = B.ch({ board: st.board, cast: st.cast, ep: st.ep, half: st.half }, st.white === "b" ? "w" : "b", lChessHist(raw), lvl);
+    return m ? (m.p ? { k: "m", s: "b", f: m.f, c: m.t, p: m.p } : { k: "m", s: "b", f: m.f, c: m.t }) : null;
+  }
+  function lFallback(raw, st) {   // if the bot fails, play any legal move instead so the game never freezes
+    var i, ms, cs;
+    if (st.type === "ttt") { i = st.board.indexOf("_"); return i >= 0 ? { k: "m", s: "b", c: i } : null; }
+    if (st.type === "c4") { for (i = 0; i < 7; i++) if (st.board[i] === "_") return { k: "m", s: "b", c: i }; return null; }
+    if (st.type === "rps") return st.picked.b ? null : lCommitB(raw, st, "rock");
+    if (st.type === "ck") { ms = ckMoves(st.board, "b", st.chain); return ms.length ? { k: "m", s: "b", f: ms[0].f, c: ms[0].t } : st.chain >= 0 ? { k: "st", s: "b" } : null; }
+    cs = chLegal({ board: st.board, cast: st.cast, ep: st.ep, half: st.half }, st.white === "b" ? "w" : "b");
+    return cs.length ? (cs[0].p ? { k: "m", s: "b", f: cs[0].f, c: cs[0].t, p: cs[0].p } : { k: "m", s: "b", f: cs[0].f, c: cs[0].t }) : null;
+  }
+  function lBotMove(gid) {   // the bot acts now
+    var raw = lgames[gid], st = raw && lview(gid), e = null, before, after;
+    if (!st || st.status !== "playing") return;
+    before = lSig(st);
+    try { e = lChoose(raw, st); } catch (err) { e = null; }
+    if (!e) { try { e = lFallback(raw, st); } catch (err2) { e = null; } }
+    if (e) lAppend(gid, e, function (x) { return x.status === "playing"; });
+    after = lview(gid);
+    if (after && after.status === "playing" && lSig(after) === before) {   // nothing changed: after 3 tries stop the game instead of looping forever
+      raw.fails = (raw.fails || 0) + 1;
+      if (raw.fails >= 3) { raw.stuck = true; lAppend(gid, { k: "end", s: "x", kind: "bothleft" }); }
+    } else raw.fails = 0;
+    lAfter(gid);
+  }
+  function lPlan(gid) {   // when it is the bot's turn (or it still has to pick), schedule its move a moment from now so it feels natural
+    var raw = lgames[gid], st = raw && lview(gid), d;
+    if (!st || st.status !== "playing" || raw.stuck || lTimers[gid]) return;
+    if (st.type === "rps" ? st.picked.b : st.turn !== "b") return;
+    d = { ttt: [450, 500], rps: [600, 900], c4: [500, 600], ck: [600, 600], ch: [350, 450] }[st.type] || [500, 500];
+    lTimers[gid] = setTimeout(function () { delete lTimers[gid]; lBotMove(gid); }, d[0] + Math.random() * d[1]);
+  }
+  function localTick(gid) {   // what directTick does for a real game: the clock, overtime and the Rock Paper Scissors reveals
+    var raw = lgames[gid], st = raw && lview(gid), t = now(), did = false;
+    if (!st || st.status !== "playing") return;
+    if (t >= st.deadline) {
+      if (st.type === "ch") did = lAppend(gid, { k: "end", s: "x", kind: "timeout", w: other(st.turn) }, function (x) { return x.status === "playing"; });
+      else if (st.score.a !== st.score.b) did = lAppend(gid, { k: "end", s: "x", kind: "timeout", w: st.score.a > st.score.b ? "a" : "b" }, function (x) { return x.status === "playing"; });
+      else if (!st.overtime) did = lAppend(gid, { k: "ot", s: "x" }, function (x) { return x.status === "playing" && !x.overtime; });
+      else did = lAppend(gid, { k: "end", s: "x", kind: "timeout-refund" }, function (x) { return x.status === "playing" && x.overtime; });
+    } else if (st.type === "rps" && st.picked.a && st.picked.b) {
+      ["a", "b"].forEach(function (s) {
+        var cm = lcommits[gid + ":" + st.rn + ":" + s];
+        if (cm && !st.rv[s] && lAppend(gid, { k: "r", s: s, p: cm.p, z: cm.z })) did = true;
+      });
+    }
+    if (did) lAfter(gid);
+  }
+  async function startPractice(type, lvl, o) {   // o = the chess options { tm, pm, c } (ignored for the other games)
+    var oo = o || {}, gid, rec;
+    await loadBots();
+    if (!window.VUS_BOTS[type]) throw new Error("There is no practice bot for that game yet.");
+    if (!LVN[lvl]) lvl = 1;
+    gid = "pr" + (++lseq) + "x" + Date.now().toString(36);
+    rec = { gid: gid, type: type, bet: 0, created: now(), a: { id: me(), name: myName() }, b: { id: "bot", name: "Bot (" + LVN[lvl] + ")" }, seen: {}, paid: {}, log: { "0000": { k: "start", t: now() } }, practice: true, lvl: lvl, prac: { type: type, lvl: lvl, opt: o || null } };
+    if (type === "ch") rec.opt = { tm: oo.tm, pm: oo.pm, w: oo.c === "white" ? "a" : oo.c === "black" ? "b" : (Math.random() < 0.5 ? "a" : "b") };   // w = which side plays White (me = a)
+    lgames[gid] = rec;
+    lPlan(gid);
+    return { gid: gid, mode: "direct" };
+  }
+  async function waitToBot(g) {   // from the "waiting for someone to join" screen: cancel my open game (bet returned), then play the bot at Normal
+    await loadBots();   // download the bots first, so the screen does not flash a "cancelled" result while they load
+    var r = await (g.mode === "direct" ? dLeave(myGid) : call("leave", { gid: myGid }));
+    if (g.mode === "direct" && r === false) throw new Error("Someone just joined your game, so it is starting. The bot was not started.");
+    return startPractice(g.type || "ttt", 1, g.type === "ch" ? { tm: g.tm, pm: g.pm, c: g.white === "a" ? "white" : "black" } : null);
+  }
+  function renderPractice(wrap) {   // the lobby card
+    var c = el("div", "gm-card"), row = el("div"), gs = document.createElement("select"), ls = document.createElement("select"), go;
+    c.appendChild(el("h3", "", "Practice against a bot"));
+    c.appendChild(el("div", "gm-note", "Play the computer for fun or to learn. No crates are bet, nothing is saved, and it does not count for quests. Leaving is free."));
+    row.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;margin:8px 0";
+    gs.className = "gm-sel"; ls.className = "gm-sel";
+    ORDER.forEach(function (k) { var o = document.createElement("option"); o.value = k; o.textContent = NAMES[k]; gs.appendChild(o); });
+    LVN.forEach(function (n, i) { var o = document.createElement("option"); o.value = String(i); o.textContent = "Bot level: " + n; ls.appendChild(o); });
+    gs.value = prOpt.game; gs.onchange = function () { prOpt.game = gs.value; render(); };
+    ls.value = String(prOpt.lvl); ls.onchange = function () { prOpt.lvl = Number(ls.value); };
+    row.appendChild(gs); row.appendChild(ls); c.appendChild(row);
+    c.appendChild(el("div", "gm-note", RULES[prOpt.game]));
+    if (prOpt.game === "ch") c.appendChild(chOptions(prOpt));
+    go = el("button", "gm-btn p", "Start practice game"); go.type = "button"; go.disabled = busy;
+    go.onclick = function () { act(function () { return startPractice(prOpt.game, prOpt.lvl, prOpt.game === "ch" ? { tm: prOpt.tm, pm: prOpt.pm, c: prOpt.c } : null); }); };
+    c.appendChild(go); wrap.appendChild(c);
+  }
+
   function startListening() {
     var d = db(); if (!d) return;
     if (!listenRef) { listenRef = d.ref("games"); listenRef.on("value", function (s) { games = s.val() || {}; onGames(); }, function () {}); }
     if (!pgRef) { pgRef = d.ref("pg"); pgRef.on("value", function (s) { pgames = s.val() || {}; directHousekeeping(); onGames(); }, function () {}); }
   }
-  function viewOf(gid, mode) { return mode === "direct" ? (pgames[gid] ? derive(pgames[gid]) : null) : (games[gid] || null); }
+  function viewOf(gid, mode) { if (lgames[gid]) return lview(gid); return mode === "direct" ? (pgames[gid] ? derive(pgames[gid]) : null) : (games[gid] || null); }
   function findMine() {   // a game I'm still playing (finished ones stay on screen until I click back)
     var id = me(), found = null;
     Object.keys(games).forEach(function (k) {
@@ -655,7 +843,7 @@
     return found;
   }
   function onGames() {
-    var mine = findMine();
+    var mine = lgames[myGid] ? null : findMine();   // while I'm in a practice game, a real game must not take over the screen
     if (mine && (mine.gid !== myGid || mine.mode !== myMode)) { myGid = mine.gid; myMode = mine.mode; startLoop(); }
     if (myGid && !viewOf(myGid, myMode)) { myGid = ""; stopLoop(); }
     if (spectate && (myGid || !viewOf(spectate.gid, spectate.mode))) spectate = null;   // started playing, or the watched game was removed
@@ -756,6 +944,7 @@
       c.appendChild(go);
     }
     wrap.appendChild(c);
+    renderPractice(wrap);
 
     var list = waitingList().filter(function (w) { return !(me() && ((games[w.gid] && games[w.gid].p.a.id === me()) || (pgames[w.gid] && pgames[w.gid].a.id === me()))); });
     var l = el("div", "gm-card"); l.appendChild(el("h3", "", "Open games"));
@@ -912,8 +1101,8 @@
   function chDesc(o) { var s = (o.tm ? o.tm / 60 : 10) + " min each"; if (o.pm) s += ", " + (o.pm >= 60 ? o.pm / 60 + " min" : o.pm + " sec") + " per move"; return s; }
   function chInfo(type, g) { return type === "ch" ? " \u00B7 " + chDesc(g) : ""; }
   function chLobbyInfo(w) { return w.type === "ch" && w.opt ? " \u00B7 " + chDesc(w.opt) + " \u00B7 you play " + (w.opt.w === "a" ? "Black" : "White") : ""; }
-  function chOptions() {
-    var box = el("div"); box.style.cssText = "display:flex;gap:12px;flex-wrap:wrap;margin:10px 0";
+  function chOptions(po) {   // po = the options object to edit (the practice card passes its own)
+    var O = po || chOpt, box = el("div"); box.style.cssText = "display:flex;gap:12px;flex-wrap:wrap;margin:10px 0";
     function pick(label, vals, cur, onSet) {
       var lb = el("label", "gm-note", label + " "); lb.style.cssText = "margin:0;display:flex;align-items:center;gap:6px";
       var s = document.createElement("select"); s.className = "gm-sel";
@@ -921,9 +1110,9 @@
       s.value = String(cur); s.onchange = function () { onSet(s.value); };
       lb.appendChild(s); box.appendChild(lb);
     }
-    pick("Time each:", [[180, "3 min"], [300, "5 min"], [600, "10 min"], [900, "15 min"], [1800, "30 min"]], chOpt.tm, function (v) { chOpt.tm = Number(v); });
-    pick("Time per move:", [[0, "No limit"], [15, "15 sec"], [30, "30 sec"], [60, "1 min"], [120, "2 min"]], chOpt.pm, function (v) { chOpt.pm = Number(v); });
-    pick("You play:", [["random", "Random"], ["white", "White"], ["black", "Black"]], chOpt.c, function (v) { chOpt.c = v; });
+    pick("Time each:", [[180, "3 min"], [300, "5 min"], [600, "10 min"], [900, "15 min"], [1800, "30 min"]], O.tm, function (v) { O.tm = Number(v); });
+    pick("Time per move:", [[0, "No limit"], [15, "15 sec"], [30, "30 sec"], [60, "1 min"], [120, "2 min"]], O.pm, function (v) { O.pm = Number(v); });
+    pick("You play:", [["random", "Random"], ["white", "White"], ["black", "Black"]], O.c, function (v) { O.c = v; });
     return box;
   }
   function chRow(name, white, you) {   // a player's name tag and clock
@@ -1000,8 +1189,8 @@
     var left = el("div"); left.appendChild(el("div", "gm-pl me", g.p[side].name + " (you)"));
     var mid = el("div", "gm-center"), sc = g.score || { a: 0, b: 0 };
     mid.appendChild(el("div", "gm-score", type === "c4" || type === "ch" ? "vs" : sc[side] + " \u2013 " + sc[opp]));
-    var sub = el("div", "gm-note", (NAMES[type] || "Game") + chInfo(type, g) + " \u00B7 bet " + g.bet + "x each \u00B7 pot " + crates(g.bet * 2));
-    sub.appendChild(el("span", "gm-tag " + (g.mode === "direct" ? "d" : "s"), g.mode === "direct" ? "Direct" : "Secure")); mid.appendChild(sub);
+    var sub = el("div", "gm-note", (NAMES[type] || "Game") + chInfo(type, g) + (g.practice ? " \u00B7 vs " + LVN[g.lvl] + " bot \u00B7 no bet" : " \u00B7 bet " + g.bet + "x each \u00B7 pot " + crates(g.bet * 2)));
+    sub.appendChild(el("span", "gm-tag " + (g.mode === "direct" ? "d" : "s"), g.practice ? "Practice" : g.mode === "direct" ? "Direct" : "Secure")); mid.appendChild(sub);
     var right = el("div"); right.style.textAlign = "right"; right.appendChild(el("div", "gm-pl", g.p[opp] ? g.p[opp].name : "Waiting\u2026"));
     top.append(left, mid, right); wrap.appendChild(top);
 
@@ -1011,6 +1200,9 @@
       card.appendChild(el("div", "gm-note gm-center", "Your bet of " + crates(g.bet) + " is held until the game ends. Keep this tab open. Cancelling gives it back."));
       var cancel = el("button", "gm-btn d", "Cancel game"); cancel.type = "button"; var cw = el("div", "gm-center"); cw.appendChild(cancel); card.appendChild(cw);
       cancel.onclick = function () { act(function () { return g.mode === "direct" ? dLeave(myGid) : call("leave", { gid: myGid }); }); };
+      var bi = el("button", "gm-btn", "Play the bot instead"); bi.type = "button"; bi.disabled = busy; bi.style.marginLeft = "8px";
+      bi.onclick = function () { gmConfirm("Play the bot instead?", "Your open game is cancelled and your bet comes back. You then play a practice game against the bot (Normal level, no bet).", "Play the bot", function () { act(function () { return waitToBot(g); }); }); };
+      cw.appendChild(bi);
     } else if (g.status === "playing") {
       timerEl = el("div", "gm-timer"); var tw = el("div", "gm-center"); tw.appendChild(timerEl); card.appendChild(tw);
       var oppName = g.p[opp].name, lr = g.lastRound, banner = "";
@@ -1040,21 +1232,26 @@
         if (type === "ttt" && lr && now() - lr.at < 4000) banner = lr.winner ? g.p[lr.winner].name + " won round " + lr.round + "!" : "Round " + lr.round + " was a draw. Replaying.";
       }
       card.appendChild(el("div", "gm-banner", banner));
-      card.appendChild(el("div", "gm-note gm-center", (type === "c4" || type === "ck" || type === "ch" ? "One game" : "Round " + g.round) + (g.draws ? " \u00B7 " + g.draws + (g.draws === 1 ? " tie" : " ties") : "") + ". Keep this tab open: if you are disconnected for 15 seconds your bet goes to " + oppName + "."));
+      card.appendChild(el("div", "gm-note gm-center", (type === "c4" || type === "ck" || type === "ch" ? "One game" : "Round " + g.round) + (g.draws ? " \u00B7 " + g.draws + (g.draws === 1 ? " tie" : " ties") : "") + (g.practice ? ". Practice game: nothing is bet and nothing is saved." : ". Keep this tab open: if you are disconnected for 15 seconds your bet goes to " + oppName + ".")));
       var lv = el("button", "gm-btn d", "Leave game"); lv.type = "button"; var lw = el("div", "gm-center"); lw.appendChild(lv); card.appendChild(lw);
-      lv.onclick = function () { gmConfirm("Leave this game?", "Your bet of " + crates(g.bet) + " goes to " + oppName + ".", "Leave game", function () { act(function () { return g.mode === "direct" ? dLeave(myGid) : call("leave", { gid: myGid }); }); }); };
+      lv.onclick = g.practice ? function () { gmConfirm("Leave this practice game?", "Nothing is bet, so nothing is lost.", "Leave", function () { lLeave(); }); } : function () { gmConfirm("Leave this game?", "Your bet of " + crates(g.bet) + " goes to " + oppName + ".", "Leave game", function () { act(function () { return g.mode === "direct" ? dLeave(myGid) : call("leave", { gid: myGid }); }); }); };
       paintTimer(g);
     } else {   // done
       var r = g.result || {}, won = r.winner === side, refund = !r.winner;
       var d = el("div", "gm-done");
-      d.appendChild(el("h3", "", refund ? "\uD83D\uDD01 Refunded" : won ? "\uD83C\uDF89 You won " + crates(g.bet * 2) + "!" : "You lost " + crates(g.bet)));
+      d.appendChild(el("h3", "", g.practice ? (refund ? "\uD83E\uDD1D Draw" : won ? "\uD83C\uDF89 You beat the bot!" : "The bot won this time") : refund ? "\uD83D\uDD01 Refunded" : won ? "\uD83C\uDF89 You won " + crates(g.bet * 2) + "!" : "You lost " + crates(g.bet)));
       d.appendChild(el("div", "gm-note", r.msg || "The game ended."));
       if (type === "rps" && g.lastRound && g.lastRound.a) d.appendChild(el("div", "gm-banner", "Final round: you " + ICON[g.lastRound[side]] + " vs " + g.p[opp].name + " " + ICON[g.lastRound[opp]]));
       if (type === "c4" && g.board) d.appendChild(c4Board(g, false, false));
       if (type === "ttt" && g.board) d.appendChild(tttBoard(g, false, false));
       if (type === "ck" && g.board) d.appendChild(ckBoard(g, false, false, side));
       if (type === "ch" && g.board) d.appendChild(chBoard(g, false, false, g.white === side ? "w" : "b"));
-      var back = el("button", "gm-btn p", "Back to games"); back.type = "button"; back.onclick = function () { myGid = ""; myMode = ""; stopLoop(); showErr(""); lastSig = ""; render(); };
+      var back = el("button", "gm-btn p", "Back to games"); back.type = "button"; back.onclick = function () { lDrop(myGid); myGid = ""; myMode = ""; stopLoop(); showErr(""); lastSig = ""; render(); };
+      if (g.practice && g.prac) {   // practice games can be replayed with the same settings
+        var again = el("button", "gm-btn", "Play again"); again.type = "button"; again.style.marginRight = "8px";
+        again.onclick = function () { var pr = g.prac; lDrop(myGid); myGid = ""; myMode = ""; act(function () { return startPractice(pr.type, pr.lvl, pr.opt); }); };
+        d.appendChild(again);
+      }
       d.appendChild(back); card.appendChild(d);
     }
     wrap.appendChild(card);
