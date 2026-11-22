@@ -11912,6 +11912,15 @@ async function openInventoryOf(loginId, name) {
   const label = () => { const hidden = document.body.classList.contains("hide-members"); b.textContent = hidden ? "\u25C0 Show online list" : "Hide online list \u25B6"; b.title = hidden ? "Show the online list" : "Hide the online list"; };
   label();
   new MutationObserver(label).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  // Only show the dock while the chat itself is on screen: not on the join / ban screens, in DMs, or in the Games panel.
+  const shellEl = document.getElementById("appShell"), shownId = id => { const n = document.getElementById(id); return !!n && getComputedStyle(n).display !== "none"; };
+  const syncDock = () => {
+    const chatOn = !!shellEl && shellEl.classList.contains("mode-chat") && !shellEl.classList.contains("mode-games") && shownId("chatScreen") && !shownId("joinScreen") && !shownId("banScreen");
+    document.body.classList.toggle("members-dock-off", !chatOn);
+  };
+  syncDock();
+  ["appShell", "chatScreen", "joinScreen", "banScreen"].forEach(id => { const n = document.getElementById(id); if (n) new MutationObserver(syncDock).observe(n, { attributes: true, attributeFilter: ["class", "style"] }); });
+  setInterval(syncDock, 1000);   // safety net for anything that changes the screens without touching these attributes
   b.addEventListener("click", () => { chatPrefs.hideMembers = !(chatPrefs.hideMembers === true); saveChatPrefs(); applyAppearance(); });
 })();
 

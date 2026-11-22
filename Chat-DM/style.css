@@ -2207,9 +2207,10 @@ body.bg-light .msg-reply { color: #334155; }
 #notifBtn:hover { border-color: #64748b; }
 #membersToggleBtn { background: transparent; border: 1px solid #334155; color: #cbd5e1; border-radius: 9px; padding: 3px 9px; font-size: 15px; cursor: pointer; }
 #membersToggleBtn:hover { border-color: #64748b; }
-#membersToggleBtn.dock { position: fixed; top: 50%; right: 240px; transform: translateY(-50%); z-index: 60; padding: 12px 6px; border-radius: 9px 0 0 9px; border-right: 0; background: #111827; writing-mode: vertical-rl; font-size: 12px; white-space: nowrap; }
+#membersToggleBtn.dock { position: fixed; top: 50%; right: 240px; transform: translateY(-50%); z-index: 45; padding: 12px 6px; border-radius: 9px 0 0 9px; border-right: 0; background: #111827; writing-mode: vertical-rl; font-size: 12px; white-space: nowrap; }
 body.hide-members #membersToggleBtn.dock { right: 0; opacity: 1; }
-body:not(:has(#appShell.mode-chat)) #membersToggleBtn.dock { display: none; }
+body:not(:has(#appShell.mode-chat:not(.mode-games))) #membersToggleBtn.dock { display: none; }
+body.members-dock-off #membersToggleBtn.dock { display: none !important; }   /* set by chat.js: join / ban screens, DMs, the Games panel */
 body.hide-members #membersToggleBtn { opacity: .55; }
 body.hide-members #appShell.mode-chat #membersPane { display: none !important; }
 @media (max-width: 1000px) { #membersToggleBtn { display: none; } }
