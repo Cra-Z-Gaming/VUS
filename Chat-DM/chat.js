@@ -2577,7 +2577,7 @@ const MUTE_KEY = "vus_chat_muted_v1";
 const SPAM_WINDOW_MS = 2000;           // "same text within this long" and "burst window"
 const BURST_MAX_MESSAGES = 2;          // more than this inside the window = burst
 const NEW_ACCOUNT_MS = 60 * 1000;      // accounts younger than this count as "new"
-const SIMILAR_AT = 0.75;               // 0..1, how alike two texts must be to count as the same
+const SIMILAR_AT = 0.85;               // 0..1, how alike two texts must be to count as the same
 let mutedMap = {};                     // loginId -> { name }   (saved)
 let autoMuted = {};                    // loginId -> { name }   (this session only)
 try { mutedMap = JSON.parse(localStorage.getItem(MUTE_KEY) || "{}") || {}; } catch (e) { mutedMap = {}; }
@@ -3296,7 +3296,7 @@ function noteRoleLoaded() {
   }
 }
 function whenRolesReady() { return rolesReady ? Promise.resolve() : new Promise(res => { rolesReadyWaiters.push(res); setTimeout(res, 6000); }); }
-const RATE_TOLERANCE_MS = 1000;        // server-timestamp jitter between an honest sender's own clock and ours
+const RATE_TOLERANCE_MS = 3000;        // server-timestamp jitter between an honest sender's own clock and ours
 const lastAccepted = {};               // loginId -> { ts, image }
 function violatesRateLimit(msg) {
   if (activeChannelId === "announce") return annRateBad(msg, annRenderLast);
@@ -3309,9 +3309,9 @@ function violatesRateLimit(msg) {
   if (prev) {
     const gap = msg.ts - prev.ts;
     const captionAfterImage = prev.image && !msg.imageData && !msg.video && !msg.gif && gap < 2500;   // an image and its caption go out together
-    if (!captionAfterImage && gap < cd - RATE_TOLERANCE_MS) return true;     // too soon for their role: not accepted, doesn't reset their timer
+    if (!captionAfterImage && gap >= 0 && gap < cd - RATE_TOLERANCE_MS) return true;     // too soon for their role: not accepted, doesn't reset their timer
   }
-  lastAccepted[id] = { ts: msg.ts, image: !!(msg.imageData || msg.video || msg.gif) };
+  if (!prev || msg.ts >= prev.ts) lastAccepted[id] = { ts: msg.ts, image: !!(msg.imageData || msg.video || msg.gif) };
   return false;
 }
 const imgAccessCache = {};
@@ -3340,7 +3340,7 @@ function textsAlike(a, b) {
   if (a === b) return true;
   const shortLen = Math.min(a.length, b.length);
   if (shortLen < 5) return false;
-  if (shortLen >= 8 && (a.includes(b) || b.includes(a))) return true;
+  if (shortLen >= 12 && (a.includes(b) || b.includes(a))) return true;
   const A = bigrams(a), B = bigrams(b);
   let overlap = 0;
   A.forEach((n, g) => { overlap += Math.min(n, B.get(g) || 0); });
@@ -3408,17 +3408,19 @@ function forgeryMismatch(msg, prof) {
   // from the real account by ID, not taken from the message.)
   if (!msg.poll) {
     const isMediaMsg = !!(msg.gif || msg.imageData || msg.video);
-    if (cos.tag && !msg.tag) return true;
-    if (cos.rfx && !msg.rfx) return true;
-    if (wantRing && !msg.ring && !cos.rfx) return true;
-    if (cos.font && !msg.font) return true;
-    if (cos.tfont && !msg.tfont) return true;
-    if (cos.bub && !msg.bub) return true;
+    let missing = 0;
+    if (cos.tag && !msg.tag) missing++;
+    if (cos.rfx && !msg.rfx) missing++;
+    if (wantRing && !msg.ring && !cos.rfx) missing++;
+    if (cos.font && !msg.font) missing++;
+    if (cos.tfont && !msg.tfont) missing++;
+    if (cos.bub && !msg.bub) missing++;
     if (!isMediaMsg && typeof msg.text === "string") {
-      if (cos.fx && !msg.fx) return true;
-      if (color && color.bubble && !msg.bubble) return true;
-      if (color && color.text && !msg.textColor) return true;
+      if (cos.fx && !msg.fx) missing++;
+      if (color && color.bubble && !msg.bubble) missing++;
+      if (color && color.text && !msg.textColor) missing++;
     }
+    if (missing >= 2) return true;   // one missing item is usually a slow profile update, not a forgery
   }
   return false;
 }
@@ -3429,7 +3431,7 @@ async function liveForgeryCheck(msg) {
     let prof = await ChatBackend.getProfile(msg.loginId);   // fresh read, never cached
     if (!forgeryMismatch(msg, prof)) return false;
     // The profile write can land a moment after the message: look once more before calling it fake.
-    await new Promise(r => setTimeout(r, 2000));
+    await new Promise(r => setTimeout(r, 4000));
     prof = await ChatBackend.getProfile(msg.loginId);
     return forgeryMismatch(msg, prof);
   } catch (e) { return false; }
