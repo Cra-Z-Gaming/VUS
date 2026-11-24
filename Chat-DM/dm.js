@@ -799,7 +799,10 @@ async function verifyMzkStaffLogin(email, password, loginId) {
       if (!prof || String(prof.id) !== id || String(prof.mzkUid || "") !== user.uid) return { ok: false, error: "This MZK account isn't linked to your chat account. Link it in your profile first." };
       const fs = await loadMzkDb();
       const snap = await fs.collection("links").doc(user.uid).get();
-      if (!snap.exists || String((snap.data() || {}).vusId) !== id) return { ok: false, error: "This MZK account isn't verified for your chat account yet." };
+      // Alts: several chat accounts can share one MZK account, but links/<uid> only remembers the LAST chat account that linked it.
+      // This chat account's own profile already points at this MZK account (mzkUid check above) and the person just proved the MZK
+      // password, so only require that the link exists. Each alt still needs its own approval from the Owner.
+      if (!snap.exists) return { ok: false, error: "This MZK account isn't verified for your chat account yet." };
       return { ok: true, uid: user.uid, email: String(user.email || email).toLowerCase() };
     } finally { await auth.signOut().catch(() => {}); }
   } catch (e) { return { ok: false, error: mzkAuthMessage(e) }; }

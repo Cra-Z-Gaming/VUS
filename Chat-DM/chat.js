@@ -12359,7 +12359,7 @@ window.VUS_CHAT = {
        unmute (expired bans and mutes can still be cleaned up by anyone). Until then nothing changes for anyone.
    ══════════════════════════════════════════════════════════ */
 const VUS_STAFF = (function () {
-  let auth = null, user = null, entry = undefined, enforced = false, entryRef = null;
+  let auth = null, user = null, entry = undefined, enforced = false, entryRef = null, signingIn = false;
   const subs = [];
   const notify = () => { subs.forEach(fn => { try { fn(); } catch (e) {} }); };
   const appOf = () => firebase.apps.find(a => a.name === FIREBASE_APP_NAME) || null;
@@ -12376,14 +12376,26 @@ const VUS_STAFF = (function () {
       if (user) {
         try {
           entryRef = a.database().ref("staff/" + user.uid);
-          entryRef.on("value", s => { entry = s.val() || null; notify(); }, () => { entry = null; notify(); });
+          entryRef.on("value", s => { entry = s.val() || null; dropIfOtherAccount(); notify(); }, () => { entry = null; notify(); });
         } catch (e) { entry = null; }
       }
       notify();
     });
   }
+  // A staff approval belongs to ONE chat account. If this browser is still signed in with another account's staff login (for example
+  // an alt on the same email), that approval must not carry over: sign out, so the alt goes through its own sign-in and approval.
+  function dropIfOtherAccount() {
+    if (signingIn) return false;   // mid sign-in the session is still switching over
+    if (entry && entry.loginId && /^\d{6}$/.test(String(myLoginId || "")) && String(entry.loginId) !== String(myLoginId)) {
+      entry = null;
+      if (auth) { try { auth.signOut(); } catch (e) {} }
+      return true;
+    }
+    return false;
+  }
   function status() {
     if (!user) return { state: "out" };
+    if (dropIfOtherAccount()) return { state: "out" };
     if (entry === undefined) return { state: "checking", uid: user.uid };
     if (!entry) return { state: "pending", uid: user.uid };
     return { state: "staff", role: entry.role, uid: user.uid };
@@ -12403,17 +12415,36 @@ const VUS_STAFF = (function () {
     if (!window.VUS_DM || !window.VUS_DM.verifyMzkStaffLogin) return { ok: false, error: "MZK sign-in isn't ready. Reload the page." };
     const mz = await window.VUS_DM.verifyMzkStaffLogin(email, password, id);
     if (!mz || !mz.ok) return mz || { ok: false, error: "Couldn't check your MZK account." };
-    let cred;
-    try { cred = await auth.signInWithEmailAndPassword(mz.email, password); }
-    catch (e) {
-      if (!/user-not-found|invalid-credential|invalid-login/.test(String((e && e.code) || ""))) return { ok: false, error: authError(e) };
-      try { cred = await auth.createUserWithEmailAndPassword(mz.email, password); }
-      catch (e2) {
-        if (/email-already-in-use/.test(String((e2 && e2.code) || ""))) return { ok: false, error: "A staff account for this email already exists with a different password (did you change your MZK password?). Ask the Owner to reset it in the Firebase console." };
-        return { ok: false, error: authError(e2) };
+    // Several chat accounts can share one email (alts). The Firebase login is per email, so a second account on an email that another
+    // chat account already used gets its own login (name+vus<ID>@domain) and therefore its own request and its own approval.
+    const aliasMail = (mail, who) => { const m = String(mail).match(/^([^@]+)@(.+)$/); return m ? m[1] + "+vus" + who + "@" + m[2] : mail; };
+    const signInOrCreate = async mail => {
+      try { return { cred: await auth.signInWithEmailAndPassword(mail, password) }; }
+      catch (e) {
+        if (!/user-not-found|invalid-credential|invalid-login/.test(String((e && e.code) || ""))) return { error: authError(e) };
+        try { return { cred: await auth.createUserWithEmailAndPassword(mail, password) }; }
+        catch (e2) {
+          if (/email-already-in-use/.test(String((e2 && e2.code) || ""))) return { error: "A staff account for this email already exists with a different password (did you change your MZK password?). Ask the Owner to reset it in the Firebase console." };
+          return { error: authError(e2) };
+        }
       }
+    };
+    signingIn = true;
+    let got = await signInOrCreate(mz.email);
+    if (got.error) { signingIn = false; return { ok: false, error: got.error }; }
+    let claimedBy = "";
+    try {
+      const d = appOf().database();
+      const [st, rq] = await Promise.all([d.ref("staff/" + got.cred.user.uid + "/loginId").get(), d.ref("staffRequests/" + got.cred.user.uid + "/loginId").get()]);
+      claimedBy = String(st.val() || rq.val() || "");
+    } catch (e) {}
+    if (claimedBy && claimedBy !== id) {
+      got = await signInOrCreate(aliasMail(mz.email, id));
+      if (got.error) { signingIn = false; return { ok: false, error: got.error }; }
     }
+    const cred = got.cred;
     try { await appOf().database().ref("staffRequests/" + cred.user.uid).set({ email: mz.email, loginId: id, mzkUid: mz.uid, ts: firebase.database.ServerValue.TIMESTAMP }); } catch (e) {}
+    signingIn = false;
     return { ok: true, uid: cred.user.uid };
   }
   async function signOut() { start(); if (auth) { try { await auth.signOut(); } catch (e) {} } }

@@ -816,6 +816,7 @@
     "staffRequests": {
       ".read": false,
       "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
         ".write": "auth != null && auth.uid === $uid",
         ".validate": "newData.hasChildren(['email','loginId','ts'])",
         "email": { ".validate": "newData.isString() && newData.val().length <= 120" },
