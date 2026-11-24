@@ -101,8 +101,9 @@ const ROLES = {
   normie:   { id: "normie",   rank: 1, label: "Normie",   icon: "🔰", bubbleClass: "normie-bubble" },
   mod:      { id: "mod",      rank: 2, label: "Mod",      icon: "🧩", bubbleClass: "mod-bubble" },
   admin:    { id: "admin",    rank: 3, label: "Admin",    icon: "🛡️", bubbleClass: "admin-bubble" },
-  coowner:  { id: "coowner",  rank: 4, label: "Co-owner", icon: "💎", bubbleClass: "coowner-bubble" },
-  crown:    { id: "crown",    rank: 5, label: "Owner",    icon: "👑", bubbleClass: "crown-bubble" }
+  headadmin:{ id: "headadmin",rank: 4, label: "Head Admin",icon: "🔱", bubbleClass: "headadmin-bubble" },
+  coowner:  { id: "coowner",  rank: 5, label: "Co-owner", icon: "💎", bubbleClass: "coowner-bubble" },
+  crown:    { id: "crown",    rank: 6, label: "Owner",    icon: "👑", bubbleClass: "crown-bubble" }
 };
 
 /* Highest-ranked role a person holds is their "effective" role. */
@@ -182,7 +183,7 @@ function canGrantRole(rank, roleId) {
   // Mod and above can give/take Normie. Co-owner and Owner can also give/take Mod, but that goes through the Owner's approval in the staff tool.
   // Admin, Co-owner and Owner are set by hand in the Firebase console.
   if (roleId === "normie") return rank >= ROLES.mod.rank;
-  if (roleId === "mod") return rank >= ROLES.coowner.rank;
+  if (roleId === "mod") return rank >= ROLES.headadmin.rank;
   return false;
 }
 // Returns "" when ms is fine, otherwise a message telling the person exactly why not.
@@ -195,8 +196,8 @@ function checkDurationLimits(ms, limits) {
 /* Per-role send delays. Owner and Co-owner are both 1s.
    Images share the same delay per role. Normie and below can't post images
    at all unless a higher-up grants image access (see setImageAccess). */
-const ROLE_MESSAGE_COOLDOWNS_MS = { unranked: 10000, normie: 5000, mod: 3000, admin: 2000, coowner: 1000, crown: 1000 };
-const ROLE_IMAGE_COOLDOWNS_MS   = { unranked: 10000, normie: 5000, mod: 3000, admin: 2000, coowner: 1000, crown: 1000 };
+const ROLE_MESSAGE_COOLDOWNS_MS = { unranked: 10000, normie: 5000, mod: 3000, admin: 2000, headadmin: 1500, coowner: 1000, crown: 1000 };
+const ROLE_IMAGE_COOLDOWNS_MS   = { unranked: 10000, normie: 5000, mod: 3000, admin: 2000, headadmin: 1500, coowner: 1000, crown: 1000 };
 /* Roles at or below this rank need an explicit image grant. */
 const IMAGE_GATED_MAX_RANK = ROLES.normie.rank;
 
@@ -2889,7 +2890,7 @@ function renderVerifyPanel() {
   // ranks
   add("h4", null, "Ranks");
   const rows = [];
-  ["crown", "coowner", "admin", "mod", "normie"].forEach(roleId => {
+  ["crown", "coowner", "headadmin", "admin", "mod", "normie"].forEach(roleId => {
     (roleIdHolders[roleId] || new Set()).forEach(id => {
       const trusted = roleId !== "mod" && roleId !== "normie";
       rows.push({ id: String(id), roleId, ok: !on || trusted || roleAttested(roleId, id), trusted });
@@ -4431,7 +4432,7 @@ const SLASH_COMMANDS = [
   { name: "/give", args: "tag_name username or #ID", minRank: 0, only: () => myGrantableTags().length > 0,
     desc: () => "Experimental: give a tag you own to someone, online or offline. You can give: " + myGrantableTags().map(id => TAG_GRANTS[id].cmd).join(", ") + ". Example: /give " + (myGrantableTags().map(id => TAG_GRANTS[id].cmd)[0] || "tag_name") + " #123456 or @name", insert: "/give " },
   { name: "/poll", args: "", minRank: ROLES.admin.rank,
-    desc: "Open the poll menu: a question with Yes / No (add up to 4 options). Lasts 1 minute.", insert: "/poll" },
+    desc: "Open the poll menu: a question with Yes / No (add up to 10 options). Lasts 1 minute.", insert: "/poll" },
   { name: "/verify", args: "[on]",              minRank: ROLES.crown.rank,
     desc: "Open the Verification panel (who is verified, recent actions). Use /verify on to turn it on for the room.", insert: "/verify " },
   { name: "/unban",   args: "username or ID",         minRank: UNBAN_MIN_RANK,
@@ -4695,7 +4696,7 @@ function isPermissionDenied(e) {
 // Owner and Co-owner can only be added by hand in the Firebase console, so the
 // rules refuse them from the browser. Say so plainly instead of a raw error.
 function rankByHandNotice(role) {
-  if (role.id === "mod") return "Giving or removing Mod needs a Co-owner or Owner who is approved staff. Type /staff to sign in, or ask the Owner to approve you in the staff tool.";
+  if (role.id === "mod") return "Giving or removing Mod needs a Head Admin, Co-owner or Owner who is approved staff. Type /staff to sign in, or ask the Owner to approve you in the staff tool.";
   return role.label + " can only be added by hand in the Firebase console: roleIds/" + role.id + "/<6-digit ID> = true.";
 }
 
@@ -6668,7 +6669,7 @@ mark{background:#854d0e;color:#fff;border-radius:3px}
 <div class="row"><button id="all">Select all</button><button id="none">Clear all</button><span class="mut" id="status"></span></div></header>
 <main id="list"></main>
 <script>
-const ROLES=[["verified","Verified"],["crown","Owner"],["coowner","Co-owner"],["admin","Admin"],["mod","Mod"],["normie","Normie"],["unranked","Unranked"]];
+const ROLES=[["verified","Verified"],["crown","Owner"],["coowner","Co-owner"],["headadmin","Head Admin"],["admin","Admin"],["mod","Mod"],["normie","Normie"],["unranked","Unranked"]];
 const rows=[];let timer=null,loading=true,total=0;
 const $=id=>document.getElementById(id);
 const rbox=$("roles");
@@ -7017,9 +7018,10 @@ function rankGuideLines(role) {
   const msgEvery = formatDurationShort(ROLE_MESSAGE_COOLDOWNS_MS[role.id]);
   const imgEvery = formatDurationShort(ROLE_IMAGE_COOLDOWNS_MS[role.id]);
   const gated = role.rank <= IMAGE_GATED_MAX_RANK;
-  const byHand = role.id === "crown" || role.id === "coowner";
+  const protectedRank = role.id === "crown" || role.id === "coowner";
+  const byHand = protectedRank || role.id === "headadmin";
   const newCommands = SLASH_COMMANDS.filter(c => c.minRank === role.rank && !c.only);
-  const grantable = Object.values(ROLES).filter(r => !r.implicit && r.id !== "crown" && r.id !== "coowner" && r.rank < role.rank && canGrantRole(role.rank, r.id));
+  const grantable = Object.values(ROLES).filter(r => !r.implicit && r.id !== "crown" && r.id !== "coowner" && r.id !== "headadmin" && r.rank < role.rank && canGrantRole(role.rank, r.id));
   const canGrant = grantable.length > 0;
   const menu = role.rank >= ROLES.crown.rank ? "Owner Menu" : role.rank >= ROLES.admin.rank ? "Admin Menu" : role.rank >= ROLES.mod.rank ? "Mod Menu" : null;
 
@@ -7034,10 +7036,10 @@ function rankGuideLines(role) {
   lines.push(["Bubble color", role.rank >= COLOR_MIN_RANK ? "You can pick your own colors in Settings." : "Unlocks at " + ROLES.normie.icon + " " + ROLES.normie.label + "."]);
   if (menu) lines.push(["Menu", menu + (role.id === "mod" ? " (mutes, temp bans up to " + formatDurationShort(TIME_LIMITS.modTempban.max) + ")" : "") + " in Settings."]);
   if (canGrant) lines.push(["Can give out", grantable.map(r => r.icon + " " + r.label).join(", ") + ", permanently or for a set time."]);
-  if (role.id === "coowner") lines.push(["Commands", "The same as " + ROLES.admin.icon + " " + ROLES.admin.label + "."]);
+  if (role.id === "coowner" || role.id === "headadmin") lines.push(["Commands", "The same as " + ROLES.admin.icon + " " + ROLES.admin.label + "."]);
   return { lines, newCommands, notes: [
     role.rank >= UNBAN_MIN_RANK ? "Owner and Co-owner can /unban." : null,
-    byHand ? "Can't be banned or muted." : null
+    protectedRank ? "Can't be banned or muted." : null
   ].filter(Boolean) };
 }
 
@@ -9799,6 +9801,7 @@ const ANNOUNCE_ROOM = "ch-announce";
 const ANNOUNCE_GAP_MS = 15000;
 const ANNOUNCE_POPUP_CHARS = 220;
 const POLL_MS = 60000;
+const POLL_MAX_OPTIONS = 10;   // admins and above; the database rules allow option numbers 0 to 9 (message poll.o and pollVotes)
 const annSleep = ms => new Promise(r => setTimeout(r, ms));
 function annHash(text) {
   let h = 0x811c9dc5; const s = String(text);
@@ -9836,7 +9839,7 @@ function annStatus(msg) {
 function pollShapeOk(msg) {
   const p = msg.poll;
   return !!p && typeof p === "object" && /^[a-z0-9]{8}$/.test(String(p.id)) && typeof p.q === "string" && p.q.length >= 1 && p.q.length <= 120 &&
-    Array.isArray(p.o) && p.o.length >= 2 && p.o.length <= 4 && p.o.every(o => typeof o === "string" && o.length >= 1 && o.length <= 40) &&
+    Array.isArray(p.o) && p.o.length >= 2 && p.o.length <= POLL_MAX_OPTIONS && p.o.every(o => typeof o === "string" && o.length >= 1 && o.length <= 40) &&
     Number(p.exp) - Number(msg.ts) > 0 && Number(p.exp) - Number(msg.ts) <= POLL_MS + 5000;
 }
 function pollSig(p) { return p.id + ":" + annHash(p.q + "|" + p.o.join("|")); }
@@ -10043,10 +10046,10 @@ function openPollMenu() {
     row.appendChild(inp);
     if (removable) { const x = document.createElement("button"); x.type = "button"; x.textContent = "×"; x.className = "pm-rm"; x.addEventListener("click", () => { row.remove(); add.style.display = ""; }); row.appendChild(x); }
     list.appendChild(row);
-    if (list.children.length >= 4) add.style.display = "none";
+    if (list.children.length >= POLL_MAX_OPTIONS) add.style.display = "none";
   };
   addOpt("Yes", false); addOpt("No", false);
-  add.addEventListener("click", () => { if (list.children.length < 4) { addOpt("", true); list.lastChild.querySelector("input").focus(); } });
+  add.addEventListener("click", () => { if (list.children.length < POLL_MAX_OPTIONS) { addOpt("", true); list.lastChild.querySelector("input").focus(); } });
   const err = ov.querySelector("#pollErr");
   ov.querySelector("#pollGo").addEventListener("click", async () => {
     const q = ov.querySelector("#pollQ").value.trim();

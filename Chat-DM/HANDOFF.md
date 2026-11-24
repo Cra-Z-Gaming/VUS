@@ -1,43 +1,55 @@
 # VUS D.C – handoff for Claude
 
-Read this first when starting a new chat about this project, then continue from "Current status".
-Last updated: 2026-11-21 (end of the quests session).
-
-**PRACTICE MODE (bot games), 2026-11-22: CODE COMPLETE, NOT YET PUSHED.** `games.js` (practice store, lobby card, hooks) and the new `bots.js` (all five bots) are on disk, syntax-checked and smoke-tested in a browser (see `_bot-work/PROGRESS.md`). Owner must push BOTH `games.js` and `bots.js` to GitHub `Chat-DM/` (no rules, Vercel or Chat-DM.html change; games.js fetches bots.js itself). Still to test live: a human move in checkers and chess, a full chess game, the waiting-screen "Play the bot instead" button (needs two accounts), phones. Older background in `BOT-MODE-NOTES.md`.
-
-**(older note) bot / practice mode for the 1v1 games. Read `BOT-MODE-NOTES.md` in this folder first.** Earlier sessions wrote the bot code but never saved it, so it is lost; `games.js` on disk also changed unexpectedly (88,490 bytes, modified 2026-11-22 01:52) and has not been inspected yet. Save every finished piece to disk immediately (see that file's "Working method").
+Start a new chat with: "Read E:\Claude\VUS D.C\HANDOFF.md first, then help me with ...". Working rules are in `CLAUDE.md` (it loads this file). At the end of a session, update "Status" and "Log" below.
+Last updated: 2026-11-22.
 
 ## What this project is
-VUS D.C is a browser chat + DM web app (main chat, channels, DMs, shop, crates, coins, tags/bubbles, 1v1 crate games, quests).
-- Front end: plain HTML/JS/CSS. `Chat-DM.html` loads its scripts from GitHub raw (`Cra-Z-Gaming/VUS`, folder `Chat-DM/`): `slm.js`, `dm.js`, `dev.js`, `chat.js`, `quests.js`, `games.js`. **Local edits do nothing until they are pushed to GitHub.**
-- Back end: Firebase Realtime Database (rules in `vus-chat-rules.json`, `vus-dm-rules.json`, `vus-SLM-rules.json`) plus a small Vercel API in `api/` (`game.js` = server-run "secure" 1v1 games, `auth/`, `bot/`, `chat/` tickets, `dev/`, `ping.js`). `package.json` only needs `firebase-admin`.
-- Folder: `E:\Claude\VUS D.C` (Claude can also reach `E:\Claude` and `E:\VUSL Git`).
-- Many players cannot reach the Vercel server, so several features have a less secure "direct" Firebase fallback (e.g. `pg/` games). The owner accepts that trade-off.
+Browser chat + DM web app (main chat, channels, DMs, shop, crates, coins, tags/bubbles, quests, 1v1 crate games with bot practice).
+- Front end: plain HTML/JS/CSS. `Chat-DM.html` loads `slm.js`, `dm.js`, `dev.js`, `chat.js`, `quests.js`, `games.js` from GitHub raw (`Cra-Z-Gaming/VUS`, folder `Chat-DM/`). `games.js` loads `bots.js` itself. **Local edits do nothing until pushed to GitHub.**
+- Back end: Firebase Realtime Database (rules in `vus-chat-rules.json`, `vus-dm-rules.json`, `vus-SLM-rules.json`) plus a small Vercel API in `api/` (`game.js` = server-run "secure" games, `auth/`, `bot/`, `chat/` tickets, `dev/`, `ping.js`). `package.json` only needs `firebase-admin`.
+- Many players can't reach Vercel, so some features have a less secure "direct" Firebase fallback (e.g. `pg/` games). The owner accepts that.
 
 ## Files
 | File | What it is |
 |---|---|
 | `Chat-DM.html` | main page, left rail (Quests button + red dot `questRailDot`), script loader |
-| `chat.js` (~650 KB) | chat, coins, shop, crates, cosmetics, /commands, moderation. Too big to read whole: copy it to Claude's computer and grep |
+| `chat.js` (~660 KB) | chat, coins, shop, crates, cosmetics, /commands, moderation. Never read whole: copy to Claude's computer and grep |
 | `dm.js` | DMs, accounts (`VUS_DM.getAccountCreatedAt`) |
 | `quests.js` | daily/weekly quests, login reward, welcome bundle, game counting |
-| `games.js` | 1v1 crate-betting games (tic-tac-toe, rock-paper-scissors, connect 4, checkers, chess), reports finished games to `quests.js` |
+| `games.js` | 1v1 games (ttt, rps, c4, checkers, chess) + practice mode, reports finished real games to `quests.js` |
+| `bots.js` | practice bots for all 5 games (`window.VUS_BOTS`), loaded by `games.js` on first practice game |
 | `slm.js`, `SLM.html`, `vus-SLM-rules.json` | ShareLargeMessages extension |
-| `dev.js`, `staff-tool/`, `staff-accounts.json` | staff/dev tools (do not copy secrets into notes or chats) |
-| `style.css` | all styling (`.quest-*` classes at the end) |
-| `games.txt` | list of launcher games, format `[Title](https://raw-link)` |
-| `version` | number file (43), left untouched; not checked what reads it |
+| `dev.js`, `staff-tool/`, `staff-accounts.json` | staff/dev tools (never copy secrets into notes, chats or GitHub) |
+| `style.css` | all styling (`.quest-*` at the end) |
+| `games.txt` | launcher games list, format `[Title](https://raw-link)` |
+| `version` | number file (43), untouched; unknown what reads it |
+| `_bot-work/` | `smoke.js` + `smoke-harness.html`: browser test for practice mode. The other notes files there are merged into this file and can be deleted |
 
-## Golden rules for working here
-1. **Rules and client are two copies of the same numbers.** Quest rewards, goals, reset times and login amounts live in `quests.js` AND in `vus-chat-rules.json`. Change both, always.
-2. After editing `vus-chat-rules.json` the owner must **publish it in Firebase**; after editing a JS file the owner must **push it to GitHub**. Say so at the end of a task.
-3. `vus-chat-rules.json` has a few giant single lines (the `coins/$id` `.write` rule is ~14 KB). Edit with small exact substring replacements, then copy the file back (`copy_file_user_to_claude`) and diff/validate it. Never retype the whole file.
-4. Firebase rules cannot be tested against the live database from here. Last session a Node simulator (mock `data`/`newData`/`root`, evaluates the rule strings) was used: 101 cases passed. It lived only in Claude's temporary workspace and is not saved. Rebuild it if needed.
-5. Security mindset: players can write to Firebase directly, so every reward must be enforced by the rules, not just by the client.
-6. Ask before large or irreversible changes. Show the plan for new minigames/features first.
+## Status / to do
+Publish and push order: **rules first, scripts last.**
+1. [ ] Publish `vus-chat-rules.json` in Firebase (quests, checkers, chess, Rainbow pack, `tag-owna`). If Firebase refuses it as too large (~69 KB now), minify it.
+2. [ ] Deploy `api/game.js` to Vercel (Secure checkers and chess).
+3. [ ] Push to GitHub `Chat-DM/`: `quests.js`, `games.js`, `bots.js`, `chat.js`, `style.css`.
+4. [ ] Live tests with test accounts: each quest claim, Friendly Duel after two 1v1 games, welcome bundle on a fresh account, buy the Rainbow Pack (cloud puffs, fading text, ring, tag; try a very long and a very short message), Direct + Secure checkers and chess games (capture, chain + stop, crowning, promotion picker, clocks, move limit, resign).
+5. [ ] Practice mode live checks: a human move in checkers and chess, a full chess game, the waiting-screen "Play the bot instead" button (needs two accounts), phone layout.
+6. [ ] Check the "Hide online list" tab hides on Games, DMs, login and ban screens (fix pushed with `chat.js` + `style.css`).
+7. [ ] Check whether the Yin & Yang bubble still turns text-effect text black (wanted: bubble must not affect text when a text effect is equipped).
+8. Optional: gift crates back on; more ways to earn coins (owner is open to ideas).
 
-## Quests system (built 2026-11-21)
-Coins live in `coins/<id>` (`n` = balance). Resets: daily at 12:00 PM Eastern (17:00 UTC), weekly Saturday 12:00 PM Eastern. Messages earn **2 coins** each (max one per 2 s, 500 per hour).
+## Idea backlog (owner's ideas, written down 2026-11-23, NOT started)
+Owner said: write these down for later if not done now. Show a plan before building the big ones (tag royalties, Head Admin).
+1. **Inactivity pause (15 min):** after 15 minutes of inactivity, stop counting time online (profile "Time active") and the quest session timer (Stick Around: `qss/qhb/qsd`). The quest timer is also enforced in the rules, so check both `chat.js` and `vus-chat-rules.json`.
+2. **Bug: crate quests mostly don't work** (Crate Cracker daily, Crate Hoarder weekly). Look at the `qcdk/qcd/qcwk/qcw` baselines and the claim rules. Checked 2026-11-23 by reading only: `quests.js`, `chat.js` and `vus-chat-rules.json` agree (day/week keys, baseline = `o - sc`, claim needs `o - sc - qcd >= goal`), so no cause found yet. Need the exact symptom (progress stuck? claim refused? which message?) or a live test.
+3. **Bug: crates bought in the shop can't be opened from the shop.** Weird, find out why (buying seems to work, opening from the shop does not). Checked 2026-11-23 by reading only: `buyShop` -> `settleShopCrates` and the `crateClaims` rules match, and the shop's "Open crates" button just calls `closeShop(); openCrateModal();`. No cause found yet; need the exact symptom (button does nothing? crate screen says 0 crates? error text?).
+4. **New tags:** good boy / bad boy / good girl / bad girl (style, price and how to get them not decided).
+5. **UI: move Reply, Reaction and Edit buttons closer to the message** without overlapping the message text (if possible).
+6. **Tag royalties (new idea, uses /give):** the owner of a tag (someone who can /give it) earns 2 coins for every 5 (or 10) seconds that someone has that tag equipped AND is online. Royalties go into a separate bank (not the owner's real coin balance) and are credited even when the tag owner is offline. When the owner comes online they claim it automatically (or manually: undecided). Example: 2 people wearing my tag online for 10 seconds = 8 coins for me (so 2 coins per person per 5 s). Cheating rule (decided, keep it simple): if the person wearing the tag is in the tag owner's possible alts, the owner gets no reward for that person. Open points: 5 s or 10 s tick, auto or manual claim, enforcing it in the rules (players write to Firebase directly, so the royalty must be validated there), and not hammering the database.
+7. **New role: Head Admin** (above Admin, under Co-Owner): same as Admin, plus can grant Mod, and has a 1 second message delay. Channel emoji: 🗿. Needs: role list/order in `chat.js`, rules (who can grant what), message delay, emoji.
+   Scoped 2026-11-23, plan shown to owner, WAITING for his OK. Ranks are never compared as numbers in `chat.js` (always `ROLES.x.rank`), so the new rank is `headadmin` = 4, Co-owner 5, Owner 6. Touch list: `chat.js` (ROLES table; message + image cooldown tables 1000 ms; `canGrantRole` mod -> headadmin and up; the role lists near the `["crown", "coowner", "admin", "mod", "normie"]` loop and the `ROLES=[["verified"...` list in the embedded page; rank guide `byHand`/`grantable`; `isAdminHolder`-style helpers), `style.css` (`.headadmin-bubble`, `.role-headadmin` member list + profile card colours), `vus-chat-rules.json` (new `roleIds/headadmin` node set by hand, `headadmin` added wherever staff role `admin` is accepted (3 places) and to the `roleIds/mod` write rule), plus the staff tool / `dev.js` / `staff-accounts.json` (not read yet: needs the new role name, never copy secrets). Decisions needed: bubble colour, can Head Admin unban (default no, same as Admin), and Head Admin set by hand in the Firebase console like Co-owner (default yes).
+8. **Polls: DONE 2026-11-23 (needs publish + push).** Polls now allow up to 10 options (admins and above, the only ones who can start polls). `chat.js`: `POLL_MAX_OPTIONS = 10` (menu, `pollShapeOk`, /poll text). Rules: poll option numbers 0-9 and `pollVotes` up to 9. The poll window already scrolls (`max-height: 90vh`). Not live-tested.
+
+## Quests (built 2026-11-21)
+Coins live in `coins/<id>` (`n` = balance). Daily reset 12:00 PM Eastern (17:00 UTC), weekly Saturday 12:00 PM Eastern. Messages earn 2 coins each (max one per 2 s, 500 per hour).
 
 | Quest | Goal | Reward |
 |---|---|---|
@@ -52,48 +64,32 @@ Coins live in `coins/<id>` (`n` = balance). Resets: daily at 12:00 PM Eastern (1
 | Arena Regular (weekly) | finish 5 1v1 games | 200 |
 | Weekly Sweep | claim all weekly quests | 300 |
 
-Welcome bundle: brand-new accounts (created on/after 2026-11-21) get **50 coins** once per account and once per browser (`starterDevices/<browser hash>`).
+Welcome bundle: accounts created on/after 2026-11-21 get 50 coins once per account and once per browser (`starterDevices/<browser hash>`).
+Fields on `coins/<id>`: `qdk/qdm/qwk/qwm` message counters (chat.js, written with the coin), `qss/qhb/qsd` session timer, `qcdk/qcd/qcwk/qcw` crate baselines, `qgl/qgt/qgdk/qgd/qgwk/qgw` game counters (quests.js; any counter change needs a new real game id in `qgl`), `qc` + `qp/<quest>` claim, `sb/sbh` welcome bundle.
+**Gift crates are deliberately OFF** (no `gc` field in the rules, no crate rewards, no starter crates). To bring them back: add `gc` to the rules (claim/starter branches), set `STARTER_CRATES` and add `crates:` to the quests in `quests.js`. `chat.js` `crateStock()` already reads `gc`.
 
-Fields on `coins/<id>` and who writes them: `qdk/qdm/qwk/qwm` message counters (chat.js, with the coin), `qss/qhb/qsd` session timer, `qcdk/qcd/qcwk/qcw` crate baselines, `qgl/qgt/qgdk/qgd/qgwk/qgw` game counters (quests.js; any counter change must come with a new real game id in `qgl`), `qc` + `qp/<quest>` claim, `sb/sbh` welcome bundle.
+## 1v1 games (`games.js`, `api/game.js`)
+- Games: tic-tac-toe `ttt`, rock-paper-scissors `rps`, connect 4 `c4`, checkers `ck`, chess `ch` (dice, memory, battleship were rejected). Bets 1x/2x/3x/5x/10x. Disconnect 15 s = other player wins; 5-minute limit then overtime/refund. Direct mode `pg/`, Secure mode `games/` via `api/game.js`.
+- `derive(g)` turns a raw Direct game record (log of moves) into the view the UI uses.
+- **Checkers** (8x8): men step forward only, go backward only by capturing; captures never forced; after a jump the piece may keep jumping or stop (`stop` / log kind `st`); reaching the far row crowns and ends the turn; win by capturing everything or leaving the opponent no legal move; 10 min, then more pieces wins, tie = 3 min overtime then refund.
+- **Chess**: board = 64-char string (uppercase White, lowercase Black). Full rules incl. castling, en passant, promotion (player picks), check/mate/stalemate, dead position, threefold repetition, 50-move rule. Each player has a clock (3/5/10/15/30 min, host's choice), optional per-move limit (none/15 s/30 s/1 min/2 min), colour White/Black/random. Timeout = loss unless the other side could never mate (then draw). Leaving = resign. The engine exists twice (`games.js` and `api/game.js`): keep them identical. Rules (`pg`) allow type `ch`, an `opt` object `{tm,pm,w}` and promotion letters q/r/b/n in log field `p`; checkers log entries use field `f`.
+- Mobile pass done (2026-11-21): ☰ menu button on phones (<= 720 px), no sideways scroll, 44 px tap targets.
 
-**Gift crates are deliberately OFF.** The owner chose to skip the `gc` (gift crate) field. So no crate rewards on game quests and no starter crates. To bring them back: add `gc` to the rules (and the claim/starter branches), then set `STARTER_CRATES` and add `crates:` to the quests in `quests.js`. `chat.js` `crateStock()` already reads `gc`.
+## Practice mode against bots (built 2026-11-22)
+- Practice games are local: kept in browser memory, never written to Firebase, no bet, never reported to quests (`questScan` only walks `pgames`/`games`). The record has the Direct-game shape, so `derive()` and the normal board screens are reused. Human = side `a`, bot = side `b`.
+- `games.js` pieces: `loadBots` (fetches `bots.js` from GitHub raw via a Blob script), `lgames`/`lview`/`lAppend`/`lAct`/`lPick`/`lLeave`/`lDrop` (local store), `lChoose`/`lFallback`/`lBotMove`/`lPlan` (bot driver; invalid bot move falls back to a legal one; 3 stuck tries stop the game), `localTick` (clock, overtime, RPS reveals), `startPractice`, `waitToBot`, `renderPractice` (lobby card). `dMove`/`dMoveCk`/`dStop`/`dPick`/`dLeave`, `directTick`, `viewOf` and `onGames` route to the local store when `lgames[gid]` exists. `renderGame` has practice labels, Leave, Play again, result heading and the waiting-screen "Play the bot instead" button.
+- `bots.js` (`window.VUS_BOTS`, levels 0/1/2 = Easy/Normal/Hard, uses the engine export `window.VUS_GAMES.E` at the end of the engine section of `games.js`: keep that list in sync with what the bots call): `ttt(board,mark,lvl)`, `rps(hist,lvl)`, `c4(board,mark,lvl)`, `ck(board,side,chain,lvl)` (move object, or null = stop jumping), `ch(S,col,hist,lvl)` (move object or null).
+  - Checkers: alpha-beta, Easy depth 2 / Normal 6 (250 ms) / Hard 16 (900 ms). Chess: alpha-beta, quiescence, check extension, piece-square tables, small opening book; Easy depth 2 (120 ms), Normal 4 (600 ms), Hard 9 (1.5 s).
+- Tests: bot engines were tested in Node by copying the engine code from `games.js` into a sandbox (self-play, mate-in-one, K+Q/K+R endings, no illegal moves). Whole UI: `_bot-work/smoke.js` (Playwright, instructions in its header). Harness pitfall: wait ~2.6 s after load before starting a game, because the app's 2 s id check resets `myGid` once on first run.
 
-## Other recent features (details in the code; status not re-verified)
-- 1v1 crate games: bets 1x/2x/3x/5x/10x, disconnect = 15 s then the other player wins, 5-minute limit then overtime/refund. Games: tic-tac-toe, rock-paper-scissors, connect 4 (dice, memory, battleship were rejected). Direct mode `pg/`, secure mode `games/` via `api/game.js`.
+## Other features (status not re-verified)
 - "Impossible" crate (100 coins, ~99% refund of 20 coins, 1/10000 per prize) and an "Impossible" rarity tier above Legendary.
-- Shop bundles: Yin & Yang Pack (1000 coins), a Dragon bundle (3000) and the Rainbow Pack (2000: `shp-tag-prism` "🌈Prism", `shp-bub-cloud` cloud bubble, the existing `shp-ring-rainbow`, `shp-fx-rainbow` fading rainbow text effect) exist in the rules and `chat.js`; their CSS is in `style.css` after the Dragon block. The Rainbow ring is still sold alone for 500 in the Rings tab too.
-- `/give` command: owners of a tag can grant it. `tag-jih` only by #177601, `tag-special` only by #581824, `tag-div` only by #185920, `tag-owna` ("owna approved", `/give tag_owna`) only by #822414 (enforced in the `tagGrants` rules; publish the rules and push `chat.js` + `style.css` for it to work).
-- Chat security work (tickets / token requirement against impersonation) is in `rules/tickets`, `config/tokensRequiredSince`, `api/chat/`.
-- Reported bug, status unknown: the Yin & Yang bubble turned text-effect text black; wanted: the bubble must not affect text when a text effect is equipped.
+- Shop bundles: Yin & Yang Pack (1000), a Dragon bundle (3000), Rainbow Pack (2000: `shp-tag-prism`, `shp-bub-cloud`, `shp-ring-rainbow`, `shp-fx-rainbow`; CSS in `style.css` after the Dragon block; the ring is also sold alone for 500). Pieces/prices live in `chat.js` (CRATE_ITEMS + BUNDLES) and the rules (`sh/$k`, `crateInv`).
+- `/give`: owners of a tag can grant it. `tag-jih` only by #177601, `tag-special` #581824, `tag-div` #185920, `tag-owna` ("owna approved", `/give tag_owna`) #822414 (enforced in `tagGrants` rules).
+- Chat security (tickets / token requirement against impersonation): `rules/tickets`, `config/tokensRequiredSince`, `api/chat/`.
+- "Hide online list" tab (`#membersToggleBtn.dock`, a fixed element on `<body>`): `chat.js` `wireMembersToggle` sets `body.members-dock-off` unless the chat screen is really showing; `style.css` hides it outside plain chat mode.
 
-## Current status / what needs doing
-Done in the Rainbow Pack session (2026-11-21): new bundle `shp-bundle-rainbow` (2000 coins) added in `chat.js` (CRATE_ITEMS + BUNDLES), `style.css` and `vus-chat-rules.json` (price in coins `sh/$k`, pieces in the `crateInv` rule). Rules file checked: parses, no `numChildren` left, only real Firebase rule methods. Not yet tested in the live app: [ ] publish the rules, [ ] push `chat.js` AND `style.css`, [ ] buy the pack with a test account (cloud puffs, fading text, ring and tag all show; check a very long and a very short message).
-
-Done last session: rules now cover all 10 quests, game counters and the welcome bundle; `quests.js` stripped of crate rewards; `games.txt` typo fixed.
-
-To do, in order:
-1. [ ] Publish the new `vus-chat-rules.json` in Firebase.
-2. [ ] Push the new `quests.js` to GitHub (rules first, then the script).
-3. [ ] Test with a test account: claim each quest type, play two 1v1 games and watch Friendly Duel progress, create a fresh account for the welcome bundle.
-4. [ ] Watch the rules file size: it grew from ~62 KB to ~69 KB (compact JSON ~57 KB). If Firebase refuses it as too large, minify it.
-5. [ ] Optional: decide whether to turn gift crates back on (see above).
-6. [ ] Optional: more ways for players to earn coins (the owner is open to ideas; example ideas so far: quests, login streak, 1v1 games).
-7. [ ] Check whether the Yin & Yang text-effect bug is fixed.
-
-## Checkers (added 2026-11-21, later session)
-New 1v1 game `ck` (8x8) in `games.js` (Direct mode + UI), `api/game.js` (Secure mode, actions `move {from,to}` and `stop`) and `vus-chat-rules.json` (`pg` type allows `ck`, log entries get field `f`, `c` up to 63). Rules: men step forward only and may go backward only by capturing; captures never forced; after a jump the piece may keep jumping or stop (`stop` / log kind `st`); reaching the far row crowns and ends the turn; win by capturing everything or leaving the opponent no legal move; 10 min, then more pieces wins, tie = 3 min overtime then refund. Checked with Node tests for the rules, server logic and a jsdom UI smoke test (not saved). NOT yet tested live: [ ] publish rules in Firebase, [ ] deploy `api/game.js` to Vercel, [ ] push `games.js` to GitHub (rules first, script last), [ ] play a Direct and a Secure checkers game with two accounts (capture, optional capture, chain + stop, crowning, win).
-
-## Chess (added 2026-11-21, latest session)
-New 1v1 game `ch` in `games.js` (Direct mode + UI), `api/game.js` (Secure mode, same `move {from,to,promo}` action) and `vus-chat-rules.json` (`pg` now allows type `ch`, an `opt` object `{tm, pm, w}` and promotion letters q/r/b/n in log field `p`). Board = 64-char string, uppercase White, lowercase Black. Full rules: castling, en passant, promotion (player picks), check/checkmate, stalemate, dead position, threefold repetition, 50-move rule. Each player has their own clock (3/5/10/15/30 min chosen by the host) and the host may add a per-move limit (none/15 s/30 s/1 min/2 min) and pick White/Black/random. Timeout = loss, except a draw if the other side could never checkmate. Leaving = resign. The engine exists twice (`games.js` and `api/game.js`): keep them identical. Tested in Claude's temporary workspace: move-count (perft) tests on 6 standard positions for the client engine and 4 for the server copy all match; 32 game-log tests (mate, illegal moves, clocks, flag, per-move limit, repetition, promotion, stalemate, castling, en passant) pass. NOT yet tested live: [ ] publish rules in Firebase FIRST (without them Direct-mode chess is refused), [ ] deploy `api/game.js` to Vercel, [ ] push `games.js` to GitHub (last), [ ] play a Direct and a Secure chess game with two accounts (both colours, promotion picker, clocks, move limit, resign).
-
-## Session log
-- 2026-11-22 (later): fixed the "Hide online list" tab showing on screens where it shouldn't (Games panel, join/login screen, ban screen; it also sat above the `#modalOverlay` dialog). Cause: the tab (`#membersToggleBtn.dock`, a fixed element on `<body>`) was hidden only by a CSS rule that checked for `mode-chat`, and the Games panel keeps `mode-chat` on `#appShell` and just adds `mode-games`. Fix in `style.css` (rule now ignores `mode-games`, z-index 60 -> 45, new `body.members-dock-off` rule) and `chat.js` (`wireMembersToggle` sets `members-dock-off` unless the chat screen is really showing). Tested with the real stylesheet in Chromium. Needs: push `chat.js` AND `style.css`.
-- 2026-11-22: practice mode against bots for all 5 1v1 games. `bots.js` (new, 24 KB: ttt, rps, c4, ck, ch bots, levels Easy/Normal/Hard) plus ~140 lines in `games.js`: local practice-game store (never touches Firebase, no bet, never counted for quests), "Practice against a bot" lobby card, bot driver, "Play the bot instead" on the waiting screen, practice Leave / Play again / result screen. Engine export `VUS_GAMES.E` added to games.js earlier the same day. Browser smoke test passed; scripts kept in `_bot-work/`. Needs: push `games.js` + `bots.js`.
-- 2026-11-21 (mobile pass): `games.js` only. Games panel now has a ☰ menu button (phones, width <= 720 px) that opens the sidebar drawer through the app's own `.mobile-menu-btn` handler in `dm.js`; before, the panel hid every menu button so portrait users were stuck. Also: no sideways scrolling (boards sized to the panel width and, on short screens, its height), centered boards, compact header on landscape phones, 44 px tap targets on touch, scroll position kept while the screen redraws, confirm popup fits narrow screens. Checked in headless Chromium at 360x640, 390x844, 844x390, 768x1024 and 1280x800 for all 5 games + lobby (no overflow, drawer opens, tapping Chat leaves Games). Needs: push `games.js` to GitHub; no rules or server change.
-- 2026-11-21 (latest): added Chess to the 1v1 games (see the Chess section above); fixed a garbled comment in `api/game.js`; the rules needed the `ch` type, `opt` and promotion letters.
-- 2026-11-21 (later still): added Checkers to the 1v1 games (see the Checkers section above).
-- 2026-11-21: quests audit (rules were out of date), rules + `quests.js` updated, gift crates left out on purpose, `games.txt` fixed.
-- 2026-11-21 (later): Firebase refused the rules with "Line 90: No such method/property 'numChildren'" (the old test simulator had accepted it); the rules file on disk is fixed. Added the Rainbow Pack bundle (see above). Also added the grant-only tag "owna approved" (`tag-owna`, only #822414 can give it) in `chat.js`, `style.css` and the rules.
-
-## How the owner starts a new chat
-"Read E:\Claude\VUS D.C\HANDOFF.md first, then help me with ...". At the end of a session ask Claude to update "Current status" and "Session log" in this file.
+## Log
+- 2026-11-23: wrote the idea backlog above. Poll limit raised from 4 to 10 options (`chat.js` + `vus-chat-rules.json`, both checked: JSON parses, `node --check` OK). Looked into the crate quest and shop-crate bugs by reading only: no cause found, need the exact symptoms. Needs: publish `vus-chat-rules.json` (rules first), then push `chat.js` (plus the files already waiting in the to-do list).
+- 2026-11-22: practice mode + `bots.js` built, verified in headless Chromium (3 simple games played to the end, chess/checkers start, 0 quest reports). Fixed the "Hide online list" tab showing on Games/join/ban screens. Merged `BOT-MODE-NOTES.md` and `_bot-work/PROGRESS.md` into this file; rules moved to `CLAUDE.md`. Needs: push `games.js`, `bots.js`, `chat.js`, `style.css`.
+- 2026-11-21: mobile pass for the Games panel; Chess added; Checkers added (both need rules published first, `api/game.js` deployed, `games.js` pushed last); Rainbow Pack + `tag-owna` added (rules once failed with "No such method 'numChildren'", fixed); quests audit, rules and `quests.js` updated, gift crates left out on purpose, `games.txt` typo fixed.

@@ -150,6 +150,12 @@
           ".validate": "$id.matches(/^[0-9]{4,12}$/) && newData.val() === true"
         }
       },
+      "headadmin": {
+        "$id": {
+          ".write": false,
+          ".validate": "$id.matches(/^[0-9]{4,12}$/) && newData.val() === true"
+        }
+      },
       "admin": {
         "$id": {
           ".write": "!newData.exists() && data.child('expiresAt').isNumber() && data.child('expiresAt').val() <= now",
@@ -191,7 +197,7 @@
       },
       "mod": {
         "$id": {
-          ".write": "(!newData.exists() && data.child('expiresAt').isNumber() && data.child('expiresAt').val() <= now) || (auth != null && (root.child('staff/' + auth.uid + '/role').val() === 'coowner' || root.child('staff/' + auth.uid + '/role').val() === 'crown'))",
+          ".write": "(!newData.exists() && data.child('expiresAt').isNumber() && data.child('expiresAt').val() <= now) || (auth != null && (root.child('staff/' + auth.uid + '/role').val() === 'headadmin' || root.child('staff/' + auth.uid + '/role').val() === 'coowner' || root.child('staff/' + auth.uid + '/role').val() === 'crown'))",
           ".validate": "$id.matches(/^[0-9]{4,12}$/) && (newData.val() === true || newData.hasChildren(['temporary','expiresAt']))",
           "temporary": {
             ".validate": "newData.val() === true"
@@ -212,7 +218,7 @@
       },
       "normie": {
         "$id": {
-          ".write": "(!newData.exists() && data.child('expiresAt').isNumber() && data.child('expiresAt').val() <= now) || root.child('config/staffEnforced').val() !== true || (auth != null && (root.child('staff/' + auth.uid + '/role').val() === 'mod' || root.child('staff/' + auth.uid + '/role').val() === 'admin' || root.child('staff/' + auth.uid + '/role').val() === 'coowner' || root.child('staff/' + auth.uid + '/role').val() === 'crown'))",
+          ".write": "(!newData.exists() && data.child('expiresAt').isNumber() && data.child('expiresAt').val() <= now) || root.child('config/staffEnforced').val() !== true || (auth != null && (root.child('staff/' + auth.uid + '/role').val() === 'mod' || root.child('staff/' + auth.uid + '/role').val() === 'admin' || root.child('staff/' + auth.uid + '/role').val() === 'headadmin' || root.child('staff/' + auth.uid + '/role').val() === 'coowner' || root.child('staff/' + auth.uid + '/role').val() === 'crown'))",
           ".validate": "$id.matches(/^[0-9]{4,12}$/) && (newData.val() === true || newData.hasChildren(['temporary','expiresAt']))",
           "temporary": {
             ".validate": "newData.val() === true"
@@ -442,7 +448,7 @@
               },
               "o": {
                 "$i": {
-                  ".validate": "$i.matches(/^[0-3]$/) && newData.isString() && newData.val().length >= 1 && newData.val().length <= 40"
+                  ".validate": "$i.matches(/^[0-9]$/) && newData.isString() && newData.val().length >= 1 && newData.val().length <= 40"
                 }
               },
               "exp": {
@@ -614,7 +620,7 @@
         "bannedUsers": {
           ".read": true,
           "$id": {
-            ".write": "!root.child('roleIds/crown/' + $id).exists() && !root.child('roleIds/coowner/' + $id).exists() && (!newData.exists() || !root.child('inventory/' + $id + '/protection').exists()) && (root.child('config/staffEnforced').val() !== true || (newData.exists() && auth != null && (root.child('staff/' + auth.uid + '/role').val() === 'admin' || root.child('staff/' + auth.uid + '/role').val() === 'coowner' || root.child('staff/' + auth.uid + '/role').val() === 'crown')) || (!newData.exists() && auth != null && (root.child('staff/' + auth.uid + '/role').val() === 'coowner' || root.child('staff/' + auth.uid + '/role').val() === 'crown')) || (!newData.exists() && data.child('expiresAt').isNumber() && data.child('expiresAt').val() <= now))",
+            ".write": "!root.child('roleIds/crown/' + $id).exists() && !root.child('roleIds/coowner/' + $id).exists() && (!newData.exists() || !root.child('inventory/' + $id + '/protection').exists()) && (root.child('config/staffEnforced').val() !== true || (newData.exists() && auth != null && (root.child('staff/' + auth.uid + '/role').val() === 'admin' || root.child('staff/' + auth.uid + '/role').val() === 'headadmin' || root.child('staff/' + auth.uid + '/role').val() === 'coowner' || root.child('staff/' + auth.uid + '/role').val() === 'crown')) || (!newData.exists() && auth != null && (root.child('staff/' + auth.uid + '/role').val() === 'coowner' || root.child('staff/' + auth.uid + '/role').val() === 'crown')) || (!newData.exists() && data.child('expiresAt').isNumber() && data.child('expiresAt').val() <= now))",
             ".validate": "$id.matches(/^[0-9]{4,12}$/) && newData.hasChildren(['loginId','bannedAt'])",
             "loginId": {
               ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4,12}$/)"
@@ -772,7 +778,7 @@
           "$pid": {
             "$uid": {
               ".write": "!data.exists() && root.child('rooms/' + $room + '/polls/' + $pid).exists() && now <= root.child('rooms/' + $room + '/polls/' + $pid).val()",
-              ".validate": "$uid.matches(/^[0-9]{4,12}$/) && newData.isNumber() && newData.val() >= 0 && newData.val() <= 3"
+              ".validate": "$uid.matches(/^[0-9]{4,12}$/) && newData.isNumber() && newData.val() >= 0 && newData.val() <= 9"
             }
           }
         }
@@ -797,7 +803,7 @@
     "roleRequests": {
       ".read": false,
       "$id": {
-        ".write": "auth != null && (root.child('staff/' + auth.uid + '/role').val() === 'coowner' || root.child('staff/' + auth.uid + '/role').val() === 'crown')",
+        ".write": "auth != null && (root.child('staff/' + auth.uid + '/role').val() === 'headadmin' || root.child('staff/' + auth.uid + '/role').val() === 'coowner' || root.child('staff/' + auth.uid + '/role').val() === 'crown')",
         ".validate": "$id.matches(/^[0-9]{4,12}$/) && newData.hasChildren(['role', 'by', 'ts'])",
         "role": { ".validate": "newData.val() === 'mod'" },
         "by": { ".validate": "newData.isString() && newData.val().length <= 12" },
@@ -919,7 +925,7 @@
     "bannedDevices": {
       "$h": {
         ".read": true,
-        ".write": "root.child('config/staffEnforced').val() !== true || (newData.exists() && auth != null && (root.child('staff/' + auth.uid + '/role').val() === 'admin' || root.child('staff/' + auth.uid + '/role').val() === 'coowner' || root.child('staff/' + auth.uid + '/role').val() === 'crown')) || (!newData.exists() && auth != null && (root.child('staff/' + auth.uid + '/role').val() === 'coowner' || root.child('staff/' + auth.uid + '/role').val() === 'crown')) || (!newData.exists() && data.child('expiresAt').isNumber() && data.child('expiresAt').val() <= now) || (newData.exists() && root.child('rooms/vus-hub-main/bannedUsers/' + newData.child('loginId').val()).exists())",
+        ".write": "root.child('config/staffEnforced').val() !== true || (newData.exists() && auth != null && (root.child('staff/' + auth.uid + '/role').val() === 'admin' || root.child('staff/' + auth.uid + '/role').val() === 'headadmin' || root.child('staff/' + auth.uid + '/role').val() === 'coowner' || root.child('staff/' + auth.uid + '/role').val() === 'crown')) || (!newData.exists() && auth != null && (root.child('staff/' + auth.uid + '/role').val() === 'coowner' || root.child('staff/' + auth.uid + '/role').val() === 'crown')) || (!newData.exists() && data.child('expiresAt').isNumber() && data.child('expiresAt').val() <= now) || (newData.exists() && root.child('rooms/vus-hub-main/bannedUsers/' + newData.child('loginId').val()).exists())",
         ".validate": "$h.matches(/^[a-f0-9]{32}$/) && newData.hasChildren(['loginId','bannedAt'])",
         "loginId": {
           ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4,12}$/)"
