@@ -11564,6 +11564,154 @@ async function buyShop(item, qty) {
   if (b) b.addEventListener("click", () => { if (shopModal) closeShop(); else openShop(); });
 })();
 
+/* ══════════ Bank: tag royalties ══════════
+   The owner of a /give tag (see TAG_GRANTS) earns ROY_PER_TICK coins every ROY_TICK_MS for each person who wears that tag and is online (not AFK).
+   The owner can be offline: the WEARER'S browser writes the tick to tagBank/<owner> (e = total earned, tags/<tag> = per tag, w/<wearer> = last tick + tag).
+   The database rules (vus-chat-rules.json: tagBank) only accept one +2 step per wearer every 9 s, only for the wearer's own equipped tag and never
+   for the owner themselves. The owner claims in the Bank window: coins/<owner>/n goes up by (e - ry) and ry (claimed so far) is set to e in one write.
+   The rules can't see alts: this client skips an owner who is one of the wearer's possible alts (same as the other client-side checks). */
+const ROY_PER_TICK = 2, ROY_TICK_MS = 10100;
+let royTickBusy = false, royPauseUntil = 0, royAltCache = {};
+let bankModal = null, bankBusy = false, bankMsg = null, bankData = null, bankRef = null, bankWatchId = "";
+async function royIsAltOf(ownerId) {
+  const k = String(myLoginId) + ">" + ownerId, c = royAltCache[k];
+  if (c && Date.now() - c.at < 600000) return c.v;
+  let v = false;
+  try { v = (await ChatBackend.possibleAlts(String(myLoginId))).map(String).includes(String(ownerId)); } catch (e) {}
+  royAltCache[k] = { v: v, at: Date.now() };
+  return v;
+}
+async function royTick() {
+  if (royTickBusy || Date.now() < royPauseUntil || !myLoginId || !ChatBackend._db || myAfk) return;
+  const me = String(myLoginId), tag = myCosm && myCosm.tag, g = tag && TAG_GRANTS[tag];
+  if (!g) return;
+  const owner = String(g.granters[0]);
+  if (owner === me || await royIsAltOf(owner)) return;
+  royTickBusy = true;
+  try {
+    const db = ChatBackend._db, base = "tagBank/" + owner, SV = firebase.database.ServerValue.TIMESTAMP;
+    for (let i = 0; i < 4; i++) {
+      const rs = await Promise.all([db.ref(base + "/e").get(), db.ref(base + "/tags/" + tag).get()]);
+      const upd = {};
+      upd[base + "/e"] = (Number(rs[0].val()) || 0) + ROY_PER_TICK;
+      upd[base + "/lt"] = SV;
+      upd[base + "/lw"] = me;
+      upd[base + "/tags/" + tag] = (Number(rs[1].val()) || 0) + ROY_PER_TICK;
+      upd[base + "/w/" + me + "/t"] = SV;
+      upd[base + "/w/" + me + "/g"] = tag;
+      try { await db.ref().update(upd); return; }
+      catch (e) {
+        if (!isPermissionDenied(e)) return;
+        if (i === 3) { royPauseUntil = Date.now() + 60000; return; }   // refused 4 times (rules not published, or someone else ticked at the same moment): rest a minute
+        await new Promise(r => setTimeout(r, 150 + Math.random() * 700));   // another wearer ticked first: read the new total and try again
+      }
+    }
+  } finally { royTickBusy = false; }
+}
+setInterval(() => { royTick().catch(() => {}); }, ROY_TICK_MS);
+
+function bankReady() {
+  const earned = Number(bankData && bankData.e) || 0, claimed = Number(myCoinRec && myCoinRec.ry) || 0;
+  return Math.max(0, earned - claimed);
+}
+function ensureBankBtn() {
+  let b = document.getElementById("navBank");
+  if (b) return b;
+  const anchor = document.getElementById("navQuests");
+  if (!anchor || !anchor.parentNode) return null;
+  b = el("button", "rail-nav-btn"); b.id = "navBank"; b.type = "button"; b.title = "Bank"; b.setAttribute("aria-label", "Bank");
+  b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10 12 4l9 6"/><path d="M5 10v7M9.5 10v7M14.5 10v7M19 10v7"/><path d="M3 20h18"/></svg><span class="rail-dot" id="bankRailDot"></span>';
+  b.style.display = "none";
+  b.addEventListener("click", () => { if (bankModal) closeBank(); else openBank(); });
+  anchor.parentNode.insertBefore(b, anchor.nextSibling);
+  return b;
+}
+function paintBankBtn() {
+  const b = ensureBankBtn(); if (!b) return;
+  const mine = !!(myLoginId && myGrantableTags().length);
+  b.style.display = mine ? "" : "none";
+  const d = document.getElementById("bankRailDot"); if (d) d.classList.toggle("show", mine && bankReady() >= 1);
+  if (mine) b.title = "Bank" + (bankData ? " \u00B7 " + bankReady() + " coins ready" : "");
+}
+function ensureBankWatch() {
+  const id = myLoginId && myGrantableTags().length ? String(myLoginId) : "";
+  if (id === bankWatchId) return;
+  if (bankRef) { try { bankRef.off(); } catch (e) {} bankRef = null; }
+  bankWatchId = id; bankData = null;
+  if (!id || !ChatBackend._db) { bankWatchId = ""; return; }
+  bankRef = ChatBackend._db.ref("tagBank/" + id);
+  bankRef.on("value", s => { bankData = s.val() || {}; paintBankBtn(); if (bankModal && !bankBusy) paintBank(); }, () => { bankData = {}; });
+}
+setInterval(() => { ensureBankBtn(); ensureBankWatch(); paintBankBtn(); if (bankModal && !bankBusy) paintBank(); }, 4000);
+setTimeout(() => { ensureBankBtn(); ensureBankWatch(); paintBankBtn(); }, 1500);
+function openBank() {
+  if (bankModal || !myLoginId || !myGrantableTags().length) return;
+  ensureCoinWatch(); ensureBankWatch();
+  const ov = el("div", "crate-overlay"), box = el("div", "crate-modal shop-modal bank-modal");
+  ov.appendChild(box); document.body.appendChild(ov);
+  bankModal = ov; bankMsg = null;
+  ov.addEventListener("click", e => { if (e.target === ov && !bankBusy) closeBank(); });
+  paintBank();
+}
+function closeBank() { if (bankModal) { bankModal.remove(); bankModal = null; } }
+function paintBank() {
+  if (!bankModal) return;
+  const box = bankModal.querySelector(".bank-modal"), keepTop = box.scrollTop;
+  box.replaceChildren();
+  const x = el("button", "poll-x", "\u00D7"); x.type = "button"; x.addEventListener("click", () => { if (!bankBusy) closeBank(); });
+  box.appendChild(x);
+  box.appendChild(el("h3", "cr-h", "\uD83C\uDFE6 Bank"));
+  const d = bankData || {}, tags = d.tags || {}, wear = d.w || {}, ready = bankReady();
+  const bal = el("div", "shop-bal");
+  bal.append(el("span", "shop-bal-ic", "\uD83E\uDE99"), el("b", "", bankData === null ? "\u2026" : String(ready)), el("span", "", " ready to claim"));
+  box.appendChild(bal);
+  const row = el("div", "shop-buys");
+  const cb = el("button", "cr-count-b", bankBusy ? "Claiming\u2026" : "Claim " + ready + " \uD83E\uDE99"); cb.type = "button";
+  cb.disabled = bankBusy || bankData === null || myCoinRec === null || ready < 1;
+  cb.addEventListener("click", () => claimRoyalties());
+  row.appendChild(cb); box.appendChild(row);
+  if (bankMsg) box.appendChild(el("div", "shop-msg" + (bankMsg.ok ? " ok" : ""), bankMsg.t));
+  const now = srvNow();
+  myGrantableTags().forEach(id => {
+    let online = 0;
+    Object.keys(wear).forEach(w => { const r = wear[w]; if (r && r.g === id && Number(r.t) > now - ROY_TICK_MS * 2.5) online++; });
+    const rate = Math.round(online * ROY_PER_TICK / (ROY_TICK_MS / 1000) * 100) / 100;
+    const it = itemOf(id, "tag"), card = el("div", "bank-row"), info = el("div", "shop-info");
+    info.append(el("b", "", (it ? it.name : id) + " (" + TAG_GRANTS[id].cmd + ")"), el("small", "", online + (online === 1 ? " person" : " people") + " wearing it online \u00B7 " + (Number(tags[id]) || 0) + " coins earned in total"));
+    const rt = el("div", "bank-rate", rate + " \uD83E\uDE99/s");
+    card.append(info, rt); box.appendChild(card);
+  });
+  box.appendChild(el("div", "cr-note", "You earn " + ROY_PER_TICK + " coins every " + Math.round(ROY_TICK_MS / 1000) + " seconds for each person who wears your tag while they are online. It adds up even while you are offline: come here and claim it. People who look like your alts earn you nothing."));
+  box.scrollTop = keepTop;
+}
+async function claimRoyalties() {
+  if (bankBusy || !myLoginId || !ChatBackend._db) return;
+  bankBusy = true; bankMsg = null; paintBank();
+  const db = ChatBackend._db, me = String(myLoginId);
+  try {
+    let got = 0;
+    for (let i = 0; i < 5 && !got; i++) {
+      const rs = await Promise.all([db.ref("tagBank/" + me + "/e").get(), db.ref("coins/" + me).get()]);
+      const e = Number(rs[0].val()) || 0, c = rs[1].val();
+      if (!c) throw new Error("Your coin account doesn't exist yet. Send a message first.");
+      const ry = Number(c.ry) || 0, n = Number(c.n) || 0;
+      if (e <= ry) { bankMsg = { t: "Nothing to claim right now." }; break; }
+      const upd = {};
+      upd["coins/" + me + "/n"] = n + (e - ry);
+      upd["coins/" + me + "/ry"] = e;
+      try { await db.ref().update(upd); got = e - ry; }
+      catch (err) {
+        if (!isPermissionDenied(err) || i === 4) throw err;
+        await new Promise(r => setTimeout(r, 200 + Math.random() * 500));   // a message coin or a new tick landed in between: read again
+      }
+    }
+    if (got) bankMsg = { ok: true, t: "Claimed " + got + (got === 1 ? " coin." : " coins.") };
+  } catch (e) {
+    bankMsg = { t: isPermissionDenied(e) ? "The database refused that. Check that the newest database rules are published, then try again." : ((e && e.message) || "Couldn't claim that.") };
+  }
+  bankBusy = false; paintBank();
+}
+
 /* ══════════ Community rules and Reports ══════════ */
 const COMMUNITY_RULES = [
   "No hate speech",

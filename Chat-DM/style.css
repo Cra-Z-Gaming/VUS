@@ -2822,6 +2822,8 @@ body.hide-bubcolors .msg-bubble.bubfx { animation: none !important; box-shadow: 
 .shop-bal{display:flex;align-items:center;justify-content:center;gap:6px;margin:0 0 14px;font-size:1.05rem;color:#fcd34d}
 .shop-bal b{font-size:1.5rem;color:#fde68a}
 .shop-bal-ic{font-size:1.4rem}
+.bank-row{display:flex;align-items:center;gap:12px;padding:12px 14px;margin:0 0 8px;border-radius:14px;border:1px solid #334155;background:#0f172a}
+.bank-rate{font-weight:700;color:#fcd34d;white-space:nowrap;text-align:right}
 .shop-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;border:1px solid #334155;background:#0f172a}
 .shop-ic{font-size:30px}
 .shop-info{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
