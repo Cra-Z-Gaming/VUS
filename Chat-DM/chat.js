@@ -11581,12 +11581,18 @@ async function royIsAltOf(ownerId) {
   royAltCache[k] = { v: v, at: Date.now() };
   return v;
 }
+let royLast = "not run yet";   // why the last tick did or did not happen: type VUS_ROY.last in the browser console (F12) on the account that wears the tag
+window.VUS_ROY = { get last() { return royLast; } };
 async function royTick() {
-  if (royTickBusy || Date.now() < royPauseUntil || !myLoginId || !ChatBackend._db || myAfk) return;
+  if (royTickBusy) { royLast = "previous tick still running"; return; }
+  if (Date.now() < royPauseUntil) { royLast = "resting after refused writes (are the newest rules published?)"; return; }
+  if (!myLoginId || !ChatBackend._db) { royLast = "not logged in"; return; }
+  if (myAfk) { royLast = "AFK: no tick"; return; }
   const me = String(myLoginId), tag = myCosm && myCosm.tag, g = tag && TAG_GRANTS[tag];
-  if (!g) return;
+  if (!g) { royLast = "no /give tag equipped (equipped: " + (tag || "none") + ")"; return; }
   const owner = String(g.granters[0]);
-  if (owner === me || await royIsAltOf(owner)) return;
+  if (owner === me) { royLast = "you own this tag: owners don't earn from themselves"; return; }
+  if (await royIsAltOf(owner)) { royLast = "skipped: #" + me + " is a possible alt of the owner #" + owner + " (same device)"; return; }
   royTickBusy = true;
   try {
     const db = ChatBackend._db, base = "tagBank/" + owner, SV = firebase.database.ServerValue.TIMESTAMP;
@@ -11599,8 +11605,9 @@ async function royTick() {
       upd[base + "/tags/" + tag] = (Number(rs[1].val()) || 0) + ROY_PER_TICK;
       upd[base + "/w/" + me + "/t"] = SV;
       upd[base + "/w/" + me + "/g"] = tag;
-      try { await db.ref().update(upd); return; }
+      try { await db.ref().update(upd); royLast = "tick sent at " + new Date().toLocaleTimeString() + " for owner #" + owner; return; }
       catch (e) {
+        royLast = "write refused or failed: " + ((e && (e.code || e.message)) || e);
         if (!isPermissionDenied(e)) return;
         if (i === 3) { royPauseUntil = Date.now() + 60000; return; }   // refused 4 times (rules not published, or someone else ticked at the same moment): rest a minute
         await new Promise(r => setTimeout(r, 150 + Math.random() * 700));   // another wearer ticked first: read the new total and try again
@@ -11663,10 +11670,10 @@ function paintBank() {
   box.appendChild(el("h3", "cr-h", "\uD83C\uDFE6 Bank"));
   const d = bankData || {}, tags = d.tags || {}, wear = d.w || {}, ready = bankReady();
   const bal = el("div", "shop-bal");
-  bal.append(el("span", "shop-bal-ic", "\uD83E\uDE99"), el("b", "", bankData === null ? "\u2026" : String(ready)), el("span", "", " ready to claim"));
+  bal.append(el("b", "", bankData === null ? "\u2026" : String(ready)), el("span", "", " coins ready to claim"));
   box.appendChild(bal);
   const row = el("div", "shop-buys");
-  const cb = el("button", "cr-count-b", bankBusy ? "Claiming\u2026" : "Claim " + ready + " \uD83E\uDE99"); cb.type = "button";
+  const cb = el("button", "cr-count-b", bankBusy ? "Claiming\u2026" : "Claim " + ready + (ready === 1 ? " coin" : " coins")); cb.type = "button";
   cb.disabled = bankBusy || bankData === null || myCoinRec === null || ready < 1;
   cb.addEventListener("click", () => claimRoyalties());
   row.appendChild(cb); box.appendChild(row);
@@ -11678,9 +11685,10 @@ function paintBank() {
     const rate = Math.round(online * ROY_PER_TICK / (ROY_TICK_MS / 1000) * 100) / 100;
     const it = itemOf(id, "tag"), card = el("div", "bank-row"), info = el("div", "shop-info");
     info.append(el("b", "", (it ? it.name : id) + " (" + TAG_GRANTS[id].cmd + ")"), el("small", "", online + (online === 1 ? " person" : " people") + " wearing it online \u00B7 " + (Number(tags[id]) || 0) + " coins earned in total"));
-    const rt = el("div", "bank-rate", rate + " \uD83E\uDE99/s");
+    const rt = el("div", "bank-rate", rate + " coins/s");
     card.append(info, rt); box.appendChild(card);
   });
+  box.appendChild(el("div", "cr-note", bankData === null ? "Loading\u2026" : (Number(d.lt) ? "Last payment arrived " + Math.max(0, Math.round((now - Number(d.lt)) / 1000)) + " s ago, from #" + d.lw + "." : "No payment has arrived yet.")));
   box.appendChild(el("div", "cr-note", "You earn " + ROY_PER_TICK + " coins every " + Math.round(ROY_TICK_MS / 1000) + " seconds for each person who wears your tag while they are online. It adds up even while you are offline: come here and claim it. People who look like your alts earn you nothing."));
   box.scrollTop = keepTop;
 }
