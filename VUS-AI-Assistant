@@ -300,7 +300,7 @@ body::after {
 .msg {
   display: flex;
   gap: 10px;
-  max-width: 760px;
+  max-width: min(760px, 100%);
   animation: fadeUp .18s ease;
 }
 @keyframes fadeUp {
@@ -332,8 +332,8 @@ body::after {
   border-radius: var(--r);
   font-size: 13px;
   line-height: 1.75;
-  max-width: calc(100% - 40px);
-  word-break: break-word;
+  min-width: 0;                 /* lets the bubble shrink to the row, so only very long words wrap */
+  overflow-wrap: break-word;    /* wrap long words only when they don't fit, never letter-by-letter */
   white-space: pre-wrap;
 }
 .msg.user .bubble { background: var(--blue); color: #fff; border-bottom-right-radius: 2px; }
@@ -410,6 +410,49 @@ body::after {
 .m-confirm { background: rgba(255,51,85,.15); border-color: var(--red); color: var(--red); }
 .m-confirm:hover { background: rgba(255,51,85,.25); }
 
+/* ── My Key ── */
+.tb-btn.mykey-btn.has-key { color: var(--accent); border-color: var(--accent); }
+
+#keyModalBg {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.7);
+  z-index: 8000;
+  align-items: center; justify-content: center;
+  backdrop-filter: blur(4px);
+}
+#keyModalBg.open { display: flex; }
+.modal.key-modal { max-width: 400px; text-align: left; }
+.modal.key-modal h3 { text-align: center; }
+.modal.key-modal p { margin-bottom: 12px; }
+.key-input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 9px 11px;
+  outline: none;
+  margin-bottom: 10px;
+  transition: border-color .2s;
+}
+.key-input:focus { border-color: var(--accent); }
+.key-input::placeholder { color: var(--muted); }
+.key-opt { display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--muted); cursor: pointer; margin-bottom: 10px; }
+.key-msg { font-size: 10px; line-height: 1.6; min-height: 16px; margin-bottom: 14px; }
+.key-msg.ok   { color: var(--accent); }
+.key-msg.err  { color: var(--red); }
+.key-msg.wait { color: var(--gold); }
+.m-save { background: var(--acc-dim); border-color: var(--accent); color: var(--accent); }
+.m-save:hover:not(:disabled) { background: rgba(0,255,136,.2); }
+.m-save:disabled { opacity: .4; cursor: not-allowed; }
+
+.key-link { display: inline-block; color: var(--accent); font-size: 11px; margin-bottom: 12px; }
+select.key-input { cursor: pointer; }
+.switch-note { color: var(--gold); font-size: 11px; margin-bottom: 6px; }
+
 /* ── Input Area ── */
 #inputArea {
   padding: 12px 16px 14px;
@@ -462,6 +505,8 @@ body::after {
     <div id="modelMenu" class="dd-menu"></div>
   </div>
 
+  <button id='refreshBtn' class='tb-btn' onclick='refreshAll()' title='Refresh the model list'>↻</button>
+
   <!-- Key selector -->
   <div id="keyWrap" class="dd-wrap">
     <button id="keyDropBtn" class="dd-btn" onclick="toggleKeyMenu()">
@@ -474,6 +519,8 @@ body::after {
 
   <!-- Check -->
   <button id="checkBtn" class="tb-btn check-btn" onclick="checkAll()" title="Refresh and test all keys and models">⟳ CHECK</button>
+
+  <button id='myKeyBtn' class='tb-btn mykey-btn' onclick='openKeyModal()' title='Choose a provider and add your own API key'>+ My Key</button>
 
   <span class="tb-spacer"></span>
 
@@ -515,6 +562,28 @@ body::after {
   </div>
 </div>
 
+<!-- My Key modal -->
+<div id='keyModalBg'>
+  <div class='modal key-modal'>
+    <h3>Your API Keys</h3>
+    <select id='providerSelect' class='key-input'>
+      <option value='groq'>Groq</option>
+      <option value='openrouter'>OpenRouter (free models)</option>
+      <option value='gemini'>Google Gemini</option>
+    </select>
+    <p id='keyHelp'></p>
+    <a id='keyLink' class='key-link' target='_blank' rel='noopener noreferrer'></a>
+    <input id='keyInput' class='key-input' type='password' autocomplete='off' spellcheck='false'>
+    <label class='key-opt' id='onlyMyKeyRow'><input type='checkbox' id='onlyMyKey'> Use only my key (skip the shared keys)</label>
+    <div id='keyMsg' class='key-msg'></div>
+    <div class='modal-btns'>
+      <button class='m-btn m-cancel' onclick='closeKeyModal()'>Close</button>
+      <button class='m-btn m-confirm' id='keyRemoveBtn' onclick='removeMyKey()'>Remove</button>
+      <button class='m-btn m-save' id='keySaveBtn' onclick='saveMyKey()'>Save &amp; use</button>
+    </div>
+  </div>
+</div>
+
 <div id="inputArea">
   <div id="inputRow">
     <textarea id="msgInput" placeholder="Ask anything…" rows="1"></textarea>
@@ -535,6 +604,102 @@ body::after {
 ════════════════════════════════════════ */
 const KEYS_URL   = 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/GroqAPIKeys';
 const MODELS_URL = 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/GroqModels';
+
+/* ════════════════════════════════════════
+   PROVIDERS
+   All three take the same chat format.
+   Shared keys exist for Groq only; the
+   others always need your own key.
+════════════════════════════════════════ */
+const bearer = key => ({ 'Authorization': 'Bearer ' + key });
+const GEMINI_API = 'https://generativelanguage.googleapis.com/v1beta';
+
+const PROVIDERS = {
+  groq: {
+    name: 'Groq',
+    shared: true,
+    store: 'vus_ai_user_key',          // original name, so saved keys carry over
+    keyUrl: 'https://console.groq.com/keys',
+    placeholder: 'gsk_...',
+    chatUrl: 'https://api.groq.com/openai/v1/chat/completions',
+    maxTokens: 1024,
+    checkKey: key => apiGet('https://api.groq.com/openai/v1/models', bearer(key)),
+    listModels: async key => {
+      const data = await apiGet('https://api.groq.com/openai/v1/models', bearer(key));
+      const first = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b'];
+      const rank = id => first.includes(id) ? first.indexOf(id) : first.length;
+      return data.data
+        .filter(m => m.active !== false && !/whisper|tts|orpheus|guard|embed/i.test(m.id))
+        .map(m => ({ id: m.id, label: m.id }))
+        .sort((a, b) => rank(a.id) - rank(b.id) || a.id.localeCompare(b.id));
+    }
+  },
+  openrouter: {
+    name: 'OpenRouter',
+    store: 'vus_ai_key_openrouter',
+    keyUrl: 'https://openrouter.ai/settings/keys',
+    placeholder: 'sk-or-...',
+    chatUrl: 'https://openrouter.ai/api/v1/chat/completions',
+    maxTokens: 2048,
+    // The model list is public, so the key is checked against the key-info address
+    checkKey: key => apiGet('https://openrouter.ai/api/v1/key', bearer(key)),
+    listModels: async key => {
+      let data;
+      try {
+        // Respects your OpenRouter account settings
+        data = await apiGet('https://openrouter.ai/api/v1/models/user', bearer(key));
+      } catch (e) {
+        if (e.status === 401) throw e;
+        data = await apiGet('https://openrouter.ai/api/v1/models', bearer(key));
+      }
+      // Free models only, so nobody gets charged by surprise
+      const isFree = m => m.id === 'openrouter/free' || m.id.endsWith(':free');
+      const isChat = m => (m.architecture?.output_modalities || ['text']).includes('text') && !/guard|safety/i.test(m.id);
+      const rank = m => m.id === 'openrouter/free' ? 0 : 1;
+      return data.data
+        .filter(m => isFree(m) && isChat(m))
+        .sort((a, b) => rank(a) - rank(b))
+        .map(m => ({ id: m.id, label: m.name || m.id }));
+    }
+  },
+  gemini: {
+    name: 'Gemini',
+    store: 'vus_ai_key_gemini',
+    keyUrl: 'https://aistudio.google.com/apikey',
+    placeholder: 'Paste your Gemini key',
+    chatUrl: GEMINI_API + '/openai/chat/completions',
+    maxTokens: 4096,
+    checkKey: key => apiGet(GEMINI_API + '/models?pageSize=1', { 'x-goog-api-key': key }),
+    listModels: async key => {
+      const data = await apiGet(GEMINI_API + '/models?pageSize=1000', { 'x-goog-api-key': key });
+      // Flash models first, newest version first
+      const family  = id => /flash-lite/.test(id) ? 1 : /flash/.test(id) ? 0 : /^gemma/.test(id) ? 2 : 3;
+      const version = id => /-latest$/.test(id) ? 999 : parseFloat((id.match(/\d+(\.\d+)?/) || [0])[0]);
+      return (data.models || [])
+        .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+        .map(m => m.name.replace(/^models\//, ''))
+        .filter(id => /^(gemini|gemma)/.test(id) && !/embed|tts|image|audio|live|robotics|computer-use|transcribe|translate/i.test(id))
+        .sort((a, b) => family(a) - family(b) || version(b) - version(a) || a.localeCompare(b))
+        .map(id => ({ id, label: id }));
+    }
+  }
+};
+
+// Turns a failed response into an Error carrying the status and code
+async function apiError(res) {
+  const body = await res.json().catch(() => ({}));
+  const info = (Array.isArray(body) ? body[0]?.error : body?.error) || {};
+  const e = new Error(info.message || 'HTTP ' + res.status);
+  e.status = res.status;
+  e.code = info.code || '';
+  return e;
+}
+
+async function apiGet(url, headers) {
+  const res = await fetch(url, { headers });
+  if (!res.ok) throw await apiError(res);
+  return res.json();
+}
 
 const SYSTEM_PROMPT = `
 
@@ -622,6 +787,40 @@ let selectedModel    = null;    // reference into modelsList
 
 let checking = false;
 
+// ---- Your own key (saved in this browser only; same storage names in both VUS AI files) ----
+const PROVIDER_STORE = 'vus_ai_provider';
+const ONLYMY_STORE   = 'vus_ai_only_my_key';
+const MODEL_STORE    = 'vus_ai_model_';   // + provider id: the model you're using
+let provider   = 'groq';
+let modelPicks = 0;      // counts dropdown picks, so a late reply never overrides one
+let myKeyObj   = null;   // { key, label, status, mine }
+let onlyMyKey  = false;
+
+function lsGet(k)    { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
+function lsDel(k)    { try { localStorage.removeItem(k); } catch (e) {} }
+
+function loadMyKey() {
+  const saved = lsGet(PROVIDER_STORE);
+  provider = PROVIDERS[saved] ? saved : 'groq';
+  const p = PROVIDERS[provider];
+  const k = (lsGet(p.store) || '').trim();
+  onlyMyKey = lsGet(ONLYMY_STORE) === '1';
+  myKeyObj  = k ? { key: k, label: 'My Key', status: 'unchecked', mine: true } : null;
+  const b = document.getElementById('myKeyBtn');
+  b.classList.toggle('has-key', !!myKeyObj);
+  b.textContent = (myKeyObj ? '✓ ' : '+ ') + (p.shared ? 'My Key' : p.name + ' Key');
+  welcomeEl.querySelector('.w-sub').textContent = 'Powered by ' + p.name + ' · VUS Hub';
+}
+
+function maskKey(k) { return k.length > 10 ? k.slice(0, 4) + '…' + k.slice(-4) : '••••'; }
+
+// Checks a key without sending a chat message, so it doesn't depend on any one model
+async function testKeyValid(keyObj, providerId = provider) {
+  await PROVIDERS[providerId].checkKey(keyObj.key);
+  return true;
+}
+
 /* ════════════════════════════════════════
    DOM REFS
 ════════════════════════════════════════ */
@@ -630,6 +829,7 @@ const welcomeEl      = document.getElementById('welcome');
 const inputEl        = document.getElementById('msgInput');
 const sendBtn        = document.getElementById('sendBtn');
 const checkBtn       = document.getElementById('checkBtn');
+const refreshBtn     = document.getElementById('refreshBtn');
 
 const keyMenu        = document.getElementById('keyMenu');
 const activeDot      = document.getElementById('activeDot');
@@ -650,6 +850,30 @@ const srchDown       = document.getElementById('srchDown');
    LOAD KEYS FROM REMOTE SOURCE
 ════════════════════════════════════════ */
 async function loadKeys() {
+  loadMyKey();
+  if (!PROVIDERS[provider].shared || (onlyMyKey && myKeyObj)) {
+    filledKeys = myKeyObj ? [myKeyObj] : [];
+    selectedKey = myKeyObj;
+    keysLoading = false;
+    keysLoadError = false;
+    buildKeyMenu();
+    updateSendAvailability();
+    return;
+  }
+
+  await loadSharedKeys();
+
+  // Your own key always works, even if the shared list failed to load
+  if (myKeyObj) {
+    keysLoadError = false;
+    filledKeys = [myKeyObj, ...filledKeys];
+    selectedKey = myKeyObj;
+  }
+  buildKeyMenu();
+  updateSendAvailability();
+}
+
+async function loadSharedKeys() {
   keysLoading = true;
   keysLoadError = false;
   activeLabel.textContent = 'Loading…';
@@ -698,20 +922,12 @@ async function loadModels(force = false) {
   updateSendAvailability();
 
   try {
-    const res = await fetch(MODELS_URL + '?v=' + Date.now(), { cache: 'no-store' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const raw = await res.text();
+    const list = await fetchModelList();
+    modelsList = list.map(m => ({ id: m.id, label: m.label, status: 'unchecked' }));
 
-    modelsList = raw
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line !== '' && !line.startsWith('#'))
-      .map(line => {
-        const [id, label] = line.split('|').map(s => s && s.trim());
-        return { id, label: label || id, status: 'unchecked' };
-      });
-
-    selectedModel = modelsList.length > 0 ? modelsList[0] : null;
+    // Stay on the model you were using, if it's still listed
+    const wanted = lsGet(MODEL_STORE + provider);
+    selectedModel = modelsList.find(m => m.id === wanted) || modelsList[0] || null;
     modelsLoading = false;
     modelsFetched = true;
   } catch (e) {
@@ -727,8 +943,51 @@ async function loadModels(force = false) {
   updateSendAvailability();
 }
 
+// With your own key, ask the provider which models it offers. For Groq, the
+// GroqModels file is used with the shared keys, or if that request fails.
+async function fetchModelList() {
+  const p = PROVIDERS[provider];
+  if (!p.shared) return myKeyObj ? p.listModels(myKeyObj.key) : [];
+  if (myKeyObj) {
+    try {
+      const list = await p.listModels(myKeyObj.key);
+      if (list.length) return list;
+    } catch (e) {
+      console.error('Failed to list models with your key:', e);
+    }
+  }
+  return fetchModelsFile();
+}
+
+async function fetchModelsFile() {
+  const res = await fetch(MODELS_URL + '?v=' + Date.now(), { cache: 'no-store' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const raw = await res.text();
+  return raw
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line !== '' && !line.startsWith('#'))
+    .map(line => {
+      const [id, label] = line.split('|').map(s => s && s.trim());
+      return { id, label: label || id };
+    });
+}
+
+// Reloads keys and models without sending any test messages.
+// Runs every time the page opens, and from the ↻ button.
+async function refreshAll() {
+  if (checking || thinking) return;
+  checking = true;
+  updateSendAvailability();
+  await loadKeys();
+  await loadModels(true);
+  checking = false;
+  updateSendAvailability();
+}
+
 function updateSendAvailability() {
   sendBtn.disabled = keysLoading || modelsLoading || thinking || checking;
+  checkBtn.disabled = refreshBtn.disabled = thinking || checking;
 }
 
 /* ════════════════════════════════════════
@@ -738,7 +997,7 @@ function sortKeysList() {
   const rank = { active: 0, unchecked: 1, checking: 1, inactive: 2 };
   filledKeys = filledKeys
     .map((k, i) => ({ k, i }))
-    .sort((a, b) => (rank[a.k.status] - rank[b.k.status]) || (a.i - b.i))
+    .sort((a, b) => ((b.k.mine ? 1 : 0) - (a.k.mine ? 1 : 0)) || (rank[a.k.status] - rank[b.k.status]) || (a.i - b.i))
     .map(x => x.k);
 }
 
@@ -763,7 +1022,7 @@ function buildKeyMenu() {
     const retry = document.createElement('div');
     retry.className = 'km-item km-action';
     retry.textContent = '↻ Retry';
-    retry.onclick = loadKeys;
+    retry.onclick = refreshAll;
     keyMenu.appendChild(retry);
     activeLabel.textContent = 'No Key';
     activeDot.className = 'k-dot inactive';
@@ -773,7 +1032,8 @@ function buildKeyMenu() {
   if (filledKeys.length === 0) {
     const el = document.createElement('div');
     el.className = 'km-item';
-    el.textContent = 'No keys configured';
+    el.textContent = PROVIDERS[provider].shared ? 'No keys configured' : '+ Add your ' + PROVIDERS[provider].name + ' key';
+    el.onclick = () => { keyMenu.classList.remove('open'); openKeyModal(); };
     keyMenu.appendChild(el);
     activeLabel.textContent = 'No Key';
     activeDot.className = 'k-dot unchecked';
@@ -851,7 +1111,7 @@ function buildModelMenu() {
     const retry = document.createElement('div');
     retry.className = 'km-item km-action';
     retry.textContent = '↻ Retry';
-    retry.onclick = () => loadModels(true);
+    retry.onclick = refreshAll;
     modelMenu.appendChild(retry);
     modelActiveLabel.textContent = 'No Model';
     modelActiveDot.className = 'k-dot inactive';
@@ -861,7 +1121,7 @@ function buildModelMenu() {
   if (modelsList.length === 0) {
     const el = document.createElement('div');
     el.className = 'km-item';
-    el.textContent = 'No models configured';
+    el.textContent = !PROVIDERS[provider].shared && !myKeyObj ? 'Add your key to see models' : 'No models found';
     modelMenu.appendChild(el);
     modelActiveLabel.textContent = 'No Model';
     modelActiveDot.className = 'k-dot unchecked';
@@ -877,7 +1137,7 @@ function buildModelMenu() {
     el.className = 'km-item' + (isSelected ? ' selected' : '') + (st === 'inactive' ? ' dimmed' : '');
     el.innerHTML = `
       <span class="km-dot ${st}"></span>
-      <span class="km-label">${m.label}</span>
+      <span class="km-label">${escHtml(m.label)}</span>
       <span class="km-status ${st}">${st === 'unchecked' ? '—' : st === 'checking' ? 'Checking…' : st === 'active' ? 'Working' : 'Failing'}</span>
     `;
     el.onclick = () => selectModel(m);
@@ -888,6 +1148,8 @@ function buildModelMenu() {
 }
 
 function selectModel(m) {
+  modelPicks++;
+  lsSet(MODEL_STORE + provider, m.id);   // stays selected until it fails
   selectedModel = m;
   buildModelMenu();
   modelMenu.classList.remove('open');
@@ -922,7 +1184,7 @@ document.addEventListener('click', e => {
    top, failing ones sink to the bottom.
 ════════════════════════════════════════ */
 async function checkAll() {
-  if (checking) return;
+  if (checking || thinking) return;
   checking = true;
   checkBtn.disabled = true;
   checkBtn.classList.add('checking');
@@ -943,30 +1205,33 @@ async function checkAll() {
 
   // Mark everything as checking
   filledKeys.forEach(k => k.status = 'checking');
-  modelsList.forEach(m => m.status = 'checking');
+  // Only Groq models get test messages; elsewhere testing would use up your free limit
+  const testModels = PROVIDERS[provider].shared;
+  if (testModels) modelsList.forEach(m => m.status = 'checking');
   buildKeyMenu();
   buildModelMenu();
 
-  // Test each key against the first available model
-  const testModelId = modelsList[0].id;
+  // Test each key against Groq's model list (free, and not tied to any one model)
   for (const k of filledKeys) {
     try {
-      await tryKey(k, testModelId, true);
+      await testKeyValid(k);
       k.status = 'active';
-    } catch {
-      k.status = 'inactive';
+    } catch (e) {
+      // A dropped connection or rate limit doesn't mean the key is bad
+      k.status = classifyError(e) === 'key' ? 'inactive' : 'unchecked';
     }
     buildKeyMenu();
   }
 
   // Test each model using a working key if we found one, otherwise the first key
   const workingKey = filledKeys.find(k => k.status === 'active') || filledKeys[0];
-  for (const m of modelsList) {
+  for (const m of testModels ? modelsList : []) {
     try {
       await tryKey(workingKey, m.id, true);
       m.status = 'active';
-    } catch {
-      m.status = 'inactive';
+    } catch (e) {
+      // Rate limits, bad keys and dropped connections say nothing about the model, so leave it untested
+      m.status = ['limit', 'key', 'network'].includes(classifyError(e)) ? 'unchecked' : 'inactive';
     }
     buildModelMenu();
   }
@@ -976,9 +1241,9 @@ async function checkAll() {
     const wk = filledKeys.find(k => k.status === 'active');
     if (wk) selectedKey = wk;
   }
-  if (!selectedModel || selectedModel.status !== 'active') {
+  if (!selectedModel || selectedModel.status === 'inactive') {
     const wm = modelsList.find(m => m.status === 'active');
-    if (wm) selectedModel = wm;
+    if (wm) { selectedModel = wm; lsSet(MODEL_STORE + provider, wm.id); }
   }
 
   buildKeyMenu();
@@ -1019,6 +1284,99 @@ function confirmClear() {
 
 // Close modal on background click
 modalBg.addEventListener('click', e => { if (e.target === modalBg) closeModal(); });
+
+// ---- My Key modal ----
+const keyModalBg   = document.getElementById('keyModalBg');
+const keyInput     = document.getElementById('keyInput');
+const keyMsg       = document.getElementById('keyMsg');
+const onlyMyKeyBox = document.getElementById('onlyMyKey');
+const keySaveBtn   = document.getElementById('keySaveBtn');
+const keyRemoveBtn = document.getElementById('keyRemoveBtn');
+const providerSelect = document.getElementById('providerSelect');
+const keyHelp        = document.getElementById('keyHelp');
+const keyLink        = document.getElementById('keyLink');
+const onlyMyKeyRow   = document.getElementById('onlyMyKeyRow');
+
+function setKeyMsg(text, cls) { keyMsg.textContent = text; keyMsg.className = 'key-msg ' + (cls || ''); }
+
+function openKeyModal() {
+  providerSelect.value = provider;
+  onlyMyKeyBox.checked = onlyMyKey;
+  showProviderForm();
+  keyModalBg.classList.add('open');
+  keyInput.focus();
+}
+
+// Fills the popup for whichever provider is picked in the list
+function showProviderForm() {
+  const p = PROVIDERS[providerSelect.value];
+  const saved = (lsGet(p.store) || '').trim();
+  keyHelp.textContent = (p.shared ? 'Optional: Groq also works with the shared keys.' : p.name + ' needs your own key.')
+    + ' Your key is saved only in this browser and only sent to ' + p.name + '.';
+  keyLink.href = p.keyUrl;
+  keyLink.textContent = 'Get your ' + p.name + ' key ↗';
+  keyInput.value = '';
+  keyInput.placeholder = saved ? 'Saved: ' + maskKey(saved) + ' (paste a new key to replace)' : p.placeholder;
+  onlyMyKeyRow.style.display = p.shared ? '' : 'none';
+  keyRemoveBtn.style.display = saved ? '' : 'none';
+  setKeyMsg('', '');
+}
+providerSelect.addEventListener('change', showProviderForm);
+
+function closeKeyModal() {
+  keyModalBg.classList.remove('open');
+  keyInput.value = '';
+}
+
+async function saveMyKey() {
+  if (checking || thinking) { setKeyMsg('Busy right now. Wait for it to finish, then save.', 'err'); return; }
+  const id = providerSelect.value;
+  const p = PROVIDERS[id];
+  const typed = keyInput.value.trim();
+  const saved = (lsGet(p.store) || '').trim();
+
+  if (!typed && !saved && !p.shared) { setKeyMsg('Paste your ' + p.name + ' key first.', 'err'); return; }
+
+  if (typed) {
+    keySaveBtn.disabled = true;
+    setKeyMsg('Checking key...', 'wait');
+    try {
+      await testKeyValid({ key: typed }, id);
+    } catch (e) {
+      setKeyMsg(e.status ? p.name + ' rejected that key: ' + e.message : 'Could not reach ' + p.name + ' to check the key.', 'err');
+      return;
+    } finally {
+      keySaveBtn.disabled = false;
+    }
+    // Closed or switched provider while checking: don't save
+    if (!keyModalBg.classList.contains('open') || providerSelect.value !== id) return;
+    if (checking || thinking) { setKeyMsg('Busy right now. Wait for it to finish, then save.', 'err'); return; }
+    if (!lsSet(p.store, typed)) { setKeyMsg('Could not save: browser storage is blocked.', 'err'); return; }
+  }
+
+  if (!lsSet(PROVIDER_STORE, id)) { setKeyMsg('Could not save: browser storage is blocked.', 'err'); return; }
+  if (p.shared) lsSet(ONLYMY_STORE, onlyMyKeyBox.checked ? '1' : '0');
+  closeKeyModal();
+
+  // The first time a key is added, run one full check with it. After that, just refresh.
+  if (typed && !saved) await checkAll();
+  else await refreshAll();
+}
+
+async function removeMyKey() {
+  if (checking || thinking) { setKeyMsg('Busy right now. Wait for it to finish, then remove.', 'err'); return; }
+  const p = PROVIDERS[providerSelect.value];
+  lsDel(p.store);
+  if (p.shared) lsDel(ONLYMY_STORE);
+  closeKeyModal();
+  await refreshAll();
+}
+
+keyModalBg.addEventListener('click', e => { if (e.target === keyModalBg) closeKeyModal(); });
+keyInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); saveMyKey(); }
+  if (e.key === 'Escape') closeKeyModal();
+});
 
 /* ════════════════════════════════════════
    SEARCH
@@ -1157,12 +1515,17 @@ inputEl.addEventListener('keydown', e => {
    MARKDOWN-LITE RENDERER
 ════════════════════════════════════════ */
 function renderText(raw) {
+  // Escape everything first, then add formatting. Code is stashed so it is only escaped once.
+  const blocks = [];
+  const stash = html => '%%VUSBLK' + (blocks.push(html) - 1) + '%%';
   let out = raw.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, _lang, code) =>
-    `<pre><code>${escHtml(code.trim())}</code></pre>`
+    stash(`<pre><code>${escHtml(code.trim())}</code></pre>`)
   );
-  out = out.replace(/`([^`]+)`/g, (_, c) => `<code>${escHtml(c)}</code>`);
+  out = out.replace(/`([^`]+)`/g, (_, c) => stash(`<code>${escHtml(c)}</code>`));
+  out = escHtml(out);
   out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   out = out.replace(/\n/g, '<br>');
+  out = out.replace(/%%VUSBLK(\d+)%%/g, (m, i) => blocks[+i] ?? m);
   return out;
 }
 
@@ -1207,11 +1570,12 @@ function appendMsg(role, content, isTyping = false) {
    real conversation.
 ════════════════════════════════════════ */
 async function tryKey(keyObj, modelId, test = false) {
+  const p = PROVIDERS[provider];
   const body = test
     ? { model: modelId, max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] }
-    : { model: modelId, max_tokens: 1024, messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...history] };
+    : { model: modelId, max_tokens: p.maxTokens, messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...history] };
 
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  const res = await fetch(p.chatUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1219,11 +1583,153 @@ async function tryKey(keyObj, modelId, test = false) {
     },
     body: JSON.stringify(body)
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || 'HTTP ' + res.status);
+  if (!res.ok) throw await apiError(res);
+  const data = await res.json();
+  // Some providers report a failure inside a normal response
+  if (data.error) throw Object.assign(new Error(data.error.message || 'Provider error'), { status: Number(data.error.code) || 502 });
+  const choice = data.choices?.[0];
+  if (!test && !choice?.message?.content) {
+    throw Object.assign(new Error('The model sent back an empty reply'), { status: choice?.finish_reason === 'length' ? 413 : 502 });
   }
-  return res.json();
+  return data;
+}
+
+// Works out what actually failed, so a broken model is never blamed on the key
+function classifyError(e) {
+  const code = String(e.code || '');
+  const msg  = e.message || '';
+  if (!e.status) return 'network';
+  // 'quota' is a limit on the whole account, so changing model won't help
+  if (e.status === 429) return /free-models-per/i.test(msg) ? 'quota' : 'limit';
+  if (e.status === 402) return 'account';
+  if (e.status === 401 || code === 'invalid_api_key' || code === 'organization_restricted') return 'key';
+  if (/api[ _]key (not valid|expired)|api_key_invalid/i.test(msg)) return 'key';   // Gemini sends these as 400
+  if (e.status === 403 && /moderation|flagged/i.test(msg)) return 'request';
+  if (e.status === 404 || code.startsWith('model_') || /decommissioned|does not exist|blocked at the/i.test(msg)) return 'model';
+  if (e.status === 403) return 'key';
+  if (e.status === 498 || e.status >= 500) return 'server';
+  return 'request';
+}
+
+// When several keys fail differently, report the most telling one. 'key' is last:
+// the key is only blamed if every key was rejected.
+function mainFailure(failures) {
+  const order = ['quota', 'account', 'limit', 'model', 'server', 'network', 'request', 'key'];
+  return [...failures].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind))[0];
+}
+
+// Short reasons used in the "switched model" note
+const REASONS = { model: 'is unavailable', server: "couldn't answer", limit: 'hit its rate limit', request: 'rejected the request' };
+
+// Problems where trying a different model would not help
+const STOP_KINDS = ['key', 'account', 'quota', 'network'];
+
+function failureHtml(failure, model) {
+  const who = PROVIDERS[provider].name;
+  const name = model.label;
+  const text = {
+    model:   `⚠ Model unavailable: ${name} can't be used right now. This is a model problem, not a bad key.`,
+    server:  `⚠ Model down: ${who} couldn't run ${name}. Try again shortly.`,
+    limit:   `⚠ Rate limit reached for ${name}. Wait a moment and try again.`,
+    quota:   `⚠ ${who} free limit reached for your account. Wait for it to reset, or switch provider.`,
+    account: `⚠ ${who} says your account can't make this request. Check your account or credits.`,
+    network: `⚠ Connection problem: couldn't reach ${who}. Check your internet and try again.`,
+    request: `⚠ ${who} rejected this request. Try a shorter message or clear the chat.`,
+    key:     `⚠ Key problem: ${who} rejected every key. Check your key or run CHECK.`
+  }[failure.kind];
+  const detail = failure.kind !== 'network' && failure.message ? '\nDetails: ' + failure.message : '';
+  return escHtml(text + detail).replace(/\n/g, '<br>');
+}
+
+// The message shown when nothing answered
+function failedHtml({ failed, refreshed }) {
+  const last = failed[failed.length - 1];
+  if (failed.length === 1 || [...STOP_KINDS, 'request'].includes(last.failure.kind)) {
+    return failureHtml(last.failure, last.model);
+  }
+  const text = `⚠ No model could answer (${failed.length} tried).`
+    + (refreshed ? ' The model list was refreshed.' : '') + ' Try again in a moment.'
+    + `\nLast error (${last.model.label}): ${last.failure.message}`;
+  return escHtml(text).replace(/\n/g, '<br>');
+}
+
+// Tries one model with each key until one answers
+async function askModel(model) {
+  // The selected key first, then fall back through the rest
+  const tryOrder = [selectedKey, ...filledKeys.filter(k => k !== selectedKey)].filter(Boolean);
+  const failures = [];
+
+  for (const k of tryOrder) {
+    try {
+      const data = await tryKey(k, model.id);
+      k.status = 'active';
+      buildKeyMenu();
+      return { data, key: k };
+    } catch (e) {
+      const kind = classifyError(e);
+      failures.push({ kind, message: e.message });
+      // Only mark a key bad when the key itself was rejected
+      if (kind === 'key') k.status = 'inactive';
+      buildKeyMenu();
+    }
+  }
+  return { failure: mainFailure(failures) };
+}
+
+// Most models one message will try, so a bad day can't burn through your free limit
+const MAX_TRIES = 8;
+
+// The picked model first, then the ones after it, skipping any known to be down
+function modelQueue(start) {
+  const i = modelsList.indexOf(start);
+  const after = [...modelsList.slice(i + 1), ...modelsList.slice(0, Math.max(i, 0))];
+  return [start, ...after.filter(m => m.status !== 'inactive')];
+}
+
+// Stays on the picked model unless it fails, then moves to the next available one.
+// If they all fail, the list is refreshed once and anything not yet tried gets a turn
+// (up to MAX_TRIES models per message).
+async function askWithFailover(start) {
+  const tried = new Set();
+  const failed = [];
+  const down = new Set();
+  let queue = modelQueue(start);
+  let refreshed = false;
+
+  while (true) {
+    const model = tried.size < MAX_TRIES ? queue.shift() : null;
+    if (!model) {
+      if (refreshed) break;
+      refreshed = true;
+      const old = [modelsList, selectedModel];
+      await loadModels(true);
+      if (modelsLoadError) {   // keep the old list if the refresh itself fails
+        [modelsList, selectedModel] = old;
+        modelsLoadError = false;
+        modelsFetched = true;
+      }
+      // A refresh shouldn't forget which models just failed
+      modelsList.forEach(m => { if (down.has(m.id)) m.status = 'inactive'; });
+      buildModelMenu();
+      queue = modelsList.filter(m => !tried.has(m.id));
+      continue;
+    }
+
+    tried.add(model.id);
+    const result = await askModel(model);
+    if (result.data) {
+      model.status = 'active';
+      return { ...result, model, failed, refreshed };
+    }
+
+    const kind = result.failure.kind;
+    if (kind === 'model' || kind === 'server') { model.status = 'inactive'; down.add(model.id); }
+    failed.push({ model, failure: result.failure });
+    buildModelMenu();
+    // Give up early if switching can't help, or three models rejected the same request
+    if (STOP_KINDS.includes(kind) || failed.filter(f => f.failure.kind === 'request').length >= 3) break;
+  }
+  return { failed, refreshed };
 }
 
 async function send() {
@@ -1235,13 +1741,19 @@ async function send() {
     return;
   }
 
+  if (!PROVIDERS[provider].shared && !myKeyObj) {
+    openKeyModal();
+    setKeyMsg('Add your ' + PROVIDERS[provider].name + ' key to start chatting.', 'err');
+    return;
+  }
+
   if (keysLoadError || filledKeys.length === 0) {
-    alert('No API keys available. Could not load keys from the remote source, or none are configured there.');
+    alert('No API keys available. Could not load keys from the remote source, or none are configured there. You can add your own with the My Key button.');
     return;
   }
 
   if (modelsLoadError || modelsList.length === 0 || !selectedModel) {
-    alert('No model available. Could not load models from the remote source, or none are configured there.');
+    alert('No model available. Could not load the model list. Press the ↻ button to try again.');
     return;
   }
 
@@ -1256,39 +1768,29 @@ async function send() {
 
   const { bub: typingBub } = appendMsg('assistant', '', true);
 
-  const modelId = selectedModel.id;
+  const picksBefore = modelPicks;
+  const result = await askWithFailover(selectedModel);
 
-  // Try the selected key first, then fall back through the rest
-  const tryOrder = [selectedKey, ...filledKeys.filter(k => k !== selectedKey)];
-
-  let data = null;
-  let usedKey = null;
-
-  for (const k of tryOrder) {
-    try {
-      data = await tryKey(k, modelId);
-      usedKey = k;
-      k.status = 'active';
-      buildKeyMenu();
-      break;
-    } catch {
-      k.status = 'inactive';
-      buildKeyMenu();
-    }
-  }
-
-  selectedModel.status = data ? 'active' : 'inactive';
-  buildModelMenu();
-
-  if (data) {
-    const reply = data.choices?.[0]?.message?.content || '(no response)';
-    typingBub.innerHTML = renderText(reply);
+  if (result.data) {
+    const reply = result.data.choices[0].message.content;
+    const first = result.failed[0];
+    const note = first
+      ? `<div class="switch-note">↪ Switched to ${escHtml(result.model.label)}: ${escHtml(first.model.label)} ${REASONS[first.failure.kind]}.</div>`
+      : '';
+    typingBub.innerHTML = note + renderText(reply);
     history.push({ role: 'assistant', content: reply });
-    if (usedKey !== selectedKey) selectedKey = usedKey;
+    // Keep using the model that worked, unless you picked another while waiting
+    if (modelPicks === picksBefore) {
+      selectedModel = result.model;
+      lsSet(MODEL_STORE + provider, result.model.id);
+    }
+    // Keep My Key selected after a one-off fallback, and never reselect a key that was removed mid-reply
+    if (!selectedKey?.mine && filledKeys.includes(result.key)) selectedKey = result.key;
     buildKeyMenu();
   } else {
-    typingBub.innerHTML = `<span style="color:var(--red)">⚠ System Inactive — all keys failed for this model. Try a different model or run CHECK.</span>`;
+    typingBub.innerHTML = `<span style="color:var(--red)">${failedHtml(result)}</span>`;
   }
+  buildModelMenu();
 
   chatEl.scrollTop = chatEl.scrollHeight;
   thinking = false;
@@ -1297,9 +1799,9 @@ async function send() {
 }
 
 /* ════════════════════════════════════════
-   INIT — load + test everything on startup
+   INIT — fetch keys and models each time the page opens
 ════════════════════════════════════════ */
-checkAll();
+refreshAll();
 </script>
 </body>
 </html>
