@@ -453,6 +453,50 @@ body::after {
 select.key-input { cursor: pointer; }
 .switch-note { color: var(--gold); font-size: 11px; margin-bottom: 6px; }
 
+/* ── Key rows in the My Key popup ── */
+.modal.key-modal { max-width: 460px; max-height: 92vh; overflow-y: auto; scrollbar-width: thin; }
+.kr { margin-bottom: 8px; }
+.kr-top { display: flex; gap: 6px; align-items: center; }
+.kr-top .key-input { margin-bottom: 0; min-width: 0; }
+.kr-label { width: 84px; flex-shrink: 0; }
+.kr-key { flex: 1 1 0; width: auto; }
+.kr-btn {
+  width: 30px; height: 30px; flex-shrink: 0;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
+  color: var(--muted); font-size: 12px; cursor: pointer; transition: color .15s, border-color .15s;
+}
+.kr-btn:hover { color: var(--text); border-color: #42425a; }
+.kr-btn.del:hover { color: var(--red); border-color: var(--red); }
+.kr-status { font-size: 10px; margin: 3px 0 0 2px; color: var(--muted); cursor: pointer; user-select: none; overflow-wrap: anywhere; }
+.kr-status.active   { color: var(--accent); }
+.kr-status.inactive { color: var(--red); }
+.kr-status.checking { color: var(--gold); }
+.kr-tools { display: flex; gap: 8px; margin: 4px 0 12px; }
+.kr-tools .m-btn { flex: 1; padding: 8px 12px; }
+.kr-tools .m-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ── Pictures ── */
+#attachMsg { display: none; font-size: 10px; color: var(--gold); margin-bottom: 6px; }
+#attachMsg.show { display: block; }
+#attachStrip { display: none; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+#attachStrip.has { display: flex; }
+.att { position: relative; width: 56px; height: 56px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+.att img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.att button {
+  position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; padding: 0;
+  border: none; border-radius: 50%; background: rgba(0,0,0,.75); color: #fff;
+  font-size: 9px; line-height: 16px; cursor: pointer;
+}
+.att button:hover { background: var(--red); }
+#attachBtn {
+  width: 32px; height: 32px; flex-shrink: 0; border-radius: 6px;
+  background: transparent; border: 1px solid var(--border); color: var(--muted);
+  font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: color .15s, border-color .15s;
+}
+#attachBtn:hover { color: var(--accent); border-color: var(--accent); }
+.bubble img.att-img { display: block; max-width: min(240px, 100%); max-height: 200px; border-radius: 6px; margin: 0 0 8px; }
+
 /* ── Input Area ── */
 #inputArea {
   padding: 12px 16px 14px;
@@ -573,23 +617,30 @@ select.key-input { cursor: pointer; }
     </select>
     <p id='keyHelp'></p>
     <a id='keyLink' class='key-link' target='_blank' rel='noopener noreferrer'></a>
-    <input id='keyInput' class='key-input' type='password' autocomplete='off' spellcheck='false'>
+    <div id='keyRows'></div>
+    <div class='kr-tools'>
+      <button class='m-btn m-cancel' id='addKeyBtn' onclick='addKeyRow()'>+ Add key</button>
+      <button class='m-btn m-cancel' id='checkKeysBtn' onclick='checkDraftKeys()' title='Checks the keys that have not been checked yet this session'>Check keys</button>
+    </div>
     <label class='key-opt' id='onlyMyKeyRow'><input type='checkbox' id='onlyMyKey'> Use only my key (skip the shared keys)</label>
     <div id='keyMsg' class='key-msg'></div>
     <div class='modal-btns'>
       <button class='m-btn m-cancel' onclick='closeKeyModal()'>Close</button>
-      <button class='m-btn m-confirm' id='keyRemoveBtn' onclick='removeMyKey()'>Remove</button>
       <button class='m-btn m-save' id='keySaveBtn' onclick='saveMyKey()'>Save &amp; use</button>
     </div>
   </div>
 </div>
 
 <div id="inputArea">
+  <div id="attachMsg"></div>
+  <div id="attachStrip"></div>
+  <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" multiple hidden>
   <div id="inputRow">
+    <button id="attachBtn" type="button" title="Attach pictures (or press Ctrl+V to paste one)">📎</button>
     <textarea id="msgInput" placeholder="Ask anything…" rows="1"></textarea>
     <button id="sendBtn" onclick="send()" title="Send (Enter)" disabled>▶</button>
   </div>
-  <div id="hint">Enter to send · Shift+Enter for new line</div>
+  <div id="hint">Enter to send · Shift+Enter for new line · Ctrl+V pastes pictures</div>
 </div>
 
 <script>
@@ -659,7 +710,7 @@ const PROVIDERS = {
       return data.data
         .filter(m => isFree(m) && isChat(m))
         .sort((a, b) => rank(a) - rank(b))
-        .map(m => ({ id: m.id, label: m.name || m.id }));
+        .map(m => ({ id: m.id, label: m.name || m.id, vision: (m.architecture?.input_modalities || []).includes('image') }));
     }
   },
   gemini: {
@@ -680,7 +731,7 @@ const PROVIDERS = {
         .map(m => m.name.replace(/^models\//, ''))
         .filter(id => /^(gemini|gemma)/.test(id) && !/embed|tts|image|audio|live|robotics|computer-use|transcribe|translate/i.test(id))
         .sort((a, b) => family(a) - family(b) || version(b) - version(a) || a.localeCompare(b))
-        .map(id => ({ id, label: id }));
+        .map(id => ({ id, label: id, vision: /^gemini/.test(id) }));
     }
   }
 };
@@ -793,23 +844,76 @@ const ONLYMY_STORE   = 'vus_ai_only_my_key';
 const MODEL_STORE    = 'vus_ai_model_';   // + provider id: the model you're using
 let provider   = 'groq';
 let modelPicks = 0;      // counts dropdown picks, so a late reply never overrides one
-let myKeyObj   = null;   // { key, label, status, mine }
+let myKeyObjs  = [];     // your own keys for this provider: { key, label, status, mine }
 let onlyMyKey  = false;
 
 function lsGet(k)    { try { return localStorage.getItem(k); } catch (e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
 function lsDel(k)    { try { localStorage.removeItem(k); } catch (e) {} }
 
+/* Your own keys: a list per provider, saved in this browser. The older single-key
+   storage name is still read (and kept in sync with the first key) so nothing is lost. */
+const KEYS_STORE = 'vus_ai_keys_';   // + provider id: JSON list of { label, key }
+
+function loadSavedKeys(id) {
+  let list = null;
+  try { list = JSON.parse(lsGet(KEYS_STORE + id) || 'null'); } catch (e) {}
+  if (!Array.isArray(list)) {
+    const old = (lsGet(PROVIDERS[id].store) || '').trim();
+    list = old ? [{ label: 'Key 1', key: old }] : [];
+  }
+  return list
+    .filter(k => k && typeof k.key === 'string' && k.key.trim())
+    .map((k, i) => ({ label: String(k.label || 'Key ' + (i + 1)).slice(0, 24), key: k.key.trim() }));
+}
+
+function saveSavedKeys(id, list) {
+  if (list[0]) lsSet(PROVIDERS[id].store, list[0].key); else lsDel(PROVIDERS[id].store);
+  return lsSet(KEYS_STORE + id, JSON.stringify(list));
+}
+
+/* What we learn about your keys is kept until the tab is closed (sessionStorage), so keys
+   that were already checked are not checked again. Only a hash of the key is stored. */
+const KS_STORE = 'vus_ai_key_status';
+let keyStatusMem = {};
+try { keyStatusMem = JSON.parse(sessionStorage.getItem(KS_STORE) || '{}') || {}; } catch (e) {}
+
+function keyHash(s) {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36) + '.' + s.length;
+}
+function ksGet(id, key) { return keyStatusMem[id + '|' + keyHash(key)] || null; }   // { s, msg } or null
+function ksSet(id, key, s, msg = '') {
+  const k = id + '|' + keyHash(key);
+  if (s) keyStatusMem[k] = { s, msg: String(msg).slice(0, 120) }; else delete keyStatusMem[k];
+  try { sessionStorage.setItem(KS_STORE, JSON.stringify(keyStatusMem)); } catch (e) {}
+}
+
+// Remembers a result for one of your own keys
+function rememberKey(k, msg = '') {
+  if (k.mine) ksSet(provider, k.key, k.status === 'active' || k.status === 'inactive' ? k.status : '', msg);
+}
+
+const keyName = k => (k.mine && PROVIDERS[provider].shared ? '★ ' : '') + k.label;
+const pickKey = list => list.find(k => k.status !== 'inactive') || list[0] || null;
+
+// Rough guess at which models can read pictures, for lists that don't say
+const guessVision = id => /vision|llama-4|scout|maverick|pixtral|llava|gpt-4o|gemini|(^|[^a-z])vl([^a-z]|$)/i.test(id);
+
 function loadMyKey() {
   const saved = lsGet(PROVIDER_STORE);
   provider = PROVIDERS[saved] ? saved : 'groq';
   const p = PROVIDERS[provider];
-  const k = (lsGet(p.store) || '').trim();
   onlyMyKey = lsGet(ONLYMY_STORE) === '1';
-  myKeyObj  = k ? { key: k, label: 'My Key', status: 'unchecked', mine: true } : null;
+  myKeyObjs = loadSavedKeys(provider).map(k => ({
+    key: k.key, label: k.label, mine: true,
+    status: ksGet(provider, k.key)?.s || 'unchecked'   // reuse what we already learned this session
+  }));
+  const n = myKeyObjs.length;
   const b = document.getElementById('myKeyBtn');
-  b.classList.toggle('has-key', !!myKeyObj);
-  b.textContent = (myKeyObj ? '✓ ' : '+ ') + (p.shared ? 'My Key' : p.name + ' Key');
+  b.classList.toggle('has-key', n > 0);
+  b.textContent = (n ? '✓ ' : '+ ') + (p.shared ? 'My Key' : p.name + ' Key') + (n > 1 ? ' ×' + n : '');
   welcomeEl.querySelector('.w-sub').textContent = 'Powered by ' + p.name + ' · VUS Hub';
 }
 
@@ -850,10 +954,11 @@ const srchDown       = document.getElementById('srchDown');
    LOAD KEYS FROM REMOTE SOURCE
 ════════════════════════════════════════ */
 async function loadKeys() {
+  const keep = selectedKey ? selectedKey.key : null;   // stay on the key you picked, if it is still there
   loadMyKey();
-  if (!PROVIDERS[provider].shared || (onlyMyKey && myKeyObj)) {
-    filledKeys = myKeyObj ? [myKeyObj] : [];
-    selectedKey = myKeyObj;
+  if (!PROVIDERS[provider].shared || (onlyMyKey && myKeyObjs.length)) {
+    filledKeys = [...myKeyObjs];
+    selectedKey = filledKeys.find(k => k.key === keep) || pickKey(filledKeys);
     keysLoading = false;
     keysLoadError = false;
     buildKeyMenu();
@@ -863,11 +968,13 @@ async function loadKeys() {
 
   await loadSharedKeys();
 
-  // Your own key always works, even if the shared list failed to load
-  if (myKeyObj) {
+  // Your own keys always work, even if the shared list failed to load
+  if (myKeyObjs.length) {
     keysLoadError = false;
-    filledKeys = [myKeyObj, ...filledKeys];
-    selectedKey = myKeyObj;
+    filledKeys = [...myKeyObjs, ...filledKeys];
+    selectedKey = filledKeys.find(k => k.key === keep) || pickKey(myKeyObjs);
+  } else {
+    selectedKey = filledKeys.find(k => k.key === keep) || selectedKey;
   }
   buildKeyMenu();
   updateSendAvailability();
@@ -923,7 +1030,10 @@ async function loadModels(force = false) {
 
   try {
     const list = await fetchModelList();
-    modelsList = list.map(m => ({ id: m.id, label: m.label, status: 'unchecked' }));
+    modelsList = list.map(m => ({
+      id: m.id, label: m.label, status: 'unchecked',
+      vision: m.vision !== undefined ? m.vision : guessVision(m.id)   // can it read pictures?
+    }));
 
     // Stay on the model you were using, if it's still listed
     const wanted = lsGet(MODEL_STORE + provider);
@@ -947,15 +1057,20 @@ async function loadModels(force = false) {
 // GroqModels file is used with the shared keys, or if that request fails.
 async function fetchModelList() {
   const p = PROVIDERS[provider];
-  if (!p.shared) return myKeyObj ? p.listModels(myKeyObj.key) : [];
-  if (myKeyObj) {
+  // Your own keys first. A key already known to be rejected is skipped (unless every key is).
+  const usable = myKeyObjs.filter(k => k.status !== 'inactive');
+  let lastError = null;
+  for (const k of usable.length ? usable : myKeyObjs) {
     try {
-      const list = await p.listModels(myKeyObj.key);
-      if (list.length) return list;
+      const list = await p.listModels(k.key);
+      if (list.length || !p.shared) return list;
     } catch (e) {
+      lastError = e;
+      if (classifyError(e) === 'key') { k.status = 'inactive'; rememberKey(k, e.message); }
       console.error('Failed to list models with your key:', e);
     }
   }
+  if (!p.shared) { if (lastError) throw lastError; return []; }
   return fetchModelsFile();
 }
 
@@ -1049,7 +1164,7 @@ function buildKeyMenu() {
     el.className = 'km-item' + (isSelected ? ' selected' : '') + (st === 'inactive' ? ' dimmed' : '');
     el.innerHTML = `
       <span class="km-dot ${st}"></span>
-      <span class="km-label">${k.label}</span>
+      <span class="km-label">${escHtml(keyName(k))}</span>
       <span class="km-status ${st}">${st === 'unchecked' ? '—' : st === 'checking' ? 'Checking…' : st === 'active' ? 'Active' : 'Inactive'}</span>
     `;
     el.onclick = () => selectKey(k);
@@ -1068,7 +1183,7 @@ function selectKey(k) {
 function updateKeyDropBtn() {
   const st = selectedKey ? selectedKey.status : 'unchecked';
   activeDot.className = 'k-dot ' + st;
-  activeLabel.textContent = selectedKey ? selectedKey.label : 'No Key';
+  activeLabel.textContent = selectedKey ? keyName(selectedKey) : 'No Key';
 }
 
 function toggleKeyMenu() {
@@ -1121,7 +1236,7 @@ function buildModelMenu() {
   if (modelsList.length === 0) {
     const el = document.createElement('div');
     el.className = 'km-item';
-    el.textContent = !PROVIDERS[provider].shared && !myKeyObj ? 'Add your key to see models' : 'No models found';
+    el.textContent = !PROVIDERS[provider].shared && !myKeyObjs.length ? 'Add your key to see models' : 'No models found';
     modelMenu.appendChild(el);
     modelActiveLabel.textContent = 'No Model';
     modelActiveDot.className = 'k-dot unchecked';
@@ -1137,7 +1252,7 @@ function buildModelMenu() {
     el.className = 'km-item' + (isSelected ? ' selected' : '') + (st === 'inactive' ? ' dimmed' : '');
     el.innerHTML = `
       <span class="km-dot ${st}"></span>
-      <span class="km-label">${escHtml(m.label)}</span>
+      <span class="km-label">${escHtml(m.label)}${m.vision ? ' <span title="Can read pictures">🖼</span>' : ''}</span>
       <span class="km-status ${st}">${st === 'unchecked' ? '—' : st === 'checking' ? 'Checking…' : st === 'active' ? 'Working' : 'Failing'}</span>
     `;
     el.onclick = () => selectModel(m);
@@ -1213,12 +1328,20 @@ async function checkAll() {
 
   // Test each key against Groq's model list (free, and not tied to any one model)
   for (const k of filledKeys) {
-    try {
-      await testKeyValid(k);
-      k.status = 'active';
-    } catch (e) {
-      // A dropped connection or rate limit doesn't mean the key is bad
-      k.status = classifyError(e) === 'key' ? 'inactive' : 'unchecked';
+    // Your own keys that were already checked this session are not checked again
+    const known = k.mine ? ksGet(provider, k.key) : null;
+    if (known) {
+      k.status = known.s;
+    } else {
+      try {
+        await testKeyValid(k);
+        k.status = 'active';
+        rememberKey(k);
+      } catch (e) {
+        // A dropped connection or rate limit doesn't mean the key is bad
+        k.status = classifyError(e) === 'key' ? 'inactive' : 'unchecked';
+        rememberKey(k, e.message);
+      }
     }
     buildKeyMenu();
   }
@@ -1287,11 +1410,12 @@ modalBg.addEventListener('click', e => { if (e.target === modalBg) closeModal();
 
 // ---- My Key modal ----
 const keyModalBg   = document.getElementById('keyModalBg');
-const keyInput     = document.getElementById('keyInput');
 const keyMsg       = document.getElementById('keyMsg');
+const keyRows      = document.getElementById('keyRows');
 const onlyMyKeyBox = document.getElementById('onlyMyKey');
 const keySaveBtn   = document.getElementById('keySaveBtn');
-const keyRemoveBtn = document.getElementById('keyRemoveBtn');
+const addKeyBtn    = document.getElementById('addKeyBtn');
+const checkKeysBtn = document.getElementById('checkKeysBtn');
 const providerSelect = document.getElementById('providerSelect');
 const keyHelp        = document.getElementById('keyHelp');
 const keyLink        = document.getElementById('keyLink');
@@ -1299,83 +1423,188 @@ const onlyMyKeyRow   = document.getElementById('onlyMyKeyRow');
 
 function setKeyMsg(text, cls) { keyMsg.textContent = text; keyMsg.className = 'key-msg ' + (cls || ''); }
 
+const MAX_KEYS = 10;
+let drafts = {};   // keys being edited in the popup, per provider: [{ label, key, show, busy, note }]
+
+const mk = (tag, cls, props) => Object.assign(document.createElement(tag), props || {}, cls ? { className: cls } : {});
+
+function draftFor(id) {
+  if (!drafts[id]) drafts[id] = loadSavedKeys(id).map(k => ({ label: k.label, key: k.key, show: false }));
+  return drafts[id];
+}
+
+// What to show under a key: [css class, text]
+function draftStatus(id, d) {
+  if (d.busy) return ['checking', 'Checking...'];
+  const key = d.key.trim();
+  if (!key) return ['', 'Paste a key above'];
+  const s = ksGet(id, key);
+  if (s && s.s === 'active') return ['active', 'Working. Click to check again.'];
+  if (s && s.s === 'inactive') return ['inactive', 'Rejected' + (s.msg ? ': ' + s.msg : '') + '. Click to check again.'];
+  return ['', d.note || 'Not checked yet. Click to check.'];
+}
+
+// One row per key: a name you can edit, the key, show/hide, remove, and its status
+function renderKeyRows() {
+  const id = providerSelect.value;
+  const p = PROVIDERS[id];
+  const list = draftFor(id);
+  keyRows.innerHTML = '';
+  list.forEach((d, i) => {
+    const row   = mk('div', 'kr');
+    const top   = mk('div', 'kr-top');
+    const label = mk('input', 'key-input kr-label', { value: d.label, maxLength: 24, autocomplete: 'off', spellcheck: false, title: 'Name for this key' });
+    const key   = mk('input', 'key-input kr-key', { value: d.key, type: d.show ? 'text' : 'password', placeholder: p.placeholder, autocomplete: 'off', spellcheck: false });
+    const eye   = mk('button', 'kr-btn', { type: 'button', textContent: '👁', title: 'Show or hide this key' });
+    const del   = mk('button', 'kr-btn del', { type: 'button', textContent: '✕', title: 'Remove this key' });
+    const stat  = mk('div', 'kr-status', { title: 'Click to check this key' });
+    const paint = () => { const [cls, text] = draftStatus(id, d); stat.className = 'kr-status ' + cls; stat.textContent = text; };
+    d.paint = paint;
+    label.addEventListener('input', () => { d.label = label.value; });
+    key.addEventListener('input', () => { d.key = key.value; d.note = ''; paint(); });
+    eye.addEventListener('click', () => { d.show = !d.show; key.type = d.show ? 'text' : 'password'; });
+    del.addEventListener('click', () => { list.splice(i, 1); renderKeyRows(); });
+    stat.addEventListener('click', () => checkDraftKey(d, id));
+    top.append(label, key, eye, del);
+    row.append(top, stat);
+    keyRows.appendChild(row);
+    paint();
+  });
+  addKeyBtn.disabled = list.length >= MAX_KEYS;
+}
+
 function openKeyModal() {
+  drafts = {};
   providerSelect.value = provider;
   onlyMyKeyBox.checked = onlyMyKey;
   showProviderForm();
   keyModalBg.classList.add('open');
-  keyInput.focus();
+  const fields = [...keyRows.querySelectorAll('.kr-key')];
+  (fields.find(f => !f.value) || fields[0])?.focus();
 }
 
 // Fills the popup for whichever provider is picked in the list
 function showProviderForm() {
-  const p = PROVIDERS[providerSelect.value];
-  const saved = (lsGet(p.store) || '').trim();
+  const id = providerSelect.value;
+  const p = PROVIDERS[id];
   keyHelp.textContent = (p.shared ? 'Optional: Groq also works with the shared keys.' : p.name + ' needs your own key.')
-    + ' Your key is saved only in this browser and only sent to ' + p.name + '.';
+    + ' Add as many keys as you like and rename them to keep track. Keys are saved only in this browser and only sent to ' + p.name + '.';
   keyLink.href = p.keyUrl;
   keyLink.textContent = 'Get your ' + p.name + ' key ↗';
-  keyInput.value = '';
-  keyInput.placeholder = saved ? 'Saved: ' + maskKey(saved) + ' (paste a new key to replace)' : p.placeholder;
   onlyMyKeyRow.style.display = p.shared ? '' : 'none';
-  keyRemoveBtn.style.display = saved ? '' : 'none';
+  const list = draftFor(id);
+  if (!list.length) list.push({ label: 'Key 1', key: '', show: false });
   setKeyMsg('', '');
+  renderKeyRows();
 }
 providerSelect.addEventListener('change', showProviderForm);
 
 function closeKeyModal() {
   keyModalBg.classList.remove('open');
-  keyInput.value = '';
+  drafts = {};
+}
+
+function addKeyRow() {
+  const list = draftFor(providerSelect.value);
+  if (list.length >= MAX_KEYS) return;
+  let n = 1;
+  while (list.some(d => d.label.trim() === 'Key ' + n)) n++;
+  list.push({ label: 'Key ' + n, key: '', show: false });
+  renderKeyRows();
+  const fields = keyRows.querySelectorAll('.kr-key');
+  const last = fields[fields.length - 1];
+  last.focus();
+  last.scrollIntoView({ block: 'nearest' });
+}
+
+// Checks one key from the popup (no chat message is sent) and remembers the result until the tab is closed
+async function checkDraftKey(d, id) {
+  const key = d.key.trim();
+  if (!key || d.busy) return;
+  d.busy = true;
+  d.note = '';
+  if (d.paint) d.paint();
+  try {
+    await PROVIDERS[id].checkKey(key);
+    ksSet(id, key, 'active');
+  } catch (e) {
+    if (classifyError(e) === 'key') {
+      ksSet(id, key, 'inactive', e.message);
+    } else {
+      ksSet(id, key, '');
+      d.note = e.status ? `Could not check it right now (${e.message}). Click to try again.` : 'Could not reach the provider. Click to try again.';
+    }
+  }
+  d.busy = false;
+  if (d.paint) d.paint();
+}
+
+// Checks every key in the list that has not been checked yet this session
+async function checkDraftKeys() {
+  const id = providerSelect.value;
+  const rows = draftFor(id).filter(d => d.key.trim());
+  if (!rows.length) { setKeyMsg('Add a key first.', 'err'); return; }
+  const todo = rows.filter(d => !ksGet(id, d.key.trim()));
+  if (!todo.length) { setKeyMsg(`Every key was already checked this session. Click a key's status to check it again.`, 'ok'); return; }
+
+  checkKeysBtn.disabled = true;
+  setKeyMsg('Checking ' + todo.length + (todo.length === 1 ? ' key...' : ' keys...'), 'wait');
+  const seen = new Set();
+  for (const d of todo) {
+    const k = d.key.trim();
+    if (seen.has(k)) continue;   // the same key pasted twice
+    seen.add(k);
+    await checkDraftKey(d, id);
+  }
+  checkKeysBtn.disabled = false;
+  rows.forEach(d => { if (d.paint) d.paint(); });
+  if (providerSelect.value !== id || !keyModalBg.classList.contains('open')) return;
+
+  const results = rows.map(d => (ksGet(id, d.key.trim()) || {}).s);
+  const good = results.filter(s => s === 'active').length;
+  const bad  = results.filter(s => s === 'inactive').length;
+  const open = results.length - good - bad;
+  setKeyMsg(good + ' working, ' + bad + ' rejected' + (open ? ', ' + open + ' could not be checked' : '') + '.', bad || open ? 'err' : 'ok');
+}
+
+function cleanDraft(list) {
+  const seen = new Set();
+  const out = [];
+  list.forEach(d => {
+    const key = d.key.trim();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    out.push({ label: d.label.trim() || 'Key ' + (out.length + 1), key });
+  });
+  return out;
 }
 
 async function saveMyKey() {
   if (checking || thinking) { setKeyMsg('Busy right now. Wait for it to finish, then save.', 'err'); return; }
   const id = providerSelect.value;
   const p = PROVIDERS[id];
-  const typed = keyInput.value.trim();
-  const saved = (lsGet(p.store) || '').trim();
+  const before = loadSavedKeys(id).length;
+  if (!cleanDraft(draftFor(id)).length && !before && !p.shared) { setKeyMsg('Paste your ' + p.name + ' key first.', 'err'); return; }
 
-  if (!typed && !saved && !p.shared) { setKeyMsg('Paste your ' + p.name + ' key first.', 'err'); return; }
-
-  if (typed) {
-    keySaveBtn.disabled = true;
-    setKeyMsg('Checking key...', 'wait');
-    try {
-      await testKeyValid({ key: typed }, id);
-    } catch (e) {
-      setKeyMsg(e.status ? p.name + ' rejected that key: ' + e.message : 'Could not reach ' + p.name + ' to check the key.', 'err');
-      return;
-    } finally {
-      keySaveBtn.disabled = false;
-    }
-    // Closed or switched provider while checking: don't save
-    if (!keyModalBg.classList.contains('open') || providerSelect.value !== id) return;
-    if (checking || thinking) { setKeyMsg('Busy right now. Wait for it to finish, then save.', 'err'); return; }
-    if (!lsSet(p.store, typed)) { setKeyMsg('Could not save: browser storage is blocked.', 'err'); return; }
+  // Save every provider whose list was changed in the popup
+  for (const pid of Object.keys(drafts)) {
+    const list = cleanDraft(drafts[pid]);
+    if (JSON.stringify(list) === JSON.stringify(loadSavedKeys(pid))) continue;
+    if (!saveSavedKeys(pid, list)) { setKeyMsg('Could not save: browser storage is blocked.', 'err'); return; }
   }
-
   if (!lsSet(PROVIDER_STORE, id)) { setKeyMsg('Could not save: browser storage is blocked.', 'err'); return; }
   if (p.shared) lsSet(ONLYMY_STORE, onlyMyKeyBox.checked ? '1' : '0');
+  const after = loadSavedKeys(id).length;
   closeKeyModal();
 
-  // The first time a key is added, run one full check with it. After that, just refresh.
-  if (typed && !saved) await checkAll();
+  // The first time a key is added for a provider, run one full check. After that, just refresh.
+  if (!before && after) await checkAll();
   else await refreshAll();
 }
 
-async function removeMyKey() {
-  if (checking || thinking) { setKeyMsg('Busy right now. Wait for it to finish, then remove.', 'err'); return; }
-  const p = PROVIDERS[providerSelect.value];
-  lsDel(p.store);
-  if (p.shared) lsDel(ONLYMY_STORE);
-  closeKeyModal();
-  await refreshAll();
-}
-
 keyModalBg.addEventListener('click', e => { if (e.target === keyModalBg) closeKeyModal(); });
-keyInput.addEventListener('keydown', e => {
+keyRows.addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); saveMyKey(); }
-  if (e.key === 'Escape') closeKeyModal();
 });
 
 /* ════════════════════════════════════════
@@ -1511,6 +1740,120 @@ inputEl.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
 });
 
+/* ── Pictures ──
+   Attach with the 📎 button, paste with Ctrl+V (the message box doesn't need focus) or drop
+   them on the page. They are shrunk first so the request stays small. */
+const MAX_IMAGES   = 4;
+const fileInput   = document.getElementById('fileInput');
+const attachStrip = document.getElementById('attachStrip');
+const attachMsg   = document.getElementById('attachMsg');
+let attachments    = [];      // data URLs waiting to be sent
+let attachMsgTimer = null;
+
+function flashAttach(text) {
+  attachMsg.textContent = text;
+  attachMsg.classList.add('show');
+  clearTimeout(attachMsgTimer);
+  attachMsgTimer = setTimeout(() => attachMsg.classList.remove('show'), 4000);
+}
+
+function prepareImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, 1280 / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width  = Math.max(1, Math.round(img.naturalWidth * scale));
+      c.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff';   // transparent areas would turn black as a JPEG
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('unreadable')); };
+    img.src = url;
+  });
+}
+
+async function addImages(files) {
+  const types = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/bmp'];
+  const pics = [...files].filter(f => types.includes(f.type));
+  if (!pics.length) { flashAttach('Only PNG, JPEG, WebP, GIF or BMP pictures can be attached.'); return; }
+  for (const f of pics) {
+    const full = () => { flashAttach('You can attach up to ' + MAX_IMAGES + ' pictures per message.'); };
+    if (attachments.length >= MAX_IMAGES) { full(); break; }
+    try {
+      const url = await prepareImage(f);
+      if (attachments.length >= MAX_IMAGES) { full(); break; }
+      attachments.push(url);
+      renderAttachments();
+    } catch (e) {
+      flashAttach(`Could not read ${f.name || 'that picture'}.`);
+    }
+  }
+}
+
+function renderAttachments() {
+  attachStrip.innerHTML = '';
+  attachStrip.classList.toggle('has', attachments.length > 0);
+  attachments.forEach((src, i) => {
+    const box = mk('div', 'att');
+    const im  = mk('img', '', { src, alt: 'Attached picture ' + (i + 1) });
+    const x   = mk('button', '', { type: 'button', textContent: '✕', title: 'Remove' });
+    x.addEventListener('click', () => { attachments.splice(i, 1); renderAttachments(); });
+    box.append(im, x);
+    attachStrip.appendChild(box);
+  });
+}
+
+document.getElementById('attachBtn').addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => { addImages(fileInput.files); fileInput.value = ''; });
+
+const isTypingTarget = t => !!t && (t.isContentEditable || (t.matches && t.matches('input, textarea, select')));
+const popupOpen = () => keyModalBg.classList.contains('open') || modalBg.classList.contains('open');
+
+function clipboardImages(cd) {
+  const out = [...((cd && cd.files) || [])].filter(f => f.type.startsWith('image/'));
+  if (out.length) return out;
+  return [...((cd && cd.items) || [])].filter(i => i.kind === 'file' && i.type.startsWith('image/')).map(i => i.getAsFile()).filter(Boolean);
+}
+
+// Ctrl+V works anywhere on the page. A picture is attached; text pasted while nothing is focused goes into the message box.
+document.addEventListener('paste', e => {
+  if (popupOpen()) return;
+  const cd = e.clipboardData;
+  const text = cd ? cd.getData('text/plain') : '';
+  const files = clipboardImages(cd);
+  if (files.length && !text) { e.preventDefault(); addImages(files); return; }
+  if (text && !isTypingTarget(e.target)) {
+    e.preventDefault();
+    inputEl.focus();
+    inputEl.setRangeText(text, inputEl.selectionStart, inputEl.selectionEnd, 'end');
+    inputEl.dispatchEvent(new Event('input'));
+  }
+});
+
+// Drop pictures anywhere on the page
+document.addEventListener('dragover', e => {
+  if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) e.preventDefault();
+});
+document.addEventListener('drop', e => {
+  if (popupOpen() || !e.dataTransfer || !e.dataTransfer.files.length) return;
+  e.preventDefault();
+  addImages(e.dataTransfer.files);
+});
+
+// Start typing anywhere and the letters go into the message box
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && keyModalBg.classList.contains('open')) { closeKeyModal(); return; }
+  if (!e.key || e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;   // plain typing only
+  if (popupOpen() || isTypingTarget(e.target)) return;
+  inputEl.focus();   // the key you pressed then lands in the message box
+});
+
 /* ════════════════════════════════════════
    MARKDOWN-LITE RENDERER
 ════════════════════════════════════════ */
@@ -1536,7 +1879,7 @@ function escHtml(s) {
 /* ════════════════════════════════════════
    MESSAGES
 ════════════════════════════════════════ */
-function appendMsg(role, content, isTyping = false) {
+function appendMsg(role, content, isTyping = false, images = []) {
   if (welcomeEl && welcomeEl.parentNode === chatEl) chatEl.removeChild(welcomeEl);
 
   const wrap = document.createElement('div');
@@ -1553,6 +1896,11 @@ function appendMsg(role, content, isTyping = false) {
     bub.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
   } else {
     bub.innerHTML = role === 'assistant' ? renderText(content) : escHtml(content);
+    if (images.length) {
+      const frag = document.createDocumentFragment();
+      images.forEach(src => frag.appendChild(mk('img', 'att-img', { src, alt: 'Attached picture' })));
+      bub.prepend(frag);
+    }
   }
 
   wrap.appendChild(av);
@@ -1569,11 +1917,24 @@ function appendMsg(role, content, isTyping = false) {
    used by checkAll(); test=false sends the
    real conversation.
 ════════════════════════════════════════ */
+// The conversation in the format the API wants. A picture is only sent with the message
+// that carries it; in older messages it becomes a short note so requests stay small.
+function apiMessages() {
+  return history.map((h, i) => {
+    if (!h.images || !h.images.length) return { role: h.role, content: h.content };
+    if (i !== history.length - 1) return { role: h.role, content: (h.content + ' [picture attached earlier]').trim() };
+    const parts = [];
+    if (h.content) parts.push({ type: 'text', text: h.content });
+    h.images.forEach(url => parts.push({ type: 'image_url', image_url: { url } }));
+    return { role: h.role, content: parts };
+  });
+}
+
 async function tryKey(keyObj, modelId, test = false) {
   const p = PROVIDERS[provider];
   const body = test
     ? { model: modelId, max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] }
-    : { model: modelId, max_tokens: p.maxTokens, messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...history] };
+    : { model: modelId, max_tokens: p.maxTokens, messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...apiMessages()] };
 
   const res = await fetch(p.chatUrl, {
     method: 'POST',
@@ -1583,7 +1944,11 @@ async function tryKey(keyObj, modelId, test = false) {
     },
     body: JSON.stringify(body)
   });
-  if (!res.ok) throw await apiError(res);
+  if (!res.ok) {
+    const err = await apiError(res);
+    err.hadImages = !test && !!(history[history.length - 1] || {}).images?.length;   // lets a model that can't read pictures be told apart
+    throw err;
+  }
   const data = await res.json();
   // Some providers report a failure inside a normal response
   if (data.error) throw Object.assign(new Error(data.error.message || 'Provider error'), { status: Number(data.error.code) || 502 });
@@ -1605,6 +1970,7 @@ function classifyError(e) {
   if (e.status === 401 || code === 'invalid_api_key' || code === 'organization_restricted') return 'key';
   if (/api[ _]key (not valid|expired)|api_key_invalid/i.test(msg)) return 'key';   // Gemini sends these as 400
   if (e.status === 403 && /moderation|flagged/i.test(msg)) return 'request';
+  if (e.hadImages && [400, 404, 415, 422].includes(e.status) && /image|vision|multimodal|modalit|not support/i.test(msg) && !/decommission/i.test(msg)) return 'noimage';
   if (e.status === 404 || code.startsWith('model_') || /decommissioned|does not exist|blocked at the/i.test(msg)) return 'model';
   if (e.status === 403) return 'key';
   if (e.status === 498 || e.status >= 500) return 'server';
@@ -1614,12 +1980,12 @@ function classifyError(e) {
 // When several keys fail differently, report the most telling one. 'key' is last:
 // the key is only blamed if every key was rejected.
 function mainFailure(failures) {
-  const order = ['quota', 'account', 'limit', 'model', 'server', 'network', 'request', 'key'];
+  const order = ['quota', 'account', 'limit', 'model', 'server', 'network', 'noimage', 'request', 'key'];
   return [...failures].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind))[0];
 }
 
 // Short reasons used in the "switched model" note
-const REASONS = { model: 'is unavailable', server: "couldn't answer", limit: 'hit its rate limit', request: 'rejected the request' };
+const REASONS = { model: 'is unavailable', server: "couldn't answer", limit: 'hit its rate limit', request: 'rejected the request', noimage: `can't read pictures` };
 
 // Problems where trying a different model would not help
 const STOP_KINDS = ['key', 'account', 'quota', 'network'];
@@ -1634,6 +2000,7 @@ function failureHtml(failure, model) {
     quota:   `⚠ ${who} free limit reached for your account. Wait for it to reset, or switch provider.`,
     account: `⚠ ${who} says your account can't make this request. Check your account or credits.`,
     network: `⚠ Connection problem: couldn't reach ${who}. Check your internet and try again.`,
+    noimage: `⚠ ${name} can't read pictures. Remove the picture or try another model.`,
     request: `⚠ ${who} rejected this request. Try a shorter message or clear the chat.`,
     key:     `⚠ Key problem: ${who} rejected every key. Check your key or run CHECK.`
   }[failure.kind];
@@ -1642,7 +2009,8 @@ function failureHtml(failure, model) {
 }
 
 // The message shown when nothing answered
-function failedHtml({ failed, refreshed }) {
+function failedHtml({ failed, refreshed, noVision }) {
+  if (noVision) return escHtml('⚠ None of the models in the list can read pictures. Remove the picture, or switch provider.');
   const last = failed[failed.length - 1];
   if (failed.length === 1 || [...STOP_KINDS, 'request'].includes(last.failure.kind)) {
     return failureHtml(last.failure, last.model);
@@ -1656,21 +2024,26 @@ function failedHtml({ failed, refreshed }) {
 // Tries one model with each key until one answers
 async function askModel(model) {
   // The selected key first, then fall back through the rest
-  const tryOrder = [selectedKey, ...filledKeys.filter(k => k !== selectedKey)].filter(Boolean);
+  let tryOrder = [selectedKey, ...filledKeys.filter(k => k !== selectedKey)].filter(Boolean);
+  // Skip keys already known to be rejected (unless that is every key)
+  const live = tryOrder.filter(k => k.status !== 'inactive');
+  if (live.length) tryOrder = live;
   const failures = [];
 
   for (const k of tryOrder) {
     try {
       const data = await tryKey(k, model.id);
       k.status = 'active';
+      rememberKey(k);
       buildKeyMenu();
       return { data, key: k };
     } catch (e) {
       const kind = classifyError(e);
       failures.push({ kind, message: e.message });
       // Only mark a key bad when the key itself was rejected
-      if (kind === 'key') k.status = 'inactive';
+      if (kind === 'key') { k.status = 'inactive'; rememberKey(k, e.message); }
       buildKeyMenu();
+      if (kind === 'noimage') break;   // every key would get the same answer
     }
   }
   return { failure: mainFailure(failures) };
@@ -1689,11 +2062,21 @@ function modelQueue(start) {
 // Stays on the picked model unless it fails, then moves to the next available one.
 // If they all fail, the list is refreshed once and anything not yet tried gets a turn
 // (up to MAX_TRIES models per message).
-async function askWithFailover(start) {
+async function askWithFailover(start, needVision = false) {
   const tried = new Set();
   const failed = [];
   const down = new Set();
-  let queue = modelQueue(start);
+  const blind = new Set();   // models that turned out not to read pictures
+  const usable = m => !needVision || m.vision;
+  let first = start;
+  let imageSwitch = false;
+  if (!usable(start)) {
+    // The picked model can't read pictures: use the first one that can, for this message only
+    first = modelsList.find(m => usable(m) && m.status !== 'inactive');
+    if (!first) return { failed: [], refreshed: false, noVision: true };
+    imageSwitch = true;
+  }
+  let queue = modelQueue(first).filter(usable);
   let refreshed = false;
 
   while (true) {
@@ -1709,9 +2092,9 @@ async function askWithFailover(start) {
         modelsFetched = true;
       }
       // A refresh shouldn't forget which models just failed
-      modelsList.forEach(m => { if (down.has(m.id)) m.status = 'inactive'; });
+      modelsList.forEach(m => { if (down.has(m.id)) m.status = 'inactive'; if (blind.has(m.id)) m.vision = false; });
       buildModelMenu();
-      queue = modelsList.filter(m => !tried.has(m.id));
+      queue = modelsList.filter(m => !tried.has(m.id) && usable(m));
       continue;
     }
 
@@ -1719,11 +2102,12 @@ async function askWithFailover(start) {
     const result = await askModel(model);
     if (result.data) {
       model.status = 'active';
-      return { ...result, model, failed, refreshed };
+      return { ...result, model, failed, refreshed, imageSwitch };
     }
 
     const kind = result.failure.kind;
     if (kind === 'model' || kind === 'server') { model.status = 'inactive'; down.add(model.id); }
+    if (kind === 'noimage') { model.vision = false; blind.add(model.id); }
     failed.push({ model, failure: result.failure });
     buildModelMenu();
     // Give up early if switching can't help, or three models rejected the same request
@@ -1734,14 +2118,15 @@ async function askWithFailover(start) {
 
 async function send() {
   const text = inputEl.value.trim();
-  if (!text || thinking || checking) return;
+  const imgs = attachments.slice();
+  if ((!text && !imgs.length) || thinking || checking) return;
 
   if (keysLoading || modelsLoading) {
     alert('Still loading keys/models, please wait a moment and try again.');
     return;
   }
 
-  if (!PROVIDERS[provider].shared && !myKeyObj) {
+  if (!PROVIDERS[provider].shared && !myKeyObjs.length) {
     openKeyModal();
     setKeyMsg('Add your ' + PROVIDERS[provider].name + ' key to start chatting.', 'err');
     return;
@@ -1763,29 +2148,34 @@ async function send() {
   inputEl.style.height = 'auto';
   clearSearch();
 
-  appendMsg('user', text);
-  history.push({ role: 'user', content: text });
+  appendMsg('user', text, false, imgs);
+  history.push({ role: 'user', content: text, images: imgs });
+  attachments = [];
+  renderAttachments();
 
   const { bub: typingBub } = appendMsg('assistant', '', true);
 
   const picksBefore = modelPicks;
-  const result = await askWithFailover(selectedModel);
+  const start = selectedModel;
+  const result = await askWithFailover(start, imgs.length > 0);
 
   if (result.data) {
     const reply = result.data.choices[0].message.content;
     const first = result.failed[0];
     const note = first
       ? `<div class="switch-note">↪ Switched to ${escHtml(result.model.label)}: ${escHtml(first.model.label)} ${REASONS[first.failure.kind]}.</div>`
-      : '';
+      : result.imageSwitch
+        ? `<div class="switch-note">↪ Used ${escHtml(result.model.label)} to read the picture (${escHtml(start.label)} can't).</div>`
+        : '';
     typingBub.innerHTML = note + renderText(reply);
     history.push({ role: 'assistant', content: reply });
     // Keep using the model that worked, unless you picked another while waiting
-    if (modelPicks === picksBefore) {
+    if (modelPicks === picksBefore && (!imgs.length || start.vision)) {
       selectedModel = result.model;
       lsSet(MODEL_STORE + provider, result.model.id);
     }
     // Keep My Key selected after a one-off fallback, and never reselect a key that was removed mid-reply
-    if (!selectedKey?.mine && filledKeys.includes(result.key)) selectedKey = result.key;
+    if (filledKeys.includes(result.key) && !(selectedKey?.mine && !result.key.mine)) selectedKey = result.key;
     buildKeyMenu();
   } else {
     typingBub.innerHTML = `<span style="color:var(--red)">${failedHtml(result)}</span>`;
