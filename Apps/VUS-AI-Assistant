@@ -653,8 +653,8 @@ select.key-input { cursor: pointer; }
    "id|Display Label" — otherwise the id is
    shown as-is.
 ════════════════════════════════════════ */
-const KEYS_URL   = 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/GroqAPIKeys';
-const MODELS_URL = 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/GroqModels';
+const KEYS_URL   = 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Other/GroqAPIKeys';
+const MODELS_URL = 'https://raw.githubusercontent.com/Cra-Z-Gaming/VUS/refs/heads/main/Other/GroqModels';
 
 /* ════════════════════════════════════════
    PROVIDERS
