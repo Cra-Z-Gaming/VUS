@@ -1,4 +1,4 @@
-EASY links:
+EASY links: 
 
 [CodePen](https://codepen.io/vladiscool2212/pen/poBKwpz)
 
