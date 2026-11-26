@@ -1,7 +1,7 @@
 # VUS D.C – handoff for Claude
 
 Start a new chat with: "Read E:\Claude\VUS D.C\HANDOFF.md first, then help me with ...". Working rules are in `CLAUDE.md` (it loads this file). At the end of a session, update "Status" and "Log" below.
-Last updated: 2026-11-22.
+Last updated: 2026-11-25.
 
 ## What this project is
 Browser chat + DM web app (main chat, channels, DMs, shop, crates, coins, tags/bubbles, quests, 1v1 crate games with bot practice).
@@ -85,11 +85,14 @@ Fields on `coins/<id>`: `qdk/qdm/qwk/qwm` message counters (chat.js, written wit
 ## Other features (status not re-verified)
 - "Impossible" crate (100 coins, ~99% refund of 20 coins, 1/10000 per prize) and an "Impossible" rarity tier above Legendary.
 - Shop bundles: Yin & Yang Pack (1000), a Dragon bundle (3000), Rainbow Pack (2000: `shp-tag-prism`, `shp-bub-cloud`, `shp-ring-rainbow`, `shp-fx-rainbow`; CSS in `style.css` after the Dragon block; the ring is also sold alone for 500). Pieces/prices live in `chat.js` (CRATE_ITEMS + BUNDLES) and the rules (`sh/$k`, `crateInv`).
-- `/give`: owners of a tag can grant it. `tag-jih` only by #177601, `tag-special` #581824, `tag-div` #185920, `tag-owna` ("owna approved", `/give tag_owna`) #822414 (enforced in `tagGrants` rules).
+- `/give`: owners of a tag can grant it. `tag-jih` only by #177601, `tag-special` #581824, `tag-div` #185920, `tag-owna` ("owna approved", `/give tag_owna`) #822414, `tag-bb` ("BB", `/give tag_BB`) #328760 (enforced in `tagGrants` rules).
 - Chat security (tickets / token requirement against impersonation): `rules/tickets`, `config/tokensRequiredSince`, `api/chat/`.
 - "Hide online list" tab (`#membersToggleBtn.dock`, a fixed element on `<body>`): `chat.js` `wireMembersToggle` sets `body.members-dock-off` unless the chat screen is really showing; `style.css` hides it outside plain chat mode.
 
 ## Log
+- 2026-11-25 (later): `/remove tag_<name> <name|#ID|@name>` for tag owners (same tags as /give; the existing `/remove normie|mod` for staff still works). `chat.js`: `removeTagFrom()` next to `giveTagTo()`, `/remove` entry now `only` = mod+ or tag owner. It deletes the tag from `crateInv/<id>/items`, deletes `tagGrants/<id>/<tag>` (so the wearer can't put it back) and clears `userProfiles/<id>/cosm/tag`; old messages keep the stored tag name but stop showing it (tags only show while the sender owns them; other people's open chats may keep showing it until reload). Rules: new `tagRemovals/<id>/<tag>` ({by: granter, ts: now}); `crateInv` items and `tagGrants` can be deleted only while that record is under 60 s old. A new grantable tag must now be added in 3 rule places (`tagGrants`, `tagRemovals`, `crateInv`) plus `TAG_GRANTS`. Tested the rules in a Node simulator (14 cases pass), `node --check chat.js` OK, not live. Needs: publish `vus-chat-rules.json`, then push `chat.js`.
+- 2026-11-25 (later): the Bank tab / tag royalties (`bank.js`, `ry` field on `coins/<id>`, `tagBank` rules) was built in a temporary workspace that was lost: it is NOT in this folder. Needs a rebuild (plan agreed: 2 coins per 10 s per online wearer of any /give tag, owner can be offline, left Bank tab with per-tag coins/s, manual Claim).
+- 2026-11-25: fixed Secure 1v1 refusing bets ("You don't have 1 crate to bet" with crates in stock): `api/game.js` only counted `crateClaims` n - o. It now counts n - o + `coins/<id>/gc` + `crateGames`, and moves bets/winnings through `crateGames`. Added `tag-bb` (only #328760). Checked in Node (syntax, rules JSON, mock tests), not live. Needs: publish `vus-chat-rules.json`, then deploy `api/game.js`, then push `chat.js` and `style.css`.
 - 2026-11-23: wrote the idea backlog above. Poll limit raised from 4 to 10 options (`chat.js` + `vus-chat-rules.json`, both checked: JSON parses, `node --check` OK). Looked into the crate quest and shop-crate bugs by reading only: no cause found, need the exact symptoms. Needs: publish `vus-chat-rules.json` (rules first), then push `chat.js` (plus the files already waiting in the to-do list).
 - 2026-11-22: practice mode + `bots.js` built, verified in headless Chromium (3 simple games played to the end, chess/checkers start, 0 quest reports). Fixed the "Hide online list" tab showing on Games/join/ban screens. Merged `BOT-MODE-NOTES.md` and `_bot-work/PROGRESS.md` into this file; rules moved to `CLAUDE.md`. Needs: push `games.js`, `bots.js`, `chat.js`, `style.css`.
 - 2026-11-21: mobile pass for the Games panel; Chess added; Checkers added (both need rules published first, `api/game.js` deployed, `games.js` pushed last); Rainbow Pack + `tag-owna` added (rules once failed with "No such method 'numChildren'", fixed); quests audit, rules and `quests.js` updated, gift crates left out on purpose, `games.txt` typo fixed.

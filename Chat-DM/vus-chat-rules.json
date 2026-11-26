@@ -26,7 +26,7 @@
         ".validate": "newData.hasChildren(['type', 'bet', 'created', 'a'])",
         "type": { ".validate": "newData.isString() && (newData.val() === 'ttt' || newData.val() === 'rps' || newData.val() === 'c4' || newData.val() === 'ck' || newData.val() === 'ch')" },
         "opt": { ".validate": "newData.hasChildren(['tm', 'pm', 'w']) && (newData.child('tm').val() === 180 || newData.child('tm').val() === 300 || newData.child('tm').val() === 600 || newData.child('tm').val() === 900 || newData.child('tm').val() === 1800) && (newData.child('pm').val() === 0 || newData.child('pm').val() === 15 || newData.child('pm').val() === 30 || newData.child('pm').val() === 60 || newData.child('pm').val() === 120) && (newData.child('w').val() === 'a' || newData.child('w').val() === 'b')", "tm": { ".validate": "newData.isNumber()" }, "pm": { ".validate": "newData.isNumber()" }, "w": { ".validate": "newData.isString()" }, "$x": { ".validate": false } },
-        "bet": { ".validate": "newData.isNumber() && (newData.val() === 1 || newData.val() === 2 || newData.val() === 3 || newData.val() === 5 || newData.val() === 10)" },
+        "bet": { ".validate": "newData.isNumber() && (newData.val() === 0 || newData.val() === 1 || newData.val() === 2 || newData.val() === 3 || newData.val() === 5 || newData.val() === 10)" },
         "created": { ".validate": "newData.val() === now" },
         "v": { ".validate": "newData.isNumber()" },
         "a": { "id": { ".validate": "newData.isString()" }, "name": { ".validate": "newData.isString()" }, ".validate": "newData.hasChildren(['id', 'name']) && newData.child('id').isString() && newData.child('id').val().matches(/^[0-9]{4,12}$/) && newData.child('name').isString() && newData.child('name').val().length <= 40", "$x": { ".validate": false } },
@@ -879,8 +879,56 @@
       "$id": {
         "items": {
           "$item": {
-            ".write": "$id.matches(/^[0-9]{4,12}$/) && !data.exists()",
-            ".validate": "$item.matches(/^[a-z0-9-]{1,24}$/) && (($item !== 'tag-special' && $item !== 'tag-jih' && $item !== 'tag-div' && $item !== 'tag-owna') || ($item === 'tag-jih' && root.child('tagGrants/' + $id + '/' + $item + '/by').val() === '177601') || ($item === 'tag-special' && root.child('tagGrants/' + $id + '/' + $item + '/by').val() === '581824') || ($item === 'tag-div' && root.child('tagGrants/' + $id + '/' + $item + '/by').val() === '185920') || ($item === 'tag-owna' && root.child('tagGrants/' + $id + '/' + $item + '/by').val() === '822414')) && ($item !== 'tag-loaded' || root.child('coins/' + $id + '/ld').val() === 1) && (!$item.beginsWith('shp-') || root.child('coins/' + $id + '/sh/' + $item).val() === 1 || root.child('coins/' + $id + '/iw/' + $item).val() === 1 || (root.child('coins/' + $id + '/sh/shp-bundle-yinyang').val() === 1 && ($item === 'shp-tag-yin' || $item === 'shp-tag-yang' || $item === 'shp-tag-yinyang' || $item === 'shp-bub-yinyang' || $item === 'shp-fx-yinyang')) || (root.child('coins/' + $id + '/sh/shp-bundle-dragon').val() === 1 && ($item === 'shp-tag-dragonic' || $item === 'shp-bub-dragon' || $item === 'shp-ring-dragon' || $item === 'shp-fx-dragon')) || (root.child('coins/' + $id + '/sh/shp-bundle-rainbow').val() === 1 && ($item === 'shp-tag-prism' || $item === 'shp-bub-cloud' || $item === 'shp-ring-rainbow' || $item === 'shp-fx-rainbow'))) && newData.val() === now && (!$item.beginsWith('sea-') || $item.beginsWith('sea-' + root.child('crateClaims/' + $id + '/s').val() + '-'))"
+            ".write": "$id.matches(/^[0-9]{4,12}$/) && (!data.exists() || (!newData.exists() && root.child('tagRemovals/' + $id + '/' + $item + '/ts').val() > now - 60000))",
+            ".validate": "$item.matches(/^[a-z0-9-]{1,24}$/) && (($item !== 'tag-special' && $item !== 'tag-jih' && $item !== 'tag-div' && $item !== 'tag-owna' && $item !== 'tag-bb') || ($item === 'tag-jih' && root.child('tagGrants/' + $id + '/' + $item + '/by').val() === '177601') || ($item === 'tag-special' && root.child('tagGrants/' + $id + '/' + $item + '/by').val() === '581824') || ($item === 'tag-div' && root.child('tagGrants/' + $id + '/' + $item + '/by').val() === '185920') || ($item === 'tag-owna' && root.child('tagGrants/' + $id + '/' + $item + '/by').val() === '822414') || ($item === 'tag-bb' && root.child('tagGrants/' + $id + '/' + $item + '/by').val() === '328760')) && ($item !== 'tag-loaded' || root.child('coins/' + $id + '/ld').val() === 1) && (!$item.beginsWith('shp-') || root.child('coins/' + $id + '/sh/' + $item).val() === 1 || root.child('coins/' + $id + '/iw/' + $item).val() === 1 || (root.child('coins/' + $id + '/sh/shp-bundle-yinyang').val() === 1 && ($item === 'shp-tag-yin' || $item === 'shp-tag-yang' || $item === 'shp-tag-yinyang' || $item === 'shp-bub-yinyang' || $item === 'shp-fx-yinyang')) || (root.child('coins/' + $id + '/sh/shp-bundle-dragon').val() === 1 && ($item === 'shp-tag-dragonic' || $item === 'shp-bub-dragon' || $item === 'shp-ring-dragon' || $item === 'shp-fx-dragon')) || (root.child('coins/' + $id + '/sh/shp-bundle-rainbow').val() === 1 && ($item === 'shp-tag-prism' || $item === 'shp-bub-cloud' || $item === 'shp-ring-rainbow' || $item === 'shp-fx-rainbow'))) && newData.val() === now && (!$item.beginsWith('sea-') || $item.beginsWith('sea-' + root.child('crateClaims/' + $id + '/s').val() + '-'))"
+          }
+        }
+      }
+    },
+    "gchat": {
+      ".read": true,
+      ".indexOn": ["c"],
+      "$gid": {
+        ".read": true,
+        ".write": "$gid.matches(/^[-A-Za-z0-9_]{10,30}$/) && !newData.exists() && (!data.child('p').exists() || data.child('c').val() < now - 10800000)",
+        "c": {
+          ".write": "!data.exists()",
+          ".validate": "newData.isNumber() && newData.val() === now"
+        },
+        "p": {
+          "$id": {
+            ".write": "$id.matches(/^[0-9]{4,12}$/)",
+            ".validate": "newData.val() === true"
+          }
+        },
+        "m": {
+          "$k": {
+            ".write": "!data.exists()",
+            ".validate": "newData.hasChildren(['i', 'n', 'x', 't']) && newData.child('t').val() === now && newData.child('i').isString() && (root.child('pg/' + $gid + '/a/id').val() === newData.child('i').val() || root.child('pg/' + $gid + '/b/id').val() === newData.child('i').val() || root.child('games/' + $gid + '/p/a/id').val() === newData.child('i').val() || root.child('games/' + $gid + '/p/b/id').val() === newData.child('i').val())",
+            "i": { ".validate": "newData.isString()" },
+            "n": { ".validate": "newData.isString() && newData.val().length <= 40" },
+            "x": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 200" },
+            "t": { ".validate": "newData.isNumber()" },
+            "$other": { ".validate": false }
+          }
+        },
+        "$other": { ".validate": false }
+      }
+    },
+    "tagRemovals": {
+      ".read": true,
+      "$id": {
+        "$item": {
+          ".write": "$id.matches(/^[0-9]{4,12}$/) && newData.exists()",
+          ".validate": "(($item === 'tag-jih' && newData.child('by').val() === '177601') || ($item === 'tag-special' && newData.child('by').val() === '581824') || ($item === 'tag-div' && newData.child('by').val() === '185920') || ($item === 'tag-owna' && newData.child('by').val() === '822414') || ($item === 'tag-bb' && newData.child('by').val() === '328760')) && newData.hasChildren(['by','ts']) && newData.child('ts').val() === now",
+          "by": {
+            ".validate": "newData.isString()"
+          },
+          "ts": {
+            ".validate": "newData.isNumber()"
+          },
+          "$x": {
+            ".validate": false
           }
         }
       }
@@ -889,8 +937,8 @@
       ".read": true,
       "$id": {
         "$item": {
-          ".write": "$id.matches(/^[0-9]{4,12}$/) && !data.exists() && newData.exists()",
-          ".validate": "(($item === 'tag-jih' && newData.child('by').val() === '177601') || ($item === 'tag-special' && newData.child('by').val() === '581824') || ($item === 'tag-div' && newData.child('by').val() === '185920') || ($item === 'tag-owna' && newData.child('by').val() === '822414')) && newData.hasChildren(['by','ts']) && newData.child('ts').val() === now",
+          ".write": "$id.matches(/^[0-9]{4,12}$/) && ((!data.exists() && newData.exists()) || (data.exists() && !newData.exists() && root.child('tagRemovals/' + $id + '/' + $item + '/ts').val() > now - 60000))",
+          ".validate": "(($item === 'tag-jih' && newData.child('by').val() === '177601') || ($item === 'tag-special' && newData.child('by').val() === '581824') || ($item === 'tag-div' && newData.child('by').val() === '185920') || ($item === 'tag-owna' && newData.child('by').val() === '822414') || ($item === 'tag-bb' && newData.child('by').val() === '328760')) && newData.hasChildren(['by','ts']) && newData.child('ts').val() === now",
           "by": {
             ".validate": "newData.isString()"
           },

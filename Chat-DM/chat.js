@@ -4395,7 +4395,8 @@ const TAG_GRANTS = {
   "tag-jih":     { cmd: "tag_JIH",     granters: ["177601"] },
   "tag-special": { cmd: "tag_special", granters: ["581824"] },
   "tag-div":     { cmd: "tag_div",     granters: ["185920"] },
-  "tag-owna":    { cmd: "tag_owna",    granters: ["822414"] }
+  "tag-owna":    { cmd: "tag_owna",    granters: ["822414"] },
+  "tag-bb":      { cmd: "tag_BB",      granters: ["328760"] }
 };
 function myGrantableTags() { return Object.keys(TAG_GRANTS).filter(id => TAG_GRANTS[id].granters.includes(String(myLoginId || ""))); }
 // Records the grant (tagGrants/<receiver>/<tag> = who gave it and when), then puts the tag in the receiver's inventory. Works for offline people too. Firebase only.
@@ -4408,6 +4409,27 @@ async function giveTagTo(itemId, targetId) {
   }
   await db.ref("crateInv/" + tid + "/items/" + itemId).set(firebase.database.ServerValue.TIMESTAMP);
   return "given";
+}
+// /remove tag_name: takes one of YOUR tags away from someone, online or offline. First records the removal (tagRemovals/<receiver>/<tag>: the rules only
+// allow deletes while that record is under a minute old), then in one write deletes the tag from their inventory and grant record (so they can't put it back)
+// and un-equips it on their profile. Old messages keep the stored tag name but stop showing it, because a tag only shows while its sender owns it. Firebase only.
+async function removeTagFrom(itemId, targetId) {
+  const db = ChatBackend._db, me = String(myLoginId), tid = String(targetId);
+  if (!db) throw new Error("Not connected to the database.");
+  const [inv, grant, worn] = await Promise.all([
+    db.ref("crateInv/" + tid + "/items/" + itemId).get(),
+    db.ref("tagGrants/" + tid + "/" + itemId).get(),
+    db.ref("userProfiles/" + tid + "/cosm/tag").get()
+  ]);
+  const equipped = worn.val() === itemId;
+  if (!inv.exists() && !grant.exists() && !equipped) return "none";
+  await db.ref("tagRemovals/" + tid + "/" + itemId).set({ by: me, ts: firebase.database.ServerValue.TIMESTAMP });
+  const upd = {};
+  if (inv.exists()) upd["crateInv/" + tid + "/items/" + itemId] = null;
+  if (grant.exists()) upd["tagGrants/" + tid + "/" + itemId] = null;
+  if (equipped) upd["userProfiles/" + tid + "/cosm/tag"] = null;
+  await db.ref().update(upd);
+  return "removed";
 }
 
 const SLASH_COMMANDS = [
@@ -4423,8 +4445,8 @@ const SLASH_COMMANDS = [
     desc: () => "Ban the account ID for a while (" + limitsText(banLimitsForRank(myRank())) + ").", insert: "/tempban " },
   { name: "/grant",   args: "normie|mod perm|time username", minRank: ROLES.mod.rank,
     desc: () => "Give Normie to someone (Co-owner and Owner can also give Mod; the Owner approves Mod in the staff tool before it gets ban/mute). perm = permanent, or a time (" + limitsText(TIME_LIMITS.tempGrant) + ").", insert: "/grant normie " },
-  { name: "/remove",  args: "normie|mod username",        minRank: ROLES.mod.rank,
-    desc: () => "Take Normie away from someone (Co-owner and Owner can also take Mod).", insert: "/remove normie " },
+  { name: "/remove",  args: "normie|mod|tag_name username", minRank: 0, only: () => myRank() >= ROLES.mod.rank || myGrantableTags().length > 0,
+    desc: rank => (rank >= ROLES.mod.rank ? "Take Normie away from someone (Co-owner and Owner can also take Mod). " : "") + (myGrantableTags().length ? "Tag owners: /remove " + TAG_GRANTS[myGrantableTags()[0]].cmd + " #123456 or name takes your tag away from them for good (inventory, profile and chat messages, online or offline). You can remove: " + myGrantableTags().map(id => TAG_GRANTS[id].cmd).join(", ") + "." : ""), insert: "/remove " },
   { name: "/staff",   args: "", minRank: ROLES.mod.rank,
     desc: "Sign in as staff with your MZK email and password. Needed for bans and mutes once the Owner turns on staff-only moderation.", insert: "/staff" },
   { name: "/media",   args: "on|off username",        minRank: ROLES.admin.rank,
@@ -4890,6 +4912,30 @@ async function handleModerationCommand(text) {
 
   // ── /remove (Normie only) ──
   if (command === "/remove") {
+    // ── /remove tag_name username|#ID|@username (tag owners, for the tags they can /give) ──
+    const tagWord = String(parts[1] || "").toLowerCase().replace(/_/g, "-");
+    if (TAG_GRANTS[tagWord] || /^tag[-_]/.test(String(parts[1] || "").toLowerCase())) {
+      const mine = myGrantableTags();
+      const usage = mine.length ? "Use /remove " + TAG_GRANTS[mine[0]].cmd + " username, #123456 or @username (you can remove: " + mine.map(id => TAG_GRANTS[id].cmd).join(", ") + ")." : "You don't own any tag you can remove from others.";
+      if (!mine.length) { showComposerNotice(usage); return true; }
+      if (parts.length < 3) { showComposerNotice(usage); return true; }
+      if (!mine.includes(tagWord)) { showComposerNotice(TAG_GRANTS[tagWord] ? "You are not allowed to remove " + TAG_GRANTS[tagWord].cmd + "." : "Unknown tag. " + usage); return true; }
+      const rawTarget = parts.slice(2).join(" ").replace(/^[@#]/, "");
+      let target = null;
+      try { target = await resolveModerationTarget(rawTarget, { allowOfflineId: true }); } catch (e) {}
+      if (!target || !target.loginId) { showComposerNotice("Couldn't find that user. Use their username, @username or #6-digit ID (online or offline)."); return true; }
+      if (String(target.loginId) === String(myLoginId)) { showComposerNotice("You can't remove your own tag."); return true; }
+      const who = (target.name || ("#" + target.loginId));
+      try {
+        const res = await removeTagFrom(tagWord, target.loginId);
+        showComposerNotice(res === "none" ? who + " doesn't have " + TAG_GRANTS[tagWord].cmd + "." : "Removed " + TAG_GRANTS[tagWord].cmd + " from " + who + " (#" + target.loginId + "): inventory, profile and chat messages.");
+      } catch (e) {
+        const m = String(e && e.message);
+        showComposerNotice(isPermissionDenied(e) ? "The database refused that. Publish the newest chat rules first (tagRemovals)." : "Couldn't remove the tag: " + m);
+      }
+      return true;
+    }
+    if (rank < ROLES.mod.rank) { showComposerNotice("Use /remove tag_name username (you can remove: " + myGrantableTags().map(id => TAG_GRANTS[id].cmd).join(", ") + ")."); return true; }
     if (parts.length < 3) { showComposerNotice("Use /remove rank username, such as /remove mod alex"); return true; }
     const roleToRemove = ROLES[parts[1].toLowerCase()];
     if (!roleToRemove || roleToRemove.implicit || roleToRemove.id === "crown") {
@@ -10168,6 +10214,7 @@ const CRATE_ITEMS = [
   { id: "tag-jih", type: "tag", rar: "legendary", name: "JIH", fb: true },
   { id: "tag-div", type: "tag", rar: "legendary", name: "<div>", fb: true },
   { id: "tag-owna", type: "tag", rar: "impossible", name: "owna approved", fb: true },   // grant-only: only #822414 can give it (/give tag_owna)
+  { id: "tag-bb", type: "tag", rar: "legendary", name: "BB", fb: true },   // grant-only: only #328760 can give it (/give tag_BB)
   // Shop-only (1000 coins in the Shop, never from a crate): a shiny gold tag
   { id: "tag-loaded",  type: "tag", rar: "legendary", name: "Loaded 💰", shop: true, price: 1000, legacy: true, blurb: "A shiny gold tag. Only sold here, never found in crates." },
   // ── Shop-only items (never in a crate). Ids start with "shp-". The price list lives in the database rules too (coins → sh), so a new
@@ -10380,13 +10427,19 @@ async function earnCrate() {
   crateEarning = false;
 }
 let crateRulesBad = false, crateDenials = 0;   // a single refused write (stale count) is retried; only 3 in a row count as "rules out of date"
+const selfGrantTried = new Set();   // tag owners get their own tag(s) put into their inventory once per login (see the inventory listener in ensureCrateWatch)
 function ensureCrateWatch() {
   if (!myLoginId || !ChatBackend._db || crateWatchId === myLoginId) return;
   crateWatchRefs.forEach(r => { try { r.off(); } catch (e) {} });
   crateWatchId = myLoginId; crateClaimedW = undefined; crateEarned = 0; crateOpened = 0; crateGameNet = 0; crateOwned = new Set(); myCosm = {};
   const claim = ChatBackend._db.ref("crateClaims/" + myLoginId), inv = ChatBackend._db.ref("crateInv/" + myLoginId + "/items");
   claim.on("value", s => { const v = s.val(); crateClaimedW = v && typeof v.w === "number" ? v.w : null; crateEarned = v && Number(v.n) > 0 ? Number(v.n) : 0; crateOpened = v && Number(v.o) > 0 ? Number(v.o) : 0; crateTick(true); }, () => { crateClaimedW = null; });
-  inv.on("value", s => { crateOwned = new Set(Object.keys(s.val() || {}).filter(k => itemOf(k))); if (crateModal && !crateBusy) paintCrateModal(); });
+  inv.on("value", s => {
+    const have = s.val() || {};
+    crateOwned = new Set(Object.keys(have).filter(k => itemOf(k))); if (crateModal && !crateBusy) paintCrateModal();
+    // Tag owners always own their own tag(s): add any that are missing (tried once per tag per login; Firebase only, same write as /give).
+    myGrantableTags().forEach(t => { const key = myLoginId + ":" + t; if (!have[t] && !selfGrantTried.has(key)) { selfGrantTried.add(key); giveTagTo(t, myLoginId).catch(() => {}); } });
+  });
   const seasons = ChatBackend._db.ref("crateSeasons");
   seasons.on("value", s => { mergeSeasons(s.val()); crateTick(true); }, () => { mergeSeasons(null); });
   const gnet = ChatBackend._db.ref("crateGames/" + myLoginId);
@@ -12323,7 +12376,7 @@ window.VUS_CHAT = {
   _wheelSlices() { return lastWheel ? lastWheel.slices.map(x => ({ id: x.it.id, a0: x.a0, w: x.w })) : null; },
   _crateProg(m, ms) { const p = progFor(); p.msgs = m; p.ms = ms; saveProg(); crateTick(true); },
   cosmFor: async id => { try { const p = await ChatBackend.getProfile(id); const c = cosmFields(p && p.cosm); if (!c.ring && p && p.color && p.color.ring) c.ring = p.color.ring; return await ownedCosmOnly(id, c); } catch (e) { return {}; } },
-  tagEl, reportUser, applyRingTo,
+  tagEl, reportUser, applyRingTo, maskFiltered,
   toggleBotMute, botMutedList: () => botMutedMap,
   myId: () => myLoginId, myName: () => myName, crateStock, srvNow, db: () => ChatBackend._db,
   activeMsFor, formatActiveTime, openInventoryOf,

@@ -7,7 +7,10 @@
 (function () {
   "use strict";
   var API = window.VUS_API_BASE || "https://vus-orcin.vercel.app";
-  var BETS = [1, 2, 3, 5, 10];
+  var BETS = [0, 1, 2, 3, 5, 10];   // 0 = a free game: no crates are bet, but it is still a real game (counts for quests)
+  // Live game chat (see "Live chat inside a real 1v1 game" below). Declared here so render() can use it at any time.
+  var GC_MAX = 200, GC_EVERY = 1200, GC_STALE = 10800000;
+  var gc = { gid: "", ref: null, mref: null, conn: null, connFn: null, box: null, log: null, inp: null, last: 0, sweptAt: 0 };
   var ORDER = ["ttt", "rps", "c4", "ck", "ch"];
   var NAMES = { ttt: "Tic-Tac-Toe", rps: "Rock Paper Scissors", c4: "Connect 4", ck: "Checkers", ch: "Chess" };
   var RULES = {
@@ -515,6 +518,7 @@
     return (what || "That") + " was refused by the database" + (path ? " (" + path + ")" : "") + ". Try again; if it keeps happening, report this message.";
   }
   async function adjustG(id, delta) {
+    if (!delta) return;   // a free (0x) game moves no crates
     try { await db().ref("crateGames/" + id).transaction(function (v) { return (Number(v) || 0) + delta; }); }
     catch (e) { throw new Error(friendly(e, delta < 0 ? "Taking your bet" : "Returning your crates")); }
   }
@@ -806,7 +810,18 @@
     if (g.mode === "direct" && r === false) throw new Error("Someone just joined your game, so it is starting. The bot was not started.");
     return startPractice(g.type || "ttt", 1, g.type === "ch" ? { tm: g.tm, pm: g.pm, c: g.white === "a" ? "white" : "black" } : null);
   }
-  function renderPractice(wrap) {   // the lobby card
+  function openPracticePopup() {   // the practice options live in a popup so they take no room in the lobby
+    var ov = el("div"), box = el("div");
+    ov.style.cssText = "position:fixed;inset:0;background:rgba(2,6,23,.7);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px";
+    box.style.cssText = "max-width:460px;width:100%;max-height:90vh;overflow:auto;box-sizing:border-box;color:#e2e8f0";
+    function close() { document.removeEventListener("keydown", onKey, true); if (ov.parentNode) ov.parentNode.removeChild(ov); }
+    function onKey(e) { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); } }
+    function paint() { box.textContent = ""; renderPractice(box, paint, close); }
+    ov.onclick = function (e) { if (e.target === ov) close(); };
+    paint(); ov.appendChild(box); document.body.appendChild(ov);
+    document.addEventListener("keydown", onKey, true);
+  }
+  function renderPractice(wrap, repaint, done) {   // the content of the practice popup
     var c = el("div", "gm-card"), row = el("div"), gs = document.createElement("select"), ls = document.createElement("select"), go;
     c.appendChild(el("h3", "", "Practice against a bot"));
     c.appendChild(el("div", "gm-note", "Play the computer for fun or to learn. No crates are bet, nothing is saved, and it does not count for quests. Leaving is free."));
@@ -814,14 +829,15 @@
     gs.className = "gm-sel"; ls.className = "gm-sel";
     ORDER.forEach(function (k) { var o = document.createElement("option"); o.value = k; o.textContent = NAMES[k]; gs.appendChild(o); });
     LVN.forEach(function (n, i) { var o = document.createElement("option"); o.value = String(i); o.textContent = "Bot level: " + n; ls.appendChild(o); });
-    gs.value = prOpt.game; gs.onchange = function () { prOpt.game = gs.value; render(); };
+    gs.value = prOpt.game; gs.onchange = function () { prOpt.game = gs.value; repaint(); };
     ls.value = String(prOpt.lvl); ls.onchange = function () { prOpt.lvl = Number(ls.value); };
     row.appendChild(gs); row.appendChild(ls); c.appendChild(row);
     c.appendChild(el("div", "gm-note", RULES[prOpt.game]));
     if (prOpt.game === "ch") c.appendChild(chOptions(prOpt));
     go = el("button", "gm-btn p", "Start practice game"); go.type = "button"; go.disabled = busy;
-    go.onclick = function () { act(function () { return startPractice(prOpt.game, prOpt.lvl, prOpt.game === "ch" ? { tm: prOpt.tm, pm: prOpt.pm, c: prOpt.c } : null); }); };
-    c.appendChild(go); wrap.appendChild(c);
+    go.onclick = function () { done(); act(function () { return startPractice(prOpt.game, prOpt.lvl, prOpt.game === "ch" ? { tm: prOpt.tm, pm: prOpt.pm, c: prOpt.c } : null); }); };
+    var cn = el("button", "gm-btn", "Cancel"); cn.type = "button"; cn.style.marginLeft = "8px"; cn.onclick = done;
+    c.appendChild(go); c.appendChild(cn); wrap.appendChild(c);
   }
 
   function startListening() {
@@ -898,10 +914,11 @@
   }, 2000);
 
   // ── drawing ──
-  var picked = 0, selGame = "ttt", busy = false, lastViewKey = "";
+  var picked = 1, selGame = "ttt", busy = false, lastViewKey = "";
   function render() {
     if (!open) return;
     var viewKey = myGid ? "g" + myGid : spectate ? "s" + spectate.gid : "l", keepY = viewKey === lastViewKey ? pane.scrollTop : 0;   // keep your scroll position while the same screen redraws
+    var gcWasFocused = !!(gc.inp && document.activeElement === gc.inp), gcCaret = gcWasFocused ? gc.inp.selectionStart : 0;   // keep typing in the game chat while the screen redraws
     lastViewKey = viewKey; pane.textContent = "";
     requestAnimationFrame(function () { pane.scrollTop = keepY; });
     var wrap = el("div", "gm-wrap"); pane.appendChild(wrap);
@@ -912,12 +929,15 @@
     errBox = el("div", "gm-err"); wrap.appendChild(errBox);
     if (!me()) { wrap.appendChild(el("div", "gm-note", "Log in to play games.")); return; }
     var g = myGid ? viewOf(myGid, myMode) : null;
+    gcSync(g);
     if (g) renderGame(wrap, g); else if (spectate && viewOf(spectate.gid, spectate.mode)) renderSpectate(wrap, viewOf(spectate.gid, spectate.mode)); else renderLobby(wrap);
+    if (gcWasFocused && gc.inp) { gc.inp.focus(); try { gc.inp.setSelectionRange(gcCaret, gcCaret); } catch (e) {} }
   }
 
   function renderLobby(wrap) {
+    gcSweep();
     var have = stock(), opts = BETS.filter(function (b) { return b <= have; });   // only amounts you actually have
-    if (opts.indexOf(picked) < 0) picked = opts.length ? opts[0] : 0;
+    if (opts.indexOf(picked) < 0) picked = opts.length > 1 ? opts[1] : 0;   // 0x is always possible; start on 1x when you have a crate
     var c = el("div", "gm-card"); c.appendChild(el("h3", "", "Create a game"));
     var sel = document.createElement("select"); sel.className = "gm-sel";
     ORDER.forEach(function (k) { var o = document.createElement("option"); o.value = k; o.textContent = NAMES[k]; sel.appendChild(o); });
@@ -932,19 +952,20 @@
     var cm = createMode();
     c.appendChild(el("div", "gm-note", (serverUp === null ? "Checking the game server\u2026 " : serverUp ? "Game server reachable. " : "Game server not reachable from here. ") +
       (cm === "secure" ? "This game will be Secure: the server runs it, so it can't be cheated." : "This game will be Direct: it works without the server, but it relies on both players' browsers, so a determined cheater could fake results or crates.")));
-    if (!opts.length) {
-      c.appendChild(el("div", "gm-note", "You need at least 1 crate to play. A new crate can be earned every hour by chatting."));
-    } else {
-      c.appendChild(el("div", "gm-note", "Pick how many crates to bet. The winner takes both bets. Leaving, or being disconnected for 15 seconds, gives your bet to the other player."));
+    {
+      if (opts.length === 1) c.appendChild(el("div", "gm-note", "You have no crates, so only free 0x games are open to you. A new crate can be earned every hour by chatting."));
+      c.appendChild(el("div", "gm-note", "Pick how many crates to bet. 0x is a free game: no crates are bet, and it still counts as a real game for quests. Otherwise the winner takes both bets. Leaving, or being disconnected for 15 seconds, gives your bet to the other player."));
       var bets = el("div", "gm-bets");
       opts.forEach(function (n) { var b = el("button", "gm-bet" + (n === picked ? " on" : ""), n + "x"); b.type = "button"; b.onclick = function () { picked = n; render(); }; bets.appendChild(b); });
       c.appendChild(bets);
-      var go = el("button", "gm-btn p", "Create game (" + crates(picked) + ")"); go.type = "button"; go.disabled = busy || (cm === "secure" && serverUp === false);
+      var go = el("button", "gm-btn p", picked === 0 ? "Create free game (0x)" : "Create game (" + crates(picked) + ")"); go.type = "button"; go.disabled = busy || (cm === "secure" && serverUp === false);
       go.onclick = function () { act(function () { return cm === "direct" ? dCreate(selGame, picked, chCreateOpts()) : call("create", { game: selGame, bet: picked, opt: chCreateOpts() }).then(function (r) { return { gid: r.gid, mode: "secure" }; }); }); };
       c.appendChild(go);
     }
+    var prow = el("div"); prow.style.cssText = "margin-top:12px";   // practice vs a bot lives in a popup so it takes no room here
+    var pbtn = el("button", "gm-btn", "\uD83E\uDD16 Practice against a bot"); pbtn.type = "button"; pbtn.disabled = busy; pbtn.onclick = openPracticePopup;
+    prow.appendChild(pbtn); c.appendChild(prow);
     wrap.appendChild(c);
-    renderPractice(wrap);
 
     var list = waitingList().filter(function (w) { return !(me() && ((games[w.gid] && games[w.gid].p.a.id === me()) || (pgames[w.gid] && pgames[w.gid].a.id === me()))); });
     var l = el("div", "gm-card"); l.appendChild(el("h3", "", "Open games"));
@@ -952,7 +973,7 @@
     list.forEach(function (w) {
       var row = el("div", "gm-row"), info = el("div", "grow"), b = el("b", "", w.host);
       b.appendChild(el("span", "gm-tag " + (w.mode === "secure" ? "s" : "d"), w.mode === "secure" ? "Secure" : "Direct"));
-      info.appendChild(b); info.appendChild(el("span", "", (NAMES[w.type] || "Game") + chLobbyInfo(w) + " \u00B7 bet " + w.bet + "x (" + crates(w.bet) + ")"));
+      info.appendChild(b); info.appendChild(el("span", "", (NAMES[w.type] || "Game") + chLobbyInfo(w) + (w.bet ? " \u00B7 bet " + w.bet + "x (" + crates(w.bet) + ")" : " \u00B7 free game (0x)")));
       var needServer = w.mode === "secure" && serverUp === false;
       var j = el("button", "gm-btn p", needServer ? "Server needed" : have >= w.bet ? "Join" : "Need " + w.bet); j.type = "button"; j.disabled = busy || needServer || have < w.bet;
       j.onclick = function () { act(function () { return w.mode === "direct" ? dJoin(w.gid) : call("join", { gid: w.gid }).then(function (r) { return { gid: r.gid, mode: "secure" }; }); }); };
@@ -1183,13 +1204,77 @@
     return w;
   }
 
+  // ── Live chat inside a real 1v1 game (Direct and Secure; practice games have none). It lives at gchat/<gid>: c = created, p/<id> = who has the game
+  //    screen open right now, m/<key> = messages. When the last player leaves the game screen, the whole gchat/<gid> node is deleted. If a tab dies, the
+  //    database drops its p/<id> by itself and gcSweep() later removes chats nobody is in. The text goes through the main chat's word filter. ──
+  function gcSync(g) {   // render() calls this: follow the game screen I am on
+    var want = g && !g.practice && g.p && g.p.a && g.p.b && myGid ? myGid : "";
+    if (want === gc.gid) return;
+    if (gc.gid) gcLeave();
+    if (want) gcJoin(want);
+  }
+  function gcAdd(m) {
+    if (!gc.log || !m) return;
+    var mine = String(m.i) === me(), row = el("div"), txt = String(m.x || "").slice(0, GC_MAX), f = chat().maskFiltered;
+    row.style.cssText = "margin:2px 0;word-break:break-word";
+    var who = el("b", "", mine ? "You" : String(m.n || "Player").slice(0, 40)); who.style.color = mine ? "#4ade80" : "#93c5fd";
+    try { if (f) txt = f(txt); } catch (e) {}
+    row.appendChild(who); row.appendChild(document.createTextNode(": " + txt)); gc.log.appendChild(row);
+    while (gc.log.childNodes.length > 100) gc.log.removeChild(gc.log.firstChild);
+    gc.log.scrollTop = gc.log.scrollHeight;
+  }
+  function gcSend() {
+    if (!gc.ref || !gc.inp) return;
+    var v = gc.inp.value.replace(/\s+/g, " ").trim().slice(0, GC_MAX), t = Date.now();
+    if (!v || t - gc.last < GC_EVERY) return;
+    gc.last = t; gc.inp.value = "";
+    gc.mref.push({ i: me(), n: myName(), x: v, t: TS() }).catch(function () { gcAdd({ i: "", n: "Chat", x: "Couldn't send that. The newest database rules (gchat) may not be published yet." }); });
+  }
+  function gcJoin(gid) {
+    var d = db(), id = me(); if (!d || !id) return;
+    gc.gid = gid; gc.ref = d.ref("gchat/" + gid); gc.mref = gc.ref.child("m");
+    var box = el("div", "gm-card"), log = el("div"), row = el("div"), inp = document.createElement("input"), send = el("button", "gm-btn p", "Send");
+    box.appendChild(el("h3", "", "\uD83D\uDCAC Game chat"));
+    log.style.cssText = "height:150px;overflow:auto;background:#0f172a;border-radius:8px;padding:8px 10px;font-size:14px;color:#e2e8f0;margin:6px 0";
+    row.style.cssText = "display:flex;gap:8px";
+    inp.type = "text"; inp.maxLength = GC_MAX; inp.placeholder = "Say something to your opponent\u2026"; inp.setAttribute("autocomplete", "off");
+    inp.style.cssText = "flex:1;min-width:0;padding:9px 10px;border-radius:8px;border:1.5px solid #334155;background:#0f172a;color:#e2e8f0;font-size:15px";
+    send.type = "button"; send.onclick = gcSend;
+    inp.addEventListener("keydown", function (e) { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); gcSend(); } });
+    row.appendChild(inp); row.appendChild(send);
+    box.appendChild(log); box.appendChild(row);
+    box.appendChild(el("div", "gm-note", "This chat is deleted when you both leave the game screen."));
+    gc.box = box; gc.log = log; gc.inp = inp;
+    var pr = gc.ref.child("p/" + id);
+    gc.conn = d.ref(".info/connected");   // (re)mark me as here whenever the connection is up; the database un-marks me if my tab dies
+    gc.connFn = gc.conn.on("value", function (s) { if (s.val() === true && gc.gid === gid) { try { pr.onDisconnect().remove(); } catch (e) {} pr.set(true).catch(function () {}); } });
+    gc.ref.child("c").set(TS()).catch(function () {});   // refused when it already exists: fine
+    gc.mref.limitToLast(100).on("child_added", function (s) { if (gc.gid === gid) gcAdd(s.val()); }, function () {});
+  }
+  function gcLeave() {
+    var ref = gc.ref, id = me();
+    try { if (gc.mref) gc.mref.off(); } catch (e) {}
+    try { if (gc.conn && gc.connFn) gc.conn.off("value", gc.connFn); } catch (e) {}
+    gc.gid = ""; gc.ref = null; gc.mref = null; gc.conn = null; gc.connFn = null; gc.box = null; gc.log = null; gc.inp = null;
+    if (!ref || !id) return;
+    var pr = ref.child("p/" + id);
+    try { pr.onDisconnect().cancel(); } catch (e) {}
+    // I am off the game screen: take my mark away; if nobody else is marked, delete the whole chat.
+    pr.remove().then(function () { return ref.child("p").get(); }).then(function (s) { if (!s.exists()) return ref.remove(); }).catch(function () {});
+  }
+  function gcSweep() {   // from time to time, remove chats that nobody is in any more (for example after a closed tab)
+    var d = db(), t = Date.now(); if (!d || !me() || t - gc.sweptAt < 300000) return; gc.sweptAt = t;
+    d.ref("gchat").orderByChild("c").endAt(now() - 600000).limitToFirst(20).get().then(function (s) {
+      s.forEach(function (ch) { var v = ch.val() || {}; if (!v.p || Number(v.c) < now() - GC_STALE) ch.ref.remove().catch(function () {}); });
+    }).catch(function () {});
+  }
   function renderGame(wrap, g) {
     var id = me(), side = g.p.a && g.p.a.id === id ? "a" : "b", opp = side === "a" ? "b" : "a", type = g.type || "ttt";
     var top = el("div", "gm-top");
     var left = el("div"); left.appendChild(el("div", "gm-pl me", g.p[side].name + " (you)"));
     var mid = el("div", "gm-center"), sc = g.score || { a: 0, b: 0 };
     mid.appendChild(el("div", "gm-score", type === "c4" || type === "ch" ? "vs" : sc[side] + " \u2013 " + sc[opp]));
-    var sub = el("div", "gm-note", (NAMES[type] || "Game") + chInfo(type, g) + (g.practice ? " \u00B7 vs " + LVN[g.lvl] + " bot \u00B7 no bet" : " \u00B7 bet " + g.bet + "x each \u00B7 pot " + crates(g.bet * 2)));
+    var sub = el("div", "gm-note", (NAMES[type] || "Game") + chInfo(type, g) + (g.practice ? " \u00B7 vs " + LVN[g.lvl] + " bot \u00B7 no bet" : g.bet ? " \u00B7 bet " + g.bet + "x each \u00B7 pot " + crates(g.bet * 2) : " \u00B7 free game (0x)"));
     sub.appendChild(el("span", "gm-tag " + (g.mode === "direct" ? "d" : "s"), g.practice ? "Practice" : g.mode === "direct" ? "Direct" : "Secure")); mid.appendChild(sub);
     var right = el("div"); right.style.textAlign = "right"; right.appendChild(el("div", "gm-pl", g.p[opp] ? g.p[opp].name : "Waiting\u2026"));
     top.append(left, mid, right); wrap.appendChild(top);
@@ -1197,7 +1282,7 @@
     var card = el("div", "gm-card");
     if (g.status === "waiting") {
       card.appendChild(el("div", "gm-status", "Waiting for someone to join\u2026"));
-      card.appendChild(el("div", "gm-note gm-center", "Your bet of " + crates(g.bet) + " is held until the game ends. Keep this tab open. Cancelling gives it back."));
+      card.appendChild(el("div", "gm-note gm-center", g.bet ? "Your bet of " + crates(g.bet) + " is held until the game ends. Keep this tab open. Cancelling gives it back." : "This is a free game: no crates are bet. Keep this tab open."));
       var cancel = el("button", "gm-btn d", "Cancel game"); cancel.type = "button"; var cw = el("div", "gm-center"); cw.appendChild(cancel); card.appendChild(cw);
       cancel.onclick = function () { act(function () { return g.mode === "direct" ? dLeave(myGid) : call("leave", { gid: myGid }); }); };
       var bi = el("button", "gm-btn", "Play the bot instead"); bi.type = "button"; bi.disabled = busy; bi.style.marginLeft = "8px";
@@ -1234,12 +1319,12 @@
       card.appendChild(el("div", "gm-banner", banner));
       card.appendChild(el("div", "gm-note gm-center", (type === "c4" || type === "ck" || type === "ch" ? "One game" : "Round " + g.round) + (g.draws ? " \u00B7 " + g.draws + (g.draws === 1 ? " tie" : " ties") : "") + (g.practice ? ". Practice game: nothing is bet and nothing is saved." : ". Keep this tab open: if you are disconnected for 15 seconds your bet goes to " + oppName + ".")));
       var lv = el("button", "gm-btn d", "Leave game"); lv.type = "button"; var lw = el("div", "gm-center"); lw.appendChild(lv); card.appendChild(lw);
-      lv.onclick = g.practice ? function () { gmConfirm("Leave this practice game?", "Nothing is bet, so nothing is lost.", "Leave", function () { lLeave(); }); } : function () { gmConfirm("Leave this game?", "Your bet of " + crates(g.bet) + " goes to " + oppName + ".", "Leave game", function () { act(function () { return g.mode === "direct" ? dLeave(myGid) : call("leave", { gid: myGid }); }); }); };
+      lv.onclick = g.practice ? function () { gmConfirm("Leave this practice game?", "Nothing is bet, so nothing is lost.", "Leave", function () { lLeave(); }); } : function () { gmConfirm("Leave this game?", g.bet ? "Your bet of " + crates(g.bet) + " goes to " + oppName + "." : "This is a free game, so you lose nothing, but " + oppName + " wins.", "Leave game", function () { act(function () { return g.mode === "direct" ? dLeave(myGid) : call("leave", { gid: myGid }); }); }); };
       paintTimer(g);
     } else {   // done
       var r = g.result || {}, won = r.winner === side, refund = !r.winner;
       var d = el("div", "gm-done");
-      d.appendChild(el("h3", "", g.practice ? (refund ? "\uD83E\uDD1D Draw" : won ? "\uD83C\uDF89 You beat the bot!" : "The bot won this time") : refund ? "\uD83D\uDD01 Refunded" : won ? "\uD83C\uDF89 You won " + crates(g.bet * 2) + "!" : "You lost " + crates(g.bet)));
+      d.appendChild(el("h3", "", g.practice ? (refund ? "\uD83E\uDD1D Draw" : won ? "\uD83C\uDF89 You beat the bot!" : "The bot won this time") : refund ? (g.bet ? "\uD83D\uDD01 Refunded" : "\uD83E\uDD1D Draw") : won ? "\uD83C\uDF89 You won" + (g.bet ? " " + crates(g.bet * 2) : "") + "!" : "You lost" + (g.bet ? " " + crates(g.bet) : "")));
       d.appendChild(el("div", "gm-note", r.msg || "The game ended."));
       if (type === "rps" && g.lastRound && g.lastRound.a) d.appendChild(el("div", "gm-banner", "Final round: you " + ICON[g.lastRound[side]] + " vs " + g.p[opp].name + " " + ICON[g.lastRound[opp]]));
       if (type === "c4" && g.board) d.appendChild(c4Board(g, false, false));
@@ -1255,6 +1340,7 @@
       d.appendChild(back); card.appendChild(d);
     }
     wrap.appendChild(card);
+    if (gc.box && gc.gid === myGid) { wrap.appendChild(gc.box); gc.log.scrollTop = gc.log.scrollHeight; }   // the live game chat (built once per game, so typing survives redraws)
   }
   function paintTimer(g) {
     if (g.type === "ch") { paintChess(g); return; }
